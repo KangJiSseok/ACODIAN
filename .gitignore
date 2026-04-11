@@ -1,0 +1,19 @@
+.omx/
+.codex/*
+!.codex/skills/
+!.codex/skills/**
+
+# Generated working notes / local review artifacts
+docs3/
+docs/AX-WMS_기획서_아키텍처가이드-enum-updated.docx
+docs2/*
+docs2/*-note-*.md
+docs2/session-log-*.md
+docs2/oh-my-codex-*.md
+docs2/velog-*.md
+
+# OS / editor clutter
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
