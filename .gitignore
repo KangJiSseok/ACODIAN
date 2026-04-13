@@ -2,18 +2,37 @@
 .codex/*
 !.codex/skills/
 !.codex/skills/**
+.claude/
 
 # Generated working notes / local review artifacts
-docs3/
-docs/AX-WMS_기획서_아키텍처가이드-enum-updated.docx
-docs2/*
-docs2/*-note-*.md
-docs2/session-log-*.md
-docs2/oh-my-codex-*.md
-docs2/velog-*.md
+plan/*
 
 # OS / editor clutter
 .DS_Store
 Thumbs.db
 .vscode/
 .idea/
+
+# Env / logs / temp files
+.env
+.env.*
+!.env.example
+!.env.*.example
+*.log
+*.tmp
+*.swp
+
+# Common workspace caches / build outputs
+**/.gradle/
+**/build/
+**/out/
+**/bin/
+**/node_modules/
+**/.next/
+**/dist/
+**/coverage/
+**/.turbo/
+**/__pycache__/
+**/.pytest_cache/
+**/.mypy_cache/
+**/.venv/

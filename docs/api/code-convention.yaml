@@ -1,0 +1,93 @@
+general:
+  - id: GEN-001
+    rule: 함수는 단일 책임 원칙을 따른다. 50줄을 넘으면 분리를 검토한다.
+    stacks: [springboot]
+  - id: GEN-002
+    rule: 매직 넘버를 사용하지 않는다. 상수로 선언한다.
+    stacks: [springboot]
+  - id: GEN-003
+    rule: DB 테이블명은 tb_ 접두 + snake_case. DB 컬럼명은 snake_case. Java 필드는 camelCase로 선언하고 @Column(name="...") 으로 매핑한다.
+    stacks: [springboot]
+  - id: GEN-004
+    rule: 응답 포맷은 고정. 성공 { success:true, data:{...}, timestamp:"ISO8601" } / 에러 { success:false, error:{code, message, statusCode}, timestamp:"ISO8601" }
+    stacks: [springboot]
+
+springboot:
+  - id: SB-001
+    rule: Controller는 요청/응답 변환만 담당한다. 비즈니스 로직은 Service에 둔다.
+    stacks: [springboot]
+  - id: SB-002
+    rule: Controller에서 Entity를 직접 반환하지 않는다. 항상 DTO로 변환 후 반환한다.
+    stacks: [springboot]
+  - id: SB-003
+    rule: DTO에 Bean Validation 어노테이션(@NotNull, @NotBlank, @Size 등)을 반드시 적용한다. Controller에서 @Valid로 검증한다.
+    stacks: [springboot]
+  - id: SB-004
+    rule: 의존성 주입은 생성자 주입(@RequiredArgsConstructor + final 필드)만 사용한다. @Autowired 필드 주입 금지.
+    stacks: [springboot]
+  - id: SB-005
+    rule: Entity에 public 기본 생성자와 setter를 남발하지 않는다. 생성은 정적 팩토리 메서드, 변경은 도메인 메서드로 처리한다. @NoArgsConstructor(access = AccessLevel.PROTECTED) 사용.
+    stacks: [springboot]
+  - id: SB-006
+    rule: Service 클래스에 @Transactional(readOnly = true)를 기본 선언한다. 쓰기(CUD) 메서드에만 @Transactional을 추가한다.
+    stacks: [springboot]
+  - id: SB-007
+    rule: 에러는 반드시 BusinessException(ErrorCode.XXX)을 throw한다. RuntimeException이나 임의 문자열 throw 금지.
+    stacks: [springboot]
+  - id: SB-008
+    rule: GlobalResponseAdvice가 응답 래핑을 자동 처리한다. Controller에서 ApiResponse 수동 래핑 금지.
+    stacks: [springboot]
+  - id: SB-009
+    rule: 권한 체크는 @PreAuthorize("hasRole('ROLE_NAME')")로 Controller 메서드에 선언한다. 데이터 소유권 체크(부서 소속 등)는 Service에서 CustomUserPrincipal로 처리한다.
+    stacks: [springboot]
+  - id: SB-010
+    rule: DB 마이그레이션은 Flyway로 관리한다. 수동 SQL 직접 실행 금지. 마이그레이션 파일(V{version}__{description}.sql)은 반드시 커밋한다.
+    stacks: [springboot]
+  - id: SB-011
+    rule: 민감정보(JWT_SECRET, DB_PASSWORD 등)는 환경변수로 관리한다. application.yml에 하드코딩 금지. application-local.yml은 .gitignore에 포함.
+    stacks: [springboot]
+  - id: SB-012
+    rule: |
+      테스트 네이밍 규칙.
+      클래스명: {Subject}Test (단위), {Subject}IntegrationTest (통합).
+      메서드: @DisplayName("should {기대결과} when {조건}") 사용.
+      그룹핑: @Nested 클래스로 시나리오별 묶기.
+      예시: @DisplayName("should throw exception when email is duplicated")
+    stacks: [springboot]
+  - id: SB-013
+    rule: |
+      DTO 네이밍 패턴.
+      입력: {동작}{Entity}Request (예: CreateUserRequest, UpdateWorklogRequest).
+      출력: {Entity}{뷰}Response (예: UserDetailResponse, WorklogListResponse).
+      목록 조회 파라미터: {Entity}ListQuery (예: WorklogListQuery, DepartmentListQuery).
+      삭제 응답: Delete{Entity}Response. 상태 변경: Update{Entity}StatusRequest.
+    stacks: [springboot]
+  - id: SB-014
+    rule: |
+      Audit 필드 패턴.
+      모든 변경 가능 엔티티에 createdAt, updatedAt 필수.
+      Hibernate @CreationTimestamp, @UpdateTimestamp 사용.
+      필요 시 createdBy, updatedBy 추가하고 Spring Security SecurityContext에서 주입.
+    stacks: [springboot]
+  - id: SB-015
+    rule: |
+      MapStruct 매퍼 컨벤션.
+      모듈당 {Module}Mapper 인터페이스 1개 (예: OrganizationMapper, WorklogMapper).
+      @Mapper(componentModel = "spring") 사용.
+      복잡한 매핑은 default 메서드로 처리. 엔티티 간 관계 매핑은 @Mapping(target, source)으로 명시.
+    stacks: [springboot]
+  - id: SB-016
+    rule: |
+      QueryDSL 사용 컨벤션.
+      QueryDSL 쿼리 클래스는 infrastructure/query/ 패키지에 배치.
+      인터페이스: {Entity}QueryRepository. 구현: {Entity}QueryRepositoryImpl.
+      Spring Data JPA의 Custom Repository 패턴 사용 (메인 Repository가 QueryRepository를 extends).
+    stacks: [springboot]
+  - id: SB-017
+    rule: |
+      모듈 간 의존성 규칙.
+      다른 모듈의 domain/ 및 infrastructure/ 패키지를 직접 import하지 않는다.
+      모듈 간 조회는 해당 모듈의 application/ 서비스를 통해서만 접근한다.
+      support/는 모든 모듈에서 사용 가능하지만, support가 다른 모듈에 의존하면 안 된다.
+      허용된 모듈 의존 방향: auth→organization, worklog→organization/tag, file→worklog/organization, notification→organization, dashboard→organization/worklog/notification.
+    stacks: [springboot]
