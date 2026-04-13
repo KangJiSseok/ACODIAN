@@ -1,0 +1,162 @@
+- id: ADR-001
+  title: API 응답 포맷 통일
+  status: adopted
+  date: 2026-04-08
+  stacks: [springboot]
+  context: |
+    모든 API 응답 형식을 일관되게 유지하기 위해 GlobalResponseAdvice가 자동으로 래핑을 처리한다.
+    컨트롤러가 반환한 객체를 자동 래핑하므로, 컨트롤러에서 직접 ResponseEntity나 ApiResponse를 생성하면 이중 래핑이 발생한다.
+  decision: |
+    성공: { success: true, data: { ... }, timestamp: "ISO8601" }
+    에러: { success: false, error: { code, message, statusCode }, timestamp: "ISO8601" }
+    GlobalResponseAdvice(@RestControllerAdvice)가 자동 래핑. 컨트롤러는 DTO/List 직접 반환.
+  consequence: 컨트롤러에서 ApiResponse 수동 생성 금지. 에러는 GlobalExceptionHandler에서 처리.
+
+- id: ADR-002
+  title: 인증/인가 분리 — Spring Security + JWT
+  status: adopted
+  date: 2026-04-08
+  stacks: [springboot]
+  context: |
+    인증(JWT 검증)과 인가(역할 기반 접근 제어)를 단일 필터에서 처리하면 각각 독립적으로 변경하기 어렵다.
+    4단계 역할 계층(DIRECTOR > DEPT_HEAD > TEAM_LEAD > MEMBER)에서 상위 역할이 하위 권한을 포함해야 한다.
+  decision: |
+    인증: JwtAuthFilter에서 JWT 서명 검증 + SecurityContext 설정.
+    인가: @PreAuthorize("hasRole('...')") + RoleHierarchy Bean.
+    데이터 소유권 체크: Service 레이어에서 CustomUserPrincipal로 직접 검증.
+  consequence: RoleHierarchy 덕분에 hasRole('DEPT_HEAD')는 DIRECTOR도 통과. 부서 소속 확인 등 데이터 권한은 Service에서 처리.
+
+- id: ADR-003
+  title: 에러 처리 계층화 — ErrorCode enum 단일 출처
+  status: adopted
+  date: 2026-04-08
+  stacks: [springboot]
+  context: |
+    서비스 레이어에서 에러를 임의 형식으로 throw하면 응답 에러 포맷이 엔드포인트마다 달라진다.
+    프론트엔드에서 에러 코드 기반 분기를 하려면 에러 코드가 일관성 있게 정의되어야 한다.
+  decision: |
+    에러 코드는 Java ErrorCode enum이 단일 출처.
+    비즈니스 에러는 BusinessException(ErrorCode.XXX)으로 throw.
+    GlobalExceptionHandler가 모든 예외를 { success:false, error:{code, message, statusCode}, timestamp } 형식으로 변환.
+    도메인 접두사: COMMON_*, AUTH_*, DEPARTMENT_*, TEAM_*, USER_*
+  consequence: 새 에러 추가 시 ErrorCode enum에만 추가. RuntimeException 직접 throw 금지.
+
+- id: ADR-004
+  title: DB 마이그레이션 — Flyway 단일 관리
+  status: adopted
+  date: 2026-04-08
+  stacks: [springboot]
+  context: |
+    개발자가 로컬에서 직접 SQL을 실행하면 로컬/스테이징/운영 스키마가 달라져 배포 시 오류가 발생한다.
+    Spring Boot 기동 시 JPA ddl-auto로 스키마를 관리하면 운영 환경에서 위험하다.
+  decision: |
+    Flyway를 단일 마이그레이션 도구로 사용. ddl-auto는 validate 또는 none.
+    파일명 규칙: V{version}__{description}.sql (예: V1__init_schema.sql)
+    위치: src/main/resources/db/migration/
+    수동 SQL 직접 실행 금지. 마이그레이션 파일은 반드시 커밋.
+  consequence: 스키마 변경은 항상 새 Flyway 파일로. 기존 파일 수정 금지(체크섬 오류 발생).
+
+- id: ADR-005
+  title: Redis — Refresh Token 저장소
+  status: adopted
+  date: 2026-04-08
+  stacks: [springboot]
+  context: |
+    Refresh Token을 DB에 저장하면 만료/로그아웃 처리 시 DB 부하가 발생하고 TTL 자동 관리가 어렵다.
+    단일 세션 정책(동시 로그인 방지)이 필요하다.
+  decision: |
+    Redis key: refresh:token:{userId}
+    TTL: 14일(1,209,600s)
+    로그아웃 시 키 즉시 DELETE.
+    한 사용자당 단일 세션 — 새 로그인 시 기존 refresh token 덮어쓰기.
+  consequence: Redis 장애 시 재로그인 필요. 운영 환경에서 Redis 고가용성 구성 필수.
+
+- id: ADR-006
+  title: DTO 매핑 — MapStruct 단일 도구
+  status: adopted
+  date: 2026-04-12
+  stacks: [springboot]
+  context: |
+    8개 모듈에 걸쳐 다수의 Entity↔DTO 변환이 발생한다.
+    수동 매핑은 코드 중복과 유지보수 부담을 크게 늘린다.
+  decision: |
+    MapStruct를 모든 Entity↔DTO 변환의 단일 도구로 사용한다.
+    모듈별 *Mapper 인터페이스를 정의하고 componentModel = "spring"으로 설정한다.
+    커스텀 매핑은 @Mapping 어노테이션 또는 default 메서드로 처리한다.
+    Lombok과 함께 사용하며, annotationProcessor 순서를 올바르게 설정한다.
+  consequence: 컴파일 타임 검증으로 매핑 오류 조기 발견. 매핑 로직 중앙화. 런타임 오버헤드 없음.
+
+- id: ADR-007
+  title: 페이지네이션 표준
+  status: adopted
+  date: 2026-04-12
+  stacks: [springboot]
+  context: |
+    모든 목록 API에 일관된 페이지네이션 구조가 필요하다.
+    프론트엔드에서 페이지네이션 로직을 재사용하려면 응답 형식이 통일되어야 한다.
+  decision: |
+    Spring Data의 Pageable을 사용하되, 응답은 PageResponse<T>로 래핑한다.
+    기본값: page=0, size=20, max=100.
+    정렬: ?sort=field,asc|desc (복수 가능).
+    응답 형식: { content: [...], page, size, totalElements, totalPages, isFirst, isLast, hasNext, hasPrevious }
+    PageResponse<T>는 support/api/ 패키지에 정의한다.
+  consequence: 모든 목록 API의 응답 형식이 통일됨. 클라이언트는 동일한 페이지네이션 로직 재사용 가능.
+
+- id: ADR-008
+  title: 모듈 간 통신 — 직접 호출 + 이벤트
+  status: adopted
+  date: 2026-04-12
+  stacks: [springboot]
+  context: |
+    worklog→organization 등 모듈 간 데이터 조회 및 부수효과 전파 방식을 결정해야 한다.
+    메시지 브로커 도입은 초기 단계에서 운영 부담이 크다.
+  decision: |
+    조회/검증: Service 직접 호출. (예: worklogService가 organizationService.getDepartment() 호출)
+    부수효과: Spring ApplicationEvent + @TransactionalEventListener 사용.
+    (예: 업무일지 생성 → WorklogCreatedEvent 발행 → notification 모듈이 리스닝)
+    메시지 브로커는 초기 단계에서 도입하지 않는다.
+  consequence: 단순한 디버깅. 부수효과 실패가 메인 트랜잭션에 영향 안 줌. IDE에서 호출 추적 가능.
+
+- id: ADR-009
+  title: 파일 저장소 추상화
+  status: adopted
+  date: 2026-04-12
+  stacks: [springboot]
+  context: |
+    개발 환경은 로컬 파일시스템, 운영 환경은 S3/Object Storage를 사용할 예정이다.
+    환경별 저장소 전환이 코드 변경 없이 가능해야 한다.
+  decision: |
+    file 모듈에 FileStoragePort 인터페이스를 정의한다.
+    LocalFileStorageAdapter(dev 프로파일)와 S3FileStorageAdapter(prod 프로파일)를 구현한다.
+    Spring Profile(@Profile)로 활성 구현체를 전환한다.
+  consequence: 테스트 시 AWS 자격 증명 불필요. 운영 전환 시 코드 변경 없음. 새 저장소 추가 시 어댑터만 구현.
+
+- id: ADR-010
+  title: 테스트 전략 — 3계층
+  status: adopted
+  date: 2026-04-12
+  stacks: [springboot]
+  context: |
+    비즈니스 로직 신뢰도와 빠른 피드백 루프를 동시에 확보해야 한다.
+    통합 테스트만으로는 피드백이 느리고, 단위 테스트만으로는 실제 DB 동작을 검증할 수 없다.
+  decision: |
+    Unit Test (60%): Mockito로 Service/Policy 단위 테스트. <1초 피드백.
+    Integration Test (30%): Testcontainers로 실제 PostgreSQL/Redis 사용. Flyway 마이그레이션 검증 포함.
+    E2E Test (10%): MockMvc + full Spring context로 인증 포함 핵심 흐름 검증.
+    전체 커버리지 목표: 75%+, 비즈니스 로직 80%+.
+  consequence: 빠른 피드백과 높은 신뢰도 동시 확보. Testcontainers 사용으로 Docker 필수.
+
+- id: ADR-011
+  title: API 문서화 — Springdoc OpenAPI
+  status: adopted
+  date: 2026-04-12
+  stacks: [springboot]
+  context: |
+    프론트엔드 팀과 AI 팀이 API 스펙을 참조해야 한다.
+    수동 문서 관리는 코드와 문서 간 불일치를 유발한다.
+  decision: |
+    Springdoc OpenAPI로 OpenAPI 3.0 스펙을 코드에서 자동 생성한다.
+    개발 환경: /swagger-ui.html에서 Swagger UI 제공.
+    운영 환경: springdoc.api-docs.enabled=false로 비활성화.
+    필요 시 @Operation, @Tag 어노테이션으로 문서 보강.
+  consequence: 코드에서 문서 자동 파생. 별도 문서 관리 부담 최소화. 운영 환경 노출 방지.
