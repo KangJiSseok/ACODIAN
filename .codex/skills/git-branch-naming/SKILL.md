@@ -7,14 +7,26 @@ description: 현재 AX-WMS 모노레포 프로젝트의 브랜치 네이밍과 �
 
 이 스킬은 현재 프로젝트의 **브랜치 전략과 네이밍 규칙**만 담당한다.
 좋은 브랜치 이름은 작업 대상 앱과 변경 성격이 한눈에 드러나야 한다.
-현재 프로젝트는 **TBD(Trunk-Based Development)** 방식으로 운영하며, `master` 브랜치를 trunk로 사용한다.
-즉, 장수 `develop/dev` 브랜치를 두지 않고, **`master`에서 짧은 작업 브랜치를 생성해서 빠르게 머지/삭제**하는 흐름을 기본으로 한다.
+현재 프로젝트는 **GitFlow 경량 전략**으로 운영한다.
+
+## 브랜치 구조
+
+| 브랜치 | 역할 | 비고 |
+|--------|------|------|
+| `master` | 프로덕션 배포 브랜치 | 직접 커밋 금지. `dev` 또는 `hotfix/*`에서만 머지 |
+| `dev` | 개발 통합 브랜치 | 모든 작업 브랜치의 base. 기능이 모이는 곳 |
+| `feat/*` | 기능 개발 | `dev`에서 생성 → `dev`로 PR |
+| `fix/*` | 버그 수정 | `dev`에서 생성 → `dev`로 PR |
+| `refactor/*` | 리팩토링 | `dev`에서 생성 → `dev`로 PR |
+| `chore/*` | 빌드/설정 잡일 | `dev`에서 생성 → `dev`로 PR |
+| `docs/*` | 문서 작업 | `dev`에서 생성 → `dev`로 PR |
+| `hotfix/*` | 운영 긴급 수정 | `master`에서 생성 → `master`로 PR 후 `dev`에도 반영 |
 
 ## 기본 전략
-- trunk 브랜치: `master`
-- 작업 브랜치는 모두 `master` 에서 생성
-- 작업 브랜치는 짧게 유지하고, 머지 후 바로 삭제
-- 장수 통합 브랜치(`dev`, `develop`)는 두지 않음
+- 일상 작업 브랜치의 base: **`dev`**
+- `dev` → `master`: 릴리즈 시 PR로 머지
+- `hotfix/*`: `master`에서 생성, 완료 후 `master` + `dev` 양쪽에 반영
+- 작업 브랜치는 머지 후 바로 삭제
 
 ## 권장 형식
 ```text
@@ -37,7 +49,7 @@ description: 현재 AX-WMS 모노레포 프로젝트의 브랜치 네이밍과 �
 - topic은 1~3단어 이내 권장
 - 첫 토큰은 **작업 유형(type)** 으로 시작
 - 두 번째 토큰은 **영역(area)** 으로 둔다
-- area는 `web`, `api`, `ai`, `infra`, `docs`, `shared` 중 하나를 사용
+- area는 `web`, `api`, `ai`, `infra`, `docs`, `agent` 중 하나를 사용
 - 브랜치 이름은 짧고 일회성으로 유지한다
 
 ## type 권장값
@@ -57,17 +69,18 @@ description: 현재 AX-WMS 모노레포 프로젝트의 브랜치 네이밍과 �
 - `fix/api/worklog-status`
 - `feat/ai/embedding-pipeline`
 - `chore/infra/docker-compose`
-- `refactor/shared/git-convention-skill`
+- `refactor/agent/git-convention-skill`
 
 ## 추천 규칙
 사용자가 브랜치를 물으면 아래 우선순위로 제안한다.
 1. 먼저 작업 유형을 분류한다 (`feat/fix/chore/refactor/docs/hotfix`)
-2. 그다음 어느 앱/영역을 바꾸는지 분류한다 (`web/api/ai/infra/docs/shared`)
+2. 그다음 어느 앱/영역을 바꾸는지 분류한다 (`web/api/ai/infra/docs/agent`)
 3. 가장 짧고 명확한 topic을 뽑는다
 4. 브랜치명 1순위 + 대안 1~2개 제시한다
-5. 필요하면 `master` 에서 브랜치를 만드는 명령까지 함께 제안한다
+5. `hotfix/*` 가 아니면 `dev` 에서, `hotfix/*` 이면 `master` 에서 브랜치를 만드는 명령까지 함께 제안한다
 
 ## 응답 예시 스타일
 - 추천: `fix/api/worklog-status`
-- 이유: TBD 방식에서 작업 유형과 영역, 주제가 모두 드러나며 짧은 브랜치로 운영하기 좋기 때문
+- 이유: 작업 유형과 영역, 주제가 모두 드러나며 `dev` 기반 단기 브랜치로 운영하기 좋기 때문
 - 대안: `fix/api/status-transition`, `refactor/api/worklog-status`
+- base 브랜치: `dev` (hotfix 계열이면 `master`)
