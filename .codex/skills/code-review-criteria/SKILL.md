@@ -17,7 +17,10 @@ description: 평가기준 문서 자동 생성. ADR 추출 + code-convention 필
 
 ## Execution Mode
 
-이 skill은 **2-stage delegation**으로 동작한다. 리더 세션은 최종 머지만 담당하며, full ADR 본문은 절대 보관하지 않는다.
+이 skill은 **2-stage delegation**으로 동작한다. 리더 세션은 최종 머지만 담당한다.
+
+- **Stage 1 (ADR 추출)**: full ADR bleed를 막기 위해 **격리된 subagent**로 실행한다.
+- **Stage 2 (평가기준 머지)**: 코드 컨벤션과 작업 설계 요약을 현재 파이프라인 문맥과 함께 다뤄야 하므로 **forked context subagent**로 실행한다.
 
 ### Stage 1: ADR 추출 (격리된 subagent)
 
@@ -49,7 +52,7 @@ delegate(
 )
 ```
 
-### Stage 2: 평가기준 머지 (격리된 subagent)
+### Stage 2: 평가기준 머지 (forked context subagent)
 
 Stage 1의 결과를 입력으로 받아 code-convention과 결합한다:
 
@@ -57,6 +60,7 @@ Stage 1의 결과를 입력으로 받아 code-convention과 결합한다:
 delegate(
   role="quality-strategist",
   tier="STANDARD",
+  fork_context=true,
   task="CODE QUALITY GUIDE MERGE
 
 다음 입력을 결합하여 code-quality-guide.md를 작성하라.
@@ -127,6 +131,6 @@ delegate(
 
 ## Context Isolation Rationale
 
-ADR 전문(예: 50개 ADR × 평균 800자 = 40KB)을 리더 컨텍스트에 직접 주입하면, 이후 단계(PR 본문, 리뷰)에서 ADR 토큰이 계속 쌓여 컨텍스트가 빠르게 오염된다.
+ADR 전문(예: 50개 ADR × 평균 800자 = 40KB)을 리더 컨텍스트에 직접 주입하면, 이후 단계(PR 본문, 리뷰)에서 ADR 토큰이 계속 쌓여 컨텍스트가 빠르게 오염된다. 따라서 ADR 분석은 Stage 1 subagent에 격리하고, 리더에게는 **추출 결과와 짧은 요약만** 전달한다.
 
-이 skill은 ADR 분석을 Stage 1 subagent에 격리하고, 리더에게는 **추출 결과와 짧은 요약만** 전달함으로써 리더 컨텍스트를 깨끗하게 유지한다. 핵심은 full ADR bleed를 막고 artifact handoff만 유지하는 것이다.
+반면 code-convention 머지 단계는 이미 정제된 ADR 추출 결과와 현재 파이프라인의 설계 요약, 사용자 피드백 문맥을 함께 다루는 편이 정확도가 높다. 그래서 Stage 2는 **forked context subagent**로 실행하되, 출력은 계속 bounded payload와 산출물 파일로 제한한다.

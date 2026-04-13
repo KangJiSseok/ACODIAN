@@ -74,7 +74,7 @@ description: 코드리뷰 전체 파이프라인 오케스트레이션 — 설�
 
 ### Step 2: 설계의도 작성
 
-`$code-review-intent`를 호출한다. 해당 skill은 내부적으로 `delegate(role="analyst")`로 격리 실행된다.
+`$code-review-intent`를 호출한다. 해당 skill은 내부적으로 `delegate(role="writer")`를 **forked context**로 실행한다.
 
 1. subagent가 `design-intent.md`를 저장하고, 리더에게는 artifact 경로 + 짧은 요약 + **모호한 논의점**만 반환한다.
 2. 사용자 피드백을 반영하여 확정한다.
@@ -82,7 +82,7 @@ description: 코드리뷰 전체 파이프라인 오케스트레이션 — 설�
 
 ### Step 3: 평가기준 수립
 
-`$code-review-criteria`를 호출한다. 내부적으로 `delegate(role="architect")` + ADR 추출 subagent 2-stage로 동작한다.
+`$code-review-criteria`를 호출한다. 내부적으로 **ADR 추출은 격리 subagent**, **코드 컨벤션 머지는 forked context subagent**로 나누어 동작한다.
 
 Step 1에서 감지된 모듈 경로(예: `docs/api/adr.yaml`)를 함께 전달한다.
 
@@ -94,7 +94,7 @@ Step 1에서 감지된 모듈 경로(예: `docs/api/adr.yaml`)를 함께 전달�
 
 ### Step 4: PR 본문 생성
 
-`$code-review-pr-body`를 호출한다. 내부적으로 `delegate(role="writer")`로 격리 실행된다.
+`$code-review-pr-body`를 호출한다. 내부적으로 `delegate(role="writer")`를 **forked context**로 실행한다.
 
 1. subagent가 git diff와 기존 artifact 기반으로 PR 본문 초안을 생성한다.
 2. 리더에게는 artifact 경로 + 짧은 요약 + **PR 설명에서 명확히 해야 할 논의점**(breaking change 여부, 마이그레이션 필요성, 관련 이슈 번호 등)만 제시한다.
