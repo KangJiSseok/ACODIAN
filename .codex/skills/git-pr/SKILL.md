@@ -13,15 +13,15 @@ description: 현재 AX-WMS 프로젝트의 PR 제목과 본문을 한글 맥락�
 
 ## PR 제목 형식
 ```text
-<type>(<scope>): <subject>
+[<Type>(<scope>)]: <subject>
 ```
 
 ## type 예시
-- `docs`
-- `fix`
-- `feat`
-- `refactor`
-- `chore`
+- `Docs`
+- `Fix`
+- `Feat`
+- `Refactor`
+- `Chore`
 
 ## scope 예시
 - `web`
@@ -41,14 +41,16 @@ description: 현재 AX-WMS 프로젝트의 PR 제목과 본문을 한글 맥락�
 - 무엇을, 왜 바꿨는지 알 수 있게 작성
 
 ## PR 제목 예시
-- `docs(api): 응답 스키마 가이드 업데이트`
-- `fix(api): 잘못된 상태 전환 방지`
-- `feat(web): 중요도 필터 추가`
-- `chore(agent): 프로젝트 git 스킬 추가`
-- `refactor(api): worklog 상태 흐름 단순화`
+- `[Docs(api)]: 응답 스키마 가이드 업데이트`
+- `[Fix(api)]: 잘못된 상태 전환 방지`
+- `[Feat(web)]: 중요도 필터 추가`
+- `[Chore(agent)]: 프로젝트 git 스킬 추가`
+- `[Refactor(api)]: worklog 상태 흐름 단순화`
 
 ## PR 제목 작성 원칙
 - 제목은 한 줄로 짧게 쓴다.
+- 제목은 `[Type(scope)]: subject` 형식을 사용한다.
+- `Type`은 앞글자를 대문자로 쓰고, `scope`는 괄호 안에 넣는다.
 - `type`은 변경 성격을 드러내고, `scope`는 변경 영역을 드러낸다.
 - `subject`는 명사형으로 핵심만 쓴다.
 - PR 제목은 커밋 메시지처럼 엄격한 규약 검사용이 아니라, **리뷰어가 빠르게 이해할 수 있는 검색 친화형 요약**으로 본다.

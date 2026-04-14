@@ -15,12 +15,13 @@ base branch 대비 git diff와 산출물 문서를 기반으로 PR 본문 초안
 
 ## Execution Mode
 
-이 skill은 **리더 세션에서 직접 수행하지 않는다.** 반드시 `delegate()`로 writer subagent에 위임한다:
+이 skill은 **리더 세션에서 직접 수행하지 않는다.** 반드시 `delegate()`로 writer subagent에 **forked context** 위임한다. PR 본문 단계는 git diff뿐 아니라 현재 파이프라인에서 확정된 설계 의도와 사용자 피드백 문맥을 함께 반영해야 하므로, 부모 세션의 관련 문맥을 넘기는 것이 기본값이다:
 
 ```
 delegate(
   role="writer",
   tier="STANDARD",
+  fork_context=true,
   task="PR BODY DRAFTING
 
 현재 feature branch의 PR 본문 초안을 작성하라.
@@ -101,4 +102,4 @@ delegate(
 
 ## Context Isolation Note
 
-PR 본문 작성에 git diff 전체(수천 줄 가능)를 리더 컨텍스트에 끌어오면, 이후 단계(리뷰, 반영)에서 컨텍스트가 빠르게 포화된다. writer subagent에 위임하면 diff는 subagent 컨텍스트에서만 소비되고, 리더에게는 **artifact 경로, 짧은 요약, 논의점**만 전달된다.
+PR 본문 작성에 git diff 전체(수천 줄 가능)를 리더가 직접 다루면, 이후 단계(리뷰, 반영)에서 컨텍스트가 빠르게 포화된다. 따라서 Step 4는 **부모 문맥을 포크한 writer subagent**에게 맡기되, 결과 전달은 계속 bounded payload로 제한한다. 즉 입력은 forked context + diff + 기존 artifact를 함께 활용하고, 출력은 **artifact 경로, 짧은 요약, 논의점**만 리더에게 전달한다.

@@ -15,12 +15,13 @@ description: 설계의도 문서를 작성. 요구사항, 설계 결정, 트레�
 
 ## Execution Mode
 
-이 skill은 **리더 세션에서 직접 수행하지 않는다.** 반드시 `delegate()`로 analyst subagent에 위임한다:
+이 skill은 **리더 세션에서 직접 수행하지 않는다.** 반드시 `delegate()`로 writer subagent에 **forked context** 위임한다. 설계의도 단계는 현재 대화에서 논의된 요구사항, 설계 결정, 트레이드오프를 직접 입력으로 사용하므로, 부모 세션의 관련 문맥을 그대로 넘기는 것이 기본값이다:
 
 ```
 delegate(
-  role="analyst",
+  role="writer",
   tier="STANDARD",
+  fork_context=true,
   task="DESIGN INTENT DOCUMENTATION
 
 현재 feature branch의 설계의도 문서를 작성하라.
@@ -94,4 +95,4 @@ subagent는 다음을 수행한다:
 
 ## Context Isolation Note
 
-리더가 이 skill을 직접 실행하면 이후 단계(평가기준, PR본문, 리뷰)가 전부 리더 컨텍스트에 쌓여 토큰 낭비와 혼선이 발생한다. 반드시 `delegate()`로 위임하여 subagent의 격리된 컨텍스트 안에서 설계의도 작성만 수행하고, 리더에게는 전문이 아닌 bounded payload만 반환하도록 한다.
+리더가 이 skill을 직접 실행하면 이후 단계(평가기준, PR본문, 리뷰)가 전부 리더 컨텍스트에 쌓여 토큰 낭비와 혼선이 발생한다. 따라서 Step 2는 **부모 문맥을 포크한 서브에이전트**에게 맡기되, 결과 전달은 계속 bounded payload로 제한한다. 즉 입력은 forked context로 풍부하게 유지하고, 출력은 artifact 경로와 논의점 중심으로 좁게 유지한다.
