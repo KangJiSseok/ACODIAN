@@ -58,12 +58,14 @@
 
 - id: ADR-005
   title: Redis — Refresh Token 저장소
-  status: adopted
+  status: planned
   date: 2026-04-08
   stacks: [springboot]
   context: |
     Refresh Token을 DB에 저장하면 만료/로그아웃 처리 시 DB 부하가 발생하고 TTL 자동 관리가 어렵다.
     단일 세션 정책(동시 로그인 방지)이 필요하다.
+    주의: 갱신 API(POST /api/auth/refresh)는 현재 plan/api-design.md에서 Proposed-risk-closure 상태이므로,
+    해당 API가 Inferred-required 이상으로 격상될 때 이 ADR도 adopted로 전환한다.
   decision: |
     Redis key: refresh:token:{userId}
     TTL: 14일(1,209,600s)
@@ -72,19 +74,29 @@
   consequence: Redis 장애 시 재로그인 필요. 운영 환경에서 Redis 고가용성 구성 필수.
 
 - id: ADR-006
-  title: DTO 매핑 — MapStruct 단일 도구
+  title: DTO 매핑 — API DTO 명시적 변환 + 팩토리 메서드 기반 응답 생성
   status: adopted
-  date: 2026-04-12
+  date: 2026-04-14
   stacks: [springboot]
   context: |
     8개 모듈에 걸쳐 다수의 Entity↔DTO 변환이 발생한다.
-    수동 매핑은 코드 중복과 유지보수 부담을 크게 늘린다.
+    동시에 각 컨트롤러 API의 요청/응답 계약을 한 눈에 파악할 수 있어야 한다.
+    자동 매핑 도구를 기본 전제로 두면 API별로 국소적인 변환과 도메인 의미가 강한 조립 로직까지
+    숨겨져 가독성과 응집도가 떨어질 수 있다.
+    현재 프로젝트에서는 응답 DTO를 명시적으로 작성하는 방식이 더 단순하고 일관된다고 판단한다.
   decision: |
-    MapStruct를 모든 Entity↔DTO 변환의 단일 도구로 사용한다.
-    모듈별 *Mapper 인터페이스를 정의하고 componentModel = "spring"으로 설정한다.
-    커스텀 매핑은 @Mapping 어노테이션 또는 default 메서드로 처리한다.
-    Lombok과 함께 사용하며, annotationProcessor 순서를 올바르게 설정한다.
-  consequence: 컴파일 타임 검증으로 매핑 오류 조기 발견. 매핑 로직 중앙화. 런타임 오버헤드 없음.
+    API 전용 DTO는 유스케이스 기준의 {UseCase}Api 외부 클래스에 모은다.
+    각 API 클래스는 static nested class 두 개로 Request/Response를 정의한다.
+    Request는 Controller 바인딩 전용으로 두고, Service 입력은 toCommand()/toCriteria() 등으로 변환한다.
+    Response는 static factory method(from/of)로 Service 결과 또는 도메인 객체를 받아 생성한다.
+    Request DTO를 Entity로 직접 매핑하지 않는다.
+    API 요청/응답 변환은 명시적 코드로 작성하며, 자동 매핑 도구를 기본 규칙으로 도입하지 않는다.
+    Entity 생성/수정은 Service 또는 Domain의 책임으로 둔다.
+  consequence: |
+    API 계약이 유스케이스 단위로 응집된다.
+    Controller DTO와 Service 입력이 분리되어 계층 경계가 명확해진다.
+    응답 DTO 생성 규칙이 각 DTO 내부에 드러나 가독성과 추적성이 높아진다.
+    자동 매핑 설정과 숨겨진 변환 규칙 없이, 명시적인 코드 중심으로 일관된 DTO 변환 방식을 유지할 수 있다.
 
 - id: ADR-007
   title: 페이지네이션 표준
@@ -96,10 +108,12 @@
     프론트엔드에서 페이지네이션 로직을 재사용하려면 응답 형식이 통일되어야 한다.
   decision: |
     Spring Data의 Pageable을 사용하되, 응답은 PageResponse<T>로 래핑한다.
-    기본값: page=0, size=20, max=100.
-    정렬: ?sort=field,asc|desc (복수 가능).
-    응답 형식: { content: [...], page, size, totalElements, totalPages, isFirst, isLast, hasNext, hasPrevious }
+    기본값: page=1 (1-indexed), pageSize=20, max=100.
+    정렬: ?sortBy=field&sortDirection=ASC|DESC.
+    PageResponse 필드: { items: [...], page, pageSize, totalCount, totalPages, isFirst, isLast, hasNext, hasPrevious }
     PageResponse<T>는 support/api/ 패키지에 정의한다.
+    PageResponse는 GlobalResponseAdvice의 data 필드 내부에 위치한다.
+    API 설계서의 각 응답 예시는 data 필드 내부 구조만 표현하며, 최종 응답은 ADR-001 래퍼가 자동 적용된다.
   consequence: 모든 목록 API의 응답 형식이 통일됨. 클라이언트는 동일한 페이지네이션 로직 재사용 가능.
 
 - id: ADR-008
@@ -120,16 +134,19 @@
 - id: ADR-009
   title: 파일 저장소 추상화
   status: adopted
-  date: 2026-04-12
+  date: 2026-04-14
   stacks: [springboot]
   context: |
-    개발 환경은 로컬 파일시스템, 운영 환경은 S3/Object Storage를 사용할 예정이다.
-    환경별 저장소 전환이 코드 변경 없이 가능해야 한다.
+    개발 환경(dev)과 운영 환경(prod) 모두 S3 기반 저장소를 사용할 예정이다.
+    두 환경은 저장 방식은 같지만 bucket, prefix, credentials, endpoint 등 설정값이 다를 수 있다.
+    환경 차이를 설정으로 분리하면서도, 향후 저장소 변경 가능성은 열어둬야 한다.
   decision: |
     file 모듈에 FileStoragePort 인터페이스를 정의한다.
-    LocalFileStorageAdapter(dev 프로파일)와 S3FileStorageAdapter(prod 프로파일)를 구현한다.
-    Spring Profile(@Profile)로 활성 구현체를 전환한다.
-  consequence: 테스트 시 AWS 자격 증명 불필요. 운영 전환 시 코드 변경 없음. 새 저장소 추가 시 어댑터만 구현.
+    현재 dev/prod 프로파일 모두 S3FileStorageAdapter를 사용한다.
+    프로파일은 구현체를 전환하지 않고 bucket, prefix, credentials, endpoint 등 설정만 분리한다.
+    향후 로컬 파일시스템 또는 다른 Object Storage가 필요해질 경우 새 Adapter를 추가한다.
+  consequence: 개발/운영 환경이 동일한 저장 방식(S3 API)을 사용하므로 환경 차이로 인한 문제를 줄일 수 있다.
+    설정만으로 환경 전환이 가능하다. 테스트 대역과 향후 저장소 확장을 위해 Port 추상화는 유지한다.
 
 - id: ADR-010
   title: 테스트 전략 — 3계층
@@ -160,3 +177,24 @@
     운영 환경: springdoc.api-docs.enabled=false로 비활성화.
     필요 시 @Operation, @Tag 어노테이션으로 문서 보강.
   consequence: 코드에서 문서 자동 파생. 별도 문서 관리 부담 최소화. 운영 환경 노출 방지.
+
+- id: ADR-012
+  title: 타입 세이프 쿼리 — JOOQ (QueryDSL 대체)
+  status: adopted
+  date: 2026-04-14
+  stacks: [springboot]
+  context: |
+    복잡한 동적 쿼리(다중 조건 필터링, 집계, 다중 테이블 JOIN)를 타입 세이프하게 작성해야 한다.
+    QueryDSL 5.x는 Hibernate 6.x / Spring Boot 3+ 환경에서 유지보수가 사실상 중단됐고,
+    Q클래스 생성을 위해 Entity 컴파일 후 annotationProcessor 재실행이 필요해 빌드 흐름이 복잡해진다.
+  decision: |
+    JOOQ를 타입 세이프 쿼리 도구로 채택한다. QueryDSL 의존성은 제거한다.
+    단순 CRUD(findById, save, findAll 등)는 Spring Data JPA를 그대로 사용한다.
+    복잡한 동적 쿼리, 집계, 다중 테이블 JOIN은 JOOQ DSLContext를 사용한다.
+    코드 생성: nu.studer.jooq Gradle 플러그인 + DDLDatabase (Flyway SQL 파일 기반, DB 불필요).
+    생성 패키지: com.ibank.axwms.infrastructure.jooq.
+    쿼리 클래스 배치: infrastructure/jooq/ 패키지, {Entity}JooqRepository 패턴 (SB-016 참조).
+  consequence: |
+    QueryDSL Q클래스 불필요. Flyway 마이그레이션 파일만 있으면 별도 DB 없이 코드 생성 가능.
+    JOOQ DSL은 SQL과 1:1 대응되어 학습 곡선이 낮고 디버깅이 직관적이다.
+    엔티티 변경 시 Flyway 파일 추가 후 ./gradlew jooqGenerate 실행으로 타입 갱신.
