@@ -2,6 +2,7 @@ plugins {
     id 'java'
     id 'org.springframework.boot' version '4.0.5'
     id 'io.spring.dependency-management' version '1.1.7'
+    id 'nu.studer.jooq' version '9.0'
 }
 
 group = 'com.ibank'
@@ -42,9 +43,6 @@ dependencies {
     // --- DTO Mapping ---
     implementation 'org.mapstruct:mapstruct:1.6.3'
 
-    // --- Type-safe Query ---
-    implementation 'com.querydsl:querydsl-jpa:5.1.0:jakarta'
-
     // --- Lombok ---
     compileOnly 'org.projectlombok:lombok'
 
@@ -58,7 +56,6 @@ dependencies {
     annotationProcessor 'org.springframework.boot:spring-boot-configuration-processor'
     annotationProcessor 'org.projectlombok:lombok'
     annotationProcessor 'org.mapstruct:mapstruct-processor:1.6.3'
-    annotationProcessor 'com.querydsl:querydsl-apt:5.1.0:jakarta'
     annotationProcessor 'jakarta.persistence:jakarta.persistence-api'
 
     // --- Test ---
@@ -78,9 +75,91 @@ tasks.named('test') {
     useJUnitPlatform()
 }
 
-compileJava {
-    options.compilerArgs += [
-        '-Amapstruct.defaultComponentModel=spring',
-        '-Amapstruct.unmappedTargetPolicy=WARN'
-    ]
+apply from: 'gradle/jooq-codegen.gradle'
+
+// jOOQ matcher rule 객체를 만들어주는 헬퍼 함수
+def matcherRuleFactory = { String value ->
+    new org.jooq.meta.jaxb.MatcherRule()
+            .withTransform(org.jooq.meta.jaxb.MatcherTransformType.AS_IS)
+            .withExpression(value)
+}
+
+// jooq 설정이다. 실행되는 명령어가 아님!
+jooq {
+    version = project.findProperty('jooqVersion')?.toString()?.trim()
+    configurations {
+        main {
+
+            // jOOQ 플러그인의 기본 "항상 생성" 동작은 끄고,
+            // api/gradle/jooq-codegen.gradle 에서 필요한 경우에만 선행 보장한다.
+            generateSchemaSourceOnCompilation = false
+
+            generationTool {
+                jdbc {
+                    driver = 'org.postgresql.Driver'
+                    url = 'jdbc:postgresql://invalid-placeholder/axwms'
+                    user = 'unused'
+                    password = 'unused'
+                }
+                //jOOQ가 어떤 방식으로 Java 코드를 만들지 정의
+                generator {
+                    strategy {
+                        matchers {
+                            foreignKeys {
+                                foreignKey {
+                                    expression = 'fk_user_primary_department'
+                                    pathMethodName = matcherRuleFactory('primaryDepartment')
+                                    pathMethodNameInverse = matcherRuleFactory('primaryDepartmentUsers')
+                                }
+                                foreignKey {
+                                    expression = 'fk_department_head_member'
+                                    pathMethodName = matcherRuleFactory('departmentHeadMember')
+                                    pathMethodNameInverse = matcherRuleFactory('headedDepartment')
+                                }
+                                foreignKey {
+                                    expression = 'fk_worklog_dependency_current_worklog'
+                                    pathMethodName = matcherRuleFactory('currentWorklog')
+                                    pathMethodNameInverse = matcherRuleFactory('outgoingDependencies')
+                                    pathMethodNameManyToMany = matcherRuleFactory('predecessorWorklogs')
+                                }
+                                foreignKey {
+                                    expression = 'fk_worklog_dependency_predecessor_worklog'
+                                    pathMethodName = matcherRuleFactory('predecessorWorklog')
+                                    pathMethodNameInverse = matcherRuleFactory('incomingDependencies')
+                                    pathMethodNameManyToMany = matcherRuleFactory('dependentWorklogs')
+                                }
+                            }
+                        }
+                    }
+                    //jOOQ가 어떤 DB 메타데이터를 읽을지 지정
+                    database {
+                        name = 'org.jooq.meta.postgres.PostgresDatabase'
+                        inputSchema = 'public'
+                        includes = '.*'
+
+                        // embedding 테이블은 실제 DB/Flyway에는 유지하지만,
+                        // 현재 API 모듈은 vector 컬럼을 직접 사용하지 않으므로 jOOQ 생성 대상에서만 제외한다.
+                        // 추후 API가 embedding 저장/조회/검색을 직접 담당하게 되면 이 excludes 정책을 재검토한다.
+                        excludes = 'flyway_schema_history|tb_worklog_embedding|tb_file_embedding'
+                    }
+                    //jOOQ가 어떤 종류의 Java 산출물을 만들지 정하는 옵션
+                    generate {
+                        records = true  // 각 테이블 마다 Recode 클래스 생성
+                        daos = false    //DAO 클래스 안만듬
+                        fluentSetters = true    //체이닝 기법 가능하도록
+
+                        // 현재 API 모듈은 테이블/레코드 중심으로만 jOOQ를 사용한다.
+                        // pgvector extension이 노출하는 routine/UDT generated code는 이번 범위에서 제외한다.
+                        routines = false
+                        udts = false
+                    }
+                    //생성된 Java 파일을 어디에, 어떤 패키지로 만들지 결정
+                    target {
+                        packageName = 'com.ibank.axwms.global.jooq'
+                        directory = layout.projectDirectory.dir('src/generated/jooq/main/java').asFile.path
+                    }
+                }
+            }
+        }
+    }
 }

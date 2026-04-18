@@ -1,0 +1,30 @@
+# ──────────────────────────────────────────────────────────
+# Version Catalog
+#
+# Spring Boot BOM(spring-boot-starter-*)이 관리하는 의존성
+# (Lombok, Flyway, PostgreSQL 드라이버, JUnit 등)은 여기서 제외한다.
+#
+# jooq / flyway / postgresql 세 버전은 gradle.properties에서 관리한다.
+# jooq-codegen.gradle 의 buildscript {} 블록이 project.findProperty()로
+# 이 값들을 읽어야 하기 때문에 version catalog로 이전할 수 없다.
+# ──────────────────────────────────────────────────────────
+
+[versions]
+spring-boot          = "4.0.5"
+spring-dep-mgmt      = "1.1.7"
+jooq-plugin          = "9.0"
+jjwt                 = "0.12.6"
+springdoc            = "2.8.6"
+testcontainers       = "1.20.4"
+
+[libraries]
+jjwt-api             = { module = "io.jsonwebtoken:jjwt-api",                           version.ref = "jjwt" }
+jjwt-impl            = { module = "io.jsonwebtoken:jjwt-impl",                          version.ref = "jjwt" }
+jjwt-jackson         = { module = "io.jsonwebtoken:jjwt-jackson",                       version.ref = "jjwt" }
+springdoc-openapi    = { module = "org.springdoc:springdoc-openapi-starter-webmvc-ui",  version.ref = "springdoc" }
+testcontainers-bom   = { module = "org.testcontainers:testcontainers-bom",              version.ref = "testcontainers" }
+
+[plugins]
+springBoot           = { id = "org.springframework.boot",        version.ref = "spring-boot" }
+springDepMgmt        = { id = "io.spring.dependency-management", version.ref = "spring-dep-mgmt" }
+jooq                 = { id = "nu.studer.jooq",                  version.ref = "jooq-plugin" }
