@@ -32,7 +32,7 @@ CREATE EXTENSION IF NOT EXISTS vector;
 --   - tb_department (1) : tb_user (1) via department_head_user_id
 --     -> 각 부서는 부서장 사용자 1명을 참조함.
 --     -> UNIQUE(department_head_user_id)로 사용자 1명은 최대 1개 부서의 부서장만 맡을 수 있음.
---     -> 부서장은 반드시 자신의 주 소속(인사 기준) 부서와 동일한 부서만 맡을 수 있음.
+--     -> 부서장-부서 간 부서 일치 여부는 DB에서 강제하지 않으며, 애플리케이션 레이어 책임임.
 -- =====================================================================
 CREATE TABLE tb_department (
     department_id        BIGSERIAL PRIMARY KEY,                 -- PK, 부서 식별자
@@ -93,7 +93,7 @@ CREATE TABLE tb_user (
     employment_status    VARCHAR(20) NOT NULL DEFAULT 'ACTIVE',-- 재직 상태
     created_at           TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP, -- 생성 시각
     updated_at           TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP, -- 수정 시각
-    CONSTRAINT fk_user_department
+    CONSTRAINT fk_user_primary_department
         FOREIGN KEY (department_id) REFERENCES tb_department(department_id),
     CONSTRAINT ck_user_role_code
         CHECK (role_code IN ('DIRECTOR', 'DEPT_HEAD', 'TEAM_LEAD', 'MEMBER')),
@@ -102,74 +102,8 @@ CREATE TABLE tb_user (
 );
 
 ALTER TABLE tb_department
-    ADD CONSTRAINT fk_department_head_user
+    ADD CONSTRAINT fk_department_head_member
     FOREIGN KEY (department_head_user_id) REFERENCES tb_user(user_id);
-
--- 부서장 배정 검증:
--- 1) department_head_user_id 로 지정된 사용자의 주 소속 부서가 해당 부서와 같아야 함
--- 2) 이미 부서장인 사용자의 department_id 를 다른 부서로 변경할 수 없음
-CREATE OR REPLACE FUNCTION fn_validate_department_head_user()
-RETURNS TRIGGER AS $$
-DECLARE
-    v_user_department_id BIGINT;
-BEGIN
-    IF NEW.department_head_user_id IS NULL THEN
-        RETURN NEW;
-    END IF;
-
-    SELECT department_id
-      INTO v_user_department_id
-      FROM tb_user
-     WHERE user_id = NEW.department_head_user_id;
-
-    IF v_user_department_id IS NULL THEN
-        RAISE EXCEPTION 'Department head user % does not exist or has no department.', NEW.department_head_user_id;
-    END IF;
-
-    IF v_user_department_id <> NEW.department_id THEN
-        RAISE EXCEPTION
-            'Department head user % belongs to department %, so cannot head department %.',
-            NEW.department_head_user_id, v_user_department_id, NEW.department_id;
-    END IF;
-
-    RETURN NEW;
-END;
-$$ LANGUAGE plpgsql;
-
-CREATE OR REPLACE FUNCTION fn_prevent_head_user_department_mismatch()
-RETURNS TRIGGER AS $$
-DECLARE
-    v_headed_department_id BIGINT;
-BEGIN
-    IF NEW.department_id = OLD.department_id THEN
-        RETURN NEW;
-    END IF;
-
-    SELECT department_id
-      INTO v_headed_department_id
-      FROM tb_department
-     WHERE department_head_user_id = NEW.user_id;
-
-    IF v_headed_department_id IS NOT NULL
-       AND v_headed_department_id <> NEW.department_id THEN
-        RAISE EXCEPTION
-            'User % is head of department %, so department_id cannot be changed to %.',
-            NEW.user_id, v_headed_department_id, NEW.department_id;
-    END IF;
-
-    RETURN NEW;
-END;
-$$ LANGUAGE plpgsql;
-
-CREATE TRIGGER trg_validate_department_head_user
-BEFORE INSERT OR UPDATE OF department_head_user_id ON tb_department
-FOR EACH ROW
-EXECUTE FUNCTION fn_validate_department_head_user();
-
-CREATE TRIGGER trg_prevent_head_user_department_mismatch
-BEFORE UPDATE OF department_id ON tb_user
-FOR EACH ROW
-EXECUTE FUNCTION fn_prevent_head_user_department_mismatch();
 
 -- =====================================================================
 -- 3. 팀
@@ -227,9 +161,9 @@ CREATE TABLE tb_team (
 --   - team_role = 'LEADER' 로 팀장을 표현함.
 --   - 애플리케이션 단에서 팀당 팀장 1명 정책을 관리함.
 --
---   [부서 일치 정책]
---   - 사용자와 팀의 소속 부서는 동일해야 함.
---   - 즉, 문서 기준으로 사용자는 자신의 소속 부서 내 팀에만 참여할 수 있음.
+--   [부서 경계 정책]
+--   - 사용자는 자신의 주 소속 부서와 다른 부서의 팀에도 참여할 수 있음.
+--   - 즉, tb_user.department_id 와 tb_team.department_id 일치 여부는 강제하지 않음.
 -- =====================================================================
 CREATE TABLE tb_user_team (
     user_team_id          BIGSERIAL PRIMARY KEY,                -- PK, 사용자-팀 관계 식별자
@@ -248,109 +182,6 @@ CREATE TABLE tb_user_team (
     CONSTRAINT ck_user_team_role
         CHECK (team_role IN ('LEADER', 'MEMBER'))
 );
-
--- 사용자-팀 부서 일치 검증:
--- 1) 사용자-팀 연결 생성/수정 시 사용자.department_id = 팀.department_id 이어야 함
--- 2) 이미 팀에 속한 사용자의 department_id 를 다른 부서로 변경할 수 없음
--- 3) 멤버가 있는 팀의 department_id 를 다른 부서로 변경할 수 없음
-CREATE OR REPLACE FUNCTION fn_validate_user_team_department_match()
-RETURNS TRIGGER AS $$
-DECLARE
-    v_user_department_id BIGINT;
-    v_team_department_id BIGINT;
-BEGIN
-    SELECT department_id
-      INTO v_user_department_id
-      FROM tb_user
-     WHERE user_id = NEW.user_id;
-
-    SELECT department_id
-      INTO v_team_department_id
-      FROM tb_team
-     WHERE team_id = NEW.team_id;
-
-    IF v_user_department_id IS NULL OR v_team_department_id IS NULL THEN
-        RAISE EXCEPTION 'User-team mapping requires existing user and team.';
-    END IF;
-
-    IF v_user_department_id <> v_team_department_id THEN
-        RAISE EXCEPTION
-            'User % belongs to department %, so cannot join team % in department %.',
-            NEW.user_id, v_user_department_id, NEW.team_id, v_team_department_id;
-    END IF;
-
-    RETURN NEW;
-END;
-$$ LANGUAGE plpgsql;
-
-CREATE OR REPLACE FUNCTION fn_prevent_user_department_change_with_team_memberships()
-RETURNS TRIGGER AS $$
-DECLARE
-    v_mismatch_exists BOOLEAN;
-BEGIN
-    IF NEW.department_id = OLD.department_id THEN
-        RETURN NEW;
-    END IF;
-
-    SELECT EXISTS (
-        SELECT 1
-          FROM tb_user_team ut
-          JOIN tb_team t ON t.team_id = ut.team_id
-         WHERE ut.user_id = NEW.user_id
-           AND t.department_id <> NEW.department_id
-    ) INTO v_mismatch_exists;
-
-    IF v_mismatch_exists THEN
-        RAISE EXCEPTION
-            'User % already belongs to team(s) outside department %, so department change is blocked.',
-            NEW.user_id, NEW.department_id;
-    END IF;
-
-    RETURN NEW;
-END;
-$$ LANGUAGE plpgsql;
-
-CREATE OR REPLACE FUNCTION fn_prevent_team_department_change_with_members()
-RETURNS TRIGGER AS $$
-DECLARE
-    v_mismatch_exists BOOLEAN;
-BEGIN
-    IF NEW.department_id = OLD.department_id THEN
-        RETURN NEW;
-    END IF;
-
-    SELECT EXISTS (
-        SELECT 1
-          FROM tb_user_team ut
-          JOIN tb_user u ON u.user_id = ut.user_id
-         WHERE ut.team_id = NEW.team_id
-           AND u.department_id <> NEW.department_id
-    ) INTO v_mismatch_exists;
-
-    IF v_mismatch_exists THEN
-        RAISE EXCEPTION
-            'Team % already has member(s) outside department %, so department change is blocked.',
-            NEW.team_id, NEW.department_id;
-    END IF;
-
-    RETURN NEW;
-END;
-$$ LANGUAGE plpgsql;
-
-CREATE TRIGGER trg_validate_user_team_department_match
-BEFORE INSERT OR UPDATE OF user_id, team_id ON tb_user_team
-FOR EACH ROW
-EXECUTE FUNCTION fn_validate_user_team_department_match();
-
-CREATE TRIGGER trg_prevent_user_department_change_with_team_memberships
-BEFORE UPDATE OF department_id ON tb_user
-FOR EACH ROW
-EXECUTE FUNCTION fn_prevent_user_department_change_with_team_memberships();
-
-CREATE TRIGGER trg_prevent_team_department_change_with_members
-BEFORE UPDATE OF department_id ON tb_team
-FOR EACH ROW
-EXECUTE FUNCTION fn_prevent_team_department_change_with_members();
 
 -- =====================================================================
 -- 5. 사용자 스킬
@@ -527,9 +358,9 @@ CREATE TABLE tb_worklog_dependency (
     worklog_id            BIGINT NOT NULL,                     -- N:1, 현재 업무 ID -> tb_worklog.worklog_id
     depends_on_worklog_id BIGINT NOT NULL,                     -- N:1, 선행 업무 ID -> tb_worklog.worklog_id
     created_at            TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP, -- 등록 시각
-    CONSTRAINT fk_dependency_worklog
+    CONSTRAINT fk_worklog_dependency_current_worklog
         FOREIGN KEY (worklog_id) REFERENCES tb_worklog(worklog_id) ON DELETE CASCADE,
-    CONSTRAINT fk_dependency_predecessor
+    CONSTRAINT fk_worklog_dependency_predecessor_worklog
         FOREIGN KEY (depends_on_worklog_id) REFERENCES tb_worklog(worklog_id) ON DELETE CASCADE,
     CONSTRAINT uq_worklog_dependency_pair
         UNIQUE (worklog_id, depends_on_worklog_id),
