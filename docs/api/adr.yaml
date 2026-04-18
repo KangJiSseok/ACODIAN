@@ -181,20 +181,71 @@
 - id: ADR-012
   title: 타입 세이프 쿼리 — JOOQ (QueryDSL 대체)
   status: adopted
-  date: 2026-04-14
+  date: 2026-04-18
   stacks: [springboot]
   context: |
     복잡한 동적 쿼리(다중 조건 필터링, 집계, 다중 테이블 JOIN)를 타입 세이프하게 작성해야 한다.
-    QueryDSL 5.x는 Hibernate 6.x / Spring Boot 3+ 환경에서 유지보수가 사실상 중단됐고,
-    Q클래스 생성을 위해 Entity 컴파일 후 annotationProcessor 재실행이 필요해 빌드 흐름이 복잡해진다.
+    QueryDSL 5.x는 Hibernate 6.x / Spring Boot 3+ 환경에서 유지보수 신호가 약하고,
+    Q 클래스 생성과 커스텀 리포지토리 결합 규칙이 문서마다 달라지면 JPA/JOOQ 책임 경계가 흐려진다.
+    동시에 API 문서의 canonical root는 ADR-013에 따라 global/ 과 domain/ 으로 정규화되어야 한다.
   decision: |
-    JOOQ를 타입 세이프 쿼리 도구로 채택한다. QueryDSL 의존성은 제거한다.
-    단순 CRUD(findById, save, findAll 등)는 Spring Data JPA를 그대로 사용한다.
-    복잡한 동적 쿼리, 집계, 다중 테이블 JOIN은 JOOQ DSLContext를 사용한다.
-    코드 생성: nu.studer.jooq Gradle 플러그인 + DDLDatabase (Flyway SQL 파일 기반, DB 불필요).
-    생성 패키지: com.ibank.axwms.infrastructure.jooq.
-    쿼리 클래스 배치: infrastructure/jooq/ 패키지, {Entity}JooqRepository 패턴 (SB-016 참조).
+    JOOQ를 타입 세이프 쿼리 도구로 채택한다. QueryDSL은 기준 기술에서 제외한다.
+    단순 CRUD(findById, save, findAll 등)는 Spring Data JPA를 유지하고, 복잡한 동적 쿼리/집계/JOIN은 JOOQ DSLContext를 사용한다.
+    hand-written 공통 설정과 generated 패키지 root는 global/jooq/ vocabulary에 맞춘다.
+    도메인별 hand-written JOOQ 쿼리 구현은 domain/{module}/repository/jooq/ 에 배치하고, 메인 Repository는 {Entity}JooqRepository 패턴으로 결합한다.
+    codegen 진입점은 ./gradlew jooqGenerate 로 통일하되, bootstrap 방식·generated source 비커밋·CI 선행 보장 같은 운영 규칙은 ADR-014에서 정의한다.
   consequence: |
-    QueryDSL Q클래스 불필요. Flyway 마이그레이션 파일만 있으면 별도 DB 없이 코드 생성 가능.
-    JOOQ DSL은 SQL과 1:1 대응되어 학습 곡선이 낮고 디버깅이 직관적이다.
-    엔티티 변경 시 Flyway 파일 추가 후 ./gradlew jooqGenerate 실행으로 타입 갱신.
+    QueryDSL Q 타입과 별도 repository vocabulary를 계속 유지하지 않아도 된다.
+    JPA와 JOOQ의 책임 경계, global/domain package vocabulary, hand-written query class 배치 기준이 함께 정리된다.
+    JOOQ 도입 결정 자체와 codegen 운영 모델을 분리해 ADR-012와 ADR-014의 역할 충돌을 줄인다.
+
+- id: ADR-013
+  title: API 패키지 정규화 — global/domain canonical root
+  status: adopted
+  date: 2026-04-14
+  stacks: [springboot]
+  context: |
+    API 문서마다 legacy shared root, infrastructure/ 같은 서로 다른 최상위 패키지 용어가 섞여 있으면
+    실제 책임 경계보다 경로 이름이 먼저 흔들려 설계 리뷰와 후속 리팩터링 기준이 불명확해진다.
+    특히 인증 도메인(auth) 책임과 공통 보안 인프라(Security filter/config/principal) 책임이 섞이면
+    인증 유스케이스와 횡단 관심사의 ownership을 분리해 설명하기 어렵다.
+    organization 도메인은 department/team/user처럼 하위 기능 축이 커서 feature-first 기준이 별도로 필요하고,
+    dashboard는 여러 도메인의 조회 결과를 조합하지만 기준 데이터를 직접 변경하는 주체가 되면 안 된다.
+  decision: |
+    API 문서의 canonical root는 global/ 과 domain/ 으로 통일한다.
+    공통 보안 설정, JWT 필터, CustomUserPrincipal, 보안 어노테이션은 global/security/ 가 소유한다.
+    auth 도메인은 로그인, 토큰 발급/재발급, 로그아웃 같은 인증 유스케이스와 정책만 소유한다.
+    organization 도메인만 domain/organization/<feature>/<layer> 구조를 사용한다.
+    dashboard는 query-only 조합 계층으로 유지하고 다른 도메인의 원본 상태를 직접 변경하지 않는다.
+    이번 변경은 문서 canonicalization만 수행하며 실제 코드 이동은 별도 리팩터링으로 다룬다.
+  consequence: |
+    문서 전반에서 동일한 패키지 vocabulary(global/domain)를 사용하게 된다.
+    auth 와 global.security 의 책임 경계가 분명해져 보안 관련 코드 배치 기준이 명확해진다.
+    organization 의 feature-first 예외와 dashboard 의 query-only 제약이 함께 기록되어 후속 코드 정리 기준으로 재사용할 수 있다.
+
+- id: ADR-014
+  title: JOOQ codegen 운영 모델 — PostgreSQL bootstrap 유지 + bootstrap-first reproducible workflow
+  status: adopted
+  date: 2026-04-15
+  stacks: [springboot]
+  context: |
+    AX-WMS API는 실제 PostgreSQL(pgvector) bootstrap 후 Flyway migration을 적용한 스키마를 읽어 jOOQ 코드를 생성하고,
+    embedding 테이블은 생성 대상에서 제외하고 있다.
+    로컬 빌드와 CI가 `jooqGenerate` 를 안정적으로 선행 보장하고, 팀 전체가 Docker/pgvector bootstrap 전제를 수용한다면
+    generated source를 저장소에 커밋하지 않아도 clean checkout에서 동일한 codegen 결과를 재현할 수 있다.
+    이 경우 리뷰 관심사는 generated diff 자체보다 migration·hand-written code·실행 가능한 build 파이프라인으로 옮겨간다.
+  decision: |
+    jOOQ codegen은 실제 PostgreSQL bootstrap 기반 `jooqGenerate` lane을 유지한다.
+    embedding 테이블 제외 정책은 API가 vector 컬럼을 직접 사용하기 전까지 유지한다.
+    generated source canonical path는 `api/src/generated/jooq/main/java` 로 유지하고, `src/main/java` 와 분리된 generated-only 루트로 관리한다.
+    generated source는 disposable artifact로 취급하며 Git에 커밋하지 않는다. 갱신은 `./gradlew jooqGenerate` 재실행으로만 수행하고, generated-only 루트에는 수기 작성 소스를 두지 않는다.
+    로컬 `build`/`bootRun`/`test`/`assemble` 와 CI는 generated source가 없거나 stale 하면 compile 이전에 `jooqGenerate` 를 선행 보장하는 bootstrap-first workflow로 운영한다.
+    stale 판정은 migration 파일뿐 아니라 codegen 결과에 영향을 주는 `api/build.gradle`, `api/gradle/jooq-codegen.gradle`, `api/gradle.properties` 변경까지 함께 반영한다.
+    Flyway migration 변경자는 `./gradlew jooqGenerate` 또는 표준 build entrypoint로 codegen 성공 여부를 먼저 확인하되, generated source는 커밋하지 않는다.
+    `pgvector-java`, forcedType, custom Binding 같은 runtime vector binding은 실제 사용 요구가 생길 때까지 도입하지 않는다.
+  consequence: |
+    PostgreSQL bootstrap 기반 codegen lane과 embedding 제외 정책을 유지하면서도 clean checkout 재현성이 높아진다.
+    저장소에는 migration과 hand-written source 중심의 diff만 남아 PR review noise가 줄어든다.
+    codegen/bootstrap 실패는 로컬 build와 CI에서 더 일찍 드러나므로 generated source 누락 커밋 문제로 우회되지 않는다.
+    팀 전체가 Docker/pgvector bootstrap 전제를 받아들여야 하며, 로컬 환경 준비가 build 성공의 필수 조건이 된다.
+    `api/src/generated/...` 는 현재 build/sourceSets 기준 canonical path로 유지하고, `api/src/main/java/...` 는 hand-written jOOQ 설정 소스와 physical root가 섞이므로 사용하지 않는다.
