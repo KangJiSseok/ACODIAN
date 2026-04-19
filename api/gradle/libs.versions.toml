@@ -16,6 +16,7 @@ jooq-plugin          = "9.0"
 jjwt                 = "0.12.6"
 springdoc            = "2.8.6"
 testcontainers       = "1.20.4"
+testcontainers-redis = "2.2.2"
 
 [libraries]
 jjwt-api             = { module = "io.jsonwebtoken:jjwt-api",                           version.ref = "jjwt" }
@@ -23,6 +24,7 @@ jjwt-impl            = { module = "io.jsonwebtoken:jjwt-impl",                  
 jjwt-jackson         = { module = "io.jsonwebtoken:jjwt-jackson",                       version.ref = "jjwt" }
 springdoc-openapi    = { module = "org.springdoc:springdoc-openapi-starter-webmvc-ui",  version.ref = "springdoc" }
 testcontainers-bom   = { module = "org.testcontainers:testcontainers-bom",              version.ref = "testcontainers" }
+testcontainers-redis = { module = "com.redis:testcontainers-redis",                     version.ref = "testcontainers-redis" }
 
 [plugins]
 springBoot           = { id = "org.springframework.boot",        version.ref = "spring-boot" }
