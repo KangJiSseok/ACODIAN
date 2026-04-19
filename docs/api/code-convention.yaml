@@ -49,8 +49,12 @@ springboot:
     stacks: [springboot]
   - id: SB-012
     rule: |
-      테스트 네이밍 규칙.
-      클래스명: {Subject}Test (단위), {Subject}IntegrationTest (통합).
+      테스트 계층/네이밍 규칙.
+      Unit Test: Spring 없이 순수 로직을 검증한다. 클래스명은 {Subject}Test.
+      Smoke/Context Test: 최소 Spring Boot 기동만 검증한다. `application-test.yml` + `@ActiveProfiles("test")` 를 기본으로 사용하고, DB/JPA/Flyway/Redis 같은 인프라 성공 여부를 책임지지 않는다.
+      Integration Test: 실제 PostgreSQL/Redis(Testcontainers)와 함께 Repository/Service/JPA/Flyway wiring 을 검증한다. 클래스명은 {Subject}IntegrationTest, 공통 기반은 IntegrationTestSupport 와 `application-integration.yml` + `@ActiveProfiles("integration")` 를 우선 사용한다.
+      E2E Test: MockMvc 기반이라도 full Spring context + Security + Service + DB/Redis 연동을 포함한 백엔드 API end-to-end 검증으로 취급한다. 클래스명은 {Subject}E2eTest, 공통 기반은 E2eTestSupport 와 `application-e2e.yml` + `@ActiveProfiles({"integration","e2e"})` 를 우선 사용한다.
+      JPA-aware 공통 설정(`@EnableJpaAuditing` 등)은 JPA 인프라가 있을 때만 활성화되도록 구성해 smoke/context 테스트와 충돌시키지 않는다.
       메서드: @DisplayName("should {기대결과} when {조건}") 사용.
       그룹핑: @Nested 클래스로 시나리오별 묶기.
       예시: @DisplayName("should throw exception when email is duplicated")

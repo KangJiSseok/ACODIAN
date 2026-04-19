@@ -158,10 +158,12 @@
     통합 테스트만으로는 피드백이 느리고, 단위 테스트만으로는 실제 DB 동작을 검증할 수 없다.
   decision: |
     Unit Test (60%): Mockito로 Service/Policy 단위 테스트. <1초 피드백.
-    Integration Test (30%): Testcontainers로 실제 PostgreSQL/Redis 사용. Flyway 마이그레이션 검증 포함.
-    E2E Test (10%): MockMvc + full Spring context로 인증 포함 핵심 흐름 검증.
+    Smoke/Context Test: 최소 Spring Boot 기동만 확인한다. `application-test.yml` 프로필을 사용하고 DB/JPA/Flyway/Redis 같은 무거운 인프라 성공 여부를 여기서 책임지지 않는다.
+    Integration Test (30%): Testcontainers로 실제 PostgreSQL/Redis 사용. `application-integration.yml` + `@ActiveProfiles("integration")` 를 사용하며, Flyway 마이그레이션, JPA/JOOQ 매핑, Repository/Service wiring 검증을 포함한다.
+    E2E Test (10%): MockMvc + full Spring context로 인증 포함 핵심 API 흐름 검증. `application-e2e.yml` + `@ActiveProfiles({"integration","e2e"})` 를 사용하며, 브라우저는 없지만 Security, Service, DB/Redis 연동은 실제로 검증한다.
+    JPA-aware 공통 설정(`@EnableJpaAuditing` 등)은 JPA 인프라가 존재할 때만 활성화되도록 구성해 smoke profile과 충돌하지 않게 한다.
     전체 커버리지 목표: 75%+, 비즈니스 로직 80%+.
-  consequence: 빠른 피드백과 높은 신뢰도 동시 확보. Testcontainers 사용으로 Docker 필수.
+  consequence: 빠른 피드백과 높은 신뢰도 동시 확보. Smoke test 실패 원인과 인프라 연동 실패 원인을 분리할 수 있다. Testcontainers 사용으로 Docker 필수.
 
 - id: ADR-011
   title: API 문서화 — Springdoc OpenAPI
