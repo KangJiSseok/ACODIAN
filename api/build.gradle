@@ -1,8 +1,8 @@
 plugins {
     id 'java'
-    id 'org.springframework.boot' version '4.0.5'
-    id 'io.spring.dependency-management' version '1.1.7'
-    id 'nu.studer.jooq' version '9.0'
+    alias(libs.plugins.springBoot)
+    alias(libs.plugins.springDepMgmt)
+    alias(libs.plugins.jooq)
 }
 
 group = 'com.ibank'
@@ -34,15 +34,12 @@ dependencies {
     implementation 'org.flywaydb:flyway-database-postgresql'
 
     // --- JWT Authentication ---
-    implementation 'io.jsonwebtoken:jjwt-api:0.12.6'
-    runtimeOnly 'io.jsonwebtoken:jjwt-impl:0.12.6'
-    runtimeOnly 'io.jsonwebtoken:jjwt-jackson:0.12.6'
+    implementation libs.jjwt.api
+    runtimeOnly libs.jjwt.impl
+    runtimeOnly libs.jjwt.jackson
 
     // --- API Documentation ---
-    implementation 'org.springdoc:springdoc-openapi-starter-webmvc-ui:2.8.6'
-
-    // --- DTO Mapping ---
-    implementation 'org.mapstruct:mapstruct:1.6.3'
+    implementation libs.springdoc.openapi
 
     // --- Lombok ---
     compileOnly 'org.projectlombok:lombok'
@@ -56,20 +53,18 @@ dependencies {
     // --- Annotation Processors ---
     annotationProcessor 'org.springframework.boot:spring-boot-configuration-processor'
     annotationProcessor 'org.projectlombok:lombok'
-    annotationProcessor 'org.mapstruct:mapstruct-processor:1.6.3'
     annotationProcessor 'jakarta.persistence:jakarta.persistence-api'
 
     // --- Test ---
     testImplementation 'org.springframework.boot:spring-boot-starter-test'
     testImplementation 'org.springframework.security:spring-security-test'
-    testImplementation platform('org.testcontainers:testcontainers-bom:1.20.4')
+    testImplementation platform(libs.testcontainers.bom)
     testImplementation 'org.testcontainers:testcontainers'
     testImplementation 'org.testcontainers:postgresql'
     testImplementation 'org.testcontainers:junit-jupiter'
     testCompileOnly 'org.projectlombok:lombok'
     testRuntimeOnly 'org.junit.platform:junit-platform-launcher'
     testAnnotationProcessor 'org.projectlombok:lombok'
-    testAnnotationProcessor 'org.mapstruct:mapstruct-processor:1.6.3'
 }
 
 tasks.named('test') {
