@@ -60,6 +60,8 @@ spawn_agent(
 출력:
 - .codex/review-artifacts/{branch-name}/review-comments.md 파일 생성
 - 이 SKILL.md 'Document Structure' 형식 준수
+- 각 코멘트마다 사용자가 바로 수정 여부를 기록할 수 있도록 아래 placeholder를 **반드시 포함**:
+  - `- **사용자 판정: [ACCEPT 또는 REJECT 입력]**`
 - 리더 반환 payload: {artifact_path, status, summary(severity count + ≤5 bullet), open_questions(원칙적으로 비움, 꼭 필요한 경우만 ≤5)}
 
 중요:
@@ -98,6 +100,7 @@ spawn_agent(
 - 제안: ...
 - side effect: (이 변경을 적용할 때 발생할 수 있는 부수 효과. 없으면 "없음")
 - 제안 이유: (side effect에도 불구하고 이 방향을 제안하는 이유)
+- **사용자 판정: [ACCEPT 또는 REJECT 입력]**
 
 ### [p2] {파일경로}:{라인}
 - 근거: ...
@@ -105,16 +108,19 @@ spawn_agent(
 - 제안: ...
 - side effect: ...
 - 제안 이유: ...
+- **사용자 판정: [ACCEPT 또는 REJECT 입력]**
 
 ### [p3] {파일경로}:{라인}
 - 근거: ...
 - 내용: ...
 - 제안: ...
 - side effect: ...
+- **사용자 판정: [ACCEPT 또는 REJECT 입력]**
 
 ### [p4] {파일경로}:{라인}
 - 내용: ...
 - 제안: ...
+- **사용자 판정: [ACCEPT 또는 REJECT 입력]**
 ```
 
 ## Context Isolation Rationale

@@ -117,19 +117,75 @@ description: 코드리뷰 전체 파이프라인 오케스트레이션 — 설�
 - severity 요약만 확인한다.
 - artifact가 없으면 실패로 보고하고 중단한다.
 
-### Step 6: 리뷰 반영
+### Step 6: 사용자 판정 입력
+
+- **이 단계는 자동 진행하지 않는다.**
+- 리더는 Step 5 완료 직후 `review-comments.md`의 severity 요약과 핵심 판단 포인트만 사용자에게 보여준다.
+- 사용자는 **`review-comments.md` 각 항목의 `사용자 판정` 슬롯에 직접 `ACCEPT / REJECT`를 기록하는 최종 판단자**다.
+- Step 5의 리뷰 산출물은 각 코멘트마다 아래 placeholder를 **기본 포함**해야 한다:
+  - `- **사용자 판정: [ACCEPT 또는 REJECT 입력]**`
+- 리더는 사용자가 `review-comments.md`에 판정을 적기 전에는 Step 7로 넘어가지 않는다.
+- 사용자가 판정을 완료하면, 그때 Step 7로 넘어간다.
+
+완료 후:
+
+- `review-comments.md`가 사용자 판정으로 업데이트되었는지만 확인한다.
+- 판정이 비어 있거나 모호하면 파이프라인을 여기서 멈추고 사용자 보완을 요청한다.
+
+### Step 7: 리뷰 반영
 
 - 하위 skill: `$code-review-reflect`
 - 입력 handoff:
   - `review-comments.md`
   - `design-intent.md`
   - `code-quality-guide.md`
-  - 사용자 결정 요약
+  - 사용자 판정이 반영된 `review-comments.md`
 
 완료 후:
 
 - 수정 요약과 QA 결과만 확인한다.
-- 필요하면 사용자 판단 항목을 정리해 다시 전달한다.
+- reflect는 `review-comments.md`에서 **사용자가 `ACCEPT`로 표시한 항목만 반영**해야 한다.
+
+### Step 8: docs drift / 신규 기준 누락 감지 및 권고
+
+리더가 직접 수행한다.
+
+입력:
+- Step 2 `design-intent.md`
+- Step 5 `review-comments.md`
+- Step 7 반영 결과와 QA 요약
+- 현재 모듈의 `docs/{module}/adr.yaml`
+- 현재 모듈의 `docs/{module}/code-convention.yaml`
+
+판단 기준:
+1. 최종 반영된 코드가 **새 설계 결정**을 실제 기준으로 굳혔는데, 그 결정이 `adr.yaml`에 아직 없는가?
+2. 최종 반영된 코드가 **새 코드 규칙/패턴**을 사실상 팀 규칙으로 만들었는데, 그 규칙이 `code-convention.yaml`에 아직 없는가?
+3. 리뷰와 반영이 끝난 현재 기준이 기존 `adr.yaml` / `code-convention.yaml`과 **모순**되거나 **문서가 뒤처진 상태**인가?
+
+출력은 두 축으로 나눈다:
+
+1. **긴급도**
+- `MUST` — 지금 문서를 갱신하지 않으면 source of truth가 어긋나는 경우
+- `RECOMMENDED` — 문서를 갱신하면 더 좋지만, 즉시 막히는 수준은 아닌 경우
+- `NONE` — 후속 docs 작업 불필요
+
+2. **작업 유형** (복수 가능)
+- `ADR_ADD_REQUIRED` — 새 ADR을 추가해야 함
+- `CONVENTION_ADD_REQUIRED` — 새 convention 규칙을 추가해야 함
+- `ADR_UPDATE_REQUIRED` — 기존 ADR 수정/폐기/대체가 필요함
+- `CONVENTION_UPDATE_REQUIRED` — 기존 convention 수정/삭제가 필요함
+
+처리 규칙:
+- `MUST` 또는 `RECOMMENDED`가 나오면, 리더는 **긴급도 + 작업 유형**을 함께 보고한다.
+- 작업 유형이 `ADR_*`만 있으면 → `$code-review-docs adr --module {module}` 권고
+- 작업 유형이 `CONVENTION_*`만 있으면 → `$code-review-docs convention --module {module}` 권고
+- 작업 유형이 둘 다 있으면 → `$code-review-docs --module {module}` 권고
+- `NONE` → 별도 후속 액션 없이 종료한다.
+
+완료 후:
+
+- drift 판단 결과를 **긴급도 + 작업 유형**으로 기록한다.
+- 이 단계는 리뷰 파이프라인의 **후처리/안내 단계**이며, 앞선 코드리뷰 자체를 되돌리지는 않는다.
 
 ## Failure Rule
 
