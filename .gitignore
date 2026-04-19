@@ -1,4 +1,5 @@
 .omx/
+**/.omc/
 .codex/*
 !.codex/agents/
 !.codex/agents/**

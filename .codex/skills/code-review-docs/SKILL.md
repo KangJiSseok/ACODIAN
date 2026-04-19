@@ -14,6 +14,11 @@ description: docs/{module}/code-convention.yaml과 docs/{module}/adr.yaml 항목
 - 새 ADR을 채택했을 때 (`$code-review-docs adr --module api`)
 - 새 코딩 컨벤션 규칙을 정했을 때 (`$code-review-docs convention --module api`)
 - 기존 결정이 폐기/대체되었을 때
+- `$code-review-auto`의 **후처리 docs drift 감지 단계**가 아래 신호를 반환했을 때
+  - `ADR_ADD_REQUIRED`
+  - `CONVENTION_ADD_REQUIRED`
+  - `ADR_UPDATE_REQUIRED`
+  - `CONVENTION_UPDATE_REQUIRED`
 - 인자 없이 호출하면 두 문서 모두를 업데이트한다 (`$code-review-docs --module api`)
 
 ## Execution Mode
