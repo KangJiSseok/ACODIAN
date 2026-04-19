@@ -1,0 +1,329 @@
+buildscript {
+    repositories {
+        mavenCentral()
+    }
+
+    def flywayVersion = project.findProperty('flywayVersion')?.toString()?.trim()
+    def postgresqlVersion = project.findProperty('postgresqlVersion')?.toString()?.trim()
+
+    if (!flywayVersion) {
+        throw new GradleException("api/gradle.properties 에 flywayVersion 값을 설정하세요.")
+    }
+    if (!postgresqlVersion) {
+        throw new GradleException("api/gradle.properties 에 postgresqlVersion 값을 설정하세요.")
+    }
+
+    dependencies {
+        classpath "org.flywaydb:flyway-core:${flywayVersion}"
+        classpath "org.flywaydb:flyway-database-postgresql:${flywayVersion}"
+        classpath "org.postgresql:postgresql:${postgresqlVersion}"
+    }
+}
+
+import org.flywaydb.core.Flyway
+import java.nio.charset.StandardCharsets
+import java.security.MessageDigest
+
+def generatedJooqDir = layout.projectDirectory.dir('src/generated/jooq/main/java')
+def generatedJooqRootDir = layout.projectDirectory.dir('src/generated/jooq/main')
+def jooqBootstrapPropertiesFile = layout.buildDirectory.file('tmp/jooq/codegen-db.properties')
+def jooqMigrationDir = layout.projectDirectory.dir('src/main/resources/db/migration')
+def jooqCodegenStateFile = generatedJooqRootDir.file('.jooq-codegen-inputs.sha256')
+
+// generated 결과가 언제 stale 인지 판단할 때 같이 봐야 하는 hand-written 입력들이다.
+// migration 만 보지 않고, 실제 생성 결과에 영향을 주는 Gradle 설정 변경도 함께 추적한다.
+def jooqCodegenInputFiles = [
+        layout.projectDirectory.file('build.gradle').asFile,
+        layout.projectDirectory.file('gradle/jooq-codegen.gradle').asFile,
+        layout.projectDirectory.file('gradle.properties').asFile
+]
+
+def wasJooqGenerateExplicitlyRequested = {
+    gradle.startParameter.taskNames.any { requestedTask ->
+        requestedTask.tokenize(':').last() == 'jooqGenerate'
+    }
+}
+
+def collectJooqCodegenInputs = {
+    def migrationFiles = fileTree(jooqMigrationDir).matching {
+        include '**/*'
+    }.files.findAll { it.isFile() }
+
+    (jooqCodegenInputFiles + migrationFiles)
+            .findAll { it.exists() && it.isFile() }
+            .sort { it.path }
+}
+
+// jOOQ generated 결과를 만든 입력들의 content fingerprint 를 만든다.
+// lastModified 시간만 보면 false positive / false negative 가 생길 수 있으므로
+// 입력 파일 경로 + 파일 내용 기준으로 SHA-256 fingerprint 를 만든다.
+def calculateJooqCodegenFingerprint = {
+    def digest = MessageDigest.getInstance('SHA-256')
+
+    collectJooqCodegenInputs().each { inputFile ->
+        digest.update(inputFile.path.getBytes(StandardCharsets.UTF_8))
+        digest.update('\n'.getBytes(StandardCharsets.UTF_8))
+        digest.update(inputFile.bytes)
+        digest.update('\n'.getBytes(StandardCharsets.UTF_8))
+    }
+
+    digest.digest().encodeHex().toString()
+}
+
+def readJooqCodegenFingerprint = {
+    def stateFile = jooqCodegenStateFile.asFile
+    if (!stateFile.exists()) {
+        return null
+    }
+
+    stateFile.getText('UTF-8').trim()
+}
+
+def writeJooqCodegenFingerprint = {
+    def stateFile = jooqCodegenStateFile.asFile
+    stateFile.parentFile.mkdirs()
+    stateFile.setText(calculateJooqCodegenFingerprint(), 'UTF-8')
+}
+
+def hasGeneratedJooqSources = {
+    !fileTree(generatedJooqDir).matching {
+        include '**/*.java'
+    }.files.isEmpty()
+}
+
+def shouldRunJooqGenerate = {
+    // 사용자가 직접 jooqGenerate 를 호출한 경우에는 stale 여부와 무관하게 항상 다시 생성한다.
+    if (wasJooqGenerateExplicitlyRequested()) {
+        return true
+    }
+
+    // clean checkout 이거나 generated source 가 지워진 상태면 무조건 생성해야 한다.
+    if (!hasGeneratedJooqSources()) {
+        return true
+    }
+
+    // fingerprint 파일이 없으면 현재 generated source 가 어떤 입력으로 만들어졌는지 모른다.
+    // 이 경우에는 안전하게 regenerate 한다.
+    def persistedFingerprint = readJooqCodegenFingerprint()
+    if (!persistedFingerprint) {
+        return true
+    }
+
+    // migration, build.gradle, jooq-codegen.gradle, gradle.properties 중 하나라도 바뀌면
+    // content fingerprint 가 달라지므로 generated 결과를 stale 로 판단한다.
+    persistedFingerprint != calculateJooqCodegenFingerprint()
+}
+
+def runCommand = { List<String> command, boolean ignoreFailure = false ->
+    def stdout = new StringBuffer()
+    def stderr = new StringBuffer()
+    def process = new ProcessBuilder(command.collect { it.toString() })
+            .directory(project.projectDir)
+            .start()
+
+    process.waitForProcessOutput(stdout, stderr)
+
+    if (!ignoreFailure && process.exitValue() != 0) {
+        throw new GradleException("명령 실행에 실패했습니다: ${command.join(' ')}\n${stderr.toString().trim()}")
+    }
+
+    [exitValue: process.exitValue(), stdout: stdout.toString().trim(), stderr: stderr.toString().trim()]
+}
+
+//bootstrap 도중 생성된 컨테이너 이름 저장, 이후 컨테이너 삭제를 하기 위해
+ext.jooqCodegenContainerName = null
+
+dependencies {
+    implementation 'org.springframework.boot:spring-boot-starter-jooq'
+    jooqGenerator 'org.postgresql:postgresql'
+}
+
+// src경로에 src/generated/jooq/main/java 추가
+// 컴파일은 sourceSets에 등록된 소스 디렉토리들만 본다.
+sourceSets {
+    main {
+        java {
+            srcDir generatedJooqDir
+        }
+    }
+}
+
+// jOOQ 코드 생성을 위한 임시 PostgreSQL 환경을 준비
+tasks.register('bootstrapJooqCodegenDatabase') {
+    group = 'jOOQ'
+    description = 'Starts a temporary pgvector PostgreSQL container and applies Flyway migrations for jOOQ code generation.'
+
+    inputs.dir(jooqMigrationDir)
+    outputs.file(jooqBootstrapPropertiesFile)
+    outputs.upToDateWhen { false }
+    onlyIf { shouldRunJooqGenerate() }
+
+    /**
+     * Docker 띄우기
+     * 포트 찾기
+     * Flyway migrate
+     * properties 파일 저장
+     */
+    doLast {
+        def containerName = "axwms-jooq-codegen-${UUID.randomUUID().toString().replace('-', '').substring(0, 12)}"
+        try {
+            runCommand([
+                    'docker', 'run',
+                    '-d',
+                    '--rm',
+                    '--name', containerName,
+                    '-e', 'POSTGRES_DB=axwms_jooq_codegen',
+                    '-e', 'POSTGRES_USER=axwms',
+                    '-e', 'POSTGRES_PASSWORD=axwms',
+                    '-P',
+                    'pgvector/pgvector:pg17'
+            ])
+
+            project.ext.jooqCodegenContainerName = containerName
+
+            //20초동안 컨테이너 내부 5432/tcp 가 호스트의 몇 번 포트에 연결됐는지 확인
+            String hostPort = null
+            for (int attempt = 0; attempt < 20 && hostPort == null; attempt++) {
+                def result = runCommand(['docker', 'port', containerName, '5432/tcp'], true)
+
+                if (result.exitValue == 0 && result.stdout) {
+                    def portMapping = result.stdout
+                    hostPort = portMapping.tokenize(':').last()
+                } else {
+                    sleep(1000)
+                }
+            }
+
+            if (hostPort == null) {
+                throw new GradleException('jOOQ codegen용 PostgreSQL 호스트 포트를 확인하지 못했습니다.')
+            }
+
+            def jdbcUrl = "jdbc:postgresql://localhost:${hostPort}/axwms_jooq_codegen"
+            def flyway = Flyway.configure()
+                    .cleanDisabled(false)
+                    .connectRetries(30)
+                    .dataSource(jdbcUrl, 'axwms', 'axwms')
+                    .locations("filesystem:${layout.projectDirectory.dir('src/main/resources/db/migration').asFile.path}")
+                    .load()
+
+            flyway.clean()
+            flyway.migrate()
+
+            def propertiesFile = jooqBootstrapPropertiesFile.get().asFile
+            propertiesFile.parentFile.mkdirs()
+
+            def properties = new Properties()
+            properties.setProperty('url', jdbcUrl)
+            properties.setProperty('user', 'axwms')
+            properties.setProperty('password', 'axwms')
+            properties.setProperty('containerName', containerName)
+
+            /**
+             * jooqBootstrapPropertiesFile
+             * 즉, build/tmp/jooq/codegen-db.properties 같은 파일에 아래 정보를 저장
+             * url, user, password, containerName
+             */
+            propertiesFile.withOutputStream { output ->
+                properties.store(output, 'jOOQ codegen database connection')
+            }
+        } catch (Exception exception) {
+            if (project.ext.jooqCodegenContainerName != null) {
+                runCommand(['docker', 'rm', '-f', project.ext.jooqCodegenContainerName], true)
+                project.ext.jooqCodegenContainerName = null
+            }
+
+            throw new GradleException(
+                    'jOOQ codegen용 PostgreSQL bootstrap에 실패했습니다. Docker 실행 상태, pgvector 이미지 pull, Flyway migration 로그를 확인하세요.',
+                    exception
+            )
+        }
+    }
+}
+
+// bootstrap 으로 띄운 임시 DB를 정리
+tasks.register('shutdownJooqCodegenDatabase') {
+    group = 'jOOQ'
+    description = 'Stops the temporary PostgreSQL container used for jOOQ code generation.'
+
+    doLast {
+        if (project.ext.jooqCodegenContainerName != null) {
+            runCommand(['docker', 'rm', '-f', project.ext.jooqCodegenContainerName], true)
+            project.ext.jooqCodegenContainerName = null
+        }
+
+        delete jooqBootstrapPropertiesFile.get().asFile
+    }
+}
+
+
+// 등록된 태스크들 중 이름이 generateJooq 인 태스크만 골라서 실행
+tasks.matching { it.name == 'generateJooq' }.configureEach {
+    onlyIf { shouldRunJooqGenerate() }
+
+    //generateJooq 태스크가 실행되기 직전에, 임시 PostgreSQL bootstrap 결과가 정상인지 검증하고, 그 DB 접속 정보를 jOOQ에 주입한 뒤, 기존 생성 코드를 지우는 사전 준비 로직
+    doFirst {
+        def propertiesFile = jooqBootstrapPropertiesFile.get().asFile
+        if (!propertiesFile.exists()) {
+            throw new GradleException('직접 generateJooq 대신 PostgreSQL bootstrap을 포함한 jooqGenerate 태스크를 사용하세요.')
+        }
+
+        def properties = new Properties()
+        propertiesFile.withInputStream { input ->
+            properties.load(input)
+        }
+
+        def jdbcUrl = properties.getProperty('url')?.trim()
+        def jdbcUser = properties.getProperty('user')?.trim()
+        def jdbcPassword = properties.getProperty('password')?.trim()
+        def containerName = properties.getProperty('containerName')?.trim()
+
+        if (!jdbcUrl || !jdbcUser || !jdbcPassword || !containerName) {
+            throw new GradleException('bootstrap properties 가 불완전합니다. generateJooq 대신 jooqGenerate 를 사용해 PostgreSQL bootstrap 을 다시 수행하세요.')
+        }
+
+        def inspectResult = runCommand(['docker', 'inspect', '-f', '{{.State.Running}}', containerName], true)
+        if (inspectResult.exitValue != 0 || inspectResult.stdout != 'true') {
+            throw new GradleException('유효한 bootstrap PostgreSQL 컨테이너가 없습니다. stale properties 가능성이 있으니 generateJooq 대신 jooqGenerate 를 다시 실행하세요.')
+        }
+
+        //jooq가 사용하는 jdbc를 오버라이드 한다.
+        def jdbcConfig = jooq.configurations.main.jooqConfiguration.jdbc
+        jdbcConfig.url = jdbcUrl
+        jdbcConfig.user = jdbcUser
+        jdbcConfig.password = jdbcPassword
+
+        delete generatedJooqDir.asFile
+    }
+
+    // 실제로 regenerate 가 끝났을 때만 최신 입력 fingerprint 를 저장한다.
+    // 다음 build 는 이 fingerprint 와 현재 입력을 비교해 stale 여부를 판정한다.
+    doLast {
+        writeJooqCodegenFingerprint()
+    }
+}
+
+tasks.matching { it.name == 'generateJooq' }.configureEach {
+    //mustRunAfter 는 의존성 추가가 아니라 순서 제약
+    //generateJooq 는 bootstrapJooqCodegenDatabase 이후에 실행
+    mustRunAfter tasks.named('bootstrapJooqCodegenDatabase')
+
+    //generateJooq 가 끝나면 성공/실패와 관계없이 shutdownJooqCodegenDatabase 를 실행
+    //임시 컨테이너가 남지 않게 하기 위한 안전장치
+    finalizedBy tasks.named('shutdownJooqCodegenDatabase')
+}
+
+
+// 사용자가 직접 실행할 수도 있고, compileJava 가 필요 시 자동으로 의존하는 진입점
+tasks.register('jooqGenerate') {
+    group = 'jOOQ'
+    description = 'Bootstraps PostgreSQL and then generates the jOOQ sources from the PostgreSQL-backed configuration.'
+    // 먼저 bootstrapJooqCodegenDatabase 태스크를 반드시 실행
+    dependsOn tasks.named('bootstrapJooqCodegenDatabase')
+    // 그 이후에 generateJooq 실행.
+    dependsOn 'generateJooq'
+}
+
+tasks.named('compileJava') {
+    // generated source 가 없거나 stale 하면 compile 전에 jooqGenerate 를 자동 보장한다.
+    dependsOn tasks.named('jooqGenerate')
+}

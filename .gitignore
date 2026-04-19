@@ -38,3 +38,6 @@ Thumbs.db
 **/.pytest_cache/
 **/.mypy_cache/
 **/.venv/
+
+# Generated jOOQ sources are disposable artifacts, not checked-in source
+/api/src/generated/jooq/main/

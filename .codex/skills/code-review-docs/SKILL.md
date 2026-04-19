@@ -18,12 +18,13 @@ description: docs/{module}/code-convention.yaml과 docs/{module}/adr.yaml 항목
 
 ## Execution Mode
 
-이 skill은 **충돌 분석이 핵심**이므로 격리된 컨텍스트에서 수행한다. `delegate()`로 executor subagent에 위임:
+이 skill은 **충돌 분석이 핵심**이므로 격리된 컨텍스트에서 수행한다. 리더는 `spawn_agent()`를 **직접 호출**하여 executor subagent에 위임한다:
 
 ```
-delegate(
+spawn_agent(
   role="executor",
   tier="THOROUGH",
+  fork_context=false,
   task="DOCS UPDATE — convention/adr
 
 docs/{module}/code-convention.yaml 또는 docs/{module}/adr.yaml에 항목을 추가/수정/삭제한다.
@@ -85,9 +86,9 @@ context 작성 가이드라인:
 ## 절차 (리더 세션 관점)
 
 1. 사용자에게 대상 모듈(`api` | `web` | `infra` | `ai` 등), 업데이트 대상(`convention` | `adr` | `both`)과 현재 작업의 의사결정 요약을 확인한다.
-2. **executor subagent**에 docs 업데이트를 위임한다.
+2. 리더가 위 `spawn_agent()`를 호출하여 docs 업데이트를 위임한다.
 3. subagent가 변경 제안 목록(MUST/RECOMMENDED)을 반환하면 사용자에게 전달한다.
-4. 사용자 확정을 받아 subagent에 반영을 지시한다.
+4. 사용자 확정을 받아 subagent에 반영을 지시한다 (재 `spawn_agent()` 또는 리더 직접 수정).
 5. 변경 요약을 사용자에게 보고한다.
 
 ## Update 대상 명령
@@ -104,10 +105,10 @@ $code-review-docs --module api              # api 두 문서 모두 (충돌/연�
 
 > 어떤 문서를 업데이트하든, **해당 모듈의 두 문서를 모두 먼저 읽고 분석한다.** 한쪽 문서만 수정하면 충돌과 연쇄 수정을 놓친다.
 
-이 원칙은 위 delegate task에 명시되어 있으며, subagent가 반드시 따라야 한다.
+이 원칙은 위 `spawn_agent()` task에 명시되어 있으며, subagent가 반드시 따라야 한다.
 
 ## Context Isolation Rationale
 
-두 yaml 파일을 동시에 컨텍스트에 끌어와 충돌을 분석하면 토큰 비용이 크다. executor subagent에 위임하면 분석과 파일 수정이 격리된 컨텍스트에서 일어나고, 리더에게는 **변경 제안 목록과 최종 변경 요약**만 전달된다.
+두 yaml 파일을 동시에 컨텍스트에 끌어와 충돌을 분석하면 토큰 비용이 크다. `spawn_agent(role="executor")`에 위임하면 분석과 파일 수정이 격리된 컨텍스트에서 일어나고, 리더에게는 **변경 제안 목록과 최종 변경 요약**만 전달된다.
 
-이 skill은 다른 code-review-* skill과 달리 산출물을 `.omx/review-artifacts/`에 저장하지 않는다. 직접 `docs/{module}/*.yaml`을 수정한다는 점에 주의하라.
+이 skill은 다른 code-review-* skill과 달리 산출물을 `.codex/review-artifacts/`에 저장하지 않는다. 직접 `docs/{module}/*.yaml`을 수정한다는 점에 주의하라.

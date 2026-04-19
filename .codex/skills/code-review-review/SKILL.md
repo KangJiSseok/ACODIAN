@@ -9,26 +9,33 @@ description: 평가기준/설계의도/PR본문/diff를 입력으로 근거 기�
 
 ## When to Use
 
-- `$code-review-auto` 파이프라인의 Step 5로 호출될 때
 - 독립적으로 코드리뷰만 실행하고 싶을 때 (`$code-review-review`)
 - 사전에 `design-intent.md`와 `code-quality-guide.md`가 준비된 feature branch
 
-## Execution Mode
+## Invocation Authority
 
-이 skill은 **사용자 확인 없이 자동 진행된다.** 반드시 `delegate()`로 code-reviewer subagent에 위임한다. 토큰 비용이 가장 큰 단계이므로 격리가 필수다:
+- 사용자가 `$code-review-review`를 명시 호출하면, 이 skill 내부의 `spawn_agent()` 호출은 이미 승인된 것으로 간주한다.
+- 리더는 explicit skill invocation 이후에도 subagent 사용을 재확인 대상으로 돌리지 않는다.
+
+> **파이프라인 실행 중에는** `$code-review-auto`의 Step 5에서 이 skill이 순차적으로 호출된다. agent 실행 세부와 산출물 구조는 이 문서를 따른다.
+
+## Execution Mode (독립 실행 시)
+
+이 skill은 **사용자 확인 없이 자동 진행된다.** 리더는 아래 `spawn_agent()`를 **직접 호출**하여 code-reviewer subagent에 isolated 위임한다. 토큰 비용이 가장 큰 단계이므로 격리가 필수고, 이 단계는 `fork_context=false`를 유지하는 것이 기본이다:
 
 ```
-delegate(
+spawn_agent(
   role="code-reviewer",
   tier="THOROUGH",
+  fork_context=false,
   task="EVIDENCE-BASED CODE REVIEW
 
 이 feature branch의 코드리뷰를 수행하라.
 
 입력 (모두 필수):
-- .omx/review-artifacts/{branch-name}/code-quality-guide.md
-- .omx/review-artifacts/{branch-name}/design-intent.md
-- .omx/review-artifacts/{branch-name}/pr-body.md
+- .codex/review-artifacts/{branch-name}/code-quality-guide.md
+- .codex/review-artifacts/{branch-name}/design-intent.md
+- .codex/review-artifacts/{branch-name}/pr-body.md
 - git diff <base>...HEAD (변경 코드 전체)
 
 리뷰 원칙:
@@ -51,13 +58,9 @@ delegate(
 6. 파일 경로와 라인 번호를 명시한다.
 
 출력:
-- .omx/review-artifacts/{branch-name}/review-comments.md 파일 생성
-- 아래 'Document Structure' 섹션의 형식을 따른다
-- 리더 반환 payload:
-  - artifact_path
-  - status
-  - summary (severity count + 최대 5 bullet)
-  - open_questions (원칙적으로 비움. 꼭 필요한 경우만 최대 5 bullet)
+- .codex/review-artifacts/{branch-name}/review-comments.md 파일 생성
+- 이 SKILL.md 'Document Structure' 형식 준수
+- 리더 반환 payload: {artifact_path, status, summary(severity count + ≤5 bullet), open_questions(원칙적으로 비움, 꼭 필요한 경우만 ≤5)}
 
 중요:
 - 소스코드를 수정하지 마라. 리뷰 코멘트 파일만 생성한다.
@@ -70,13 +73,13 @@ delegate(
 
 1. 사전 산출물(`code-quality-guide.md`, `design-intent.md`, `pr-body.md`)이 모두 존재하는지 확인한다.
 2. 누락된 산출물이 있으면 사용자에게 알리고 해당 단계 skill을 먼저 실행하도록 안내한다.
-3. **code-reviewer subagent**에 리뷰를 위임한다 (사용자 확인 없음).
+3. 리더가 위 `spawn_agent()`를 호출한다 (사용자 확인 없음).
 4. subagent가 반환한 severity 요약과 artifact 경로만 사용자에게 보고한다.
 
 ## Output Path
 
 ```
-.omx/review-artifacts/{branch-name}/review-comments.md
+.codex/review-artifacts/{branch-name}/review-comments.md
 ```
 
 ## Document Structure
@@ -116,6 +119,6 @@ delegate(
 
 ## Context Isolation Rationale
 
-리뷰 단계는 파이프라인에서 **가장 큰 컨텍스트**(평가기준 + 설계의도 + PR본문 + diff 전체)를 동시에 다룬다. 리더 세션에서 직접 수행하면 이후 단계(반영, 후속 작업)에서 컨텍스트 한계에 부딪힌다.
+리뷰 단계는 **가장 큰 컨텍스트**(평가기준 + 설계의도 + PR본문 + diff 전체)를 동시에 다룬다. 리더 세션에서 직접 수행하면 이후 단계(반영, 후속 작업)에서 컨텍스트 한계에 부딪힌다.
 
-`tier="THOROUGH"`로 위임하여 code-reviewer subagent의 격리된 컨텍스트에서 리뷰를 완수하고, 리더에게는 **severity 요약과 산출물 경로**만 반환하도록 한다. full comment body는 `review-comments.md`에만 남긴다.
+`tier="THOROUGH"` + `fork_context=false`로 isolated code-reviewer subagent에서 리뷰를 완수하고, 리더에게는 **severity 요약과 산출물 경로**만 반환한다. full comment body는 `review-comments.md`에만 남긴다.

@@ -9,32 +9,41 @@ base branch 대비 git diff와 산출물 문서를 기반으로 PR 본문 초안
 
 ## When to Use
 
-- `$code-review-auto` 파이프라인의 Step 4로 호출될 때
 - 독립적으로 PR 본문만 작성하고 싶을 때 (`$code-review-pr-body`)
 - `gh pr create`로 PR을 올리기 직전 본문이 필요한 시점
 
-## Execution Mode
+## Invocation Authority
 
-이 skill은 **리더 세션에서 직접 수행하지 않는다.** 반드시 `delegate()`로 writer subagent에 **forked context** 위임한다. PR 본문 단계는 git diff뿐 아니라 현재 파이프라인에서 확정된 설계 의도와 사용자 피드백 문맥을 함께 반영해야 하므로, 부모 세션의 관련 문맥을 넘기는 것이 기본값이다:
+- 사용자가 `$code-review-pr-body`를 명시 호출하면, 이 skill 내부의 `spawn_agent()` 호출은 이미 승인된 것으로 간주한다.
+- 리더는 explicit skill invocation 이후에도 subagent 사용 승인을 다시 요구하거나 직접 수행으로 임의 강등하지 않는다.
+
+> **파이프라인 실행 중에는** `$code-review-auto`의 Step 4에서 이 skill이 순차적으로 호출된다. agent 실행 세부와 산출물 구조는 이 문서를 따른다.
+
+## Execution Mode (독립 실행 시)
+
+리더는 아래 `spawn_agent()`를 **직접 호출**하여 writer subagent에 위임한다. PR 본문 단계는 대화 전체를 포크하기보다, diff와 확정된 artifact, 그리고 논의점 요약만 넘겨 typed agent가 합성하게 하는 것이 기본값이다:
 
 ```
-delegate(
+spawn_agent(
   role="writer",
   tier="STANDARD",
-  fork_context=true,
+  fork_context=false,
   task="PR BODY DRAFTING
 
 현재 feature branch의 PR 본문 초안을 작성하라.
 
 입력:
 - git diff <base>...HEAD (변경사항)
-- .omx/review-artifacts/{branch-name}/design-intent.md (있으면)
-- .omx/review-artifacts/{branch-name}/code-quality-guide.md (있으면)
+- git diff --stat <base>...HEAD
+- git diff --name-only <base>...HEAD
+- .codex/review-artifacts/{branch-name}/design-intent.md (있으면)
+- .codex/review-artifacts/{branch-name}/code-quality-guide.md (있으면)
+- 사용자와 확정한 논의점 요약 (있으면)
 
 절차:
 1. base branch 대비 git diff를 수집한다.
 2. 변경된 파일을 모듈/영역 단위로 그룹화한다.
-3. 아래 문서 구조에 맞춰 PR 본문 초안을 작성한다.
+3. Document Structure에 맞춰 PR 본문 초안을 작성한다.
 4. design-intent.md가 있다면 'Summary'와 'Related' 섹션에 그 내용을 반영한다.
 5. PR 설명에서 명확히 해야 할 논의점을 함께 정리한다.
    - 예: 'breaking change 여부 확인 필요'
@@ -43,13 +52,11 @@ delegate(
    - 예: 'Test Plan에 포함할 수동 검증 시나리오 확정'
 
 출력:
-- .omx/review-artifacts/{branch-name}/pr-body.md 초안
+- .codex/review-artifacts/{branch-name}/pr-body.md 초안
 - 사용자 확인이 필요한 논의점 목록
-- 리더 반환 payload:
-  - artifact_path
-  - status
-  - summary (최대 5 bullet)
-  - open_questions (최대 5 bullet)
+- 리더 반환 payload: {artifact_path, status, summary(≤5), open_questions(≤5)}
+
+문서 구조: 이 SKILL.md 'Document Structure' 섹션 참조.
 
 중요:
 - 소스코드를 수정하지 마라. 산출물 파일만 생성한다.
@@ -61,8 +68,8 @@ delegate(
 
 ## 절차 (리더 세션 관점)
 
-1. base branch를 사용자와 합의한다 (이 프로젝트는 보통 `master`).
-2. **writer subagent**를 호출하여 PR 본문 작성을 위임한다.
+1. base branch를 사용자와 합의한다 (기본: `dev`).
+2. 리더가 위 `spawn_agent()`를 호출한다.
 3. subagent가 artifact를 저장하고 반환한 summary + 논의점을 사용자에게 제시한다.
 4. 사용자 피드백을 반영하여 확정한다.
 5. 확정된 문서를 산출물 경로에 저장한다.
@@ -70,7 +77,7 @@ delegate(
 ## Output Path
 
 ```
-.omx/review-artifacts/{branch-name}/pr-body.md
+.codex/review-artifacts/{branch-name}/pr-body.md
 ```
 
 ## Document Structure
@@ -102,4 +109,4 @@ delegate(
 
 ## Context Isolation Note
 
-PR 본문 작성에 git diff 전체(수천 줄 가능)를 리더가 직접 다루면, 이후 단계(리뷰, 반영)에서 컨텍스트가 빠르게 포화된다. 따라서 Step 4는 **부모 문맥을 포크한 writer subagent**에게 맡기되, 결과 전달은 계속 bounded payload로 제한한다. 즉 입력은 forked context + diff + 기존 artifact를 함께 활용하고, 출력은 **artifact 경로, 짧은 요약, 논의점**만 리더에게 전달한다.
+PR 본문 작성에 git diff 전체(수천 줄 가능)를 리더가 직접 다루면, 이후 단계(리뷰, 반영)에서 컨텍스트가 빠르게 포화된다. 따라서 `fork_context=true` 대신 **typed writer + diff/stat/name-only + 기존 artifact + 논의점 요약** 조합으로 위임하고, 출력은 **artifact 경로, 짧은 요약, 논의점**만 리더에게 전달한다.
