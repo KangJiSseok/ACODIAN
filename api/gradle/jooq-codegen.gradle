@@ -44,6 +44,12 @@ def wasJooqGenerateExplicitlyRequested = {
     }
 }
 
+def wasGenerateJooqExplicitlyRequested = {
+    gradle.startParameter.taskNames.any { requestedTask ->
+        requestedTask.tokenize(':').last() == 'generateJooq'
+    }
+}
+
 def collectJooqCodegenInputs = {
     def migrationFiles = fileTree(jooqMigrationDir).matching {
         include '**/*'
@@ -258,10 +264,14 @@ tasks.register('shutdownJooqCodegenDatabase') {
 
 // 등록된 태스크들 중 이름이 generateJooq 인 태스크만 골라서 실행
 tasks.matching { it.name == 'generateJooq' }.configureEach {
-    onlyIf { shouldRunJooqGenerate() }
+    onlyIf { wasGenerateJooqExplicitlyRequested() || shouldRunJooqGenerate() }
 
     //generateJooq 태스크가 실행되기 직전에, 임시 PostgreSQL bootstrap 결과가 정상인지 검증하고, 그 DB 접속 정보를 jOOQ에 주입한 뒤, 기존 생성 코드를 지우는 사전 준비 로직
     doFirst {
+        if (wasGenerateJooqExplicitlyRequested()) {
+            throw new GradleException('직접 generateJooq 대신 PostgreSQL bootstrap을 포함한 jooqGenerate 태스크를 사용하세요.')
+        }
+
         def propertiesFile = jooqBootstrapPropertiesFile.get().asFile
         if (!propertiesFile.exists()) {
             throw new GradleException('직접 generateJooq 대신 PostgreSQL bootstrap을 포함한 jooqGenerate 태스크를 사용하세요.')

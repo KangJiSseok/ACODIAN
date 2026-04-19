@@ -68,6 +68,7 @@ CREATE TABLE tb_user_team (
     is_primary            BOOLEAN NOT NULL DEFAULT FALSE,      -- 주 소속 팀 여부 (대시보드/알림 기본 기준)
     joined_at             TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP, -- 팀 합류 시각
     created_at            TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP, -- 관계 생성 시각
+    updated_at            TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP, -- 관계 수정 시각
     CONSTRAINT uq_user_team_pair
         UNIQUE (user_id, team_id),
     CONSTRAINT ck_user_team_role
@@ -108,7 +109,8 @@ CREATE TABLE tb_meta_tag (
     tag_id                BIGSERIAL PRIMARY KEY,                -- PK, 태그 식별자
     tag_name              VARCHAR(100) NOT NULL UNIQUE,        -- 태그명
     usage_count           INTEGER NOT NULL DEFAULT 0,          -- 사용 횟수 캐시
-    created_at            TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP -- 생성 시각
+    created_at            TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP, -- 생성 시각
+    updated_at            TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP  -- 수정 시각
 );
 
 -- =====================================================================
