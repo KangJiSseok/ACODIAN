@@ -14,7 +14,7 @@ spring-boot          = "4.0.5"
 spring-dep-mgmt      = "1.1.7"
 jooq-plugin          = "9.0"
 jjwt                 = "0.12.6"
-springdoc            = "2.8.6"
+springdoc            = "3.0.3"
 testcontainers       = "1.20.4"
 testcontainers-redis = "2.2.2"
 
