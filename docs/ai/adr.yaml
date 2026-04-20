@@ -13,6 +13,7 @@
     FastAPI 앱 생성은 app/main.py 의 create_app() factory가 단일 진입점으로 담당한다.
     라우터 등록은 app/router/__init__.py 의 api_router 에서 모아 관리하고,
     실제 mount prefix는 settings.api_prefix 로 주입한다.
+    AI 서비스의 기본 공개 prefix 는 api 서비스와 구분되는 /ai 로 둔다.
     초기 bootstrap 단계에서는 health 라우터만 유지하고, 새 API 는 요구가 확정된 뒤 기능별 라우터로 확장한다.
   consequence: |
     앱 초기화와 기능 라우팅 책임이 분리된다.

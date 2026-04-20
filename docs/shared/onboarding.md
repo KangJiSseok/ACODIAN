@@ -58,13 +58,22 @@ npm run dev
 
 <스텁 — 추후 ai 표준가이드(`docs/AX-WMS_FastAPI_표준가이드.docx`) 참고>
 
+- 기준 문서: 루트 `AGENTS.md`
+- ADR/컨벤션: `docs/ai/adr.yaml`, `docs/ai/code-convention.yaml`
+
 ```bash
 # 예시 (미확정)
 cd ai
 python -m venv .venv
 source .venv/bin/activate
 pip install -r requirements.txt
+cp .env.example .env
 uvicorn main:app --reload
+```
+
+```bash
+# 기본 확인 예시
+curl http://localhost:8000/ai/health
 ```
 
 ### 5. nginx

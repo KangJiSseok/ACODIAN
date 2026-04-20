@@ -38,7 +38,7 @@ fastapi:
     rule: 라우터 등록은 app/router/__init__.py 의 api_router 에 모은다. main.py 에서 개별 라우터를 직접 반복 등록하지 않는다.
     stacks: [fastapi]
   - id: FA-003
-    rule: 엔드포인트 경로는 settings.api_prefix 하위에 노출한다. 공통 prefix 를 문자열로 하드코딩하지 않는다.
+    rule: 엔드포인트 경로는 settings.api_prefix 하위에 노출한다. AI 서비스 기본 prefix 는 /ai 로 유지하고, 공통 prefix 를 문자열로 하드코딩하지 않는다.
     stacks: [fastapi]
   - id: FA-004
     rule: |
