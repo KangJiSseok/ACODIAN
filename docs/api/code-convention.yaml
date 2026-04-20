@@ -30,7 +30,11 @@ springboot:
     rule: Entity에 public 기본 생성자와 setter를 남발하지 않는다. 생성은 정적 팩토리 메서드, 변경은 도메인 메서드로 처리한다. @NoArgsConstructor(access = AccessLevel.PROTECTED) 사용.
     stacks: [springboot]
   - id: SB-006
-    rule: Service 클래스에 @Transactional(readOnly = true)를 기본 선언한다. 쓰기(CUD) 메서드에만 @Transactional을 추가한다.
+    rule: |
+      Service 클래스에 @Transactional(readOnly = true)를 기본 선언한다. 쓰기(CUD) 메서드에만 @Transactional을 추가한다.
+      조회/쓰기 책임을 기계적으로 `*QueryService`, `*CommandService` 로 분리하지 않는다.
+      기본 서비스 네이밍은 `{Domain}Service` 를 사용하고, 조회 최적화가 필요하면 같은 Service의 readOnly 메서드와 `repository/jooq`, `readmodel` 로 해결한다.
+      `dashboard` 처럼 도메인 자체가 read-only 여도 서비스 이름을 `*QueryService` 로 강제하지 않는다.
     stacks: [springboot]
   - id: SB-007
     rule: 에러는 반드시 BusinessException(ErrorCode.XXX)을 throw한다. RuntimeException이나 임의 문자열 throw 금지.
