@@ -111,7 +111,7 @@
     기본값: page=1 (1-indexed), pageSize=20, max=100.
     정렬: ?sortBy=field&sortDirection=ASC|DESC.
     PageResponse 필드: { items: [...], page, pageSize, totalCount, totalPages, isFirst, isLast, hasNext, hasPrevious }
-    PageResponse<T>는 support/api/ 패키지에 정의한다.
+    PageResponse<T>는 global/response/ 패키지에 정의한다.
     PageResponse는 GlobalResponseAdvice의 data 필드 내부에 위치한다.
     API 설계서의 각 응답 예시는 data 필드 내부 구조만 표현하며, 최종 응답은 ADR-001 래퍼가 자동 적용된다.
   consequence: 모든 목록 API의 응답 형식이 통일됨. 클라이언트는 동일한 페이지네이션 로직 재사용 가능.
