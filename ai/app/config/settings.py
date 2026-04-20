@@ -9,7 +9,7 @@ class Settings(BaseSettings):
     app_name: str = "AX-WMS AI Service"
     app_version: str = "0.1.0"
     environment: str = "local"
-    api_prefix: str = "/api"
+    api_prefix: str = "/ai"
     host: str = "0.0.0.0"
     port: int = 8000
     log_level: str = "INFO"
