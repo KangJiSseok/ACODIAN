@@ -251,3 +251,21 @@
     codegen/bootstrap 실패는 로컬 build와 CI에서 더 일찍 드러나므로 generated source 누락 커밋 문제로 우회되지 않는다.
     팀 전체가 Docker/pgvector bootstrap 전제를 받아들여야 하며, 로컬 환경 준비가 build 성공의 필수 조건이 된다.
     `api/src/generated/...` 는 현재 build/sourceSets 기준 canonical path로 유지하고, `api/src/main/java/...` 는 hand-written jOOQ 설정 소스와 physical root가 섞이므로 사용하지 않는다.
+
+- id: ADR-015
+  title: 공통 응답 봉투 정책 단일화 — 런타임/문서 래핑 규칙 공유
+  status: adopted
+  date: 2026-04-20
+  stacks: [springboot]
+  context: |
+    GlobalResponseAdvice 는 런타임에 컨트롤러 반환값을 ApiResponse 봉투로 래핑하지만,
+    springdoc 은 메서드 반환 타입만 리플렉션으로 보고 스키마를 만든다.
+    두 경로가 분리돼 있어 래핑 제외 조건을 두 지점에 복제 구현하면 한쪽만 갱신돼 Swagger 문서와 실제 응답이 이탈한다.
+  decision: |
+    래핑 대상 판정은 global/response/ResponseEnvelopePolicy 에 단일 정의한다.
+    런타임 GlobalResponseAdvice 와 springdoc OperationCustomizer 모두 ResponseEnvelopePolicy.shouldWrap(...) 을 호출해 동일 규칙을 공유한다.
+    OperationCustomizer 는 2xx 응답 스키마를 {success, data, timestamp} 봉투로 교체해 문서와 런타임이 같은 형태로 노출되도록 한다.
+  consequence: |
+    래핑 규칙 변경 시 정책 유틸 한 곳만 고치면 런타임과 문서가 함께 갱신된다.
+    Swagger UI 의 Schema/Example 이 실제 curl 응답과 동일한 형태로 유지된다.
+    새로운 제외 타입(파일 다운로드용 Resource, StreamingResponseBody 등)을 추가할 때는 ResponseEnvelopePolicy 의 제외 목록에 먼저 반영한다.

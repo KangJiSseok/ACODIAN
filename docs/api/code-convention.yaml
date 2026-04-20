@@ -178,10 +178,19 @@ springboot:
         - ErrorCode enum 의 각 항목 — 발생 조건을 한 줄 주석으로 명시한다.
         - 공개 DTO 가 노출하는 static nested Request/Response 및 from()/of()/toCommand()/toCriteria() 메서드 — 의미가 자명하지 않은 경우 한 줄 Javadoc.
         - 커스텀 예외(BusinessException 계열) — 어떤 상황에 던지는지 Javadoc 으로 명시.
+        - 정책/규칙을 집약하는 유틸(예 - `*Policy`, `*Rule`, `*Criteria`) 의 public static 메서드 — 호출 지점에서 규칙 요약이 필요하므로 한 줄 Javadoc 을 붙인다.
+        - @Configuration 클래스의 @Bean 메서드 — 해당 빈의 역할과 등록 이유를 한 줄 Javadoc 으로 남긴다.
+
+      Javadoc 권장(함수 가독성):
+        - 위임 호출 체인을 이루는 private helper — 각 단계가 맡은 단일 책임과 다음 단계를 호출하는 이유를 한두 줄로 기술해, 함수 시그니처만 훑어도 전체 흐름을 재구성할 수 있게 한다.
+        - 필터링·enumeration·분기 처리가 들어 있는 헬퍼 — 함수 단위로는 걸러내는 케이스와 통과시키는 케이스를 요약하고, 목록 각 항목이 포함된 근거처럼 더 세부 WHY 는 enumeration 블록 상단의 한 줄 주석으로 보충한다.
+        - 외부 라이브러리 객체를 가공/조립하는 빌더성 헬퍼 — 선택한 API 가 왜 필요한지, 비자명한 설계 결정이 있다면 그 맥락을 함께 기록한다.
+
+      위 권장은 신규·변경 코드에 우선 적용하고, 리뷰에서 "이 함수가 왜 이 모양인지 머리에 담기 어렵다" 는 피드백이 나오면 Javadoc 보강 또는 함수 분해로 대응한다.
 
       Javadoc 생략 허용:
         - Controller 메서드 — Swagger `@Operation(summary, description)` 이 SB-018 `*ControllerDocs` 인터페이스에 이미 존재하므로 구현체에 Javadoc 을 중복 작성하지 않는다.
-        - `@Override` 만으로 부모 계약이 유지되는 경우.
+        - 단순 위임만 있는 `@Override` (상위 계약을 그대로 따르고 한 줄짜리 return 만 있는 경우).
         - Entity 필드/롬복 생성자/단순 getter·setter — 네이밍과 어노테이션이 자명한 경우.
 
       WHY 주석 권장 상황:
@@ -189,6 +198,10 @@ springboot:
         - 외부 라이브러리 버그/제약 우회 — 라이브러리 버전과 이슈 링크 병기.
         - 직관에 반하는 성능/순서 선택, 비자명한 알고리즘 선택.
         - 임시 예외 처리/워크어라운드 — 반드시 해제 조건을 함께 기술.
+
+      정책 중복 회피:
+        - 같은 규칙(예 - 공통 응답 봉투 래핑 제외 조건)이 두 지점 이상에서 구현되어야 하는 경우 Policy 전용 유틸 클래스(`*Policy` 네이밍)로 추출하고, 호출 지점은 유틸 메서드 한 번만 부른다.
+        - 호출 지점 메서드 이름(`shouldWrap`, `isAllowed` 등) 이 의도를 전달하므로 호출측에는 별도 WHAT 주석을 추가하지 않는다.
 
       금지:
         - WHAT 주석(코드를 한국어로 재서술하는 주석). 예 - `// user 목록을 가져온다` 같은 주석.
