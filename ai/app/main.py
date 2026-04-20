@@ -11,15 +11,7 @@ def create_app() -> FastAPI:
         docs_url="/docs",
         redoc_url="/redoc",
     )
-    app.include_router(api_router, prefix=settings.api_v1_prefix)
-
-    @app.get("/", tags=["meta"])
-    def read_root() -> dict[str, str]:
-        return {
-            "service": settings.app_name,
-            "version": settings.app_version,
-            "environment": settings.environment,
-        }
+    app.include_router(api_router, prefix=settings.api_prefix)
 
     return app
 
