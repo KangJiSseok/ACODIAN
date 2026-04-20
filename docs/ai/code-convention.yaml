@@ -1,0 +1,84 @@
+# AI 모듈의 단일 source of truth 코드 컨벤션 파일.
+general:
+  - id: GEN-001
+    rule: 함수와 메서드는 단일 책임 원칙을 따른다. Router/Service/Store/Client 역할을 섞지 않는다.
+    stacks: [fastapi]
+  - id: GEN-002
+    rule: 비밀정보(GEMINI_API_KEY, PGVECTOR_DSN, REDIS_URL, NEO4J_PASSWORD 등)는 코드에 하드코딩하지 않고 Settings + 환경변수로만 주입한다.
+    stacks: [fastapi]
+  - id: GEN-003
+    rule: 새 외부 의존성 연동 시 접근 진입점은 app/config/settings.py 에 먼저 정의하고, 코드 전역에서 settings 인스턴스를 통해서만 참조한다.
+    stacks: [fastapi]
+  - id: GEN-004
+    rule: 장시간 실행되는 AI 작업은 동기 HTTP 요청 안에서 끝내려 하지 말고 trigger API 와 비동기 작업으로 분리한다.
+    stacks: [fastapi, celery]
+
+python:
+  - id: PY-001
+    rule: 모든 공개 함수와 메서드에 타입 힌트를 작성한다. list[SearchResult], dict[str, str] 같은 구체 타입을 우선 사용한다.
+    stacks: [fastapi]
+  - id: PY-002
+    rule: Pydantic 모델은 app/model/ 아래에 두고, 입력 검증은 Field(ge, le, min_length 등)로 선언한다. Router/Service 에서 임의 검증 로직을 중복 작성하지 않는다.
+    stacks: [fastapi, pydantic]
+  - id: PY-003
+    rule: 설정 객체는 BaseSettings 기반 Settings 클래스로 관리하고, 필요 시 get_settings() / settings 캐시 진입점만 사용한다.
+    stacks: [fastapi, pydantic]
+  - id: PY-004
+    rule: 파일/모듈 이름은 snake_case, 클래스 이름은 PascalCase, 상수는 UPPER_SNAKE_CASE 를 사용한다.
+    stacks: [fastapi]
+  - id: PY-005
+    rule: 공통 유틸은 util/, 외부 연동은 client/, 저장소 구현은 store/ 에 둔다. 편의상 service 나 router 안에 헬퍼를 숨겨 넣지 않는다.
+    stacks: [fastapi]
+
+fastapi:
+  - id: FA-001
+    rule: FastAPI 앱 생성은 app/main.py 의 create_app() factory 로 유지한다. app = FastAPI(...) 를 여러 파일에 분산 선언하지 않는다.
+    stacks: [fastapi]
+  - id: FA-002
+    rule: 라우터 등록은 app/router/__init__.py 의 api_router 에 모은다. main.py 에서 개별 라우터를 직접 반복 등록하지 않는다.
+    stacks: [fastapi]
+  - id: FA-003
+    rule: 엔드포인트 경로는 settings.api_prefix 하위에 노출한다. AI 서비스 기본 prefix 는 /ai 로 유지하고, 공통 prefix 를 문자열로 하드코딩하지 않는다.
+    stacks: [fastapi]
+  - id: FA-004
+    rule: |
+      모든 엔드포인트는 response_model 을 명시하고,
+      생성/큐잉성 작업은 적절한 status_code(예: 202 Accepted)를 선언한다.
+    stacks: [fastapi]
+  - id: FA-005
+    rule: Router 는 HTTP 계약만 담당한다. request parsing, response_model 선언, dependency 연결까지만 두고 비즈니스 로직은 Service 로 위임한다.
+    stacks: [fastapi]
+  - id: FA-006
+    rule: 인증이 필요한 엔드포인트는 Depends(...) 기반 dependency 로 보호한다. health 처럼 공개 엔드포인트만 예외로 둔다.
+    stacks: [fastapi]
+  - id: FA-007
+    rule: 서비스 인스턴스 생성 방식이 바뀌더라도 Router 가 저장소/외부 클라이언트에 직접 접근하는 구조는 허용하지 않는다.
+    stacks: [fastapi]
+
+ai:
+  - id: AI-001
+    rule: 프롬프트 문자열은 app/prompt/, 모델/프롬프트/파서 조립은 app/chain/, 실행 orchestration 은 app/service/ 에 둔다.
+    stacks: [fastapi, langchain]
+  - id: AI-002
+    rule: 파이프라인 트리거 API 는 요청 접수와 태스크 발행 결과만 반환하고, 요약/태그/임베딩 생성 같은 장시간 작업 자체를 HTTP 응답 안에서 모두 수행하지 않는다.
+    stacks: [fastapi, celery]
+  - id: AI-003
+    rule: 검색 서비스는 query 검증과 limit 검증을 Pydantic 모델에 맡기고, 검색 시나리오 조합은 Service 에서 수행한다. 저장소 세부 구현은 store/ 가 소유한다.
+    stacks: [fastapi, pgvector]
+  - id: AI-004
+    rule: PGVector, Neo4j, 외부 API 같은 인프라 연동 세부사항은 app/store/ 또는 app/client/ 로 격리한다. Service 가 드라이버 세부 구현을 직접 소유하지 않는다.
+    stacks: [fastapi, pgvector, neo4j]
+  - id: AI-005
+    rule: 스텁 응답은 초기 개발 단계에서만 허용한다. 실제 연동을 시작하면 TODO 상태를 남기지 말고, 어떤 외부 시스템과 연결되는지 Service/Store 책임을 명확히 기록한다.
+    stacks: [fastapi]
+
+quality:
+  - id: QA-001
+    rule: 새 라우터를 추가하면 최소 1개의 TestClient 기반 정상 흐름 테스트를 tests/ 아래에 함께 추가한다.
+    stacks: [fastapi, pytest]
+  - id: QA-002
+    rule: health 같은 공개 엔드포인트는 상태 코드와 응답 본문을 고정해 회귀 테스트로 보호한다.
+    stacks: [fastapi, pytest]
+  - id: QA-003
+    rule: 응답 구조를 변경할 때는 response_model 수정과 테스트 수정을 함께 수행한다. 문서만 바꾸고 테스트를 남겨두지 않는다.
+    stacks: [fastapi, pytest]
