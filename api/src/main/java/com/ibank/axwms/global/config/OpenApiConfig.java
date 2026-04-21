@@ -2,7 +2,9 @@ package com.ibank.axwms.global.config;
 
 import com.ibank.axwms.global.response.ApiResponse;
 import com.ibank.axwms.global.response.ResponseEnvelopePolicy;
+import io.swagger.v3.oas.models.Components;
 import io.swagger.v3.oas.models.Operation;
+import io.swagger.v3.oas.models.OpenAPI;
 import io.swagger.v3.oas.models.media.BooleanSchema;
 import io.swagger.v3.oas.models.media.Content;
 import io.swagger.v3.oas.models.media.DateTimeSchema;
@@ -10,6 +12,7 @@ import io.swagger.v3.oas.models.media.MediaType;
 import io.swagger.v3.oas.models.media.ObjectSchema;
 import io.swagger.v3.oas.models.media.Schema;
 import io.swagger.v3.oas.models.responses.ApiResponses;
+import io.swagger.v3.oas.models.security.SecurityScheme;
 import java.util.List;
 import java.util.Map;
 import org.springdoc.core.customizers.OperationCustomizer;
@@ -22,10 +25,24 @@ import org.springframework.context.annotation.Configuration;
  * 여기서는 OperationCustomizer 로 2xx 응답 스키마를 {success, data, timestamp} 봉투로 교체해 실제 curl 응답과 문서를 일치시킨다.
  * 래핑 대상 판정은 런타임 advice 와 동일한 {@link ResponseEnvelopePolicy} 에 위임한다.
  */
-@Configuration
+@Configuration(proxyBeanMethods = false)
 public class OpenApiConfig {
 
     private static final String SUCCESS_STATUS_PREFIX = "2";
+    private static final String BEARER_AUTH_SCHEME = "bearerAuth";
+
+    /** 보호된 API 문서가 동일한 JWT Bearer 보안 스킴을 참조하도록 OpenAPI 전역 스킴을 등록한다. */
+    @Bean
+    public OpenAPI openAPI() {
+        return new OpenAPI()
+                .components(new Components().addSecuritySchemes(
+                        BEARER_AUTH_SCHEME,
+                        new SecurityScheme()
+                                .type(SecurityScheme.Type.HTTP)
+                                .scheme("bearer")
+                                .bearerFormat("JWT")
+                ));
+    }
 
     /**
      * springdoc 이 모든 엔드포인트의 {@link Operation} 을 만든 직후 호출해주는 후처리 훅을 등록한다.
