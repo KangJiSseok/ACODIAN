@@ -75,4 +75,32 @@ public class User {
     @UpdateTimestamp
     @Column(name = "updated_at", nullable = false)
     private LocalDateTime updatedAt;
+
+    /**
+     * 신규 사용자를 생성한다.
+     * email 은 tb_user 의 UNIQUE key 이므로 중복 여부는 호출측이 사전 검증한다.
+     * passwordHash 는 BCrypt 로 해시된 값이어야 하며 평문을 전달하면 인증이 성립하지 않는다.
+     * departmentId 는 tb_department 의 유효한 id 여야 한다(FK, NOT NULL).
+     */
+    public static User create(Long departmentId,
+                              String userName,
+                              String email,
+                              String passwordHash,
+                              UserRole roleCode,
+                              EmploymentStatus employmentStatus,
+                              String positionName,
+                              String titleName,
+                              LocalDate joinDate) {
+        User user = new User();
+        user.departmentId = departmentId;
+        user.userName = userName;
+        user.email = email;
+        user.passwordHash = passwordHash;
+        user.roleCode = roleCode;
+        user.employmentStatus = employmentStatus;
+        user.positionName = positionName;
+        user.titleName = titleName;
+        user.joinDate = joinDate;
+        return user;
+    }
 }

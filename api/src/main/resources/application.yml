@@ -2,6 +2,9 @@ spring:
   application:
     name: ax-wms-api
 
+  profiles:
+    default: local
+
   datasource:
     url: jdbc:postgresql://${DB_HOST:localhost}:${DB_PORT:5434}/${DB_NAME:postgres}
     username: ${DB_USERNAME:postgres}
