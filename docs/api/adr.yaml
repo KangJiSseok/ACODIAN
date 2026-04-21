@@ -58,20 +58,23 @@
 
 - id: ADR-005
   title: Redis — Refresh Token 저장소
-  status: planned
+  status: adopted
   date: 2026-04-08
   stacks: [springboot]
   context: |
     Refresh Token을 DB에 저장하면 만료/로그아웃 처리 시 DB 부하가 발생하고 TTL 자동 관리가 어렵다.
-    단일 세션 정책(동시 로그인 방지)이 필요하다.
-    주의: 갱신 API(POST /api/auth/refresh)는 현재 plan/api-design.md에서 Proposed-risk-closure 상태이므로,
-    해당 API가 Inferred-required 이상으로 격상될 때 이 ADR도 adopted로 전환한다.
+    동시에 웹/모바일/MCP 클라이언트가 병렬로 세션을 유지할 수 있어야 하므로,
+    사용자당 단일 키 overwrite 구조는 다중 세션 요구와 충돌한다.
+    로그인 단계에서 세션 식별자 기준 저장 모델을 먼저 고정해야 후속 refresh/logout API도 같은 계약을 재사용할 수 있다.
   decision: |
-    Redis key: refresh:token:{userId}
+    Redis primary key는 refresh:token:{sessionId} 형태를 사용한다.
+    sessionId(jti)를 refresh token 단위의 고유 식별자로 사용한다.
+    userId는 secondary lookup 인덱스로 저장해 한 사용자의 활성 세션 목록을 조회할 수 있게 한다.
     TTL: 14일(1,209,600s)
-    로그아웃 시 키 즉시 DELETE.
-    한 사용자당 단일 세션 — 새 로그인 시 기존 refresh token 덮어쓰기.
+    로그아웃/세션 폐기는 sessionId 기준 단건 DELETE를 기본 primitive로 둔다.
+    한 사용자당 다중 세션 공존을 허용하고, 새 로그인 시 기존 refresh token을 덮어쓰지 않는다.
   consequence: Redis 장애 시 재로그인 필요. 운영 환경에서 Redis 고가용성 구성 필수.
+    refresh/logout 구현은 sessionId 기준 조회/폐기와 userId 기준 세션 목록 조회를 같은 저장소 계약으로 재사용한다.
 
 - id: ADR-006
   title: DTO 매핑 — API DTO 명시적 변환 + 팩토리 메서드 기반 응답 생성
@@ -85,16 +88,18 @@
     숨겨져 가독성과 응집도가 떨어질 수 있다.
     현재 프로젝트에서는 응답 DTO를 명시적으로 작성하는 방식이 더 단순하고 일관된다고 판단한다.
   decision: |
-    API 전용 DTO는 유스케이스 기준의 {UseCase}Api 외부 클래스에 모은다.
-    각 API 클래스는 static nested class 두 개로 Request/Response를 정의한다.
-    Request는 Controller 바인딩 전용으로 두고, Service 입력은 toCommand()/toCriteria() 등으로 변환한다.
+    API 전용 DTO는 유스케이스 기준의 {UseCase}ApiDto 외부 클래스에 모은다. 한 유스케이스는 한 {UseCase}ApiDto 파일 1:1 매핑을 기본으로 유지한다.
+    각 API 클래스는 static nested class Request/Response 를 기본으로 두고, Service 가 반환하는 출력 record 도 같은 Api 클래스 안의 Result 로 모아 둔다. Result 안에서만 의미가 있는 동반 타입은 Result 내부 중첩 record 로 둔다.
+    Request 는 Controller 바인딩/검증과 Service 입력을 겸한다. Service 메서드는 기본적으로 Request DTO 를 그대로 인자로 받고, 별도 Command/Criteria 클래스는 기본으로 만들지 않는다.
+    Service 입력을 Request 로 직결할 수 없는 경우(여러 소스 조립·정규화, HTTP 외 경로에서도 같은 유스케이스 호출 등) 에 한해 같은 {UseCase}ApiDto 안에 Command/Criteria nested record 를 추가한다. 별도 dto 파일로 분리하지 않는다.
     Response는 static factory method(from/of)로 Service 결과 또는 도메인 객체를 받아 생성한다.
     Request DTO를 Entity로 직접 매핑하지 않는다.
     API 요청/응답 변환은 명시적 코드로 작성하며, 자동 매핑 도구를 기본 규칙으로 도입하지 않는다.
     Entity 생성/수정은 Service 또는 Domain의 책임으로 둔다.
   consequence: |
     API 계약이 유스케이스 단위로 응집된다.
-    Controller DTO와 Service 입력이 분리되어 계층 경계가 명확해진다.
+    Service 는 Request DTO 를 직접 받아 단순 유스케이스에서는 Command 보일러플레이트가 제거된다.
+    Command/Criteria 도입 여부 자체가 "Request 로 직결이 어렵다" 는 설계 신호로 작동한다.
     응답 DTO 생성 규칙이 각 DTO 내부에 드러나 가독성과 추적성이 높아진다.
     자동 매핑 설정과 숨겨진 변환 규칙 없이, 명시적인 코드 중심으로 일관된 DTO 변환 방식을 유지할 수 있다.
 
