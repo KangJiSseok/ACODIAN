@@ -65,6 +65,7 @@ export default function Sidebar() {
         </div>
 
         <div className="mt-auto px-2 pb-2 pt-6">
+          {/* TODO(auth): 인증 연동 후 Sidebar 하단에 프로필 이미지, 프로필 이동, 로그아웃 액션을 추가한다. */}
           <div className="rounded-[1.75rem] border border-white/10 bg-white/[0.03] p-5">
             <p className="text-[11px] font-semibold uppercase tracking-[0.22em] text-white/62">
               workspace
