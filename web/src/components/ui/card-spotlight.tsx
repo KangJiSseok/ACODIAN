@@ -1,0 +1,50 @@
+"use client"
+
+import * as React from "react"
+import { cn } from "@/lib/utils"
+
+export function CardSpotlight({
+  className,
+  children,
+  ...props
+}: React.HTMLAttributes<HTMLDivElement>) {
+  const [position, setPosition] = React.useState({ x: 120, y: 80 })
+  const [hovered, setHovered] = React.useState(false)
+
+  return (
+    <div
+      className={cn(
+        "group/card-spotlight relative overflow-hidden rounded-2xl border border-border/70 bg-card/95 text-card-foreground shadow-[var(--shadow-panel)] backdrop-blur supports-[backdrop-filter]:bg-card/88",
+        className
+      )}
+      onMouseEnter={() => setHovered(true)}
+      onMouseLeave={() => setHovered(false)}
+      onMouseMove={(event) => {
+        const rect = event.currentTarget.getBoundingClientRect()
+        setPosition({
+          x: event.clientX - rect.left,
+          y: event.clientY - rect.top,
+        })
+      }}
+      {...props}
+    >
+      <div
+        className="pointer-events-none absolute inset-0 transition-opacity duration-300"
+        style={{
+          background: hovered
+            ? `radial-gradient(320px circle at ${position.x}px ${position.y}px, color-mix(in srgb, var(--primary) 18%, transparent), transparent 48%)`
+            : "radial-gradient(280px circle at 12% 0%, color-mix(in srgb, var(--primary) 12%, transparent), transparent 48%)",
+        }}
+      />
+      <div
+        className="pointer-events-none absolute inset-0"
+        style={{
+          background:
+            "linear-gradient(180deg, color-mix(in srgb, var(--card-foreground) 7%, transparent), transparent 22%, transparent 100%)",
+        }}
+      />
+      <div className="pointer-events-none absolute inset-px rounded-[calc(theme(borderRadius.2xl)-1px)] border border-border/40" />
+      <div className="relative z-10">{children}</div>
+    </div>
+  )
+}
