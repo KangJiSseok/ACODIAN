@@ -126,7 +126,7 @@ springboot:
       global/은 응답, 예외, config, security 같은 횡단 관심사를 두는 공용 루트이며 domain/에 의존하면 안 된다.
       다른 모듈의 domain/ 및 repository/ 패키지를 직접 import하지 않는다.
       모듈 간 조회는 해당 모듈의 service/ 를 통해서만 접근한다.
-      허용된 모듈 의존 방향: auth→organization, worklog→organization/tag, file→worklog/organization, notification→organization, dashboard→organization/worklog/notification.
+      허용된 모듈 의존 방향: auth→organization, worklog→organization/tag, file→worklog/organization, notification→organization, dashboard→organization/worklog/notification, devsupport→organization (로컬 시드 러너 한정, @Profile("local") 전용 모듈).
       dashboard는 query-only 조합 계층으로 유지하며 다른 도메인의 상태 변경을 직접 소유하지 않는다.
     stacks: [springboot]
   - id: SB-018
@@ -217,4 +217,22 @@ springboot:
         - 사내 ADR/컨벤션 식별자(예 - GEN-004, SB-007, SB-018, ADR-001) 를 주석에서 참조하지 않는다. reader 가 별도 문서를 열지 않아도 코드만 읽고 이해할 수 있도록, 식별자 대신 그 결정의 배경이나 제약을 한국어로 풀어 적는다. 외부 인용(라이브러리 이슈 번호, 법령 조항 등)은 이 규칙에서 제외한다.
 
       이번 컨벤션 도입은 신규·변경 코드에만 적용하며 기존 파일의 주석 소급 추가는 포함하지 않는다.
+    stacks: [springboot]
+  - id: SB-021
+    rule: |
+      로컬 시드 러너 규칙.
+      `domain/devsupport/bootstrap/LocalSeedRunner` 하나만 존재하며 @Profile("local") + ApplicationRunner 로 구성한다.
+      Repository 의 existsBy*/findBy* 로 멱등성을 보장하고, 비밀번호는 PasswordEncoder 로 런타임 해시한다.
+      Flyway 마이그레이션(V*.sql) 에 시드 데이터를 포함하지 않는다(운영 유입 방지).
+      application.yml 에 `spring.profiles.default: local` 을 두어 배포 환경은 SPRING_PROFILES_ACTIVE 를 명시 주입하도록 강제한다.
+      시드 비밀번호는 개발 전용 상수(예 - `password1!`) 를 사용하고 실제 사용자 비밀번호를 재사용하지 않는다.
+      local 프로파일은 테스트에서 활성화하지 않는다. 테스트는 `@ActiveProfiles("test"/"integration"/"e2e")` 만 사용해 LocalSeedRunner 빈이 생성되지 않도록 한다.
+      devsupport 모듈은 로컬 시드 러너 외 다른 용도로 확장하지 않는다.
+    stacks: [springboot]
+  - id: SB-022
+    rule: |
+      피처 추가 시 시드 동반 규칙.
+      신규 Controller/Service/Entity 가 요구하는 참조 데이터(부서/사용자/팀/태그 등) 는 LocalSeedRunner 시드에 함께 추가한다.
+      `docs/api/api-springboot-endpoint-checklist.md` 의 엔드포인트 체크박스는 bootRun + Swagger 수동 검증이 시드만으로 가능해야 완료로 전환한다.
+      시드 없이는 수동 검증 재현성이 깨지므로 체크박스 완료 기준 미달로 간주한다.
     stacks: [springboot]
