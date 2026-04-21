@@ -1,9 +1,9 @@
 # API 명세 인덱스
 
 ## 1. 목적
-- checklist 52개 endpoint 의 coverage, 상태 분포, 문서 링크를 한곳에서 검수하기 위한 인덱스다.
-- 공통 규칙은 [api-spec-common.md](./api-spec-common.md) 를 기준으로 한다.
-- 문서 경로는 `docs/api/spec/` 디렉토리다.
+- 이 문서는 checklist 기반 **52개 upstream inventory** 의 coverage 와 상태 분포를 검수하기 위한 인덱스다.
+- 실제 도메인 문서 본문은 normalized path 를 사용할 수 있으며, 그 차이는 의도된 구조다.
+- 공통 규칙은 [api-spec-common.md](./api-spec-common.md) 를 따른다.
 
 ## 2. 문서 링크
 | 구분 | 문서 |
@@ -29,9 +29,9 @@
 | `Inferred-required` | 5 |
 
 - 총 endpoint 수: **52**
-- 기대 분포: `Documented 44 / Proposed-risk-closure 3 / Inferred-required 5`
+- addendum 3건은 위 count 와 matrix row count 에 포함하지 않는다.
 
-## 4. Coverage Matrix (커버리지 매트릭스)
+## 4. Coverage Matrix (inventory-linked 52 rows)
 | Domain | Method | Path | Status | Source priority | Spec doc |
 |---|---|---|---|---|---|
 | `auth` | `POST` | `/api/auth/login` | `Documented` | checklist → class mapping → ERD/ADR | [api-spec-auth.md](./api-spec-auth.md) |
@@ -82,24 +82,29 @@
 | `notification` | `GET` | `/api/notification/unread-count` | `Documented` | checklist → class mapping → ERD/ADR | [api-spec-notification.md](./api-spec-notification.md) |
 | `notification` | `PATCH` | `/api/notification/read-all` | `Documented` | checklist → class mapping → ERD/ADR | [api-spec-notification.md](./api-spec-notification.md) |
 | `notification` | `PATCH` | `/api/notification/{id}/read` | `Inferred-required` | checklist → class mapping → ERD/ADR | [api-spec-notification.md](./api-spec-notification.md) |
-| `dashboard` | `GET` | `/api/dashboard/summary` | `Documented` | checklist → class mapping → ERD/ADR | [api-spec-dashboard.md](./api-spec-dashboard.md) |
-| `dashboard` | `GET` | `/api/dashboard/overdue` | `Documented` | checklist → class mapping → ERD/ADR | [api-spec-dashboard.md](./api-spec-dashboard.md) |
-| `dashboard` | `GET` | `/api/dashboard/workload` | `Documented` | checklist → class mapping → ERD/ADR | [api-spec-dashboard.md](./api-spec-dashboard.md) |
-| `dashboard` | `GET` | `/api/dashboard/my` | `Documented` | checklist → class mapping → ERD/ADR | [api-spec-dashboard.md](./api-spec-dashboard.md) |
+| `dashboard` | `GET` | `/api/dashboards/summary` | `Documented` | checklist → class mapping → ERD/ADR | [api-spec-dashboard.md](./api-spec-dashboard.md) |
+| `dashboard` | `GET` | `/api/dashboards/overdue` | `Documented` | checklist → class mapping → ERD/ADR | [api-spec-dashboard.md](./api-spec-dashboard.md) |
+| `dashboard` | `GET` | `/api/dashboards/workload` | `Documented` | checklist → class mapping → ERD/ADR | [api-spec-dashboard.md](./api-spec-dashboard.md) |
+| `dashboard` | `GET` | `/api/dashboards/my` | `Documented` | checklist → class mapping → ERD/ADR | [api-spec-dashboard.md](./api-spec-dashboard.md) |
 
-## 5. 검수 체크리스트
-- [ ] 공통 문서 2개 + 도메인 문서 11개가 모두 존재한다.
-- [ ] Coverage Matrix 의 52개 행이 checklist 와 정확히 일치한다.
-- [ ] 상태 분포가 `44 / 3 / 5` 와 일치한다.
-- [ ] 각 도메인 문서에 도메인 개요 / 엔드포인트 목록 / 엔드포인트 상세 / 추론 메모가 있다.
-- [ ] 모든 목록 API가 PageResponse 표준을 설명한다.
-- [ ] `Proposed-risk-closure`, `Inferred-required` endpoint 가 누락 없이 반영되었다.
-- [ ] cross-link 가 모두 살아 있다.
+## 5. Spec-normalized path note
+- 위 matrix 는 **upstream inventory 추적용 canonical row set** 이다.
+- row identity 와 row count 는 checklist/class mapping 기준 52개를 유지한다.
+- path 표기는 clarified scope 에서 현재 spec 표기를 명시적으로 고정한 경우 normalized path 를 사용할 수 있다.
 
-## 6. 소스 문서 묶음
-- checklist: [api-springboot-endpoint-checklist.md](../api-springboot-endpoint-checklist.md)
-- class mapping: [api-springboot-endpoint-class-mapping.md](../api-springboot-endpoint-class-mapping.md)
-- ADR: [adr.yaml](../adr.yaml)
-- code convention: [code-convention.yaml](../code-convention.yaml)
-- architecture guide: [../../AX-WMS_기획서_아키텍처가이드.md](../../AX-WMS_기획서_아키텍처가이드.md)
-- ERD: [../../ax-wms-erd-draft.sql](../../ax-wms-erd-draft.sql)
+## 6. Clarified-scope addendum
+| Method | Path | Reason | Source | Spec doc |
+|---|---|---|---|---|
+| `POST` | `/api/users/signup` | user-request clarification | deep-interview spec | [api-spec-user.md](./api-spec-user.md) |
+| `GET` | `/api/departments/{id}/users` | user-request clarification | deep-interview spec | [api-spec-department.md](./api-spec-department.md) |
+| `POST` | `/api/teams/{id}/members/bulk` | user-request clarification | deep-interview spec | [api-spec-team.md](./api-spec-team.md) |
+
+- addendum 3건은 matrix 52행, 상태 분포 count, checklist completeness count 에 포함하지 않는다.
+
+## 7. 검수 체크리스트
+- [ ] matrix row count = 52
+- [ ] addendum row count = 3
+- [ ] checklist/class mapping 원본 파일 미수정
+- [ ] domain spec path 는 Auth 제외 모두 복수형 / no-`/list`
+- [ ] dashboard 포함 전역 plural 규칙이 common/index/domain 에 일관되게 반영됨
+
