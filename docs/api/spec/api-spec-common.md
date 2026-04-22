@@ -93,7 +93,7 @@
 | `POST` | `/api/tags/merge` | 병합 결과 `targetTagId` 와 재배치 결과를 후속 처리에 사용한다. |
 
 - 위 3건 외의 non-GET payload 예외는 이번 범위에서 허용하지 않는다.
-- `POST /api/auth/login` 은 ADR(로그인 토큰 전송 규약)에 따라 accessToken 은 `Authorization` 응답 헤더, refreshToken 은 HttpOnly 쿠키로 전송하고 응답 바디는 비운다. 따라서 payload 유지 예외에서 제외된다. 사용자 문맥은 `GET /api/auth/me` 가 SSOT 로 담당한다.
+- `POST /api/auth/login` 은 ADR(로그인 토큰 전송 규약)에 따라 accessToken 은 `Authorization` 응답 헤더, refreshToken 은 HttpOnly 쿠키로 전송하고 응답 바디는 비운다. 따라서 payload 유지 예외에서 제외된다. 사용자 문맥은 `GET /api/users/me` 가 SSOT 로 담당한다.
 
 ## 8. 권한 표기 규칙
 - 역할 계층: `DIRECTOR > DEPT_HEAD > TEAM_LEAD > MEMBER`.

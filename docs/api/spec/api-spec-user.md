@@ -19,6 +19,7 @@
 ## 4. 엔드포인트 목록
 | Method | Path | Status | 목적 |
 |---|---|---|---|
+| `GET` | `/api/users/me` | `Documented` | 현재 로그인 사용자의 프로필/권한 문맥을 조회한다. |
 | `GET` | `/api/users` | `Documented` | 사용자 목록과 조직/권한 필터 결과를 조회한다. |
 | `GET` | `/api/users/{id}` | `Documented` | 단일 사용자 상세와 조직 소속 문맥을 조회한다. |
 | `POST` | `/api/users/signup` | `Documented` | 셀프 회원가입 요청을 처리한다. |
@@ -27,6 +28,65 @@
 | `DELETE` | `/api/users/{id}` | `Documented` | 사용자를 퇴직/비활성 처리한다. |
 
 ## 5. 엔드포인트 상세
+
+### GET /api/users/me
+- 목적: 현재 로그인 사용자의 프로필 및 소속 팀 문맥을 조회한다.
+- 상태: `Documented`
+- 권한/접근 주체: 인증된 사용자만 호출한다. accessToken 으로 인증한다.
+- 요청
+  - Header: `Authorization: Bearer <access-token>`
+- 응답 (`data` 기준)
+  - `userId`, `userName`, `departmentId`, `departmentName`, `positionName`, `titleName`, `profileImageUrl`
+  - `teams[*]`: `teamId`, `teamName`, `isPrimary`
+- 요청 JSON 예시
+```json
+{
+  "headers": {
+    "Authorization": "Bearer <access-token>"
+  }
+}
+```
+- 응답 JSON 예시
+```json
+{
+  "success": true,
+  "data": {
+    "userId": 101,
+    "userName": "홍길동",
+    "departmentId": 10,
+    "departmentName": "물류본부",
+    "positionName": "과장",
+    "titleName": "팀장",
+    "profileImageUrl": "https://cdn.axwms.com/profile/101.png",
+    "teams": [
+      {
+        "teamId": 21,
+        "teamName": "물류혁신TF",
+        "isPrimary": true
+      },
+      {
+        "teamId": 22,
+        "teamName": "SCM분석팀",
+        "isPrimary": false
+      }
+    ]
+  },
+  "timestamp": "2026-04-21T03:00:00Z"
+}
+```
+- 상태/에러
+  - 성공: `200 OK`
+  - 대표 오류: `AUTH_UNAUTHORIZED` [추론]
+  - 대표 오류: `USER_NOT_FOUND` [추론]
+- ERD 연관
+  - `tb_user`
+  - `tb_department`
+  - `tb_user_team`
+  - `tb_team`
+- 근거
+  - source: checklist
+  - source: class mapping
+  - source: ADR-002
 
 ### GET /api/users
 - 목적: 사용자 목록과 조직/권한 필터 결과를 조회한다.

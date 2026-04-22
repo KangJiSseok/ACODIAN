@@ -36,61 +36,61 @@
 |---|---|---|---|---|---|
 | `auth` | `POST` | `/api/auth/login` | `Documented` | checklist → class mapping → ERD/ADR | [api-spec-auth.md](./api-spec-auth.md) |
 | `auth` | `POST` | `/api/auth/logout` | `Documented` | checklist → class mapping → ERD/ADR | [api-spec-auth.md](./api-spec-auth.md) |
-| `auth` | `GET` | `/api/auth/me` | `Documented` | checklist → class mapping → ERD/ADR | [api-spec-auth.md](./api-spec-auth.md) |
 | `auth` | `POST` | `/api/auth/refresh` | `Proposed-risk-closure` | checklist → class mapping → ERD/ADR | [api-spec-auth.md](./api-spec-auth.md) |
 | `auth` | `POST` | `/api/auth/change-password` | `Proposed-risk-closure` | checklist → class mapping → ERD/ADR | [api-spec-auth.md](./api-spec-auth.md) |
-| `department` | `GET` | `/api/department/list` | `Documented` | checklist → class mapping → ERD/ADR | [api-spec-department.md](./api-spec-department.md) |
-| `department` | `GET` | `/api/department/{id}` | `Documented` | checklist → class mapping → ERD/ADR | [api-spec-department.md](./api-spec-department.md) |
-| `department` | `POST` | `/api/department` | `Documented` | checklist → class mapping → ERD/ADR | [api-spec-department.md](./api-spec-department.md) |
-| `department` | `PUT` | `/api/department/{id}` | `Documented` | checklist → class mapping → ERD/ADR | [api-spec-department.md](./api-spec-department.md) |
-| `department` | `DELETE` | `/api/department/{id}` | `Documented` | checklist → class mapping → ERD/ADR | [api-spec-department.md](./api-spec-department.md) |
-| `team` | `GET` | `/api/team/list` | `Documented` | checklist → class mapping → ERD/ADR | [api-spec-team.md](./api-spec-team.md) |
-| `team` | `GET` | `/api/team/{id}` | `Documented` | checklist → class mapping → ERD/ADR | [api-spec-team.md](./api-spec-team.md) |
-| `team` | `POST` | `/api/team` | `Documented` | checklist → class mapping → ERD/ADR | [api-spec-team.md](./api-spec-team.md) |
-| `team` | `PUT` | `/api/team/{id}` | `Documented` | checklist → class mapping → ERD/ADR | [api-spec-team.md](./api-spec-team.md) |
-| `team` | `PATCH` | `/api/team/{id}/status` | `Documented` | checklist → class mapping → ERD/ADR | [api-spec-team.md](./api-spec-team.md) |
-| `user` | `GET` | `/api/user/list` | `Documented` | checklist → class mapping → ERD/ADR | [api-spec-user.md](./api-spec-user.md) |
-| `user` | `GET` | `/api/user/{id}` | `Documented` | checklist → class mapping → ERD/ADR | [api-spec-user.md](./api-spec-user.md) |
-| `user` | `POST` | `/api/user` | `Documented` | checklist → class mapping → ERD/ADR | [api-spec-user.md](./api-spec-user.md) |
-| `user` | `PUT` | `/api/user/{id}` | `Documented` | checklist → class mapping → ERD/ADR | [api-spec-user.md](./api-spec-user.md) |
-| `user` | `DELETE` | `/api/user/{id}` | `Documented` | checklist → class mapping → ERD/ADR | [api-spec-user.md](./api-spec-user.md) |
-| `skill` | `GET` | `/api/user/{id}/skills` | `Documented` | checklist → class mapping → ERD/ADR | [api-spec-skill.md](./api-spec-skill.md) |
-| `skill` | `PUT` | `/api/user/{id}/skills` | `Documented` | checklist → class mapping → ERD/ADR | [api-spec-skill.md](./api-spec-skill.md) |
-| `evaluation` | `GET` | `/api/user/{id}/evaluations` | `Documented` | checklist → class mapping → ERD/ADR | [api-spec-evaluation.md](./api-spec-evaluation.md) |
-| `evaluation` | `POST` | `/api/user/{id}/evaluations` | `Documented` | checklist → class mapping → ERD/ADR | [api-spec-evaluation.md](./api-spec-evaluation.md) |
-| `worklog` | `GET` | `/api/worklog/list` | `Documented` | checklist → class mapping → ERD/ADR | [api-spec-worklog.md](./api-spec-worklog.md) |
-| `worklog` | `GET` | `/api/worklog/{id}` | `Documented` | checklist → class mapping → ERD/ADR | [api-spec-worklog.md](./api-spec-worklog.md) |
-| `worklog` | `POST` | `/api/worklog` | `Documented` | checklist → class mapping → ERD/ADR | [api-spec-worklog.md](./api-spec-worklog.md) |
-| `worklog` | `PUT` | `/api/worklog/{id}` | `Documented` | checklist → class mapping → ERD/ADR | [api-spec-worklog.md](./api-spec-worklog.md) |
-| `worklog` | `DELETE` | `/api/worklog/{id}` | `Documented` | checklist → class mapping → ERD/ADR | [api-spec-worklog.md](./api-spec-worklog.md) |
-| `worklog` | `PATCH` | `/api/worklog/{id}/status` | `Documented` | checklist → class mapping → ERD/ADR | [api-spec-worklog.md](./api-spec-worklog.md) |
-| `worklog` | `GET` | `/api/worklog/{id}/history` | `Documented` | checklist → class mapping → ERD/ADR | [api-spec-worklog.md](./api-spec-worklog.md) |
-| `worklog` | `PATCH` | `/api/worklog/{id}/summary` | `Documented` | checklist → class mapping → ERD/ADR | [api-spec-worklog.md](./api-spec-worklog.md) |
-| `worklog` | `PUT` | `/api/worklog/{id}/tags` | `Documented` | checklist → class mapping → ERD/ADR | [api-spec-worklog.md](./api-spec-worklog.md) |
-| `worklog` | `PATCH` | `/api/worklog/{id}/ai-status` | `Documented` | checklist → class mapping → ERD/ADR | [api-spec-worklog.md](./api-spec-worklog.md) |
-| `file` | `POST` | `/api/file/upload` | `Documented` | checklist → class mapping → ERD/ADR | [api-spec-file.md](./api-spec-file.md) |
-| `file` | `GET` | `/api/file/list` | `Inferred-required` | checklist → class mapping → ERD/ADR | [api-spec-file.md](./api-spec-file.md) |
-| `file` | `GET` | `/api/file/{id}` | `Proposed-risk-closure` | checklist → class mapping → ERD/ADR | [api-spec-file.md](./api-spec-file.md) |
-| `file` | `GET` | `/api/file/{id}/download` | `Documented` | checklist → class mapping → ERD/ADR | [api-spec-file.md](./api-spec-file.md) |
-| `file` | `DELETE` | `/api/file/{id}` | `Documented` | checklist → class mapping → ERD/ADR | [api-spec-file.md](./api-spec-file.md) |
-| `file` | `PUT` | `/api/file/{id}/summary` | `Inferred-required` | checklist → class mapping → ERD/ADR | [api-spec-file.md](./api-spec-file.md) |
-| `file` | `PATCH` | `/api/file/{id}/ai-status` | `Inferred-required` | checklist → class mapping → ERD/ADR | [api-spec-file.md](./api-spec-file.md) |
-| `tag` | `GET` | `/api/tag/list` | `Documented` | checklist → class mapping → ERD/ADR | [api-spec-tag.md](./api-spec-tag.md) |
-| `tag` | `POST` | `/api/tag/merge` | `Documented` | checklist → class mapping → ERD/ADR | [api-spec-tag.md](./api-spec-tag.md) |
-| `tag` | `DELETE` | `/api/tag/{id}` | `Inferred-required` | checklist → class mapping → ERD/ADR | [api-spec-tag.md](./api-spec-tag.md) |
-| `notification` | `GET` | `/api/notification/list` | `Documented` | checklist → class mapping → ERD/ADR | [api-spec-notification.md](./api-spec-notification.md) |
-| `notification` | `GET` | `/api/notification/unread-count` | `Documented` | checklist → class mapping → ERD/ADR | [api-spec-notification.md](./api-spec-notification.md) |
-| `notification` | `PATCH` | `/api/notification/read-all` | `Documented` | checklist → class mapping → ERD/ADR | [api-spec-notification.md](./api-spec-notification.md) |
-| `notification` | `PATCH` | `/api/notification/{id}/read` | `Inferred-required` | checklist → class mapping → ERD/ADR | [api-spec-notification.md](./api-spec-notification.md) |
+| `department` | `GET` | `/api/departments` | `Documented` | checklist → class mapping → ERD/ADR | [api-spec-department.md](./api-spec-department.md) |
+| `department` | `GET` | `/api/departments/{id}` | `Documented` | checklist → class mapping → ERD/ADR | [api-spec-department.md](./api-spec-department.md) |
+| `department` | `POST` | `/api/departments` | `Documented` | checklist → class mapping → ERD/ADR | [api-spec-department.md](./api-spec-department.md) |
+| `department` | `PUT` | `/api/departments/{id}` | `Documented` | checklist → class mapping → ERD/ADR | [api-spec-department.md](./api-spec-department.md) |
+| `department` | `DELETE` | `/api/departments/{id}` | `Documented` | checklist → class mapping → ERD/ADR | [api-spec-department.md](./api-spec-department.md) |
+| `team` | `GET` | `/api/teams` | `Documented` | checklist → class mapping → ERD/ADR | [api-spec-team.md](./api-spec-team.md) |
+| `team` | `GET` | `/api/teams/{id}` | `Documented` | checklist → class mapping → ERD/ADR | [api-spec-team.md](./api-spec-team.md) |
+| `team` | `POST` | `/api/teams` | `Documented` | checklist → class mapping → ERD/ADR | [api-spec-team.md](./api-spec-team.md) |
+| `team` | `PUT` | `/api/teams/{id}` | `Documented` | checklist → class mapping → ERD/ADR | [api-spec-team.md](./api-spec-team.md) |
+| `team` | `PATCH` | `/api/teams/{id}/status` | `Documented` | checklist → class mapping → ERD/ADR | [api-spec-team.md](./api-spec-team.md) |
+| `user` | `GET` | `/api/users/me` | `Documented` | checklist → class mapping → ERD/ADR | [api-spec-user.md](./api-spec-user.md) |
+| `user` | `GET` | `/api/users` | `Documented` | checklist → class mapping → ERD/ADR | [api-spec-user.md](./api-spec-user.md) |
+| `user` | `GET` | `/api/users/{id}` | `Documented` | checklist → class mapping → ERD/ADR | [api-spec-user.md](./api-spec-user.md) |
+| `user` | `POST` | `/api/users` | `Documented` | checklist → class mapping → ERD/ADR | [api-spec-user.md](./api-spec-user.md) |
+| `user` | `PUT` | `/api/users/{id}` | `Documented` | checklist → class mapping → ERD/ADR | [api-spec-user.md](./api-spec-user.md) |
+| `user` | `DELETE` | `/api/users/{id}` | `Documented` | checklist → class mapping → ERD/ADR | [api-spec-user.md](./api-spec-user.md) |
+| `skill` | `GET` | `/api/users/{id}/skills` | `Documented` | checklist → class mapping → ERD/ADR | [api-spec-skill.md](./api-spec-skill.md) |
+| `skill` | `PUT` | `/api/users/{id}/skills` | `Documented` | checklist → class mapping → ERD/ADR | [api-spec-skill.md](./api-spec-skill.md) |
+| `evaluation` | `GET` | `/api/users/{id}/evaluations` | `Documented` | checklist → class mapping → ERD/ADR | [api-spec-evaluation.md](./api-spec-evaluation.md) |
+| `evaluation` | `POST` | `/api/users/{id}/evaluations` | `Documented` | checklist → class mapping → ERD/ADR | [api-spec-evaluation.md](./api-spec-evaluation.md) |
+| `worklog` | `GET` | `/api/worklogs` | `Documented` | checklist → class mapping → ERD/ADR | [api-spec-worklog.md](./api-spec-worklog.md) |
+| `worklog` | `GET` | `/api/worklogs/{id}` | `Documented` | checklist → class mapping → ERD/ADR | [api-spec-worklog.md](./api-spec-worklog.md) |
+| `worklog` | `POST` | `/api/worklogs` | `Documented` | checklist → class mapping → ERD/ADR | [api-spec-worklog.md](./api-spec-worklog.md) |
+| `worklog` | `PUT` | `/api/worklogs/{id}` | `Documented` | checklist → class mapping → ERD/ADR | [api-spec-worklog.md](./api-spec-worklog.md) |
+| `worklog` | `DELETE` | `/api/worklogs/{id}` | `Documented` | checklist → class mapping → ERD/ADR | [api-spec-worklog.md](./api-spec-worklog.md) |
+| `worklog` | `PATCH` | `/api/worklogs/{id}/status` | `Documented` | checklist → class mapping → ERD/ADR | [api-spec-worklog.md](./api-spec-worklog.md) |
+| `worklog` | `GET` | `/api/worklogs/{id}/history` | `Documented` | checklist → class mapping → ERD/ADR | [api-spec-worklog.md](./api-spec-worklog.md) |
+| `worklog` | `PATCH` | `/api/worklogs/{id}/summary` | `Documented` | checklist → class mapping → ERD/ADR | [api-spec-worklog.md](./api-spec-worklog.md) |
+| `worklog` | `PUT` | `/api/worklogs/{id}/tags` | `Documented` | checklist → class mapping → ERD/ADR | [api-spec-worklog.md](./api-spec-worklog.md) |
+| `worklog` | `PATCH` | `/api/worklogs/{id}/ai-status` | `Documented` | checklist → class mapping → ERD/ADR | [api-spec-worklog.md](./api-spec-worklog.md) |
+| `file` | `POST` | `/api/files/upload` | `Documented` | checklist → class mapping → ERD/ADR | [api-spec-file.md](./api-spec-file.md) |
+| `file` | `GET` | `/api/files` | `Inferred-required` | checklist → class mapping → ERD/ADR | [api-spec-file.md](./api-spec-file.md) |
+| `file` | `GET` | `/api/files/{id}` | `Proposed-risk-closure` | checklist → class mapping → ERD/ADR | [api-spec-file.md](./api-spec-file.md) |
+| `file` | `GET` | `/api/files/{id}/download` | `Documented` | checklist → class mapping → ERD/ADR | [api-spec-file.md](./api-spec-file.md) |
+| `file` | `DELETE` | `/api/files/{id}` | `Documented` | checklist → class mapping → ERD/ADR | [api-spec-file.md](./api-spec-file.md) |
+| `file` | `PUT` | `/api/files/{id}/summary` | `Inferred-required` | checklist → class mapping → ERD/ADR | [api-spec-file.md](./api-spec-file.md) |
+| `file` | `PATCH` | `/api/files/{id}/ai-status` | `Inferred-required` | checklist → class mapping → ERD/ADR | [api-spec-file.md](./api-spec-file.md) |
+| `tag` | `GET` | `/api/tags` | `Documented` | checklist → class mapping → ERD/ADR | [api-spec-tag.md](./api-spec-tag.md) |
+| `tag` | `POST` | `/api/tags/merge` | `Documented` | checklist → class mapping → ERD/ADR | [api-spec-tag.md](./api-spec-tag.md) |
+| `tag` | `DELETE` | `/api/tags/{id}` | `Inferred-required` | checklist → class mapping → ERD/ADR | [api-spec-tag.md](./api-spec-tag.md) |
+| `notification` | `GET` | `/api/notifications` | `Documented` | checklist → class mapping → ERD/ADR | [api-spec-notification.md](./api-spec-notification.md) |
+| `notification` | `GET` | `/api/notifications/unread-count` | `Documented` | checklist → class mapping → ERD/ADR | [api-spec-notification.md](./api-spec-notification.md) |
+| `notification` | `PATCH` | `/api/notifications/read-all` | `Documented` | checklist → class mapping → ERD/ADR | [api-spec-notification.md](./api-spec-notification.md) |
+| `notification` | `PATCH` | `/api/notifications/{id}/read` | `Inferred-required` | checklist → class mapping → ERD/ADR | [api-spec-notification.md](./api-spec-notification.md) |
 | `dashboard` | `GET` | `/api/dashboards/summary` | `Documented` | checklist → class mapping → ERD/ADR | [api-spec-dashboard.md](./api-spec-dashboard.md) |
 | `dashboard` | `GET` | `/api/dashboards/overdue` | `Documented` | checklist → class mapping → ERD/ADR | [api-spec-dashboard.md](./api-spec-dashboard.md) |
 | `dashboard` | `GET` | `/api/dashboards/workload` | `Documented` | checklist → class mapping → ERD/ADR | [api-spec-dashboard.md](./api-spec-dashboard.md) |
 | `dashboard` | `GET` | `/api/dashboards/my` | `Documented` | checklist → class mapping → ERD/ADR | [api-spec-dashboard.md](./api-spec-dashboard.md) |
 
 ## 5. Spec-normalized path note
-- 위 matrix 는 **upstream inventory 추적용 canonical row set** 이다.
-- row identity 와 row count 는 checklist/class mapping 기준 52개를 유지한다.
-- path 표기는 clarified scope 에서 현재 spec 표기를 명시적으로 고정한 경우 normalized path 를 사용할 수 있다.
+- 위 matrix 는 **canonical row set** 이며 checklist 및 class mapping 과 동일한 normalized path (복수형, `/list` 미사용) 표기를 사용한다.
+- row identity 와 row count 는 52개를 유지한다.
+- `/api/auth/me` 는 `/api/users/me` 로 재분류되어 `user` 도메인이 소유한다.
 
 ## 6. Clarified-scope addendum
 | Method | Path | Reason | Source | Spec doc |
@@ -104,7 +104,8 @@
 ## 7. 검수 체크리스트
 - [ ] matrix row count = 52
 - [ ] addendum row count = 3
-- [ ] checklist/class mapping 원본 파일 미수정
+- [ ] matrix / checklist / class mapping path 표기가 normalized (복수형, `/list` 미사용) 으로 정렬됨
 - [ ] domain spec path 는 Auth 제외 모두 복수형 / no-`/list`
+- [ ] `/api/auth/me` → `/api/users/me` 이동이 matrix, auth spec, user spec, common spec 에 반영됨
 - [ ] dashboard 포함 전역 plural 규칙이 common/index/domain 에 일관되게 반영됨
 
