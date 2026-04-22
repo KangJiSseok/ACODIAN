@@ -250,8 +250,8 @@
       <td>현재 로그인 사용자의 프로필/권한 컨텍스트를 조회한다.</td>
       <td><code>domain.organization.user.controller.UserController</code></td>
       <td><code>domain.organization.user.service.UserService</code></td>
-      <td><code>global.security.CustomUserPrincipal</code>, <code>domain.organization.user.entity.User</code>, <code>domain.organization.user.repository.UserRepository</code></td>
-      <td>로그인 컨텍스트는 <code>global.security.CustomUserPrincipal</code>에서 받고 사용자 기본 문맥은 <code>organization/user</code> feature가 소유한다.</td>
+      <td><code>global.security.CustomUserPrincipal</code>, <code>domain.organization.user.entity.User</code>, <code>domain.organization.user.repository.UserRepository</code>, <code>domain.organization.department.repository.DepartmentRepository</code>, <code>domain.organization.team.repository.UserTeamRepository</code>, <code>domain.organization.team.repository.TeamRepository</code></td>
+      <td>로그인 컨텍스트는 <code>global.security.CustomUserPrincipal</code>에서 받고, 사용자/부서/팀 문맥은 <code>organization/user</code> feature가 조합한다.</td>
     </tr>
     <tr>
       <td><code>GET /api/users</code></td>
