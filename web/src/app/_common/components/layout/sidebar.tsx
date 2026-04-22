@@ -15,7 +15,7 @@ export default function Sidebar() {
   const activeGroupLabel = getActiveGroupLabel(pathname);
 
   return (
-    <aside className="dark workspace-sidebar relative z-20 hidden h-full w-[17.5rem] shrink-0 flex-col overflow-hidden border-r border-white/10 text-white md:flex">
+    <aside className="dark workspace-sidebar relative z-20 hidden h-full w-full shrink-0 flex-col overflow-hidden border-r border-white/10 text-white md:flex">
       <div className="flex flex-1 flex-col overflow-y-auto px-3 py-6">
         <div className="flex flex-col gap-2">
           {navItems.map((item) => {
