@@ -27,14 +27,15 @@
 ## 5. 엔드포인트 상세
 
 ### POST /api/auth/login
-- 목적: 로그인 후 access/refresh token 과 사용자 권한 문맥을 발급한다.
+- 목적: 로그인 후 accessToken 을 응답 헤더, refreshToken 을 HttpOnly 쿠키로 발급한다. 사용자 정보는 `/api/auth/me` 가 SSOT 로 담당한다.
 - 상태: `Documented`
 - 권한/접근 주체: 비인증 사용자가 호출한다.
 - 요청
   - Body: `email`, `password`
 - 응답 (`data` 기준)
-  - `accessToken`, `expiresAt`, `refreshToken` [추론]
-  - `user`: `userId`, `userName`, `departmentId`, `departmentName`, `roleCode`, `employmentStatus`
+  - 빈 객체 (`ApiResponse.empty()`)
+  - accessToken: 응답 헤더 `Authorization: Bearer <token>` 으로 전달한다. 클라이언트는 받은 값을 이후 요청의 `Authorization` 헤더에 그대로 재사용한다.
+  - refreshToken: `Set-Cookie` 로 전달한다. 쿠키 속성은 `Name=refreshToken; HttpOnly; Secure; SameSite=Strict; Path=/api/auth/refresh; Max-Age=<jwt.refresh-token-expiration(초)>` 이며, 로컬/테스트 프로파일은 `Secure=false; SameSite=Lax` 로 override 된다.
 - 요청 JSON 예시
 ```json
 {
@@ -44,23 +45,16 @@
   }
 }
 ```
+- 응답 헤더 예시
+```
+Authorization: Bearer eyJhbGciOi...sample
+Set-Cookie: refreshToken=refresh-token-sample; Max-Age=1209600; Path=/api/auth/refresh; Secure; HttpOnly; SameSite=Strict
+```
 - 응답 JSON 예시
 ```json
 {
   "success": true,
-  "data": {
-    "accessToken": "eyJhbGciOi...sample",
-    "expiresAt": "2026-04-21T12:00:00Z",
-    "refreshToken": "refresh-token-sample",
-    "user": {
-      "userId": 101,
-      "userName": "홍길동",
-      "departmentId": 10,
-      "departmentName": "물류본부",
-      "roleCode": "TEAM_LEAD",
-      "employmentStatus": "ACTIVE"
-    }
-  },
+  "data": {},
   "timestamp": "2026-04-21T03:00:00Z"
 }
 ```
@@ -74,6 +68,7 @@
   - source: checklist
   - source: class mapping
   - source: ADR-002
+  - source: ADR — 로그인 토큰 전송 규약 (access=Authorization 헤더, refresh=HttpOnly 쿠키, 바디 비움)
 
 ### POST /api/auth/logout
 - 목적: 현재 세션 또는 refresh token 을 무효화한다.
@@ -251,6 +246,7 @@
   - source: ADR-002
 
 ## 6. 추론 메모
-- `login`/`refresh` 의 토큰 필드명은 DTO 이름이 아니라 계약 개념만 고정했다. [추론]
+- `login` 은 ADR(로그인 토큰 전송 규약)에 따라 응답 바디를 비우고 accessToken 은 Authorization 헤더, refreshToken 은 HttpOnly 쿠키로 전달한다. 사용자 문맥은 `/api/auth/me` 에서 조회한다.
+- `refresh` 는 이후 구현 시 동일 규약(쿠키 회전)을 재사용하도록 선결정되어 있다. [추론]
 - logout/change-password 는 common 의 non-GET empty 규칙을 그대로 따른다.
 

@@ -1,20 +1,24 @@
 package com.ibank.axwms.global.config;
 
+import com.ibank.axwms.global.security.JwtAuthenticationFilter;
+import lombok.RequiredArgsConstructor;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
 import org.springframework.security.config.annotation.web.configuration.EnableWebSecurity;
 import org.springframework.security.config.http.SessionCreationPolicy;
 import org.springframework.security.web.SecurityFilterChain;
+import org.springframework.security.web.authentication.UsernamePasswordAuthenticationFilter;
+import org.springframework.web.cors.CorsConfigurationSource;
 
 /**
- * 임시 보안 설정.
- * 실제 JWT 필터/도메인 권한 정책이 들어오기 전까지, Swagger UI 와 공통 응답 검증용 임시 API 만 열어두고
- * 그 외는 모두 인증 필요로 둔다. CSRF 는 토큰 기반 REST API 전제이므로 비활성화하고,
- * 세션은 STATELESS 로 두어 추후 JWT 적용에 자연스럽게 이어지도록 한다.
+ * 로그인에서 발급한 access token 을 보호된 후속 요청에서 복원하는 보안 설정.
+ * Swagger 와 로그인 엔드포인트만 익명으로 열고, 그 외 요청은 Bearer 토큰 기반으로 인증한다.
+ * CSRF 는 토큰 기반 REST API 전제이므로 비활성화하고, 세션은 STATELESS 로 유지해 요청마다 JWT 로 인증을 재구성한다.
  */
-@Configuration
+@Configuration(proxyBeanMethods = false)
 @EnableWebSecurity
+@RequiredArgsConstructor
 public class SecurityConfig {
 
     private static final String[] PUBLIC_PATHS = {
@@ -25,19 +29,25 @@ public class SecurityConfig {
             "/v3/api-docs",
             "/v3/api-docs/**",
             "/webjars/**",
-            "/api/response-test/**"
+            "/api/auth/login"
     };
 
+    private final JwtAuthenticationFilter jwtAuthenticationFilter;
+    private final CorsConfigurationSource corsConfigurationSource;
+
+    /** Swagger 와 로그인 진입점만 익명 허용하고 나머지 API 는 인증이 필요하도록 SecurityFilterChain 을 구성한다. */
     @Bean
     public SecurityFilterChain securityFilterChain(HttpSecurity http) throws Exception {
         http
+                .cors(cors -> cors.configurationSource(corsConfigurationSource))
                 .csrf(csrf -> csrf.disable())
                 .httpBasic(basic -> basic.disable())
                 .formLogin(form -> form.disable())
                 .sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
                 .authorizeHttpRequests(auth -> auth
                         .requestMatchers(PUBLIC_PATHS).permitAll()
-                        .anyRequest().authenticated());
+                        .anyRequest().authenticated())
+                .addFilterBefore(jwtAuthenticationFilter, UsernamePasswordAuthenticationFilter.class);
         return http.build();
     }
 }

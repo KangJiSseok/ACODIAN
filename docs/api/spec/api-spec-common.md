@@ -83,17 +83,17 @@
 ```
 - `{}` 반환, 메시지 객체 반환, 예시 생략은 허용하지 않는다.
 
-### 7.2 Payload 유지 예외(폐쇄형 4건)
-아래 4건만 payload 유지가 허용된다.
+### 7.2 Payload 유지 예외(폐쇄형 3건)
+아래 3건만 payload 유지가 허용된다.
 
 | Method | Path | 유지 이유 |
 |---|---|---|
-| `POST` | `/api/auth/login` | access/refresh token 과 사용자 권한 문맥을 즉시 후속 처리에 사용한다. |
 | `POST` | `/api/auth/refresh` | 재발급 token 세트를 즉시 후속 처리에 사용한다. |
 | `POST` | `/api/files/upload` | 업로드 직후 `fileId` 와 파일 메타데이터를 후속 연결에 재사용한다. |
 | `POST` | `/api/tags/merge` | 병합 결과 `targetTagId` 와 재배치 결과를 후속 처리에 사용한다. |
 
-- 위 4건 외의 non-GET payload 예외는 이번 범위에서 허용하지 않는다.
+- 위 3건 외의 non-GET payload 예외는 이번 범위에서 허용하지 않는다.
+- `POST /api/auth/login` 은 ADR(로그인 토큰 전송 규약)에 따라 accessToken 은 `Authorization` 응답 헤더, refreshToken 은 HttpOnly 쿠키로 전송하고 응답 바디는 비운다. 따라서 payload 유지 예외에서 제외된다. 사용자 문맥은 `GET /api/auth/me` 가 SSOT 로 담당한다.
 
 ## 8. 권한 표기 규칙
 - 역할 계층: `DIRECTOR > DEPT_HEAD > TEAM_LEAD > MEMBER`.
@@ -138,7 +138,7 @@
 ## 13. 공통 검수 체크리스트
 - [ ] `api-spec-index.md` matrix row 수가 52인가?
 - [ ] addendum row 수가 3인가?
-- [ ] non-GET payload 유지 예외가 정확히 4건인가?
+- [ ] non-GET payload 유지 예외가 정확히 3건인가? (login 은 헤더/쿠키 전송 규약으로 제외)
 - [ ] 예외 외 non-GET 응답이 모두 `data: {}` 인가?
 - [ ] domain spec path 가 Auth 제외 모두 복수형 / no-`/list` 인가?
 - [ ] `*Id` 노출 시 대응 `*Name` 누락이 없는가?
