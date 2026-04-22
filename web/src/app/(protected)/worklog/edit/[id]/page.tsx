@@ -16,6 +16,7 @@ export default function WorklogEditPage() {
   const [isLoading, setIsLoading] = useState(true)
 
   useEffect(() => {
+    // 수정 중 mock DB가 갱신되면 initialValues도 최신 worklog 기준으로 다시 계산합니다.
     const sync = () => {
       setIsLoading(true)
       setWorklog(worklogs.find((item) => item.id === Number(params.id)))

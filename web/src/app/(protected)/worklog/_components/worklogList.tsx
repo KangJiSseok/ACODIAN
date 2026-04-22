@@ -54,6 +54,7 @@ export function WorklogList({
                 onKeyDown={(event) => {
                   if (event.key === "Enter" || event.key === " ") {
                     event.preventDefault()
+                    // 카드 전체를 버튼처럼 쓰기 때문에 키보드 접근도 동일한 선택 흐름으로 맞춥니다.
                     if (onSelect) {
                       onSelect(worklog.id)
                       return

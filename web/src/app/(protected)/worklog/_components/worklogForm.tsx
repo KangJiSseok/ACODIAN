@@ -27,6 +27,7 @@ import { getImportanceLabel, getWorklogStatusLabel } from "../_utils/worklogForm
 
 function normalizeDuration(actualHours: number) {
   const totalMinutes = Math.max(0, Math.round(actualHours * 60))
+  // 시간 select가 5분 단위라 저장된 소수 시간을 가장 가까운 5분 단위로 맞춥니다.
   const snappedMinutes = Math.round(totalMinutes / 5) * 5
   const nextHour = Math.floor(snappedMinutes / 60)
   const nextMinute = snappedMinutes % 60
@@ -42,6 +43,7 @@ function hasCircularDependency(
   dependencyIds: number[],
   pool: typeof worklogs
 ) {
+  // 현재 편집 중인 dependencyIds를 임시 그래프에 반영해 저장 전 순환을 미리 감지합니다.
   const adjacency = new Map<number, number[]>()
   pool.forEach((worklog) => adjacency.set(worklog.id, worklog.dependencyIds))
   adjacency.set(worklogId, dependencyIds)
@@ -145,6 +147,7 @@ export function WorklogForm({
     const normalizedKeyword = dependencyKeyword.trim().toLowerCase()
     if (!normalizedKeyword) return dependencyCandidates
 
+    // 선행 업무 검색은 제목뿐 아니라 요약, 업무 내용, 담당자, 팀, 상태까지 함께 탐색합니다.
     return dependencyCandidates.filter((dependency) => {
       const teamName = teams.find((team) => team.id === dependency.teamId)?.name ?? ""
       const authorName =
@@ -172,6 +175,7 @@ export function WorklogForm({
   const filteredTagCandidates = useMemo(() => {
     const normalizedKeyword = tagKeyword.trim().toLowerCase()
 
+    // 이미 선택된 태그는 후보에서 제외해 중복 추가를 막습니다.
     return tags.filter((tag) => {
       if (values.tagIds.includes(tag.id)) return false
       if (!normalizedKeyword) return true
@@ -205,6 +209,7 @@ export function WorklogForm({
   )
 
   const updateActualHours = (nextHour: number, nextMinute: number) => {
+    // UI는 시간/분을 나눠 받지만 mock service에는 시간 단위 number로 전달합니다.
     setValues({
       ...values,
       actualHours: nextHour + nextMinute / 60,
@@ -247,6 +252,7 @@ export function WorklogForm({
       onSubmit={async (event) => {
         event.preventDefault()
 
+        // 순환 의존성은 UI에서도 막고 service에서도 한 번 더 검증합니다.
         if (circularDependencyDetected) {
           setSubmitError(
             "순환 의존성이 감지되었습니다. 현재 업무를 다시 참조하는 연결을 해제해주세요."

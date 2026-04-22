@@ -24,6 +24,7 @@ export default function WorklogDetailPage() {
   const [transitionNotice, setTransitionNotice] = useState("")
 
   useEffect(() => {
+    // mock DB 변경 이벤트를 구독해 상태 전환 직후 상세 화면을 즉시 최신화합니다.
     const sync = async () => {
       setIsLoading(true)
       setWorklog(await worklogService.getById(Number(params.id)))
@@ -57,6 +58,7 @@ export default function WorklogDetailPage() {
         canTransition={canTransitionWorklog(user, worklog)}
         transitionNotice={transitionNotice}
         onTransition={async (nextStatus, reason) => {
+          // 상태 전환 결과의 warning은 저장은 유지하고 화면 안내로만 노출합니다.
           const result = await worklogService.transitionStatus(
             worklog.id,
             nextStatus,
