@@ -2,6 +2,9 @@
 **/.omc/
 .codex/*
 !.codex/agents/
+!.codex/hooks.json
+!.codex/hooks/
+!.codex/hooks/**
 !.codex/agents/**
 !.codex/skills/
 !.codex/skills/**
