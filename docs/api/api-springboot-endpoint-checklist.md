@@ -1,6 +1,7 @@
 # api-springboot-endpoint-checklist.md
 
 - 기준 문서: [`api-springboot-endpoint-class-mapping.md`](api-springboot-endpoint-class-mapping.md)
+- 표기 기준: [`spec/api-spec-index.md`](spec/api-spec-index.md) 의 normalized path (복수형, `/list` 미사용)
 
 ---
 
@@ -8,83 +9,86 @@
 
 - [x] `POST /api/auth/login`
 - [ ] `POST /api/auth/logout`
-- [ ] `GET /api/auth/me`
 - [ ] `POST /api/auth/refresh`
 - [ ] `POST /api/auth/change-password`
 
 ## 2. `organization/department` 도메인
 
-- [ ] `GET /api/department/list`
-- [ ] `GET /api/department/{id}`
-- [ ] `POST /api/department`
-- [ ] `PUT /api/department/{id}`
-- [ ] `DELETE /api/department/{id}`
+- [ ] `GET /api/departments`
+- [ ] `GET /api/departments/{id}`
+- [ ] `GET /api/departments/{id}/users`
+- [ ] `POST /api/departments`
+- [ ] `PUT /api/departments/{id}`
+- [ ] `DELETE /api/departments/{id}`
 
 ## 3. `organization/team` 도메인
 
-- [ ] `GET /api/team/list`
-- [ ] `GET /api/team/{id}`
-- [ ] `POST /api/team`
-- [ ] `PUT /api/team/{id}`
-- [ ] `PATCH /api/team/{id}/status`
+- [ ] `GET /api/teams`
+- [ ] `GET /api/teams/{id}`
+- [ ] `POST /api/teams`
+- [ ] `PUT /api/teams/{id}`
+- [ ] `PATCH /api/teams/{id}/status`
+- [ ] `POST /api/teams/{id}/members/bulk`
 
 ## 4. `organization/user` 도메인
 
-- [ ] `GET /api/user/list`
-- [ ] `GET /api/user/{id}`
-- [ ] `POST /api/user`
-- [ ] `PUT /api/user/{id}`
-- [ ] `DELETE /api/user/{id}`
+- [ ] `GET /api/users/me`
+- [ ] `GET /api/users`
+- [ ] `GET /api/users/{id}`
+- [ ] `POST /api/users/signup`
+- [ ] `POST /api/users`
+- [ ] `PUT /api/users/{id}`
+- [ ] `DELETE /api/users/{id}`
 
 ## 5. `organization/skill` 도메인
 
-- [ ] `GET /api/user/{id}/skills`
-- [ ] `PUT /api/user/{id}/skills`
+- [ ] `GET /api/users/{id}/skills`
+- [ ] `PUT /api/users/{id}/skills`
 
 ## 6. `organization/evaluation` 도메인
 
-- [ ] `GET /api/user/{id}/evaluations`
-- [ ] `POST /api/user/{id}/evaluations`
+- [ ] `GET /api/users/{id}/evaluations`
+- [ ] `POST /api/users/{id}/evaluations`
 
 ## 7. `worklog` 도메인
 
-- [ ] `GET /api/worklog/list`
-- [ ] `GET /api/worklog/{id}`
-- [ ] `POST /api/worklog`
-- [ ] `PUT /api/worklog/{id}`
-- [ ] `DELETE /api/worklog/{id}`
-- [ ] `PATCH /api/worklog/{id}/status`
-- [ ] `GET /api/worklog/{id}/history`
-- [ ] `PATCH /api/worklog/{id}/summary`
-- [ ] `PUT /api/worklog/{id}/tags`
-- [ ] `PATCH /api/worklog/{id}/ai-status`
+- [ ] `GET /api/worklogs`
+- [ ] `GET /api/worklogs/{id}`
+- [ ] `POST /api/worklogs`
+- [ ] `PUT /api/worklogs/{id}`
+- [ ] `DELETE /api/worklogs/{id}`
+- [ ] `PATCH /api/worklogs/{id}/status`
+- [ ] `GET /api/worklogs/{id}/history`
+- [ ] `PATCH /api/worklogs/{id}/summary`
+- [ ] `PUT /api/worklogs/{id}/tags`
+- [ ] `PATCH /api/worklogs/{id}/ai-status`
 
 ## 8. `file` 도메인
 
-- [ ] `POST /api/file/upload`
-- [ ] `GET /api/file/list`
-- [ ] `GET /api/file/{id}`
-- [ ] `GET /api/file/{id}/download`
-- [ ] `DELETE /api/file/{id}`
-- [ ] `PUT /api/file/{id}/summary`
-- [ ] `PATCH /api/file/{id}/ai-status`
+- [ ] `POST /api/files/upload`
+- [ ] `GET /api/files`
+- [ ] `GET /api/files/{id}`
+- [ ] `GET /api/files/{id}/download`
+- [ ] `DELETE /api/files/{id}`
+- [ ] `PUT /api/files/{id}/summary`
+- [ ] `PATCH /api/files/{id}/ai-status`
 
 ## 9. `tag` 도메인
 
-- [ ] `GET /api/tag/list`
-- [ ] `POST /api/tag/merge`
-- [ ] `DELETE /api/tag/{id}`
+- [ ] `GET /api/tags`
+- [ ] `POST /api/tags/merge`
+- [ ] `DELETE /api/tags/{id}`
 
 ## 10. `notification` 도메인
 
-- [ ] `GET /api/notification/list`
-- [ ] `GET /api/notification/unread-count`
-- [ ] `PATCH /api/notification/read-all`
-- [ ] `PATCH /api/notification/{id}/read`
+- [ ] `GET /api/notifications`
+- [ ] `GET /api/notifications/unread-count`
+- [ ] `PATCH /api/notifications/read-all`
+- [ ] `PATCH /api/notifications/{id}/read`
 
 ## 11. `dashboard` 도메인
 
-- [ ] `GET /api/dashboard/summary`
-- [ ] `GET /api/dashboard/overdue`
-- [ ] `GET /api/dashboard/workload`
-- [ ] `GET /api/dashboard/my`
+- [ ] `GET /api/dashboards/summary`
+- [ ] `GET /api/dashboards/overdue`
+- [ ] `GET /api/dashboards/workload`
+- [ ] `GET /api/dashboards/my`
