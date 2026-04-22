@@ -59,7 +59,7 @@ export default function WorklogPage() {
 
   const filteredWorklogs = useMemo(() => {
     const normalizedQuery = query.trim().toLowerCase()
-    const now = new Date("2026-04-13T23:59:59")
+    const now = new Date()
 
     return worklogs.filter((worklog) => {
       const team = teams.find((team) => team.id === worklog.teamId)

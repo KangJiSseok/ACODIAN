@@ -14,7 +14,7 @@ import { useAuth } from "../_hooks/useAuth"
 import { tags, teams, users, worklogs } from "../_mock/worklog.mock"
 import { getTagSourceBadgeClass } from "../_utils/tagBadge"
 import { worklogStatusLegendOrder } from "./worklogBadgeConfig"
-import type { WorklogFormValues } from "../_types/worklog.types"
+import type { WorklogFormValues, WorklogStatus } from "../_types/worklog.types"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { CardSpotlight } from "@/components/ui/card-spotlight"
@@ -24,6 +24,15 @@ import { Select } from "@/components/ui/select"
 import { Textarea } from "@/components/ui/textarea"
 import { cn } from "@/lib/utils"
 import { getImportanceLabel, getWorklogStatusLabel } from "../_utils/worklogFormat"
+
+const editableStatusTransitionMap: Record<WorklogStatus, WorklogStatus[]> = {
+  PENDING: ["IN_PROGRESS"],
+  IN_PROGRESS: ["DONE", "ON_HOLD", "FAILED", "CANCELLED"],
+  DONE: [],
+  ON_HOLD: ["IN_PROGRESS", "FAILED"],
+  FAILED: ["IN_PROGRESS"],
+  CANCELLED: [],
+}
 
 function normalizeDuration(actualHours: number) {
   const totalMinutes = Math.max(0, Math.round(actualHours * 60))
@@ -136,6 +145,18 @@ export function WorklogForm({
       })),
     []
   )
+  const statusOptions = useMemo(() => {
+    const currentStatus = initialValues?.status ?? values.status
+    // 수정 폼은 상세 화면의 상태 전이 정책과 같은 후보만 노출합니다.
+    const statusCandidates = isEditMode
+      ? [currentStatus, ...editableStatusTransitionMap[currentStatus]]
+      : worklogStatusLegendOrder
+
+    return statusCandidates.map((status) => ({
+      label: getWorklogStatusLabel(status),
+      value: status,
+    }))
+  }, [initialValues?.status, isEditMode, values.status])
   const dependencyCandidates = useMemo(
     () =>
       worklogs.filter(
@@ -365,12 +386,7 @@ export function WorklogForm({
                     <Select
                       className={controlClassName}
                       value={values.status}
-                      options={[
-                        ...worklogStatusLegendOrder.map((status) => ({
-                          label: getWorklogStatusLabel(status),
-                          value: status,
-                        })),
-                      ]}
+                      options={statusOptions}
                       onChange={(event) =>
                         setValues({
                           ...values,
