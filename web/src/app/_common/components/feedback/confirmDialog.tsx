@@ -41,6 +41,7 @@ export default function ConfirmDialog({
 }: ConfirmDialogProps) {
   const [isPending, setIsPending] = useState(false);
 
+  // 확인 처리 중에는 오버레이 클릭이나 취소로 닫히지 않게 막습니다.
   const handleOpenChange = (nextOpen: boolean) => {
     if (isPending) {
       return;
@@ -49,6 +50,7 @@ export default function ConfirmDialog({
     onOpenChange(nextOpen);
   };
 
+  // 비동기 confirm 액션이 여러 번 실행되지 않도록 pending 상태를 잠급니다.
   const handleConfirm = async () => {
     if (isPending || confirmDisabled) {
       return;
@@ -75,6 +77,7 @@ export default function ConfirmDialog({
           <DialogDescription className="leading-6">{description}</DialogDescription>
         </DialogHeader>
 
+        {/* 삭제 대상 요약처럼 다이얼로그 본문에 추가 정보가 필요할 때 사용합니다. */}
         {children ? <div className="mt-4">{children}</div> : null}
 
         <DialogFooter className="mt-6 flex-col-reverse gap-2 sm:flex-row">
