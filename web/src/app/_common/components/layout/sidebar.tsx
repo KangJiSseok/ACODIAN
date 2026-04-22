@@ -15,7 +15,7 @@ export default function Sidebar() {
   const activeGroupLabel = getActiveGroupLabel(pathname);
 
   return (
-    <aside className="dark workspace-sidebar relative z-20 hidden h-full w-[17.5rem] shrink-0 flex-col overflow-hidden border-r border-white/10 text-white md:flex">
+    <aside className="dark workspace-sidebar relative z-20 hidden h-full w-full shrink-0 flex-col overflow-hidden border-r border-white/10 text-white md:flex">
       <div className="flex flex-1 flex-col overflow-y-auto px-3 py-6">
         <div className="flex flex-col gap-2">
           {navItems.map((item) => {
@@ -65,6 +65,7 @@ export default function Sidebar() {
         </div>
 
         <div className="mt-auto px-2 pb-2 pt-6">
+          {/* TODO(auth): 인증 연동 후 Sidebar 하단에 프로필 이미지, 프로필 이동, 로그아웃 액션을 추가한다. */}
           <div className="rounded-[1.75rem] border border-white/10 bg-white/[0.03] p-5">
             <p className="text-[11px] font-semibold uppercase tracking-[0.22em] text-white/62">
               workspace

@@ -62,3 +62,18 @@ export const navItems: NavItem[] = [
     icon: Bell,
   },
 ];
+
+export function findNavItemByHref(href: string) {
+  return navItems.find((item) => item.href === href);
+}
+
+export function findNavSubItemByHref(href: string) {
+  for (const item of navItems) {
+    const submenu = item.submenus?.find((sub) => sub.href === href);
+    if (submenu) {
+      return { item, submenu };
+    }
+  }
+
+  return null;
+}
