@@ -35,12 +35,12 @@ class UserControllerTest {
     }
 
     @Test
-    @DisplayName("현재 사용자 조회 컨트롤러는 /api/users 기본 경로를 사용한다")
-    void 현재_사용자_조회_컨트롤러는_api_users_기본_경로를_사용한다() {
+    @DisplayName("현재 사용자 조회 컨트롤러는 /users 기본 경로를 사용한다")
+    void 현재_사용자_조회_컨트롤러는_users_기본_경로를_사용한다() {
         RequestMapping requestMapping = UserController.class.getAnnotation(RequestMapping.class);
 
         assertThat(requestMapping).isNotNull();
-        assertThat(requestMapping.value()).containsExactly("/api/users");
+        assertThat(requestMapping.value()).containsExactly("/users");
     }
 
     @Test
