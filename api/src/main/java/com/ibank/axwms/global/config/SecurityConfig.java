@@ -30,7 +30,8 @@ public class SecurityConfig {
             "/v3/api-docs",
             "/v3/api-docs/**",
             "/webjars/**",
-            "/auth/login"
+            "/auth/login",
+            "/auth/refresh"
     };
 
     private final JwtAuthenticationFilter jwtAuthenticationFilter;

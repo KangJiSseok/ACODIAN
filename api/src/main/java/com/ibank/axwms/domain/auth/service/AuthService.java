@@ -1,6 +1,7 @@
 package com.ibank.axwms.domain.auth.service;
 
 import com.ibank.axwms.domain.auth.dto.LoginApiDto;
+import com.ibank.axwms.domain.auth.dto.RefreshAccessTokenApiDto;
 import com.ibank.axwms.domain.organization.user.EmploymentStatus;
 import com.ibank.axwms.domain.organization.user.entity.User;
 import com.ibank.axwms.domain.organization.user.repository.UserRepository;
@@ -34,6 +35,23 @@ public class AuthService {
     }
 
     /**
+     * refresh token 을 검증한 뒤 현재 사용자 상태를 다시 확인하고 access token 을 재발급한다.
+     * refresh 회전 여부와 저장소 overwrite 정책은 TokenService 가 판단하고, AuthService 는 사용자 상태 검증을 담당한다.
+     */
+    @Transactional
+    public RefreshAccessTokenApiDto.Result refresh(String refreshToken) {
+        TokenService.ValidatedRefreshToken validatedRefreshToken = tokenService.validateRefreshToken(refreshToken);
+        User user = findRefreshUser(validatedRefreshToken.userId());
+        validateLoginAllowed(user);
+
+        TokenService.RefreshedTokens refreshedTokens = tokenService.issueRefreshTokens(user, validatedRefreshToken);
+        return new RefreshAccessTokenApiDto.Result(
+                refreshedTokens.accessToken(),
+                refreshedTokens.rotatedRefreshToken()
+        );
+    }
+
+    /**
      * 이메일로 User 를 조회하고 비밀번호 해시까지 일치해야 반환한다.
      * 계정 미존재와 비밀번호 불일치를 동일한 AUTH_INVALID_CREDENTIALS 로 묶어, 이메일 존재 여부가 응답으로 노출되는 enumeration 공격 소재를 차단한다.
      */
@@ -45,6 +63,15 @@ public class AuthService {
             throw new BusinessException(ErrorCode.AUTH_INVALID_CREDENTIALS);
         }
         return user;
+    }
+
+    /**
+     * refresh token subject 로 지정된 현재 사용자를 다시 조회한다.
+     * 토큰 안의 userId 가 더 이상 유효한 사용자를 가리키지 않으면 재발급 전체를 무효 refresh token 으로 취급한다.
+     */
+    private User findRefreshUser(Long userId) {
+        return userRepository.findById(userId)
+                .orElseThrow(() -> new BusinessException(ErrorCode.AUTH_INVALID_REFRESH_TOKEN));
     }
 
     /**

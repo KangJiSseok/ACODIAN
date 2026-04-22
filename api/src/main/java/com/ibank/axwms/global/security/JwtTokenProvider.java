@@ -1,5 +1,7 @@
 package com.ibank.axwms.global.security;
 
+import com.ibank.axwms.global.error.BusinessException;
+import com.ibank.axwms.global.error.ErrorCode;
 import io.jsonwebtoken.Claims;
 import io.jsonwebtoken.JwtBuilder;
 import io.jsonwebtoken.Jwts;
@@ -10,6 +12,7 @@ import java.time.Instant;
 import java.util.Date;
 import javax.crypto.SecretKey;
 import org.springframework.stereotype.Component;
+import org.springframework.util.StringUtils;
 
 /**
  * access/refresh JWT 의 서명 발급과 claim 파싱을 모두 담당하는 보안 인프라 컴포넌트.
@@ -19,6 +22,8 @@ import org.springframework.stereotype.Component;
 public class JwtTokenProvider {
 
     private static final String TOKEN_TYPE_CLAIM = "tokenType";
+    private static final String ACCESS_TOKEN_TYPE = "ACCESS";
+    private static final String REFRESH_TOKEN_TYPE = "REFRESH";
     private static final String EMAIL_CLAIM = "email";
     private static final String ROLE_CODE_CLAIM = "roleCode";
 
@@ -38,7 +43,7 @@ public class JwtTokenProvider {
                 String.valueOf(userId),
                 accessTokenExpirationMillis,
                 builder -> builder
-                        .claim(TOKEN_TYPE_CLAIM, "ACCESS")
+                        .claim(TOKEN_TYPE_CLAIM, ACCESS_TOKEN_TYPE)
                         .claim(EMAIL_CLAIM, email)
                         .claim(ROLE_CODE_CLAIM, roleCode)
         );
@@ -51,7 +56,7 @@ public class JwtTokenProvider {
                 refreshTokenExpirationMillis,
                 builder -> builder
                         .id(sessionId)
-                        .claim(TOKEN_TYPE_CLAIM, "REFRESH")
+                        .claim(TOKEN_TYPE_CLAIM, REFRESH_TOKEN_TYPE)
         );
     }
 
@@ -64,9 +69,57 @@ public class JwtTokenProvider {
                 .getPayload();
     }
 
+    /**
+     * refresh token 을 검증하고 재발급 흐름에 필요한 최소 claim 만 구조화해 반환한다.
+     * subject(userId), jti(sessionId), issuedAt, expiration 이 하나라도 비정상이면 저장소 조회 전에 즉시 거부한다.
+     */
+    public RefreshTokenClaims parseRefreshToken(String refreshToken) {
+        try {
+            Claims claims = parseClaims(refreshToken);
+            if (!REFRESH_TOKEN_TYPE.equals(claims.get(TOKEN_TYPE_CLAIM, String.class))) {
+                throw invalidRefreshToken();
+            }
+
+            String sessionId = claims.getId();
+            Date issuedAt = claims.getIssuedAt();
+            Date expiration = claims.getExpiration();
+            if (!StringUtils.hasText(sessionId) || issuedAt == null || expiration == null) {
+                throw invalidRefreshToken();
+            }
+
+            return new RefreshTokenClaims(
+                    parseUserId(claims.getSubject()),
+                    sessionId,
+                    issuedAt.toInstant(),
+                    expiration.toInstant()
+            );
+        } catch (BusinessException exception) {
+            throw exception;
+        } catch (RuntimeException exception) {
+            throw invalidRefreshToken();
+        }
+    }
+
     /** refresh token TTL 을 Redis 저장소의 만료 시간(초) 단위로 변환해 노출한다. */
     public long getRefreshTokenTtlSeconds() {
         return Duration.ofMillis(refreshTokenExpirationMillis).toSeconds();
+    }
+
+    /** refresh token 의 subject 는 userId 숫자 문자열이어야 하므로 파싱 실패도 즉시 무효 처리한다. */
+    private Long parseUserId(String subject) {
+        if (!StringUtils.hasText(subject)) {
+            throw invalidRefreshToken();
+        }
+        try {
+            return Long.valueOf(subject);
+        } catch (NumberFormatException exception) {
+            throw invalidRefreshToken();
+        }
+    }
+
+    /** refresh 재발급 흐름은 세부 실패 원인을 노출하지 않고 단일 401 코드로 묶는다. */
+    private BusinessException invalidRefreshToken() {
+        return new BusinessException(ErrorCode.AUTH_INVALID_REFRESH_TOKEN);
     }
 
     /**
@@ -87,5 +140,13 @@ public class JwtTokenProvider {
     @FunctionalInterface
     private interface TokenBuilderCustomizer {
         void customize(JwtBuilder builder);
+    }
+
+    public record RefreshTokenClaims(
+            Long userId,
+            String sessionId,
+            Instant issuedAt,
+            Instant expiresAt
+    ) {
     }
 }

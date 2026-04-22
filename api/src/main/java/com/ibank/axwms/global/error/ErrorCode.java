@@ -24,6 +24,8 @@ public enum ErrorCode {
     AUTH_ACCESS_DENIED(HttpStatus.FORBIDDEN, "접근 권한이 없습니다."),
     /** 이메일이 존재하지 않거나 비밀번호가 일치하지 않아 인증할 수 없을 때 사용한다. */
     AUTH_INVALID_CREDENTIALS(HttpStatus.UNAUTHORIZED, "이메일 또는 비밀번호가 올바르지 않습니다."),
+    /** refresh token 이 없거나 서명/형식/저장소 정합성이 맞지 않아 재발급을 진행할 수 없을 때 사용한다. */
+    AUTH_INVALID_REFRESH_TOKEN(HttpStatus.UNAUTHORIZED, "유효하지 않은 refresh token 입니다."),
     /** 재직 상태가 ACTIVE 가 아니어서 로그인할 수 없을 때 사용한다. */
     AUTH_LOGIN_NOT_ALLOWED(HttpStatus.FORBIDDEN, "현재 계정 상태로는 로그인할 수 없습니다."),
     /** access token 으로 복원한 현재 사용자 문맥이 DB 에 존재하지 않을 때 사용한다. */
