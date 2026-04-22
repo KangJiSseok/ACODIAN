@@ -296,3 +296,26 @@
     이후 구현될 /api/auth/refresh, /api/auth/logout 엔드포인트는 쿠키에서 토큰을 읽고 Set-Cookie 로 회전/만료를 내리는 계약이 선결정된다.
     CORS 설정이 필수가 되어 프런트 오리진을 환경별 프로퍼티로 관리해야 하며, 확정되기 전 operational 환경에서는 allowed-origin-patterns 를 명시적으로 주입한다.
     비브라우저 클라이언트는 본 로그인 엔드포인트를 재사용하지 않고 별도 경로(예 - API 키 기반 인증 또는 바디 반환 토큰 엔드포인트)를 추가해 수용한다.
+- id: ADR-017
+  title: API prefix 중앙화와 REST 경로 정규화
+  status: adopted
+  date: 2026-04-22
+  stacks: [springboot]
+  context: |
+    여러 Controller 가 클래스 레벨 @RequestMapping 에 /api prefix 를 중복 선언하고 있어
+    애플리케이션 전역 prefix 를 변경하거나 문서/보안 설정과 맞출 때 경로 drift 가 발생하기 쉬웠다.
+    또한 일부 리소스 경로가 단수형(/user, /team, /worklog 등) 과 복수형이 혼재되어
+    API inventory, Swagger, 보안 허용 경로, 테스트 코드가 서로 다른 canonical path 를 참조할 위험이 있었다.
+  decision: |
+    공통 API prefix 는 server.servlet.context-path 로만 관리하고 기본값을 /api 로 둔다.
+    Controller 의 클래스 레벨 @RequestMapping 은 공통 prefix 를 포함하지 않고 리소스 자체 경로만 선언한다.
+    공개 리소스 경로는 REST 관례에 맞춰 복수형을 기본으로 사용한다.
+    예: /users, /departments, /teams, /worklogs, /files, /tags, /notifications, /dashboards.
+    내부 callback 이더라도 특정 리소스 컬렉션을 대표하면 동일하게 복수형을 사용한다.
+    예: /internal/files, /internal/worklogs.
+    인증처럼 액션/기능 경계가 더 자연스러운 엔드포인트는 /auth 처럼 예외적으로 단수 명사를 유지할 수 있다.
+  consequence: |
+    /api prefix 변경 시 application.yml 한 곳만 수정하면 되어 Controller, Security, 테스트, 문서의 동기화 비용이 줄어든다.
+    Controller 는 도메인 경로에만 집중하고, Swagger 및 endpoint inventory 의 canonical path 도 /api + 복수형 리소스 규칙으로 정리된다.
+    신규 엔드포인트 추가 시 /api 중복 선언이나 단수형 resource path 도입은 규약 위반으로 간주한다.
+

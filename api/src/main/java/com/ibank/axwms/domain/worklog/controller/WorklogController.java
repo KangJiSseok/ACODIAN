@@ -5,7 +5,7 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
 @RestController
-@RequestMapping("/api/worklog")
+@RequestMapping("/worklogs")
 @RequiredArgsConstructor
 public class WorklogController implements WorklogControllerDocs {
 }
