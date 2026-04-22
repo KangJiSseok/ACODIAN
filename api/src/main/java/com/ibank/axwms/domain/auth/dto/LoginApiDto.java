@@ -21,16 +21,13 @@ public final class LoginApiDto {
     ) {
     }
 
-    @Schema(description = "로그인 응답 DTO. 사용자 프로필은 별도 /me 엔드포인트가 SSOT 로 소유한다.")
-    public record Response(
-            @Schema(description = "Access Token")
+    /**
+     * AuthService → Controller 경계에서 발급된 토큰 쌍을 전달하기 위한 내부 record.
+     * Controller 는 이 값을 AuthTokenResponseWriter 로 넘겨 헤더/쿠키에 기록하고 바디에는 포함하지 않는다.
+     */
+    public record Result(
             String accessToken,
-            @Schema(description = "Refresh Token")
             String refreshToken
     ) {
-
-        public static Response of(String accessToken, String refreshToken) {
-            return new Response(accessToken, refreshToken);
-        }
     }
 }

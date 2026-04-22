@@ -20,14 +20,17 @@ public class AuthService {
     private final PasswordEncoder passwordEncoder;
     private final TokenService tokenService;
 
-    /** 이메일과 비밀번호를 검증하고 JWT 토큰과 최소 사용자 문맥을 반환한다. */
+    /**
+     * 이메일과 비밀번호를 검증하고 발급된 access/refresh 토큰 쌍을 반환한다.
+     * 토큰은 Controller 경계에서 Authorization 헤더와 HttpOnly 쿠키로 분리 전송되므로, Service 는 바디 포맷을 알지 않는다.
+     */
     @Transactional
-    public LoginApiDto.Response login(LoginApiDto.Request request) {
+    public LoginApiDto.Result login(LoginApiDto.Request request) {
         User user = getAuthenticatedUser(request);
         validateLoginAllowed(user);
 
         TokenService.IssuedTokens tokens = tokenService.issueLoginTokens(user);
-        return LoginApiDto.Response.of(tokens.accessToken(), tokens.refreshToken());
+        return new LoginApiDto.Result(tokens.accessToken(), tokens.refreshToken());
     }
 
     /**

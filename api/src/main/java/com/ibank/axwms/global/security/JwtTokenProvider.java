@@ -10,7 +10,6 @@ import java.time.Instant;
 import java.util.Date;
 import javax.crypto.SecretKey;
 import org.springframework.stereotype.Component;
-import org.springframework.beans.factory.annotation.Value;
 
 /**
  * access/refresh JWT 의 서명 발급과 claim 파싱을 모두 담당하는 보안 인프라 컴포넌트.
@@ -27,14 +26,10 @@ public class JwtTokenProvider {
     private final long accessTokenExpirationMillis;
     private final long refreshTokenExpirationMillis;
 
-    public JwtTokenProvider(
-            @Value("${jwt.secret}") String secret,
-            @Value("${jwt.access-token-expiration}") long accessTokenExpirationMillis,
-            @Value("${jwt.refresh-token-expiration}") long refreshTokenExpirationMillis
-    ) {
-        this.signingKey = Keys.hmacShaKeyFor(secret.getBytes(StandardCharsets.UTF_8));
-        this.accessTokenExpirationMillis = accessTokenExpirationMillis;
-        this.refreshTokenExpirationMillis = refreshTokenExpirationMillis;
+    public JwtTokenProvider(JwtProperties jwtProperties) {
+        this.signingKey = Keys.hmacShaKeyFor(jwtProperties.secret().getBytes(StandardCharsets.UTF_8));
+        this.accessTokenExpirationMillis = jwtProperties.accessTokenExpiration();
+        this.refreshTokenExpirationMillis = jwtProperties.refreshTokenExpiration();
     }
 
     /** 로그인 성공 사용자에게 access token 을 발급한다. */
