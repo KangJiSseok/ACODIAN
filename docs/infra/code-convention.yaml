@@ -42,3 +42,15 @@ ops:
   - id: OPS-003
     rule: 배포 후 자동 검증이 필요하면 현재 운영 경로에 맞는 health check 또는 서비스 상태 확인으로 설계하되, 과거 임시 검증 절차를 운영 표준처럼 재사용하지 않는다.
     stacks: [ec2, gitlab, springboot]
+  - id: OPS-004
+    rule: 외부 공개 포트와 내부 바인딩 포트는 모두 EC2 보안그룹이 허용하는 8000–9000 범위 안에서 고정한다. staging/production 의 `API_HOST_PORT`, Nginx listen 포트, 추후 추가되는 서비스 포트도 동일 규칙을 따른다.
+    stacks: [ec2, nginx, compose]
+  - id: OPS-005
+    rule: GitLab CI 가 사용하는 SSH 키는 개인 접속 키와 분리된 전용 키페어로 운영한다. 키 회수/재발급 시 GitLab `SSH_PRIVATE_KEY` 와 EC2 `authorized_keys` 를 동시에 갱신해 두 쪽이 어긋나지 않게 한다.
+    stacks: [ec2, gitlab, security]
+  - id: OPS-006
+    rule: GitLab CI/CD Variables 는 모두 Protected 로 등록한다. 값에 `$` 문자가 섞일 수 있는 `SSH_PRIVATE_KEY`, `SSH_KNOWN_HOSTS` 는 "Expand variable reference" 를 비활성화한다. `CI_REGISTRY`, `CI_REGISTRY_USER`, `CI_REGISTRY_PASSWORD` 는 GitLab 이 자동 주입하는 predefined 변수이므로 수동으로 등록하지 않는다.
+    stacks: [gitlab, ci, security]
+  - id: OPS-007
+    rule: GitLab Runner(`gitlab-runner`) 는 EC2 에 docker executor 로 등록하고 `[runners.docker]` 섹션의 `privileged = true` 를 유지한다. `api_ci` / `api_image` 가 DinD service 를 요구하므로 privileged 를 비활성화하지 않는다. Runner 는 "Lock to current projects" 로 프로젝트 전용으로 운영한다.
+    stacks: [gitlab, runner, docker]

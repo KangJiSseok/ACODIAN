@@ -186,6 +186,55 @@ sudo mkdir -p /opt/axwms/staging /opt/axwms/production
 sudo chown -R "$USER":"$USER" /opt/axwms
 ```
 
+### 7-3. GitLab Runner 설치 및 등록
+
+SSafy GitLab 은 프로젝트에 공유 Runner 를 제공하지 않으므로, 이 EC2 에 `gitlab-runner` 를 직접 설치해 프로젝트 전용 Runner 로 붙인다.
+
+```bash
+curl -L "https://packages.gitlab.com/install/repositories/runner/gitlab-runner/script.deb.sh" | sudo bash
+sudo apt install -y gitlab-runner
+sudo usermod -aG docker gitlab-runner
+sudo systemctl restart gitlab-runner
+```
+
+GitLab UI 에서 등록 토큰 발급:
+- **Settings → CI/CD → Runners → New project runner**
+- Configuration 권장값
+  - Paused: 해제
+  - **Protected: 해제** (체크 시 작업 브랜치 CI 가 영영 pending 이 된다)
+  - Lock to current projects: 체크
+  - Maximum job timeout: `1800` (첫 Gradle 빌드가 10분 이상 걸릴 수 있어 여유 필요)
+  - Run untagged jobs: 체크
+
+EC2 에서 `sudo gitlab-runner register` 를 실행해 아래 값으로 응답한다.
+
+| 질문 | 입력 값 |
+|---|---|
+| GitLab instance URL | 프로젝트의 GitLab origin (예: `https://lab.ssafy.com/`) |
+| Registration token | UI 에서 발급한 `glrt-...` |
+| Description | `axwms-ec2-runner` |
+| Executor | `docker` |
+| Default image | `docker:27.5.1-cli` |
+
+#### privileged 필수
+
+`api_ci`, `api_image` 는 `docker:27.5.1-dind` service 를 쓰므로 Runner 가 privileged 모드로 동작해야 한다. 등록 직후 `/etc/gitlab-runner/config.toml` 을 열어 `[runners.docker]` 섹션의 `privileged` 를 `true` 로 바꾸고 서비스를 재시작한다.
+
+```toml
+[runners.docker]
+  image = "docker:27.5.1-cli"
+  privileged = true
+```
+
+```bash
+sudo systemctl restart gitlab-runner
+```
+
+#### 검증 포인트
+- GitLab UI → Runners 에 해당 runner 가 **online** 상태
+- `sudo gitlab-runner list` 결과에 등록된 runner 표시
+- `config.toml` 의 `privileged = true` 확인
+
 ---
 
 ## 8. 서버 `.env` 파일 준비
@@ -407,12 +456,14 @@ server {
 
 1. EC2에 Docker 설치
 2. `/opt/axwms/staging`, `/opt/axwms/production` 생성
-3. 각 환경 `.env` 작성
-4. GitLab Variables 등록
-5. Nginx가 staging/prod 포트를 바라보도록 확인
-6. 작업 브랜치 -> `dev` MR 생성
-7. merge 후 staging 배포 로그 확인
-8. staging 확인 후 `master` 반영
+3. GitLab Runner 설치 및 프로젝트 register (privileged 포함)
+4. 각 환경 `.env` 작성 (600, 배포 계정 소유)
+5. CI 전용 SSH 키페어 생성 및 EC2 `authorized_keys` 등록
+6. GitLab Variables 등록 + `master` / `dev` Protected Branch 설정
+7. Nginx가 staging/prod 포트를 바라보도록 확인
+8. 작업 브랜치 -> `dev` MR 생성
+9. merge 후 staging 배포 로그 확인
+10. staging 확인 후 `master` 반영
 
 ---
 

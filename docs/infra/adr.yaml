@@ -85,3 +85,26 @@
   consequence: |
     이미지 단위로 배포/롤백 추적이 쉬워진다.
     다만 Registry 자격증명, SSH 키, 환경별 `.env`, Nginx 포트 연결을 별도로 관리해야 한다.
+
+- id: ADR-006
+  title: GitLab Runner 배치 — 배포 대상 EC2 에 공존 + docker executor + privileged
+  status: adopted
+  date: 2026-04-23
+  stacks: [gitlab, runner, docker, ec2]
+  context: |
+    SSafy GitLab 환경은 프로젝트에 공유 Runner 를 제공하지 않고,
+    Container Registry 활성화 권한도 프로젝트 수준에서 닫혀 있다.
+    `api_ci` / `api_image` 는 `docker:27.5.1-dind` service 로 DinD 빌드를 요구하므로
+    Runner 는 docker executor + privileged 권한이 반드시 필요하다.
+    별도 빌드 전용 VM 을 확보하기 어려운 초기 단계라 추가 자원 없이 Runner 를 띄울 곳이 필요했다.
+  decision: |
+    `gitlab-runner` 는 배포 대상 EC2 에 같이 설치하고 docker executor 로 등록한다.
+    `/etc/gitlab-runner/config.toml` 의 `[runners.docker]` 에 `privileged = true` 를 설정해
+    `api_ci` / `api_image` 의 DinD service 가 정상 기동하게 한다.
+    Runner 는 "Lock to current projects" 로 프로젝트 전용으로 운영하고
+    "Protected" 옵션은 해제해 작업 브랜치 push 에서도 CI 를 수행할 수 있게 한다.
+  consequence: |
+    별도 VM 없이 자동화 CI/CD 를 기동할 수 있다.
+    대신 빌드 부하가 운영 서비스와 같은 호스트에서 경쟁하고,
+    privileged runner 는 보안 경계가 느슨하므로 프로젝트 Lock + Protected variables 로 범위를 좁혀야 한다.
+    장기적으로는 별도 Runner 호스트 분리를 후속 과제로 둔다.
