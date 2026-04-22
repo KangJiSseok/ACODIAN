@@ -287,7 +287,7 @@
     토큰 전송 채널을 서버가 단일 규칙으로 고정하면 로그인·재발급·로그아웃이 동일 계약을 재사용할 수 있어 변경 비용이 낮아진다.
   decision: |
     access token 은 응답 헤더 Authorization: Bearer <token> 으로 내려준다. 요청 측 헤더와 이름을 통일해 클라이언트가 받은 값을 그대로 다음 요청 Authorization 헤더에 재사용하도록 한다.
-    refresh token 은 HttpOnly 쿠키로 내려준다. 쿠키 이름/Path/Secure/SameSite/Domain 은 auth.refresh-cookie.* 프로퍼티를 단일 출처로 사용하고, 기본 Path 는 /api/auth/refresh 이다. Max-Age 는 jwt.refresh-token-expiration 을 기본 사용한다.
+    refresh token 은 HttpOnly 쿠키로 내려준다. 쿠키 이름/Path/Secure/SameSite/Domain 은 auth.refresh-cookie.* 프로퍼티를 단일 출처로 사용하고, 기본 Path 는 /api/auth 이다. Max-Age 는 jwt.refresh-token-expiration 을 기본 사용한다.
     로컬/테스트 프로파일은 HTTPS 미사용 환경을 위해 secure=false, same-site=Lax 같은 속성 override 를 프로퍼티로 관리한다.
     로그인 응답 바디는 비운다(사용자 정보는 별도 현재 사용자 조회 API 가 SSOT 로 담당한다).
     헤더/쿠키 쓰기 책임은 global/security/AuthTokenResponseWriter 가 단독으로 가진다. Controller 는 ResponseEntity 를 반환하지 않고 DTO 를 그대로 반환해 GlobalResponseAdvice 의 봉투 래핑을 유지한다.
@@ -322,7 +322,6 @@
     /api prefix 변경 시 application.yml 한 곳만 수정하면 되어 Controller, Security, 테스트, 문서의 동기화 비용이 줄어든다.
     Controller 는 도메인 경로에만 집중하고, Swagger 및 endpoint inventory 의 canonical path 도 /api + 복수형 리소스 규칙으로 정리된다.
     신규 엔드포인트 추가 시 /api 중복 선언이나 단수형 resource path 도입은 규약 위반으로 간주한다.
-
 - id: ADR-018
   title: tb_user_team baseline 예외 정렬 — team_leader boolean 전환
   status: adopted

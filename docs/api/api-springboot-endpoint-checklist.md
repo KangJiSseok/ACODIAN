@@ -8,7 +8,7 @@
 ## 1. `auth` 도메인
 
 - [x] `POST /api/auth/login`
-- [ ] `POST /api/auth/logout`
+- [x] `POST /api/auth/logout`
 - [x] `POST /api/auth/refresh`
 - [ ] `POST /api/auth/change-password`
 
