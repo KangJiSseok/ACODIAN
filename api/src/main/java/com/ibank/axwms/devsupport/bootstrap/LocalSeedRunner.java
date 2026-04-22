@@ -1,4 +1,4 @@
-package com.ibank.axwms.domain.devsupport.bootstrap;
+package com.ibank.axwms.devsupport.bootstrap;
 
 import com.ibank.axwms.domain.organization.department.entity.Department;
 import com.ibank.axwms.domain.organization.department.repository.DepartmentRepository;
