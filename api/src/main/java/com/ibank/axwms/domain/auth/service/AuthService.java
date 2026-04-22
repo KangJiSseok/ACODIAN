@@ -52,6 +52,15 @@ public class AuthService {
     }
 
     /**
+     * 현재 브라우저의 refresh token 이 가리키는 세션을 종료한다.
+     * refresh 쿠키가 없거나 이미 만료됐더라도 logout API 는 멱등 성공 정책을 따르므로, Service 도 예외 없이 no-op 으로 처리한다.
+     */
+    @Transactional
+    public void logout(String refreshToken) {
+        tokenService.revokeRefreshToken(refreshToken);
+    }
+
+    /**
      * 이메일로 User 를 조회하고 비밀번호 해시까지 일치해야 반환한다.
      * 계정 미존재와 비밀번호 불일치를 동일한 AUTH_INVALID_CREDENTIALS 로 묶어, 이메일 존재 여부가 응답으로 노출되는 enumeration 공격 소재를 차단한다.
      */

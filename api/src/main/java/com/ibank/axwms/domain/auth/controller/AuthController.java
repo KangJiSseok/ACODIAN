@@ -10,13 +10,13 @@ import jakarta.servlet.http.Cookie;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import jakarta.validation.Valid;
-import java.util.Arrays;
 import lombok.RequiredArgsConstructor;
 import org.springframework.util.StringUtils;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
+import org.springframework.web.util.WebUtils;
 
 @RestController
 @RequestMapping("/auth")
@@ -45,18 +45,18 @@ public class AuthController implements AuthControllerDocs {
         return EmptyResponse.INSTANCE;
     }
 
-    /** 설정된 쿠키 이름과 일치하는 refresh cookie 값만 찾아 Service 입력으로 전달한다. */
-    private String extractRefreshToken(HttpServletRequest request) {
-        Cookie[] cookies = request.getCookies();
-        if (cookies == null) {
-            return null;
-        }
+    @PostMapping("/logout")
+    @Override
+    public EmptyResponse logout(HttpServletRequest request, HttpServletResponse response) {
+        authService.logout(extractRefreshToken(request));
+        authTokenResponseWriter.writeExpiredRefreshCookie(response);
+        return EmptyResponse.INSTANCE;
+    }
 
-        return Arrays.stream(cookies)
-                .filter(cookie -> refreshCookieProperties.name().equals(cookie.getName()))
-                .map(Cookie::getValue)
-                .findFirst()
-                .orElse(null);
+    /** 설정된 refresh 쿠키 이름으로 현재 요청의 refresh token 값을 찾는다. */
+    private String extractRefreshToken(HttpServletRequest request) {
+        Cookie refreshCookie = WebUtils.getCookie(request, refreshCookieProperties.name());
+        return refreshCookie != null ? refreshCookie.getValue() : null;
     }
 
     /** rotation 결과가 있을 때만 refresh cookie 를 다시 기록해 controller 분기를 단순화한다. */
