@@ -10,7 +10,7 @@ import {
   getVisibleUsers,
 } from "./_utils/accessControl"
 import PageHeader from "@/app/_common/components/layout/pageHeader"
-import { Pagination } from "./_components/pagination"
+import { Pagination } from "@/app/_common/components/data-display/pagination"
 import { LegendHelpDialog } from "./_components/legendHelpDialog"
 import { usePagination } from "@/app/_common/hooks/usePagination"
 import { useAuth } from "./_hooks/useAuth"
