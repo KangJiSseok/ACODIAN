@@ -236,3 +236,13 @@ springboot:
       `docs/api/api-springboot-endpoint-checklist.md` 의 엔드포인트 체크박스는 bootRun + Swagger 수동 검증이 시드만으로 가능해야 완료로 전환한다.
       시드 없이는 수동 검증 재현성이 깨지므로 체크박스 완료 기준 미달로 간주한다.
     stacks: [springboot]
+  - id: SB-023
+    rule: |
+      인증 토큰 응답 채널.
+      access token 은 응답 헤더 `Authorization: Bearer <token>` 으로 전달한다.
+      refresh token 은 HttpOnly 쿠키로 전달한다. 쿠키 속성은 `auth.refresh-cookie.*` 프로퍼티 한 곳에서만 조정한다(이름/Path/Secure/SameSite/Domain/Max-Age).
+      Controller 는 `ResponseEntity` 를 반환하지 않고 DTO 를 그대로 반환해 공통 응답 봉투 래핑을 유지한다. 헤더/쿠키는 Controller 파라미터로 주입받은 `HttpServletResponse` 에 `global/security/AuthTokenResponseWriter` 를 경유해서만 기록한다.
+      인증 응답 바디에는 토큰도 사용자 정보도 포함하지 않는다(사용자 정보는 별도 현재 사용자 조회 API 가 SSOT).
+      CORS 가 필요한 엔드포인트에서는 exposedHeaders 에 `Authorization` 을 포함하고 allowCredentials 를 true 로 둔다.
+      본 규약은 브라우저 웹 클라이언트를 전제한다. 비브라우저 클라이언트는 별도 인증 경로를 설계해 수용한다.
+    stacks: [springboot]

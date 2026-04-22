@@ -274,3 +274,25 @@
     래핑 규칙 변경 시 정책 유틸 한 곳만 고치면 런타임과 문서가 함께 갱신된다.
     Swagger UI 의 Schema/Example 이 실제 curl 응답과 동일한 형태로 유지된다.
     새로운 제외 타입(파일 다운로드용 Resource, StreamingResponseBody 등)을 추가할 때는 ResponseEnvelopePolicy 의 제외 목록에 먼저 반영한다.
+
+- id: ADR-016
+  title: 로그인 토큰 전송 채널 — Authorization 응답 헤더 + HttpOnly 쿠키
+  status: adopted
+  date: 2026-04-22
+  stacks: [springboot]
+  context: |
+    응답 바디에 access token 과 refresh token 을 함께 내리면 프런트가 refresh token 저장 위치를 결정해야 하고, XSS 로 장기 자격 증명까지 탈취될 위험이 있다.
+    토큰 전송 채널을 서버가 단일 규칙으로 고정하면 로그인·재발급·로그아웃이 동일 계약을 재사용할 수 있어 변경 비용이 낮아진다.
+  decision: |
+    access token 은 응답 헤더 Authorization: Bearer <token> 으로 내려준다. 요청 측 헤더와 이름을 통일해 클라이언트가 받은 값을 그대로 다음 요청 Authorization 헤더에 재사용하도록 한다.
+    refresh token 은 HttpOnly 쿠키로 내려준다. 속성은 HttpOnly, Secure, SameSite=Strict, Path=/api/auth/refresh, Name=refreshToken 이며, Max-Age 는 jwt.refresh-token-expiration 을 기본 사용한다.
+    로컬/테스트 프로파일은 HTTPS 미사용 환경을 위해 secure=false, same-site=Lax 로 override 한다.
+    로그인 응답 바디는 비운다(사용자 정보는 별도 현재 사용자 조회 API 가 SSOT 로 담당한다).
+    헤더/쿠키 쓰기 책임은 global/security/AuthTokenResponseWriter 가 단독으로 가진다. Controller 는 ResponseEntity 를 반환하지 않고 DTO 를 그대로 반환해 GlobalResponseAdvice 의 봉투 래핑을 유지한다.
+    CORS 는 allowCredentials=true, exposedHeaders=[Authorization] 로 설정하고 허용 오리진은 auth.cors.* 프로퍼티로 환경별로 관리한다.
+    본 규약은 브라우저 기반 웹 클라이언트를 전제한다. MCP, CLI, 서버 간 호출 등 비브라우저 클라이언트는 쿠키 자동 처리를 전제할 수 없으므로 별도 토큰 발급 경로로 설계한다.
+  consequence: |
+    refresh token 이 JS 에서 접근 불가능해져 XSS 로 인한 장기 자격 증명 탈취를 차단한다.
+    이후 구현될 /api/auth/refresh, /api/auth/logout 엔드포인트는 쿠키에서 토큰을 읽고 Set-Cookie 로 회전/만료를 내리는 계약이 선결정된다.
+    CORS 설정이 필수가 되어 프런트 오리진을 환경별 프로퍼티로 관리해야 하며, 확정되기 전 operational 환경에서는 allowed-origin-patterns 를 명시적으로 주입한다.
+    비브라우저 클라이언트는 본 로그인 엔드포인트를 재사용하지 않고 별도 경로(예 - API 키 기반 인증 또는 바디 반환 토큰 엔드포인트)를 추가해 수용한다.
