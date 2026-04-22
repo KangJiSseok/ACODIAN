@@ -1,6 +1,7 @@
 package com.ibank.axwms.global.config;
 
 import com.ibank.axwms.global.security.JwtAuthenticationFilter;
+import com.ibank.axwms.global.security.SecurityExceptionHandler;
 import lombok.RequiredArgsConstructor;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
@@ -33,6 +34,7 @@ public class SecurityConfig {
     };
 
     private final JwtAuthenticationFilter jwtAuthenticationFilter;
+    private final SecurityExceptionHandler securityExceptionHandler;
     private final CorsConfigurationSource corsConfigurationSource;
 
     /** Swagger 와 로그인 진입점만 익명 허용하고 나머지 API 는 인증이 필요하도록 SecurityFilterChain 을 구성한다. */
@@ -44,6 +46,9 @@ public class SecurityConfig {
                 .httpBasic(basic -> basic.disable())
                 .formLogin(form -> form.disable())
                 .sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
+                .exceptionHandling(exceptions -> exceptions
+                        .authenticationEntryPoint(securityExceptionHandler)
+                        .accessDeniedHandler(securityExceptionHandler))
                 .authorizeHttpRequests(auth -> auth
                         .requestMatchers(PUBLIC_PATHS).permitAll()
                         .anyRequest().authenticated())

@@ -18,10 +18,16 @@ public enum ErrorCode {
     COMMON_VALIDATION_ERROR(HttpStatus.BAD_REQUEST, "요청 값 검증에 실패했습니다."),
     /** 로그인 후 응답 봉투 테스트용 보호 엔드포인트가 의도적으로 비즈니스 예외를 발생시킬 때 사용한다. */
     RESPONSE_TEST_ERROR(HttpStatus.BAD_REQUEST, "응답 테스트용 예외가 발생했습니다."),
+    /** access token 이 없거나 SecurityContext 에 현재 사용자 principal 이 없어 인증 문맥을 복원할 수 없을 때 사용한다. */
+    AUTH_UNAUTHORIZED(HttpStatus.UNAUTHORIZED, "인증이 필요합니다."),
+    /** 인증은 되었지만 현재 요청에 필요한 권한이 없어 접근할 수 없을 때 사용한다. */
+    AUTH_ACCESS_DENIED(HttpStatus.FORBIDDEN, "접근 권한이 없습니다."),
     /** 이메일이 존재하지 않거나 비밀번호가 일치하지 않아 인증할 수 없을 때 사용한다. */
     AUTH_INVALID_CREDENTIALS(HttpStatus.UNAUTHORIZED, "이메일 또는 비밀번호가 올바르지 않습니다."),
     /** 재직 상태가 ACTIVE 가 아니어서 로그인할 수 없을 때 사용한다. */
-    AUTH_LOGIN_NOT_ALLOWED(HttpStatus.FORBIDDEN, "현재 계정 상태로는 로그인할 수 없습니다.");
+    AUTH_LOGIN_NOT_ALLOWED(HttpStatus.FORBIDDEN, "현재 계정 상태로는 로그인할 수 없습니다."),
+    /** access token 으로 복원한 현재 사용자 문맥이 DB 에 존재하지 않을 때 사용한다. */
+    USER_NOT_FOUND(HttpStatus.NOT_FOUND, "사용자를 찾을 수 없습니다.");
 
     private final HttpStatus status;
     private final String message;

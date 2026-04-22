@@ -54,4 +54,17 @@ public class UserTeam {
     @UpdateTimestamp
     @Column(name = "updated_at", nullable = false)
     private LocalDateTime updatedAt;
+
+    /**
+     * 사용자-팀 소속 관계를 생성한다.
+     * userId/teamId 쌍의 중복 여부는 호출측이 사전에 검증하고, 주 소속 여부는 사용자별 한 건만 true 가 되도록 관리한다.
+     */
+    public static UserTeam create(Long userId, Long teamId, TeamRole teamRole, boolean isPrimary) {
+        UserTeam userTeam = new UserTeam();
+        userTeam.userId = userId;
+        userTeam.teamId = teamId;
+        userTeam.teamRole = teamRole;
+        userTeam.isPrimary = isPrimary;
+        return userTeam;
+    }
 }

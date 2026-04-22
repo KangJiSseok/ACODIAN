@@ -1,5 +1,22 @@
 package com.ibank.axwms.domain.organization.user.service;
 
+import com.ibank.axwms.domain.organization.department.entity.Department;
+import com.ibank.axwms.domain.organization.department.repository.DepartmentRepository;
+import com.ibank.axwms.domain.organization.team.entity.Team;
+import com.ibank.axwms.domain.organization.team.entity.UserTeam;
+import com.ibank.axwms.domain.organization.team.repository.TeamRepository;
+import com.ibank.axwms.domain.organization.team.repository.UserTeamRepository;
+import com.ibank.axwms.domain.organization.user.dto.GetMyProfileApiDto;
+import com.ibank.axwms.domain.organization.user.entity.User;
+import com.ibank.axwms.domain.organization.user.repository.UserRepository;
+import com.ibank.axwms.global.error.BusinessException;
+import com.ibank.axwms.global.error.ErrorCode;
+import com.ibank.axwms.global.security.CustomUserPrincipal;
+import java.util.List;
+import java.util.Map;
+import java.util.Objects;
+import java.util.function.Function;
+import java.util.stream.Collectors;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -8,4 +25,82 @@ import org.springframework.transaction.annotation.Transactional;
 @RequiredArgsConstructor
 @Transactional(readOnly = true)
 public class UserService {
+
+    private final UserRepository userRepository;
+    private final DepartmentRepository departmentRepository;
+    private final UserTeamRepository userTeamRepository;
+    private final TeamRepository teamRepository;
+
+    /**
+     * access token principal 에 해당하는 현재 로그인 사용자의 프로필/소속 팀 문맥을 조회한다.
+     * 프론트엔드가 앱 초기화 시 한 번의 호출로 사용자 기본 정보와 팀 컨텍스트를 확보할 수 있도록 필요한 필드를 조립해 반환한다.
+     */
+    public GetMyProfileApiDto.Response getMyProfile(CustomUserPrincipal principal) {
+        if (principal == null) {
+            throw new BusinessException(ErrorCode.AUTH_UNAUTHORIZED);
+        }
+
+        User user = getRequiredUser(principal.userId());
+        Department department = getRequiredDepartment(user.getDepartmentId());
+        List<GetMyProfileApiDto.TeamSummary> teams = getTeamSummaries(user.getId());
+
+        return GetMyProfileApiDto.Response.of(user, department, teams);
+    }
+
+    /**
+     * JWT subject 로 복원한 사용자 id 에 해당하는 User 를 조회한다.
+     * access token 은 유효하지만 사용자가 삭제된 비정상 케이스를 404 비즈니스 예외로 정규화한다.
+     */
+    private User getRequiredUser(Long userId) {
+        return userRepository.findById(userId)
+                .orElseThrow(() -> new BusinessException(ErrorCode.USER_NOT_FOUND));
+    }
+
+    /**
+     * 사용자의 소속 부서명을 응답에 포함하기 위해 Department 를 조회한다.
+     * 사용자 레코드가 가리키는 부서가 없으면 조직 문맥이 깨진 상태이므로 사용자 미존재와 동일하게 취급한다.
+     */
+    private Department getRequiredDepartment(Long departmentId) {
+        return departmentRepository.findById(departmentId)
+                .orElseThrow(() -> new BusinessException(ErrorCode.USER_NOT_FOUND));
+    }
+
+    /**
+     * 사용자-팀 관계 순서를 유지한 채 팀 요약 목록을 만든다.
+     * 주 소속 팀을 먼저 보이게 한 뒤, JPA findAllById 결과가 입력 순서를 보장하지 않으므로
+     * teamId -> Team 맵을 만든 뒤 사용자-팀 관계 목록 순서대로 재조립한다.
+     */
+    private List<GetMyProfileApiDto.TeamSummary> getTeamSummaries(Long userId) {
+        List<UserTeam> userTeams = userTeamRepository.findAllByUserIdOrderByIsPrimaryDesc(userId);
+        if (userTeams.isEmpty()) {
+            return List.of();
+        }
+
+        Map<Long, Team> teamsById = teamRepository.findAllById(
+                        userTeams.stream()
+                                .map(UserTeam::getTeamId)
+                                .toList()
+                ).stream()
+                .collect(Collectors.toMap(Team::getId, Function.identity()));
+
+        return userTeams.stream()
+                .map(userTeam -> toTeamSummary(userTeam, teamsById.get(userTeam.getTeamId())))
+                .filter(Objects::nonNull)
+                .toList();
+    }
+
+    /**
+     * 사용자-팀 관계와 팀 엔티티를 응답용 팀 요약으로 변환한다.
+     * FK 무결성상 team 은 존재해야 하지만, 운영 데이터 불일치가 있더라도 전체 조회를 500 으로 깨지 않게 누락 팀은 제외한다.
+     */
+    private GetMyProfileApiDto.TeamSummary toTeamSummary(UserTeam userTeam, Team team) {
+        if (team == null) {
+            return null;
+        }
+        return new GetMyProfileApiDto.TeamSummary(
+                Boolean.TRUE.equals(userTeam.getIsPrimary()),
+                team.getId(),
+                team.getTeamName()
+        );
+    }
 }
