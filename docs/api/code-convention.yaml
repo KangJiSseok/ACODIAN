@@ -69,13 +69,15 @@ springboot:
     rule: |
       DTO 네이밍 패턴.
       API 전용 DTO는 유스케이스 기준의 {UseCase}ApiDto 외부 클래스에 모은다. 한 유스케이스는 한 `{UseCase}ApiDto` 파일 1:1 매핑을 기본으로 한다.
-      각 API 클래스는 static nested class Request, Response 를 기본으로 두고, Service 가 반환하는 출력 record 도 같은 `{UseCase}ApiDto` 안의 `Result` 로 모아 둔다.
+      각 API 클래스는 static nested class Request, Response 를 기본으로 둔다.
+      Service 출력이 HTTP Response 와 사실상 동일하면 Service 가 `Response` 를 직접 반환할 수 있고, 이 경우 `Response.of(...)` / `Response.from(...)` 으로 바로 조립하며 불필요한 `Result` 는 만들지 않는다.
+      Service 출력이 Response 와 다르거나 여러 내부 호출 경계에서 재사용되는 별도 출력 계약이 필요할 때만 같은 `{UseCase}ApiDto` 안에 `Result` 를 둔다.
       특정 record(Request/Response/Result) 안에서만 의미 있는 보조 record(예 - Response 안의 `User`, Result 안의 `UserContext`) 는 `{UseCase}ApiDto` 바깥 레벨이 아닌 **해당 부모 record 내부 중첩 record** 로 배치해 "의미 소유자" 와 "파일 위치" 를 일치시킨다. 여러 record 가 공유하는 보조 record 만 `{UseCase}ApiDto` 바로 아래 중첩으로 둔다.
       예: CreateUserApiDto.Request, CreateUserApiDto.Response, LoginApiDto.Response.User, LoginApiDto.Result, LoginApiDto.Result.UserContext.
       UseCase 이름은 컨트롤러 메서드명 복제가 아니라 API 유스케이스 기준으로 정한다.
       Request는 Controller 바인딩/검증 겸 Service 입력 DTO 로 그대로 재사용한다. 별도 Command/Criteria 클래스를 기본으로 만들지 않는다.
       Service 가 여러 소스를 조립·정규화한 입력이 필요하거나 HTTP 가 아닌 경로(배치, 이벤트, 내부 호출)가 동일 유스케이스를 호출해야 하는 경우에 한해 `{UseCase}ApiDto.Command` / `{UseCase}ApiDto.Criteria` 같은 추가 nested record 를 같은 Api 클래스 안에 둔다. 단순 1:1 필드 매핑에는 도입하지 않는다.
-      Response는 from()/of() 정적 팩토리 메서드로 생성한다.
+      Response는 from()/of() 정적 팩토리 메서드로 생성한다. 중간 `Result` 가 의미를 추가하지 않으면 `Response.of(...)` / `Response.from(...)` 으로 바로 생성한다.
       공용 DTO가 필요한 경우에만 {동작}{Entity}Request, {Entity}{뷰}Response, {Entity}ListQuery 패턴을 사용한다.
       단, internal callback 또는 private integration DTO처럼 공개 API DTO 컨벤션 바깥에 있어야 하는 제한된 경우에는 top-level DTO를 허용한다.
       이 예외는 일반 public API DTO나 임의의 shared DTO로 확장하지 않는다.
@@ -159,7 +161,8 @@ springboot:
       domain 하위 DTO는 request/, response/ 로 분리하지 않고 dto/ 단일 패키지로 둔다.
       dto/ 는 controller/, service/, repository/ 와 동등한 계층에 둔다.
       Query DTO, Request DTO, Response DTO 는 모두 각 도메인(또는 organization feature) 아래 dto/ 에 배치한다.
-      Service 가 반환하는 출력 record 와 그 동반 타입은 별도 파일을 만들지 않고 동일 유스케이스의 `{UseCase}ApiDto` 안에 nested record(`Result`, `Result.UserContext` 등) 로 배치해 유스케이스 1:1 파일 매핑을 유지한다.
+      Service 가 반환하는 출력 계약이 Response 와 다를 때만 그 출력 record 와 동반 타입을 별도 파일로 만들지 않고 동일 유스케이스의 `{UseCase}ApiDto` 안에 nested record(`Result`, `Result.UserContext` 등) 로 배치해 유스케이스 1:1 파일 매핑을 유지한다.
+      Service 출력이 Response 와 1:1 이면 `Response` 를 직접 반환하고, 그 경우 `Result` 를 억지로 만들지 않는다.
       Service 입력을 Request DTO 로 직결하지 않고 별도로 조립해야 하는 예외 상황(enrichment/정규화/비 HTTP 호출 경로)에서는 같은 `{UseCase}ApiDto` 안에 `Command` / `Criteria` nested record 를 추가한다. 이 경우에도 별도 dto 파일이나 Service 내부 nested record 로 두지 않는다.
       단, 한 Service 가 다른 Service 에만 노출하는 internal record(예 - `TokenService.IssuedTokens` 처럼 Controller 로 넘어가지 않고 service→service 사이에서만 쓰이는 타입) 는 해당 Service 내부 nested record 로 둘 수 있다. 이 예외는 service→service 내부 contract 에 한정하고, Controller 경계로 드러나는 타입에는 적용하지 않는다.
       internal callback DTO 도 dto/ 아래에 두되 `Internal*Request`, `Internal*Response` naming 으로 구분한다.
