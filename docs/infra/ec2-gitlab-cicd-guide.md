@@ -230,20 +230,31 @@ JWT_REFRESH_EXPIRATION=1209600000
 GitLab 경로:
 - **Settings > CI/CD > Variables**
 
+모든 변수는 **Protected** 로 등록한다.
+`SSH_PRIVATE_KEY` 와 `SSH_KNOWN_HOSTS` 는 값 안에 `$` 가 섞여도 그대로 전달되도록 **Expand variable reference 를 끈다**.
+
 ### 공통 변수
-- `SSH_PRIVATE_KEY`
-- `SSH_KNOWN_HOSTS`
-- `DEPLOY_USER`
-- `CI_REGISTRY_USER`
-- `CI_REGISTRY_PASSWORD`
+- `SSH_PRIVATE_KEY` — CI 전용 SSH 개인키 전체 내용 (`-----BEGIN ~ END-----` 포함)
+- `SSH_KNOWN_HOSTS` — `ssh-keyscan <EC2_HOST>` 결과 전체
+- `DEPLOY_USER` — EC2 로그인 계정 (예: `ubuntu`)
 
 ### staging 변수
-- `DEPLOY_HOST_STAGING`
-- `STAGING_URL`
+- `DEPLOY_HOST_STAGING` — EC2 SSH 외부 주소
+- `STAGING_URL` — 외부 공개 URL (예: `https://k14s209.p.ssafy.io:8990`)
 
 ### production 변수
-- `DEPLOY_HOST_PRODUCTION`
-- `PRODUCTION_URL`
+- `DEPLOY_HOST_PRODUCTION` — 현재는 staging 과 같은 서버여도 된다
+- `PRODUCTION_URL` — 외부 공개 URL (예: `https://k14s209.p.ssafy.io:8989`)
+
+### Registry 자격증명은 등록하지 않는다
+`CI_REGISTRY`, `CI_REGISTRY_USER`, `CI_REGISTRY_PASSWORD` 는 GitLab 이 파이프라인 실행 시 자동 주입하는 **predefined 변수**다.
+
+- `CI_REGISTRY_USER` = `gitlab-ci-token`
+- `CI_REGISTRY_PASSWORD` = `$CI_JOB_TOKEN` (해당 job 실행 동안만 유효)
+
+`.gitlab-ci.yml` 의 `api_image`, `deploy_dev`, `deploy_prod` 가 이 이름을 그대로 참조하므로 **별도 등록이 불필요**하다.
+수동으로 등록하면 값이 고정되어 Job Token 수명 주기 이점을 잃는다.
+권한 범위를 더 좁히고 싶다면 후속 단계에서 Deploy Token 으로 전환을 검토한다.
 
 ### protected variable 주의
 `master`는 protected branch라 production 변수와 잘 맞는다.
