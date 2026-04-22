@@ -1,0 +1,87 @@
+- id: ADR-001
+  title: EC2 1차 자동배포 범위 — api/postgres/redis 3서비스 최소 구성
+  status: adopted
+  date: 2026-04-22
+  stacks: [docker, compose, ec2]
+  context: |
+    현재 인프라 목표는 EC2에서 전체 스택(web, api, ai, nginx)을 한 번에 완성형으로 배포하는 것이 아니라,
+    먼저 api가 의존하는 postgres/redis와 함께 안정적으로 자동배포되도록 만드는 것이다.
+    web과 ai는 아직 production Docker image 및 compose 편성이 준비되지 않았고,
+    nginx/HTTPS는 이미 외부에서 제공된 환경을 활용하는 전제다.
+  decision: |
+    1차 자동배포 범위는 api/postgres/redis 3서비스로 제한한다.
+    EC2 배포의 source of truth compose 파일은 `infra/compose.deploy.yml` 하나로 유지한다.
+    web, ai, nginx의 운영 자동배포는 후속 단계로 분리한다.
+  consequence: |
+    배포 대상과 실패 지점을 api 중심으로 좁혀 초기 자동화를 빠르게 안정화할 수 있다.
+    반면 전체 서비스 일괄 배포는 아직 지원하지 않으므로 web/ai 확장은 별도 인프라 작업이 필요하다.
+
+- id: ADR-002
+  title: API 컨테이너 패키징 — CI 선빌드 JAR + 단순 런타임 이미지
+  status: adopted
+  date: 2026-04-22
+  stacks: [docker, springboot, gitlab]
+  context: |
+    api/Dockerfile 은 build/libs/*.jar 를 런타임 이미지에 복사하는 단순 패키징 구조다.
+    EC2 서버가 직접 git clone 과 Gradle build 를 수행하면 서버에 JDK/Gradle 의존성을 오래 유지해야 하고,
+    배포 재현성도 CI 기준보다 낮아진다.
+    현재 Gradle 빌드에는 jOOQ codegen과 Docker 의존이 있어, 빌드 책임을 CI로 모으는 편이 더 일관적이다.
+  decision: |
+    API 이미지는 GitLab CI 에서 `./gradlew clean test bootJar` 후 빌드한다.
+    Dockerfile 은 외부 빌드된 JAR만 복사하는 현재 구조를 유지한다.
+    EC2 는 빌드 서버가 아니라 Registry 이미지를 pull 받아 실행하는 런타임 호스트로 취급한다.
+  consequence: |
+    빌드 책임과 실행 책임이 분리되어 배포 재현성이 높아진다.
+    대신 GitLab Runner가 Java 21과 Docker-in-Docker 환경을 사용할 수 있어야 한다.
+
+- id: ADR-003
+  title: 배포 설정 주입과 기동 순서 — 서버 .env + healthcheck gating
+  status: adopted
+  date: 2026-04-22
+  stacks: [docker, compose, postgres, redis]
+  context: |
+    DB 계정, JWT 시크릿, 포트 같은 값은 staging/production 마다 다르므로 저장소에 실제 값을 둘 수 없다.
+    또한 postgres 와 redis 가 실제 연결 가능한 상태가 되기 전에 api 가 먼저 기동하면,
+    초기 배포 시 연결 실패와 migration 실패가 발생할 수 있다.
+  decision: |
+    환경별 설정은 EC2 의 `/opt/axwms/{staging|production}/.env` 파일로 주입한다.
+    compose 파일에는 샘플만 남기고, 실제 비밀값은 서버 또는 GitLab protected variable 로만 관리한다.
+    api 서비스는 postgres 와 redis 의 healthcheck 통과 이후에만 기동한다.
+  consequence: |
+    환경별 설정을 분리하고 민감정보를 커밋하지 않을 수 있다.
+    초기 배포 순서 문제를 줄일 수 있지만, 서버 `.env` 파일 관리 책임이 운영 쪽에 생긴다.
+
+- id: ADR-004
+  title: GitLab 브랜치 이벤트별 파이프라인 분리 — dev/master 외 브랜치 CI, dev/master merge 후 CD
+  status: adopted
+  date: 2026-04-22
+  stacks: [gitlab, ci, cd]
+  context: |
+    현재 실무 브랜치 해석은 `feat`라는 접두사 그 자체가 아니라,
+    `dev`와 `master`를 제외한 모든 작업 브랜치에서 빠르게 CI만 돌리고 싶다는 요구에 가깝다.
+    반대로 dev/master 는 merge 결과를 기준으로 staging/production 에 반영되어야 흐름이 단순하다.
+  decision: |
+    push 이벤트에서는 `dev`, `master`를 제외한 모든 브랜치에서 CI만 수행한다.
+    `dev`, `master` 대상 merge request 생성·업데이트 시에도 CI만 수행한다.
+    merge 완료 후 `dev`, `master`에 생긴 push pipeline 에서만 CI + CD 를 수행한다.
+  consequence: |
+    브랜치 이름 접두사에 의존하지 않고 모든 작업 브랜치에서 일관된 검증이 가능하다.
+    운영 반영은 dev/master merge 결과로 제한되어 staging/production 추적이 쉬워진다.
+
+- id: ADR-005
+  title: EC2 배포 방식 — GitLab Container Registry 이미지 pull + SSH 원격 compose 실행
+  status: adopted
+  date: 2026-04-22
+  stacks: [gitlab, docker, compose, ec2, ssh]
+  context: |
+    EC2 에서 직접 소스코드를 pull 받아 빌드하는 방식은 서버 상태에 따라 결과가 흔들리고,
+    롤백 시 어떤 커밋/이미지가 올라갔는지 추적하기 어렵다.
+    GitLab CI 에서 이미지를 만들고, EC2 는 해당 이미지만 받아 실행하는 편이 단순하다.
+  decision: |
+    CI 는 `api` 이미지를 GitLab Container Registry 에 push 한다.
+    deploy job 은 SSH 로 EC2 에 접속해 `infra/compose.deploy.yml`과 배포 스크립트를 전달한다.
+    서버에서는 `docker compose pull` 후 `docker compose up -d` 로 반영한다.
+    staging 과 production 은 `/opt/axwms/{env}` 및 `API_HOST_PORT` 로 분리한다.
+  consequence: |
+    이미지 단위로 배포/롤백 추적이 쉬워진다.
+    다만 Registry 자격증명, SSH 키, 환경별 `.env`, Nginx 포트 연결을 별도로 관리해야 한다.

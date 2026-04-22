@@ -1,0 +1,219 @@
+workflow:
+  rules:
+    - if: '$CI_PIPELINE_SOURCE == "merge_request_event" && ($CI_MERGE_REQUEST_TARGET_BRANCH_NAME == "dev" || $CI_MERGE_REQUEST_TARGET_BRANCH_NAME == "master")'
+    - if: '$CI_PIPELINE_SOURCE == "push" && $CI_COMMIT_BRANCH && $CI_COMMIT_BRANCH != "dev" && $CI_COMMIT_BRANCH != "master"'
+    - if: '$CI_PIPELINE_SOURCE == "push" && ($CI_COMMIT_BRANCH == "dev" || $CI_COMMIT_BRANCH == "master")'
+    - when: never
+
+stages:
+  - validate
+  - test
+  - build
+  - image
+  - deploy
+
+default:
+  interruptible: true
+
+variables:
+  DEPLOY_ROOT: /opt/axwms
+  PIP_CACHE_DIR: "$CI_PROJECT_DIR/.cache/pip"
+
+.web_changes: &web_changes
+  - web/**/*
+  - package.json
+  - pnpm-lock.yaml
+  - pnpm-workspace.yaml
+
+.ai_changes: &ai_changes
+  - ai/**/*
+
+.api_changes: &api_changes
+  - api/**/*
+
+.infra_changes: &infra_changes
+  - infra/**/*
+  - docs/infra/**/*
+  - .gitlab-ci.yml
+
+.api_deploy_changes: &api_deploy_changes
+  - api/**/*
+  - infra/**/*
+  - docs/infra/**/*
+  - .gitlab-ci.yml
+
+infra_validate:
+  stage: validate
+  image: docker:27.5.1-cli
+  before_script:
+    - cp infra/.env.example infra/.env.validate
+    - printf '\nAPP_ENV=ci\nAPI_IMAGE=registry.example.com/ax-wms/api:ci\nAPI_HOST_PORT=18080\n' >> infra/.env.validate
+  script:
+    - docker compose --env-file infra/.env.validate -f infra/compose.deploy.yml config > /tmp/compose.deploy.rendered.yml
+  after_script:
+    - rm -f infra/.env.validate
+  rules:
+    - if: '$CI_PIPELINE_SOURCE == "merge_request_event"'
+      changes: *infra_changes
+    - if: '$CI_PIPELINE_SOURCE == "push" && $CI_COMMIT_BRANCH && $CI_COMMIT_BRANCH != "dev" && $CI_COMMIT_BRANCH != "master"'
+      changes: *infra_changes
+    - if: '$CI_PIPELINE_SOURCE == "push" && ($CI_COMMIT_BRANCH == "dev" || $CI_COMMIT_BRANCH == "master")'
+      changes: *infra_changes
+
+web_ci:
+  stage: test
+  image: node:22-alpine
+  before_script:
+    - corepack enable
+    - corepack prepare pnpm@10.32.0 --activate
+    - pnpm config set store-dir .pnpm-store
+    - pnpm install --frozen-lockfile
+  script:
+    - pnpm lint:web
+    - pnpm build:web
+  cache:
+    key:
+      files:
+        - pnpm-lock.yaml
+    paths:
+      - .pnpm-store
+  rules:
+    - if: '$CI_PIPELINE_SOURCE == "merge_request_event"'
+      changes: *web_changes
+    - if: '$CI_PIPELINE_SOURCE == "push" && $CI_COMMIT_BRANCH && $CI_COMMIT_BRANCH != "dev" && $CI_COMMIT_BRANCH != "master"'
+      changes: *web_changes
+    - if: '$CI_PIPELINE_SOURCE == "push" && ($CI_COMMIT_BRANCH == "dev" || $CI_COMMIT_BRANCH == "master")'
+      changes: *web_changes
+
+ai_ci:
+  stage: test
+  image: python:3.12-slim
+  before_script:
+    - python -m pip install --upgrade pip
+    - pip install -r ai/requirements.txt pytest
+  script:
+    - pytest ai/tests -q
+  cache:
+    key:
+      files:
+        - ai/requirements.txt
+    paths:
+      - .cache/pip
+  rules:
+    - if: '$CI_PIPELINE_SOURCE == "merge_request_event"'
+      changes: *ai_changes
+    - if: '$CI_PIPELINE_SOURCE == "push" && $CI_COMMIT_BRANCH && $CI_COMMIT_BRANCH != "dev" && $CI_COMMIT_BRANCH != "master"'
+      changes: *ai_changes
+    - if: '$CI_PIPELINE_SOURCE == "push" && ($CI_COMMIT_BRANCH == "dev" || $CI_COMMIT_BRANCH == "master")'
+      changes: *ai_changes
+
+api_ci:
+  stage: build
+  image: docker:27.5.1-cli
+  services:
+    - name: docker:27.5.1-dind
+      command: ["--tls=false"]
+  variables:
+    DOCKER_HOST: tcp://docker:2375
+    DOCKER_TLS_CERTDIR: ""
+    GRADLE_USER_HOME: "$CI_PROJECT_DIR/api/.gradle"
+  before_script:
+    - apk add --no-cache bash openjdk21-jdk
+    - export JAVA_HOME=/usr/lib/jvm/java-21-openjdk
+    - chmod +x api/gradlew
+    - docker version
+    - java -version
+  script:
+    - cd api
+    - ./gradlew --no-daemon clean test bootJar
+  cache:
+    key:
+      files:
+        - api/gradle.properties
+        - api/gradle/libs.versions.toml
+        - api/build.gradle
+        - api/settings.gradle
+    paths:
+      - api/.gradle
+  artifacts:
+    paths:
+      - api/build/libs/*.jar
+    expire_in: 1 day
+  rules:
+    - if: '$CI_PIPELINE_SOURCE == "merge_request_event"'
+      changes: *api_changes
+    - if: '$CI_PIPELINE_SOURCE == "push" && $CI_COMMIT_BRANCH && $CI_COMMIT_BRANCH != "dev" && $CI_COMMIT_BRANCH != "master"'
+      changes: *api_changes
+    - if: '$CI_PIPELINE_SOURCE == "push" && ($CI_COMMIT_BRANCH == "dev" || $CI_COMMIT_BRANCH == "master")'
+      changes: *api_changes
+
+api_image:
+  stage: image
+  image: docker:27.5.1-cli
+  services:
+    - name: docker:27.5.1-dind
+      command: ["--tls=false"]
+  variables:
+    DOCKER_HOST: tcp://docker:2375
+    DOCKER_TLS_CERTDIR: ""
+  needs:
+    - job: api_ci
+      artifacts: true
+  before_script:
+    - echo "$CI_REGISTRY_PASSWORD" | docker login "$CI_REGISTRY" -u "$CI_REGISTRY_USER" --password-stdin
+  script:
+    - docker build -t "$CI_REGISTRY_IMAGE/api:$CI_COMMIT_SHA" -t "$CI_REGISTRY_IMAGE/api:$CI_COMMIT_REF_SLUG" api
+    - docker push "$CI_REGISTRY_IMAGE/api:$CI_COMMIT_SHA"
+    - docker push "$CI_REGISTRY_IMAGE/api:$CI_COMMIT_REF_SLUG"
+  rules:
+    - if: '$CI_PIPELINE_SOURCE == "push" && ($CI_COMMIT_BRANCH == "dev" || $CI_COMMIT_BRANCH == "master")'
+      changes: *api_deploy_changes
+
+.deploy_base:
+  image: alpine:3.20
+  before_script:
+    - apk add --no-cache openssh-client
+    - mkdir -p ~/.ssh
+    - chmod 700 ~/.ssh
+    - printf '%s' "$SSH_PRIVATE_KEY" > ~/.ssh/id_ed25519
+    - chmod 600 ~/.ssh/id_ed25519
+    - printf '%s\n' "$SSH_KNOWN_HOSTS" > ~/.ssh/known_hosts
+    - chmod 644 ~/.ssh/known_hosts
+
+deploy_dev:
+  extends: .deploy_base
+  stage: deploy
+  environment:
+    name: staging
+    url: $STAGING_URL
+  script:
+    - export TARGET_HOST="$DEPLOY_HOST_STAGING"
+    - export APP_ENV=staging
+    - export REMOTE_DIR="${DEPLOY_ROOT%/}/$APP_ENV"
+    - ssh "$DEPLOY_USER@$TARGET_HOST" "mkdir -p '$REMOTE_DIR'"
+    - scp infra/compose.deploy.yml "$DEPLOY_USER@$TARGET_HOST:$REMOTE_DIR/compose.deploy.yml"
+    - scp infra/scripts/remote-deploy-api.sh "$DEPLOY_USER@$TARGET_HOST:$REMOTE_DIR/remote-deploy-api.sh"
+    - ssh "$DEPLOY_USER@$TARGET_HOST" "chmod +x '$REMOTE_DIR/remote-deploy-api.sh'"
+    - ssh "$DEPLOY_USER@$TARGET_HOST" "APP_ENV='$APP_ENV' DEPLOY_ROOT='$DEPLOY_ROOT' API_IMAGE='$CI_REGISTRY_IMAGE/api:$CI_COMMIT_REF_SLUG' CI_REGISTRY='$CI_REGISTRY' CI_REGISTRY_USER='$CI_REGISTRY_USER' CI_REGISTRY_PASSWORD='$CI_REGISTRY_PASSWORD' sh '$REMOTE_DIR/remote-deploy-api.sh'"
+  rules:
+    - if: '$CI_PIPELINE_SOURCE == "push" && $CI_COMMIT_BRANCH == "dev"'
+      changes: *api_deploy_changes
+
+deploy_prod:
+  extends: .deploy_base
+  stage: deploy
+  environment:
+    name: production
+    url: $PRODUCTION_URL
+  script:
+    - export TARGET_HOST="$DEPLOY_HOST_PRODUCTION"
+    - export APP_ENV=production
+    - export REMOTE_DIR="${DEPLOY_ROOT%/}/$APP_ENV"
+    - ssh "$DEPLOY_USER@$TARGET_HOST" "mkdir -p '$REMOTE_DIR'"
+    - scp infra/compose.deploy.yml "$DEPLOY_USER@$TARGET_HOST:$REMOTE_DIR/compose.deploy.yml"
+    - scp infra/scripts/remote-deploy-api.sh "$DEPLOY_USER@$TARGET_HOST:$REMOTE_DIR/remote-deploy-api.sh"
+    - ssh "$DEPLOY_USER@$TARGET_HOST" "chmod +x '$REMOTE_DIR/remote-deploy-api.sh'"
+    - ssh "$DEPLOY_USER@$TARGET_HOST" "APP_ENV='$APP_ENV' DEPLOY_ROOT='$DEPLOY_ROOT' API_IMAGE='$CI_REGISTRY_IMAGE/api:$CI_COMMIT_REF_SLUG' CI_REGISTRY='$CI_REGISTRY' CI_REGISTRY_USER='$CI_REGISTRY_USER' CI_REGISTRY_PASSWORD='$CI_REGISTRY_PASSWORD' sh '$REMOTE_DIR/remote-deploy-api.sh'"
+  rules:
+    - if: '$CI_PIPELINE_SOURCE == "push" && $CI_COMMIT_BRANCH == "master"'
+      changes: *api_deploy_changes
