@@ -148,12 +148,14 @@ EC2에서는:
 서로 다른 포트 / 서로 다른 volume / 서로 다른 compose project 로 분리해야 충돌이 없다.
 
 예를 들어 내부 애플리케이션 포트는 아래처럼 둔다.
-- staging API: `127.0.0.1:18080`
+- staging API: `127.0.0.1:8081`
 - production API: `127.0.0.1:8080`
 
 그리고 외부 공개 포트는 같은 도메인에서 아래처럼 분리한다.
 - production 외부 URL: `https://k14s209.p.ssafy.io:8989`
 - staging 외부 URL: `https://k14s209.p.ssafy.io:8990`
+
+EC2 보안그룹 정책상 외부에서 열 수 있는 포트는 **8000–9000 범위**로 제한되므로, 내부 바인딩 포트도 같은 범위 안에서 고른다.
 
 즉, Nginx가 같은 도메인에서 포트별로 다른 내부 포트로 프록시하는 구조다.
 
@@ -193,7 +195,7 @@ sudo chown -R "$USER":"$USER" /opt/axwms
 
 ```dotenv
 APP_ENV=staging
-API_HOST_PORT=18080
+API_HOST_PORT=8081
 DB_NAME=postgres
 DB_USERNAME=postgres
 DB_PASSWORD=change-me
@@ -326,7 +328,9 @@ GitLab 경로:
 - production 외부 포트: `8989`
 - staging 외부 포트: `8990`
 - production 내부 API 포트: `8080`
-- staging 내부 API 포트: `18080`
+- staging 내부 API 포트: `8081`
+
+> 참고: EC2 보안그룹이 **8000–9000 범위만 허용**하므로 내부 바인딩도 이 범위 안으로 고정한다.
 
 즉, 브라우저 기준으로는 아래처럼 접근한다.
 
@@ -341,7 +345,7 @@ upstream axwms_api_prod {
 }
 
 upstream axwms_api_staging {
-    server 127.0.0.1:18080;
+    server 127.0.0.1:8081;
 }
 
 server {
@@ -383,7 +387,7 @@ server {
 
 1. AWS Security Group 에 `8989`, `8990` 인바운드가 열려 있는지
 2. 서버 내부 방화벽(`ufw`)이 있다면 `8990`도 허용했는지
-3. staging `.env`의 `API_HOST_PORT=18080`, production `.env`의 `API_HOST_PORT=8080` 이 실제 compose 와 맞는지
+3. staging `.env`의 `API_HOST_PORT=8081`, production `.env`의 `API_HOST_PORT=8080` 이 실제 compose 와 맞는지 (둘 다 8000–9000 범위인지 재확인)
 4. Nginx reload 전에 `sudo nginx -t` 로 설정 검증을 했는지
 
 ---

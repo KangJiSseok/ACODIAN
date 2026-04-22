@@ -47,7 +47,7 @@ infra_validate:
   image: docker:27.5.1-cli
   before_script:
     - cp infra/.env.example infra/.env.validate
-    - printf '\nAPP_ENV=ci\nAPI_IMAGE=registry.example.com/ax-wms/api:ci\nAPI_HOST_PORT=18080\n' >> infra/.env.validate
+    - printf '\nAPP_ENV=ci\nAPI_IMAGE=registry.example.com/ax-wms/api:ci\nAPI_HOST_PORT=8081\n' >> infra/.env.validate
   script:
     - docker compose --env-file infra/.env.validate -f infra/compose.deploy.yml config > /tmp/compose.deploy.rendered.yml
   after_script:
