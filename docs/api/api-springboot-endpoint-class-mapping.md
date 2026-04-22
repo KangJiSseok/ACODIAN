@@ -57,12 +57,12 @@
     </tr>
     <tr>
       <td><code>POST /api/auth/refresh</code></td>
-      <td><code>Proposed-risk-closure</code></td>
-      <td>장시간 세션 운영을 위한 access token 재발급 보강 API다.</td>
+      <td><code>Documented</code></td>
+      <td>설정된 refresh cookie 를 검증해 access token 을 재발급하고 필요 시 refresh cookie 를 회전하는 API다.</td>
       <td><code>domain.auth.controller.AuthController</code></td>
-      <td><code>domain.auth.service.TokenService</code></td>
+      <td><code>domain.auth.service.AuthService</code></td>
       <td><code>domain.auth.entity.RefreshToken</code>, <code>domain.auth.repository.RefreshTokenRepository</code></td>
-      <td><code>api-design</code>의 운영 완결성 보강 API를 기준으로 유지한다.</td>
+      <td>응답 바디는 비우고 <code>Authorization</code> 헤더와 조건부 <code>Set-Cookie</code> 로만 토큰을 전달한다.</td>
     </tr>
     <tr>
       <td><code>POST /api/auth/change-password</code></td>
