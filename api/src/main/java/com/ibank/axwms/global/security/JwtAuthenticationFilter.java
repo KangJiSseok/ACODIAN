@@ -39,7 +39,7 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
     /**
      * 요청마다 한 번 호출돼 Bearer 토큰이 있는지 검사하고, 있으면 인증 복원을 시도한다.
      * 헤더가 없거나 이미 인증이 채워져 있으면 인증 단계를 건너뛰고 바로 다음 필터로 위임해,
-     * 익명 허용 경로(Swagger, /api/auth/login 등) 와 중복 인증 시나리오에서 불필요한 파싱을 피한다.
+     * 익명 허용 경로(Swagger, /auth/login 등) 와 중복 인증 시나리오에서 불필요한 파싱을 피한다.
      * 토큰 검증 실패 여부와 무관하게 filterChain.doFilter 는 반드시 호출해 요청 흐름을 끊지 않는다.
      */
     @Override

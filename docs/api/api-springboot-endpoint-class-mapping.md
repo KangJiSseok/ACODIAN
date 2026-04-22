@@ -569,7 +569,7 @@
       <td><code>domain.file.controller.InternalFileAiCallbackController</code></td>
       <td><code>domain.file.service.InternalFileAiCallbackService</code></td>
       <td><code>domain.file.entity.File</code>, <code>domain.file.repository.FileRepository</code></td>
-      <td>현행 코드 기준 internal callback controller base path는 <code>/api/internal/file</code> 이지만, endpoint/status 표기는 <code>api-design</code> 상세 본문 계약(<code>/api/{domain}/{id}/{action}</code>)을 우선 따른다.</td>
+      <td>현행 코드 기준 internal callback controller base path는 <code>/api/internal/files</code> 이지만, endpoint/status 표기는 <code>api-design</code> 상세 본문 계약(<code>/api/{domain}/{id}/{action}</code>)을 우선 따른다.</td>
     </tr>
     <tr>
       <td><code>PATCH /api/files/{id}/ai-status</code></td>
@@ -578,7 +578,7 @@
       <td><code>domain.file.controller.InternalFileAiCallbackController</code></td>
       <td><code>domain.file.service.InternalFileAiCallbackService</code></td>
       <td><code>domain.file.entity.File</code>, <code>domain.file.repository.FileRepository</code></td>
-      <td>현행 코드 기준 internal callback controller base path는 <code>/api/internal/file</code> 이지만, endpoint/status 표기는 <code>api-design</code> 상세 본문 계약(<code>/api/{domain}/{id}/{action}</code>)을 우선 따른다.</td>
+      <td>현행 코드 기준 internal callback controller base path는 <code>/api/internal/files</code> 이지만, endpoint/status 표기는 <code>api-design</code> 상세 본문 계약(<code>/api/{domain}/{id}/{action}</code>)을 우선 따른다.</td>
     </tr>
   </tbody>
 </table>
