@@ -29,7 +29,7 @@ public class SecurityConfig {
             "/v3/api-docs",
             "/v3/api-docs/**",
             "/webjars/**",
-            "/api/auth/login"
+            "/auth/login"
     };
 
     private final JwtAuthenticationFilter jwtAuthenticationFilter;

@@ -180,7 +180,7 @@
     수동 문서 관리는 코드와 문서 간 불일치를 유발한다.
   decision: |
     Springdoc OpenAPI로 OpenAPI 3.0 스펙을 코드에서 자동 생성한다.
-    개발 환경: /swagger-ui.html에서 Swagger UI 제공.
+    개발 환경: /api/swagger-ui.html에서 Swagger UI 제공.
     운영 환경: springdoc.api-docs.enabled=false로 비활성화.
     필요 시 @Operation, @Tag 어노테이션으로 문서 보강.
   consequence: 코드에서 문서 자동 파생. 별도 문서 관리 부담 최소화. 운영 환경 노출 방지.
