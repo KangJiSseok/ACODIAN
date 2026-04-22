@@ -1,10 +1,24 @@
-import ScaffoldPage from "@/app/_common/components/layout/scaffoldPage";
+"use client"
+
+import { useRouter } from "next/navigation"
+import PageHeader from "@/app/_common/components/layout/pageHeader"
+import { WorklogForm } from "../_components/worklogForm"
+import { worklogService } from "../_service/worklog.service"
 
 export default function WorklogCreatePage() {
+  const router = useRouter()
+
   return (
-    <ScaffoldPage
-      title="업무일지 생성"
-      description="업무일지 등록 폼과 AI 연계 UI가 들어갈 페이지 자리입니다."
-    />
-  );
+    <div className="flex flex-col gap-5 lg:gap-6">
+      <PageHeader title="업무 등록" />
+      <WorklogForm
+        submitLabel="업무 생성"
+        currentWorklogId={undefined}
+        onSubmit={async (values) => {
+          const created = await worklogService.create(values)
+          router.push(`/worklog/detail/${created.id}`)
+        }}
+      />
+    </div>
+  )
 }
