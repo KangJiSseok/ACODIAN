@@ -153,6 +153,13 @@ class AuthServiceTest {
         verify(tokenService, never()).issueRefreshTokens(any(), any());
     }
 
+    @Test
+    void 로그아웃하면_refresh_token_폐기를_TokenService_에_위임한다() {
+        authService.logout("refresh-token");
+
+        verify(tokenService).revokeRefreshToken("refresh-token");
+    }
+
     private User activeUser() {
         return userWithStatus(EmploymentStatus.ACTIVE);
     }

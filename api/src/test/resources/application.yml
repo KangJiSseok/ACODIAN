@@ -14,7 +14,7 @@ jwt:
 auth:
   refresh-cookie:
     name: refreshToken
-    path: /api/auth/refresh
+    path: /api/auth
     secure: false
     same-site: Lax
     domain:
