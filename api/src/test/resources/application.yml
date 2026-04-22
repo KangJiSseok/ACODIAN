@@ -10,3 +10,15 @@ jwt:
   secret: test-secret-key-for-unit-tests-only-min-32-chars
   access-token-expiration: 3600000
   refresh-token-expiration: 1209600000
+
+auth:
+  refresh-cookie:
+    name: refreshToken
+    path: /api/auth/refresh
+    secure: false
+    same-site: Lax
+    domain:
+    max-age-seconds-override:
+  cors:
+    allowed-origins:
+    allowed-origin-patterns: "http://localhost"
