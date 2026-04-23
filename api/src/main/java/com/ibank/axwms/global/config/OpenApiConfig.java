@@ -1,7 +1,7 @@
 package com.ibank.axwms.global.config;
 
 import com.ibank.axwms.global.response.ApiResponse;
-import com.ibank.axwms.global.response.ResponseEnvelopePolicy;
+import com.ibank.axwms.global.response.ResponseEnvelope;
 import io.swagger.v3.oas.models.Components;
 import io.swagger.v3.oas.models.Operation;
 import io.swagger.v3.oas.models.OpenAPI;
@@ -23,7 +23,7 @@ import org.springframework.context.annotation.Configuration;
  * springdoc 스펙 생성기는 컨트롤러 반환 타입만 보고 스키마를 만들기 때문에
  * 런타임에 {@code GlobalResponseAdvice} 가 씌우는 {@link ApiResponse} 봉투가 Swagger UI 에 반영되지 않는 괴리가 생긴다.
  * 여기서는 OperationCustomizer 로 2xx 응답 스키마를 {success, data, timestamp} 봉투로 교체해 실제 curl 응답과 문서를 일치시킨다.
- * 래핑 대상 판정은 런타임 advice 와 동일한 {@link ResponseEnvelopePolicy} 에 위임한다.
+ * 래핑 대상 판정은 런타임 advice 와 동일한 {@link ResponseEnvelope} 에 위임한다.
  */
 @Configuration(proxyBeanMethods = false)
 public class OpenApiConfig {
@@ -51,7 +51,7 @@ public class OpenApiConfig {
     @Bean
     public OperationCustomizer apiResponseEnvelopeCustomizer() {
         return (operation, handlerMethod) -> {
-            if (ResponseEnvelopePolicy.shouldWrap(handlerMethod)) {
+            if (ResponseEnvelope.shouldWrap(handlerMethod)) {
                 wrapSuccessResponses(operation);
             }
             return operation;
