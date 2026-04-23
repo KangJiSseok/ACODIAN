@@ -37,6 +37,7 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.MediaType;
 import org.springframework.test.context.TestPropertySource;
 import org.springframework.test.web.servlet.MvcResult;
+import org.springframework.test.web.servlet.request.MockHttpServletRequestBuilder;
 
 @TestPropertySource(properties = "auth.refresh-cookie.name=e2eRefreshToken")
 class AuthControllerE2eTest extends E2eTestSupport {
@@ -105,9 +106,7 @@ class AuthControllerE2eTest extends E2eTestSupport {
                 {"email":"%s","password":"%s"}
                 """.formatted(EMAIL, RAW_PASSWORD);
 
-        mockMvc.perform(post("/api/auth/login")
-                        .contextPath(API_CONTEXT_PATH)
-                        .servletPath("/auth/login")
+        mockMvc.perform(authPost("/login")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(body))
                 .andExpect(status().isOk())
@@ -209,9 +208,7 @@ class AuthControllerE2eTest extends E2eTestSupport {
                 {"email":"%s","password":"%s"}
                 """.formatted(EMAIL, RAW_PASSWORD);
 
-        mockMvc.perform(post("/api/auth/login")
-                        .contextPath(API_CONTEXT_PATH)
-                        .servletPath("/auth/login")
+        mockMvc.perform(authPost("/login")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(body))
                 .andExpect(status().isOk())
@@ -222,7 +219,7 @@ class AuthControllerE2eTest extends E2eTestSupport {
     @Test
     @DisplayName("로그아웃하면 refresh 세션을 삭제하고 만료 쿠키를 내려준다")
     void 로그아웃하면_refresh_세션을_삭제하고_만료_쿠키를_내려준다() throws Exception {
-        MvcResult loginResult = mockMvc.perform(post("/auth/login")
+        MvcResult loginResult = mockMvc.perform(authPost("/login")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("""
                                 {"email":"%s","password":"%s"}
@@ -234,7 +231,7 @@ class AuthControllerE2eTest extends E2eTestSupport {
         String refreshToken = refreshCookie.getValue();
         String sessionId = jwtTokenProvider.parseClaims(refreshToken).getId();
 
-        mockMvc.perform(post("/auth/logout")
+        mockMvc.perform(authPost("/logout")
                         .cookie(refreshCookie))
                 .andExpect(status().isOk())
                 .andExpect(header().doesNotExist("Authorization"))
@@ -251,7 +248,7 @@ class AuthControllerE2eTest extends E2eTestSupport {
     @Test
     @DisplayName("로그아웃은 refresh 쿠키가 없어도 멱등하게 성공한다")
     void 로그아웃은_refresh_쿠키가_없어도_멱등하게_성공한다() throws Exception {
-        mockMvc.perform(post("/auth/logout"))
+        mockMvc.perform(authPost("/logout"))
                 .andExpect(status().isOk())
                 .andExpect(header().doesNotExist("Authorization"))
                 .andExpect(cookie().value(refreshCookieProperties.name(), ""))
@@ -268,9 +265,7 @@ class AuthControllerE2eTest extends E2eTestSupport {
                 {"email":"%s","password":"wrong-password!"}
                 """.formatted(EMAIL);
 
-        mockMvc.perform(post("/api/auth/login")
-                        .contextPath(API_CONTEXT_PATH)
-                        .servletPath("/auth/login")
+        mockMvc.perform(authPost("/login")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(body))
                 .andExpect(status().isUnauthorized())
@@ -322,5 +317,9 @@ class AuthControllerE2eTest extends E2eTestSupport {
                 .claim("tokenType", "REFRESH")
                 .signWith(secretKey)
                 .compact();
+    }
+
+    private MockHttpServletRequestBuilder authPost(String path) {
+        return apiPost("/auth" + path);
     }
 }
