@@ -4,7 +4,7 @@
 -- backend architecture: NestJS 제거, Spring Boot(api)로 대체
 -- note:
 --   1) tb_worklog_file는 사용하지 않고 tb_file.worklog_id FK로 일원화
---   2) 팀장 정보는 tb_team.leader_id 대신 tb_user_team.team_position_code로 관리
+--   2) 팀장 정보는 tb_team.leader_id 대신 tb_user_team.team_leader boolean 으로 관리
 --   3) pgvector 사용을 전제로 embedding 테이블을 작성
 --   4) 관계 표기는 '관계 이름 + cardinality + 해설' 형태로 정리
 --   5) 같은 두 테이블 사이에 관계가 2개 이상 있으면 각각 분리해서 설명
@@ -157,8 +157,8 @@ CREATE TABLE tb_team (
 --   [M:N 해소 관계]
 --   - tb_user 와 tb_team 사이의 M:N 관계를 해소하는 연결 테이블임.
 --
---   [팀 직책/업무 역할 정책]
---   - team_position_code = 팀 내 직책 코드(LEADER/MEMBER)임.
+--   [팀장/업무 역할 정책]
+--   - team_leader = 팀 내 팀장 여부(boolean)임.
 --   - team_role = 실제 업무 역할명(예: 운영총괄, 고객커뮤니케이션, 장애분석)임.
 --   - 애플리케이션 단에서 팀당 팀장 1명 정책을 관리함.
 --
@@ -174,20 +174,19 @@ CREATE TABLE tb_user_team (
     user_team_id          BIGSERIAL PRIMARY KEY,                -- PK, 사용자-팀 관계 식별자
     user_id               BIGINT NOT NULL,                     -- N:1, 사용자 ID -> tb_user.user_id
     team_id               BIGINT NOT NULL,                     -- N:1, 팀 ID -> tb_team.team_id
-    team_position_code    VARCHAR(20) NOT NULL DEFAULT 'MEMBER', -- 팀 내 직책 코드 (LEADER/MEMBER)
+    team_leader           BOOLEAN NOT NULL DEFAULT FALSE,      -- 팀장 여부
     team_role             VARCHAR(50) NOT NULL,                -- 팀 내 업무 역할명 (예: 운영총괄, 릴리즈/변경관리, 인프라/배포)
     allocation            VARCHAR(50),                         -- 참여/배치 성격 (예: 주담당, 겸임)
     is_primary            BOOLEAN NOT NULL DEFAULT FALSE,      -- 주 소속 팀 여부 (대시보드/알림 기본 기준)
     joined_at             TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP, -- 팀 합류 시각
     created_at            TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP, -- 관계 생성 시각
+    updated_at            TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP, -- 관계 수정 시각
     CONSTRAINT fk_user_team_user
         FOREIGN KEY (user_id) REFERENCES tb_user(user_id) ON DELETE CASCADE,
     CONSTRAINT fk_user_team_team
         FOREIGN KEY (team_id) REFERENCES tb_team(team_id),
     CONSTRAINT uq_user_team_pair
-        UNIQUE (user_id, team_id),
-    CONSTRAINT ck_user_team_position_code
-        CHECK (team_position_code IN ('LEADER', 'MEMBER'))
+        UNIQUE (user_id, team_id)
 );
 
 -- =====================================================================

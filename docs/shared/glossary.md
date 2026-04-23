@@ -21,9 +21,9 @@
 
 ### 사용자-팀 연결 (UserTeam)
 
-- **정의**: 사용자와 팀 사이의 M:N 관계를 해소하는 연결 엔티티. 팀 내 역할(팀장/팀원)을 포함한다.
-- **ERD 매핑**: `tb_user_team` — `user_id`, `team_id`, `team_role`, `is_primary`
-- **사용 맥락**: 팀장 지정(`team_role = 'LEADER'`), 주 소속 팀 판단(`is_primary`), 타 부서 팀 참여 허용
+- **정의**: 사용자와 팀 사이의 M:N 관계를 해소하는 연결 엔티티. 팀장 여부와 실제 업무 역할을 함께 관리한다.
+- **ERD 매핑**: `tb_user_team` — `user_id`, `team_id`, `team_leader`, `team_role`, `allocation`, `is_primary`
+- **사용 맥락**: 팀장 지정(`team_leader = true`), 주 소속 팀 판단(`is_primary`), 타 부서 팀 참여 허용
 
 ### 팀 (Team)
 
