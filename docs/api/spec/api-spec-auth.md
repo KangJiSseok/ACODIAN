@@ -20,7 +20,7 @@
 |---|---|---|---|
 | `POST` | `/api/auth/login` | `Documented` | 로그인 후 access/refresh token 과 사용자 권한 문맥을 발급한다. |
 | `POST` | `/api/auth/logout` | `Documented` | 현재 세션 또는 refresh token 을 무효화한다. |
-| `POST` | `/api/auth/refresh` | `Proposed-risk-closure` | access token 재발급을 수행한다. |
+| `POST` | `/api/auth/refresh` | `Documented` | refresh cookie 검증 후 access token 재발급을 수행한다. |
 | `POST` | `/api/auth/change-password` | `Proposed-risk-closure` | 본인 비밀번호를 변경한다. |
 
 ## 5. 엔드포인트 상세
@@ -32,9 +32,9 @@
 - 요청
   - Body: `email`, `password`
 - 응답 (`data` 기준)
-  - 빈 객체 (`ApiResponse.empty()`)
+  - 빈 객체 (`EmptyResponse`)
   - accessToken: 응답 헤더 `Authorization: Bearer <token>` 으로 전달한다. 클라이언트는 받은 값을 이후 요청의 `Authorization` 헤더에 그대로 재사용한다.
-  - refreshToken: `Set-Cookie` 로 전달한다. 쿠키 속성은 `Name=refreshToken; HttpOnly; Secure; SameSite=Strict; Path=/api/auth/refresh; Max-Age=<jwt.refresh-token-expiration(초)>` 이며, 로컬/테스트 프로파일은 `Secure=false; SameSite=Lax` 로 override 된다.
+  - refreshToken: `Set-Cookie` 로 전달한다. 쿠키 속성은 `<configured-refresh-cookie-name>=<token>; HttpOnly; Path=/api/auth/refresh; Max-Age=<jwt.refresh-token-expiration(초)>` 형식이며, 이름/Path/Secure/SameSite/Domain 은 `auth.refresh-cookie.*` 설정을 따른다.
 - 요청 JSON 예시
 ```json
 {
@@ -47,7 +47,7 @@
 - 응답 헤더 예시
 ```
 Authorization: Bearer eyJhbGciOi...sample
-Set-Cookie: refreshToken=refresh-token-sample; Max-Age=1209600; Path=/api/auth/refresh; Secure; HttpOnly; SameSite=Strict
+Set-Cookie: <configured-refresh-cookie-name>=refresh-token-sample; Max-Age=1209600; Path=/api/auth/refresh; Secure; HttpOnly; SameSite=Strict
 ```
 - 응답 JSON 예시
 ```json
@@ -59,8 +59,8 @@ Set-Cookie: refreshToken=refresh-token-sample; Max-Age=1209600; Path=/api/auth/r
 ```
 - 상태/에러
   - 성공: `200 OK`
-  - 대표 오류: `AUTH_INVALID_CREDENTIALS` [추론]
-  - 대표 오류: `AUTH_ACCOUNT_INACTIVE` [추론]
+  - 대표 오류: `AUTH_INVALID_CREDENTIALS`
+  - 대표 오류: `AUTH_LOGIN_NOT_ALLOWED`
 - ERD 연관
   - `tb_user`
 - 근거
@@ -109,44 +109,48 @@ Set-Cookie: refreshToken=refresh-token-sample; Max-Age=1209600; Path=/api/auth/r
   - source: ADR-002
 
 ### POST /api/auth/refresh
-- 목적: access token 재발급을 수행한다.
-- 상태: `Proposed-risk-closure`
+- 목적: 설정된 refresh cookie 를 검증해 access token 을 재발급하고, 필요 시 refresh cookie 를 회전한다.
+- 상태: `Documented`
 - 권한/접근 주체: refresh token 을 보유한 클라이언트가 호출한다.
 - 요청
-  - Body 또는 HttpOnly cookie: `refreshToken` [추론]
+  - Cookie: `auth.refresh-cookie.name` 설정값과 일치하는 HttpOnly refresh cookie
 - 응답 (`data` 기준)
-  - `accessToken`, `expiresAt`
-  - 필요 시 rotation 된 `refreshToken` [추론]
-- 요청 JSON 예시
+  - 빈 객체 (`EmptyResponse`)
+  - accessToken: 응답 헤더 `Authorization: Bearer <new-access-token>` 으로 전달한다.
+  - rotatedRefreshToken: refresh token 남은 유효 시간이 전체 TTL 의 절반 이하일 때만 `Set-Cookie` 로 다시 기록한다.
+- 요청 예시
 ```json
 {
-  "body": {
-    "refreshToken": "refresh-token-sample"
+  "cookies": {
+    "<configured-refresh-cookie-name>": "refresh-token-sample"
   }
 }
+```
+- 응답 헤더 예시
+```
+Authorization: Bearer eyJhbGciOi...renewed
+Set-Cookie: <configured-refresh-cookie-name>=refresh-token-rotated; Max-Age=1209600; Path=/api/auth/refresh; Secure; HttpOnly; SameSite=Strict
 ```
 - 응답 JSON 예시
 ```json
 {
   "success": true,
-  "data": {
-    "accessToken": "eyJhbGciOi...renewed",
-    "expiresAt": "2026-04-21T14:00:00Z",
-    "refreshToken": "refresh-token-rotated"
-  },
+  "data": {},
   "timestamp": "2026-04-21T03:00:00Z"
 }
 ```
 - 상태/에러
-  - 성공: `200 OK` [추론]
-  - 대표 오류: `AUTH_REFRESH_TOKEN_EXPIRED` [추론]
-  - 대표 오류: `AUTH_REFRESH_TOKEN_NOT_FOUND` [추론]
+  - 성공: `200 OK`
+  - 대표 오류: `AUTH_INVALID_REFRESH_TOKEN`
+  - 대표 오류: `AUTH_LOGIN_NOT_ALLOWED`
 - ERD 연관
   - refresh token 저장소
 - 근거
   - source: checklist
   - source: class mapping
   - source: ADR-002
+  - source: `domain.auth.controller.AuthController#refresh`
+  - source: `domain.auth.service.AuthService#refresh`
 
 ### POST /api/auth/change-password
 - 목적: 본인 비밀번호를 변경한다.
@@ -191,6 +195,6 @@ Set-Cookie: refreshToken=refresh-token-sample; Max-Age=1209600; Path=/api/auth/r
 
 ## 6. 추론 메모
 - `login` 은 ADR(로그인 토큰 전송 규약)에 따라 응답 바디를 비우고 accessToken 은 Authorization 헤더, refreshToken 은 HttpOnly 쿠키로 전달한다. 사용자 문맥은 `/api/users/me` 에서 조회한다.
-- `refresh` 는 이후 구현 시 동일 규약(쿠키 회전)을 재사용하도록 선결정되어 있다. [추론]
+- `refresh` 는 현재 구현 기준으로 request body 를 사용하지 않고 설정된 쿠키 이름으로 refresh token 을 추출한다.
+- `refresh` 는 성공 시 항상 Authorization 헤더를 내려주고, refresh cookie 회전은 남은 유효 시간이 절반 이하일 때만 수행한다.
 - logout/change-password 는 common 의 non-GET empty 규칙을 그대로 따른다.
-

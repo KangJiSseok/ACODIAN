@@ -9,7 +9,7 @@
 
 - [x] `POST /api/auth/login`
 - [ ] `POST /api/auth/logout`
-- [ ] `POST /api/auth/refresh`
+- [x] `POST /api/auth/refresh`
 - [ ] `POST /api/auth/change-password`
 
 ## 2. `organization/department` 도메인

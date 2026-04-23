@@ -8,6 +8,7 @@ import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 
 import com.ibank.axwms.domain.auth.dto.LoginApiDto;
+import com.ibank.axwms.domain.auth.dto.RefreshAccessTokenApiDto;
 import com.ibank.axwms.domain.organization.user.EmploymentStatus;
 import com.ibank.axwms.domain.organization.user.UserRole;
 import com.ibank.axwms.domain.organization.user.entity.User;
@@ -44,10 +45,12 @@ class AuthServiceTest {
     private AuthService authService;
 
     private LoginApiDto.Request request;
+    private String refreshToken;
 
     @BeforeEach
     void setUp() {
         request = new LoginApiDto.Request(EMAIL, RAW_PASSWORD);
+        refreshToken = "refresh-token";
     }
 
     @Test
@@ -102,6 +105,52 @@ class AuthServiceTest {
 
         assertThat(result.accessToken()).isEqualTo("access-token");
         assertThat(result.refreshToken()).isEqualTo("refresh-token");
+    }
+
+    @Test
+    void 유효한_refresh_token_이면_새_access_token_과_rotation_결과를_반환한다() {
+        User user = activeUser();
+        TokenService.ValidatedRefreshToken validatedRefreshToken =
+                new TokenService.ValidatedRefreshToken(1L, "session-1", true);
+        given(tokenService.validateRefreshToken(refreshToken)).willReturn(validatedRefreshToken);
+        given(userRepository.findById(1L)).willReturn(Optional.of(user));
+        given(tokenService.issueRefreshTokens(user, validatedRefreshToken))
+                .willReturn(new TokenService.RefreshedTokens("new-access-token", "rotated-refresh-token"));
+
+        RefreshAccessTokenApiDto.Result result = authService.refresh(refreshToken);
+
+        assertThat(result.accessToken()).isEqualTo("new-access-token");
+        assertThat(result.rotatedRefreshToken()).isEqualTo("rotated-refresh-token");
+    }
+
+    @Test
+    void refresh_token_이_유효하지_않으면_AUTH_INVALID_REFRESH_TOKEN_을_던진다() {
+        given(tokenService.validateRefreshToken(refreshToken))
+                .willThrow(new BusinessException(ErrorCode.AUTH_INVALID_REFRESH_TOKEN));
+
+        assertThatThrownBy(() -> authService.refresh(refreshToken))
+                .isInstanceOf(BusinessException.class)
+                .extracting(e -> ((BusinessException) e).getErrorCode())
+                .isEqualTo(ErrorCode.AUTH_INVALID_REFRESH_TOKEN);
+
+        verify(userRepository, never()).findById(any());
+        verify(tokenService, never()).issueRefreshTokens(any(), any());
+    }
+
+    @Test
+    void refresh_사용자의_고용상태가_ACTIVE_가_아니면_AUTH_LOGIN_NOT_ALLOWED_를_던진다() {
+        User user = userWithStatus(EmploymentStatus.LEAVE);
+        TokenService.ValidatedRefreshToken validatedRefreshToken =
+                new TokenService.ValidatedRefreshToken(1L, "session-1", false);
+        given(tokenService.validateRefreshToken(refreshToken)).willReturn(validatedRefreshToken);
+        given(userRepository.findById(1L)).willReturn(Optional.of(user));
+
+        assertThatThrownBy(() -> authService.refresh(refreshToken))
+                .isInstanceOf(BusinessException.class)
+                .extracting(e -> ((BusinessException) e).getErrorCode())
+                .isEqualTo(ErrorCode.AUTH_LOGIN_NOT_ALLOWED);
+
+        verify(tokenService, never()).issueRefreshTokens(any(), any());
     }
 
     private User activeUser() {

@@ -24,8 +24,8 @@
 ## 3. 상태 분포
 | Status | Count |
 |---|---:|
-| `Documented` | 44 |
-| `Proposed-risk-closure` | 3 |
+| `Documented` | 45 |
+| `Proposed-risk-closure` | 2 |
 | `Inferred-required` | 5 |
 
 - 총 endpoint 수: **52**
@@ -36,7 +36,7 @@
 |---|---|---|---|---|---|
 | `auth` | `POST` | `/api/auth/login` | `Documented` | checklist → class mapping → ERD/ADR | [api-spec-auth.md](./api-spec-auth.md) |
 | `auth` | `POST` | `/api/auth/logout` | `Documented` | checklist → class mapping → ERD/ADR | [api-spec-auth.md](./api-spec-auth.md) |
-| `auth` | `POST` | `/api/auth/refresh` | `Proposed-risk-closure` | checklist → class mapping → ERD/ADR | [api-spec-auth.md](./api-spec-auth.md) |
+| `auth` | `POST` | `/api/auth/refresh` | `Documented` | checklist → class mapping → ERD/ADR | [api-spec-auth.md](./api-spec-auth.md) |
 | `auth` | `POST` | `/api/auth/change-password` | `Proposed-risk-closure` | checklist → class mapping → ERD/ADR | [api-spec-auth.md](./api-spec-auth.md) |
 | `department` | `GET` | `/api/departments` | `Documented` | checklist → class mapping → ERD/ADR | [api-spec-department.md](./api-spec-department.md) |
 | `department` | `GET` | `/api/departments/{id}` | `Documented` | checklist → class mapping → ERD/ADR | [api-spec-department.md](./api-spec-department.md) |
@@ -102,10 +102,9 @@
 - addendum 3건은 matrix 52행, 상태 분포 count, checklist completeness count 에 포함하지 않는다.
 
 ## 7. 검수 체크리스트
-- [ ] matrix row count = 52
-- [ ] addendum row count = 3
-- [ ] matrix / checklist / class mapping path 표기가 normalized (복수형, `/list` 미사용) 으로 정렬됨
-- [ ] domain spec path 는 Auth 제외 모두 복수형 / no-`/list`
-- [ ] `/api/auth/me` → `/api/users/me` 이동이 matrix, auth spec, user spec, common spec 에 반영됨
-- [ ] dashboard 포함 전역 plural 규칙이 common/index/domain 에 일관되게 반영됨
-
+- [x] matrix row count = 52
+- [x] addendum row count = 3
+- [x] matrix / checklist / class mapping path 표기가 normalized (복수형, `/list` 미사용) 으로 정렬됨
+- [x] domain spec path 는 Auth 제외 모두 복수형 / no-`/list`
+- [x] `/api/auth/me` → `/api/users/me` 이동이 matrix, auth spec, user spec, common spec 에 반영됨
+- [x] dashboard 포함 전역 plural 규칙이 common/index/domain 에 일관되게 반영됨
