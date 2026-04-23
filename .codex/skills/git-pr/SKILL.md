@@ -22,6 +22,7 @@ description: 현재 AX-WMS 프로젝트의 PR 제목과 본문을 한글 맥락�
 - `Feat`
 - `Refactor`
 - `Chore`
+- `Deploy`
 
 ## scope 예시
 - `web`
@@ -45,6 +46,7 @@ description: 현재 AX-WMS 프로젝트의 PR 제목과 본문을 한글 맥락�
 - `[Fix(api)]: 잘못된 상태 전환 방지`
 - `[Feat(web)]: 중요도 필터 추가`
 - `[Chore(agent)]: 프로젝트 git 스킬 추가`
+- `[Deploy(infra)]: EC2 GitLab CI/CD 배포 기준 정리`
 - `[Refactor(api)]: worklog 상태 흐름 단순화`
 
 ## PR 제목 작성 원칙
@@ -77,6 +79,7 @@ description: 현재 AX-WMS 프로젝트의 PR 제목과 본문을 한글 맥락�
 - [ ] 🎨 Style / Design — 코드 포맷 또는 사용자 UI 디자인 변경
 - [ ] ✅ Test — 테스트 코드 추가/수정
 - [ ] 🔧 Chore — 빌드, CI, 패키지 매니저 등 잡일
+- [ ] 🚀 Deploy — 배포 설정, 스크립트, 인프라 릴리스 경로 변경
 
 ## Motivation
 
@@ -137,6 +140,7 @@ description: 현재 AX-WMS 프로젝트의 PR 제목과 본문을 한글 맥락�
 - [ ] 🎨 Style / Design
 - [ ] ✅ Test
 - [ ] 🔧 Chore
+- [ ] 🚀 Deploy
 
 ## Motivation
 
