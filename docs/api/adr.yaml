@@ -89,10 +89,12 @@
     현재 프로젝트에서는 응답 DTO를 명시적으로 작성하는 방식이 더 단순하고 일관된다고 판단한다.
   decision: |
     API 전용 DTO는 유스케이스 기준의 {UseCase}ApiDto 외부 클래스에 모은다. 한 유스케이스는 한 {UseCase}ApiDto 파일 1:1 매핑을 기본으로 유지한다.
-    각 API 클래스는 static nested class Request/Response 를 기본으로 두고, Service 가 반환하는 출력 record 도 같은 Api 클래스 안의 Result 로 모아 둔다. Result 안에서만 의미가 있는 동반 타입은 Result 내부 중첩 record 로 둔다.
+    각 API 클래스는 static nested class Request/Response 를 기본으로 둔다.
+    Service 출력이 HTTP Response 와 실질적으로 1:1 이면 Service 가 Response 를 직접 반환할 수 있고, 이 경우 Response.of()/from() 정적 팩토리로 도메인 객체를 바로 조립하며 불필요한 Result record 는 만들지 않는다.
+    Service 출력이 Response 와 다르거나 다른 내부 소비자까지 고려한 별도 계약이 필요할 때만 같은 Api 클래스 안에 Result 를 둔다. Result 안에서만 의미가 있는 동반 타입은 Result 내부 중첩 record 로 둔다.
     Request 는 Controller 바인딩/검증과 Service 입력을 겸한다. Service 메서드는 기본적으로 Request DTO 를 그대로 인자로 받고, 별도 Command/Criteria 클래스는 기본으로 만들지 않는다.
     Service 입력을 Request 로 직결할 수 없는 경우(여러 소스 조립·정규화, HTTP 외 경로에서도 같은 유스케이스 호출 등) 에 한해 같은 {UseCase}ApiDto 안에 Command/Criteria nested record 를 추가한다. 별도 dto 파일로 분리하지 않는다.
-    Response는 static factory method(from/of)로 Service 결과 또는 도메인 객체를 받아 생성한다.
+    Response는 static factory method(from/of)로 Service 결과 또는 도메인 객체를 받아 생성한다. Response 조립에 중간 Result 가 꼭 필요하지 않다면 Response.of()/from() 으로 바로 생성한다.
     Request DTO를 Entity로 직접 매핑하지 않는다.
     API 요청/응답 변환은 명시적 코드로 작성하며, 자동 매핑 도구를 기본 규칙으로 도입하지 않는다.
     Entity 생성/수정은 Service 또는 Domain의 책임으로 둔다.

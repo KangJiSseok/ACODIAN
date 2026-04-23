@@ -58,4 +58,24 @@ public class Team {
     @UpdateTimestamp
     @Column(name = "updated_at", nullable = false)
     private LocalDateTime updatedAt;
+
+    /**
+     * 신규 팀을 생성한다.
+     * departmentId 는 유효한 부서를 가리켜야 하며, 같은 부서 안의 teamName 중복 여부는 호출측이 사전 검증한다.
+     */
+    public static Team create(Long departmentId,
+                              String teamName,
+                              TeamStatus statusCode,
+                              String description,
+                              LocalDate startDate,
+                              LocalDate expectedEndDate) {
+        Team team = new Team();
+        team.departmentId = departmentId;
+        team.teamName = teamName;
+        team.statusCode = statusCode;
+        team.description = description;
+        team.startDate = startDate;
+        team.expectedEndDate = expectedEndDate;
+        return team;
+    }
 }

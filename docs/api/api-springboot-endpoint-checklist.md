@@ -32,7 +32,7 @@
 
 ## 4. `organization/user` 도메인
 
-- [ ] `GET /api/users/me`
+- [x] `GET /api/users/me`
 - [ ] `GET /api/users`
 - [ ] `GET /api/users/{id}`
 - [ ] `POST /api/users/signup`

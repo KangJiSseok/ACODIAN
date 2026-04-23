@@ -60,14 +60,14 @@
     "profileImageUrl": "https://cdn.axwms.com/profile/101.png",
     "teams": [
       {
+        "isPrimary": true,
         "teamId": 21,
-        "teamName": "물류혁신TF",
-        "isPrimary": true
+        "teamName": "물류혁신TF"
       },
       {
+        "isPrimary": false,
         "teamId": 22,
-        "teamName": "SCM분석팀",
-        "isPrimary": false
+        "teamName": "SCM분석팀"
       }
     ]
   },
@@ -380,4 +380,3 @@
 ## 6. 추론 메모
 - inventory matrix 는 legacy 단수형 inventory path 를 유지하지만, 본문은 normalized `/api/users/*` 를 canonical 로 사용한다.
 - signup 과 admin create 는 요청 목적과 요청 필드가 다르므로 분리 문서화했다.
-
