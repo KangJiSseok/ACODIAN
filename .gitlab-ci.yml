@@ -130,10 +130,8 @@ api_ci:
   cache:
     key:
       files:
-        - api/gradle.properties
         - api/gradle/libs.versions.toml
         - api/build.gradle
-        - api/settings.gradle
     paths:
       - api/.gradle
   artifacts:
