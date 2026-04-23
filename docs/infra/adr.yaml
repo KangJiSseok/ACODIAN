@@ -174,3 +174,113 @@
         `API_IMAGE_BASE` 한 줄과 ADR 기록을 함께 갱신한다(상수화 덕분에 변경 지점은 최소).
       - 소스(GitLab) 와 이미지(GitHub) 로 인프라가 두 서비스에 분산된다.
         장기적으로 SSafy GitLab 이 Container Registry 를 열어주면 이 결정을 재검토해 GitLab Container Registry 로 되돌리는 선택지를 남겨 둔다.
+
+- id: ADR-008
+  title: CI Runner privileged 허용 — DinD 기반 이미지 빌드의 전제와 재검토 트리거
+  status: adopted
+  date: 2026-04-23
+  stacks: [gitlab, runner, docker, security]
+  context: |
+    ADR-006 은 Runner 를 배포 대상 EC2 에 docker executor 로 띄우고 `[runners.docker]` 의 `privileged = true` 를 유지한다고 기록했다.
+    그러나 privileged = true 는 "컨테이너 안의 root 가 호스트 root 에 근접" 할 만큼 보안적으로 민감한 옵션이므로,
+    이 결정이 왜 필요했고 어떤 완화 장치가 같이 작동하는지, 언제 어떻게 재검토·전환하는지를 독립된 ADR 로 남긴다.
+
+    1) 왜 DinD 가 필요한가 — jOOQ bootstrap-first + Testcontainers 체인
+       privileged 의 근본 원인은 "이미지 빌드" 가 아니라 "Gradle 자체가 Docker 를 쓰는 설계" 다.
+       api 모듈의 Gradle 빌드는 두 지점에서 Docker daemon 접근을 요구한다.
+       - jOOQ codegen: `docs/api/jooq-codegen-policy.md` 의 bootstrap-first workflow 에 따라
+         `./gradlew jooqGenerate` 가 실제 `pgvector/pgvector:pg17` 컨테이너를 띄우고
+         Flyway migration 을 적용한 뒤 메타데이터를 읽어 generated source 를 만든다.
+         `build`/`test`/`bootRun`/`assemble` 도 필요 시 jooqGenerate 를 선행 보장한다.
+       - Testcontainers: `api/build.gradle` 가 `org.testcontainers:postgresql`,
+         `spring-boot-testcontainers`, Redis testcontainers 를 testImplementation 으로 사용해
+         `./gradlew test` 가 PostgreSQL / Redis 컨테이너를 즉석 기동한다.
+       결과적으로 `api_ci` 의 `./gradlew clean test bootJar` 는 "내부적으로 Docker 를 호출하는 Gradle 빌드" 가 된다.
+       CI 컨테이너 안에서 이 Gradle 을 실행하려면 컨테이너 안쪽에서도 쓸 수 있는 Docker daemon 이 필요하고,
+       GitLab 표준 해법이 services 로 `docker:dind` 를 붙이는 Docker-in-Docker 패턴이다.
+       `api_image` 의 docker build / push 는 여기에 더해지는 두 번째 요구일 뿐이다.
+
+    2) 왜 privileged 가 필요한가 — DinD 메커니즘
+       dind 의 Docker daemon 은 커널 namespace 조작, cgroups 생성, overlay/loopback mount,
+       iptables NAT 규칙 추가, `/dev` 디바이스 접근 같은 작업을 수행해야 한다.
+       unprivileged 컨테이너는 이 기능들이 대부분 커널 수준에서 차단되므로
+       DinD 를 쓰기로 결정한 순간 privileged 는 선택 옵션이 아니라 전제 조건이 된다.
+
+    3) privileged 가 실제로 허용하는 것
+       - 모든 Linux capability(특히 `CAP_SYS_ADMIN`) 부여
+       - 호스트 `/dev/*` 디바이스 전부 접근
+       - AppArmor / seccomp 프로필 해제
+       - iptables 및 network namespace 조작, mount 시스템콜 허용
+       그 결과 privileged 컨테이너 안의 root 는 호스트 root 에 근접하며,
+       컨테이너 탈출(container escape) 공격이 성공하면 호스트 장악으로 이어질 수 있다.
+
+    4) 검토한 대안과 기각 사유
+       a. DooD (Docker-outside-of-Docker, 호스트 `/var/run/docker.sock` 바인딩)
+          - privileged 플래그는 불필요해지지만, docker.sock 접근 자체가 실질적으로 privileged 와 동급 또는 그 이상의 위험.
+          - GitLab 공식 문서도 "security implications are similar to or worse than privileged" 라고 명시.
+       b. Kaniko (Google, rootless image builder)
+          - daemon 없이 Dockerfile 빌드가 가능해 privileged 가 진짜로 불필요해진다.
+          - `api/Dockerfile` 이 FROM + COPY + ENTRYPOINT 단순 구조라 전환 영향은 작다.
+          - 단점: `api_image` job 재작성이 필요하고, 일부 Dockerfile 지시어 호환이 완전하지 않다.
+       c. BuildKit rootless / Buildah
+          - 커널·OS 의존성이 있고 팀 전원 학습 허들이 비교적 크다.
+       d. Shell executor + 호스트 docker daemon 직접 사용
+          - privileged 옵션 자체가 사라지지만 CI job 이 호스트 shell 을 그대로 실행할 수 있어 격리가 없다.
+          - 이 프로젝트 맥락에서는 오히려 공격 표면이 넓어진다.
+  decision: |
+    현 단계에서는 `[runners.docker]` 의 `privileged = true` 를 유지한다.
+    "privileged 의 이론적 위험을 실제 공격 경로로 전환시키는 인자" 가 아래 방어 조합으로 대부분 차단된다는 판단이다.
+
+    방어 조합:
+      - Runner 가 "Lock to current projects" 로 이 프로젝트에만 바인딩되어 타 프로젝트 파이프라인이 이 Runner 를 사용할 수 없다.
+      - `SSH_PRIVATE_KEY`, `GHCR_TOKEN` 같은 민감 자격증명은 Protected variable 로 등록되어 protected branch(master/dev) 파이프라인에만 주입된다.
+        작업 브랜치 CI 는 privileged 컨테이너를 얻더라도 탈취할 비밀값 자체가 없다.
+      - 저장소는 SSafy GitLab 내부 전용이라 외부 fork MR 이 존재하지 않는다. MR 은 팀원만 생성할 수 있다.
+      - dev / master 에는 직접 push 가 금지되고 MR 리뷰를 거쳐야 반영된다. 악성 코드가 protected branch 파이프라인에 들어가려면 동료 최소 1명을 속이거나 공모해야 한다.
+      - 팀 규모가 작고 서로 신뢰 가능한 구성이라 trust boundary 가 좁다.
+
+    거부한 대안의 이유:
+      - DooD: privileged 와 동급 또는 그 이상 위험이라 보안상 이득이 없다.
+      - Kaniko: `api_image` 만 rootless 빌드로 바꿀 수는 있으나, `api_ci` 가 jOOQ + Testcontainers 때문에 여전히 DinD 를 요구하므로 `config.toml` 의 privileged 자체는 끌 수 없다. 재작성 비용 대비 이득이 제한적이라 현 단계에서는 기각한다.
+      - Shell executor: 격리 자체를 포기해야 하므로 공격 표면이 오히려 넓어진다.
+  consequence: |
+    긍정적 영향:
+      - GitLab 표준 DinD 패턴을 그대로 써서 학습 허들과 디버깅 비용이 낮다.
+      - ADR-002 / ADR-005 / ADR-006 의 "CI 선빌드 + Registry 이미지 pull" 설계가 변경 없이 성립한다.
+      - `api_image` 이미지 빌드·push 가 단순하게 동작한다.
+
+    부정적 영향과 수용 범위:
+      - privileged 컨테이너 탈출이 성공하면 호스트(EC2) 장악으로 이어질 수 있다.
+      - 악성 MR 이 protected branch 에 병합되면 배포 파이프라인이 공격 벡터가 될 수 있다.
+      이 위험은 위의 방어 조합으로 감수 가능한 수준으로 판단한다.
+
+    재검토 트리거 (아래 중 하나라도 해당되면 이 ADR 을 재검토한다):
+      - 저장소가 public 으로 전환되어 fork MR 파이프라인을 받게 되는 경우
+      - 팀 인원이 커져 코드 리뷰 기반 신뢰 모델이 느슨해지는 경우
+      - SSafy 또는 외부 감사 · 보안 요구사항이 privileged 를 금지하는 경우
+      - api 외에 web / ai 컨테이너화까지 확장되어 privileged Runner 의 blast radius 가 넓어지는 경우
+      - SSafy GitLab 이 Container Registry 를 다시 열어 ADR-007 의 기반 전제가 바뀌는 경우
+
+    전환 시 선택지 (실질 이득이 큰 순서):
+      중요 전제: `api_ci` 의 Gradle 빌드가 jOOQ codegen 과 Testcontainers 때문에 Docker daemon 을 요구하므로,
+      `api_ci` 자체에서 DinD 를 제거하는 것은 api 모듈의 codegen · test 아키텍처를 먼저 바꾸지 않는 한 불가능하다.
+      아래 선택지는 그 제약을 전제로 privileged 노출을 줄이는 방향을 나열한다.
+
+      1. Runner 를 별도 빌드 VM 으로 분리
+         - privileged Runner 를 배포 대상 EC2 에서 떼어내 전용 빌드 VM 으로 옮긴다.
+         - 실행 호스트(production / staging 서비스가 도는 EC2) 와 빌드 호스트가 분리되어 blast radius 가 실제로 줄어든다.
+         - 변경 범위: 인프라 토폴로지 변경 + ADR-006 갱신. Gradle 의 Docker 의존은 그대로 유지된다.
+         - 가장 큰 실질 이득을 주는 완화책.
+      2. api_image 만 Kaniko 로 전환
+         - image 를 `gcr.io/kaniko-project/executor:debug` 로 바꾸고 script 를 `/kaniko/executor --dockerfile=api/Dockerfile --context=... --destination="$API_IMAGE_BASE:..."` 형태로 재작성한다.
+         - `api_image` 한 job 만 DinD / privileged 없이 rootless 로 이미지 빌드·push 를 수행할 수 있다.
+         - 단, `api_ci` 가 여전히 DinD 를 요구하므로 `config.toml` 의 `privileged = true` 자체는 유지해야 한다.
+         - 기대 효과는 "privileged 컨테이너가 네트워크·이미지 레지스트리에 접근하는 구간을 줄이는" 정도로 제한적이며, 1번과 조합해야 의미가 커진다.
+      3. api 의 codegen / test 아키텍처 변경 — privileged 자체를 끌 수 있는 유일한 경로
+         - generated jOOQ source 를 커밋해 CI 에서 `jooqGenerate` 실행을 제거하거나,
+           Testcontainers 기반 통합 테스트를 H2 또는 embedded/inmemory 대체재로 전환하거나,
+           CI 를 "codegen job(Docker 접근 허용) + 빌드 job(Docker 불필요)" 두 단계로 쪼개 아티팩트로 연결한다.
+         - `docs/api/jooq-codegen-policy.md` 의 운영 모델(bootstrap-first + generated source 비커밋)을 포기하거나 크게 바꿔야 하므로
+           보안 요구가 privileged 자체를 금지하는 수준일 때만 고려한다.
+
+    세 선택지는 조합 가능하며, 지금 당장 가장 가벼운 실질 완화책은 1번(Runner 분리) 이다. 2번은 1번과 함께 갈 때 의미가 커진다.
