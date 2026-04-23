@@ -45,18 +45,24 @@ public final class GetMyProfileApiDto {
                     teams
             );
         }
-    }
 
-    /** 현재 사용자의 팀 요약 정보. */
-    @Schema(description = "사용자 소속 팀 요약")
-    @JsonPropertyOrder({"isPrimary", "teamId", "teamName"})
-    public record TeamSummary(
-            @Schema(description = "주 소속 팀 여부", example = "true")
-            boolean isPrimary,
-            @Schema(description = "팀 ID", example = "21")
-            Long teamId,
-            @Schema(description = "팀명", example = "물류혁신TF")
-            String teamName
-    ) {
+        /** 현재 사용자의 팀 요약 정보. */
+        @Schema(description = "사용자 소속 팀 요약")
+        @JsonPropertyOrder({"isPrimary", "teamId", "teamName", "teamLeader", "teamRole", "allocation"})
+        public record TeamSummary(
+                @Schema(description = "주 소속 팀 여부", example = "true")
+                boolean isPrimary,
+                @Schema(description = "팀 ID", example = "21")
+                Long teamId,
+                @Schema(description = "팀명", example = "물류혁신TF")
+                String teamName,
+                @Schema(description = "팀장 여부", example = "true")
+                boolean teamLeader,
+                @Schema(description = "팀 내 업무 역할명", example = "플랫폼 총괄")
+                String teamRole,
+                @Schema(description = "참여/배치 성격", example = "주담당")
+                String allocation
+        ) {
+        }
     }
 }

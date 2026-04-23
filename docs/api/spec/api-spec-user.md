@@ -37,7 +37,7 @@
   - Header: `Authorization: Bearer <access-token>`
 - 응답 (`data` 기준)
   - `userId`, `userName`, `departmentId`, `departmentName`, `positionName`, `titleName`, `profileImageUrl`
-  - `teams[*]`: `teamId`, `teamName`, `isPrimary`
+  - `teams[*]`: `isPrimary`, `teamId`, `teamName`, `teamLeader`, `teamRole`, `allocation`
 - 요청 JSON 예시
 ```json
 {
@@ -62,12 +62,18 @@
       {
         "isPrimary": true,
         "teamId": 21,
-        "teamName": "물류혁신TF"
+        "teamName": "물류혁신TF",
+        "teamLeader": true,
+        "teamRole": "플랫폼 총괄",
+        "allocation": "주담당"
       },
       {
         "isPrimary": false,
         "teamId": 22,
-        "teamName": "SCM분석팀"
+        "teamName": "SCM분석팀",
+        "teamLeader": false,
+        "teamRole": "SCM 분석",
+        "allocation": "겸임"
       }
     ]
   },
@@ -162,7 +168,7 @@
   - Path: `id`
 - 응답 (`data` 기준)
   - `userId`, `userName`, `email`, `departmentId`, `departmentName`, `positionName`, `titleName`, `joinDate`, `roleCode`, `profileImageUrl`, `phone`, `employmentStatus`
-  - `teams[*]`: `teamId`, `teamName`, `teamRole`
+  - `teams[*]`: `teamId`, `teamName`, `teamLeader`, `teamRole`, `allocation`
 - 요청 JSON 예시
 ```json
 {
@@ -192,7 +198,9 @@
       {
         "teamId": 21,
         "teamName": "물류혁신TF",
-        "teamRole": "LEADER"
+        "teamLeader": true,
+        "teamRole": "플랫폼 총괄",
+        "allocation": "주담당"
       }
     ]
   },
