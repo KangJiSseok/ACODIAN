@@ -144,7 +144,7 @@ api_ci:
     - if: '$CI_PIPELINE_SOURCE == "push" && $CI_COMMIT_BRANCH && $CI_COMMIT_BRANCH != "dev" && $CI_COMMIT_BRANCH != "master"'
       changes: *api_changes
     - if: '$CI_PIPELINE_SOURCE == "push" && ($CI_COMMIT_BRANCH == "dev" || $CI_COMMIT_BRANCH == "master")'
-      changes: *api_changes
+      changes: *api_deploy_changes
 
 api_image:
   stage: image

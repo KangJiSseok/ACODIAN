@@ -284,3 +284,56 @@
            보안 요구가 privileged 자체를 금지하는 수준일 때만 고려한다.
 
     세 선택지는 조합 가능하며, 지금 당장 가장 가벼운 실질 완화책은 1번(Runner 분리) 이다. 2번은 1번과 함께 갈 때 의미가 커진다.
+
+- id: ADR-009
+  title: "`infra/.env.example` 역할 재정의 — compose 렌더·스모크 테스트용 기본값 파일"
+  status: adopted
+  date: 2026-04-23
+  stacks: [infra, docker, compose, ci]
+  context: |
+    ADR-003 은 환경별 값(DB 계정, JWT 시크릿, 포트 등) 을 저장소가 아니라 EC2 `/opt/axwms/{staging|production}/.env`
+    또는 GitLab CI/CD Variables 로만 주입한다고 확정했다.
+    그러나 실제 `infra/.env.example` 에는 `APP_ENV=staging`, `API_HOST_PORT=8081` 같은 환경 특화 값이 남아 있어
+    "이 파일을 그대로 서버에 복사해도 되는가" 라는 혼동을 유발하고, ADR-003 의 "환경별 값은 서버 `.env` 에서만" 원칙과도 충돌했다.
+
+    동시에 `.gitlab-ci.yml` 의 `infra_validate` job 이 이 파일을 `infra/.env.validate` 로 복사한 뒤
+    `APP_ENV` / `API_IMAGE` / `API_HOST_PORT` 만 append 하고 `docker compose config` 로 렌더한다.
+    즉 `.env.example` 에 담긴 DB/JWT 기본값은 실제 CI 렌더 입력으로 쓰인다.
+    문제는 기존 `JWT_SECRET=change-me-to-a-long-random-string` (31바이트) 가 HMAC-SHA256 의 최소 32바이트 요구에 1바이트 부족해,
+    로컬에서 compose 로 스모크 기동할 때 Spring 기동이 실패할 수 있는 잠재 리스크가 있었다.
+
+    요컨대 `.env.example` 이 "운영 샘플" 이라는 명목을 유지하는 한
+    (1) ADR-003 원칙과의 문구 drift, (2) `infra_validate` 및 로컬 스모크에서 실제 사용되는 값의 안전성 보증
+    두 가지가 동시에 해결되지 않는다.
+  decision: |
+    `infra/.env.example` 의 역할을 "운영 샘플" 이 아니라
+    "compose 렌더 / `infra_validate` / 로컬 스모크 테스트에서 그대로 동작하는 기본값 파일" 로 축소 재정의한다.
+
+    구체 변경:
+      - 환경 특화 값(`APP_ENV`, `API_HOST_PORT`) 은 `.env.example` 에서 제거한다.
+        compose.deploy.yml 은 `${APP_ENV:-deploy}` / `${API_HOST_PORT:-8080}` default 를 갖고,
+        `infra_validate` 는 자체적으로 `APP_ENV=ci` / `API_HOST_PORT=8081` 을 append 하므로 제거해도 렌더가 깨지지 않는다.
+      - 헤더 주석에 "스모크 테스트용 기본값 / 프로덕션 절대 금지 / 환경 특화 값과 비밀값은 서버 `.env` 또는 GitLab Variables 로만 주입" 을 명시한다.
+      - `DB_PASSWORD` 는 `postgres` 로 고정해 compose 의 postgres/redis 기본값과 일치시킨다.
+      - `JWT_SECRET` 은 HMAC-SHA256 이 요구하는 최소 32바이트를 만족하는 더미 값으로 교체해
+        `infra_validate` 렌더와 로컬 스모크 기동이 별도 값 주입 없이 성공하도록 한다.
+      - `JWT_ACCESS_EXPIRATION` / `JWT_REFRESH_EXPIRATION` 은 그대로 둔다 — compose default 와 중복되지만 명시 값이 가독성을 높인다.
+
+    이 결정은 ADR-003("환경별 값은 서버 `.env` 에서만 주입") 을 갱신하지 않고 보강한다.
+    `.env.example` 이 서버 `.env` 를 대체하는 원본이라는 해석을 명시적으로 닫는다.
+  consequence: |
+    긍정적 영향:
+      - `infra_validate` 가 추가 append 없이도 compose 렌더에 필요한 DB/JWT 값을 안전하게 확보한다.
+        (JWT_SECRET 길이 부족으로 기동이 실패할 리스크 제거)
+      - `.env.example` 과 ADR-003 사이 문서 drift 가 사라진다. "환경 특화 값은 서버 `.env` 에서만" 이라는 단일 원칙이 파일 구조에서도 드러난다.
+      - 로컬 개발자가 `docker compose -f infra/compose.deploy.yml --env-file infra/.env.example up` 으로 즉시 스모크 기동할 수 있다.
+
+    부정적 영향 및 완화:
+      - 스모크 테스트용 기본값(DB_PASSWORD=postgres, JWT_SECRET=smoke-test-...) 이 실수로 서버 `.env` 로 복사되면 약한 비밀값이 운영에 유입될 수 있다.
+        완화: 헤더 주석에 "프로덕션 절대 금지" 를 명시하고, 코드 리뷰 단계에서 서버 배포 체크리스트로 차단한다.
+      - 기존 `.env.example` 을 그대로 서버에 복사하는 운영 흐름은 이 결정 이후 사용할 수 없다.
+        완화: `docs/infra/ec2-gitlab-cicd-guide.md` 가 이미 서버 `.env` 를 별도로 작성하도록 안내하므로 실제 운영 절차에는 영향 없다.
+
+    후속 책임:
+      - 향후 compose 변수 추가 시 "환경 특화 값인가 / 스모크 기본값이 안전하게 잡히는가" 두 기준을 먼저 판단한다.
+        환경 특화면 서버 `.env` 에만, 스모크 기본값을 둘 수 있으면 `.env.example` 에 둔다.

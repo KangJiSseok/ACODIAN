@@ -54,3 +54,6 @@ ops:
   - id: OPS-007
     rule: GitLab Runner(`gitlab-runner`) 는 EC2 에 docker executor 로 등록하고 `[runners.docker]` 섹션의 `privileged = true` 를 유지한다. `api_ci` / `api_image` 가 DinD service 를 요구하므로 privileged 를 비활성화하지 않는다. Runner 는 "Lock to current projects" 로 프로젝트 전용으로 운영한다.
     stacks: [gitlab, runner, docker]
+  - id: OPS-008
+    rule: '`.gitlab-ci.yml` 의 `cache.key.files` 는 GitLab 제약(최대 2개) 에 맞춰 최대 2개까지만 지정한다. Gradle 기반 job 은 `api/gradle/libs.versions.toml` 과 `api/build.gradle` 두 파일을 기본 조합으로 쓰고, 추가 파일이 필요해지면 files 를 늘리지 말고 cache key 전략 자체를 재설계(prefix + checksum 조합 등) 한다.'
+    stacks: [gitlab, ci]
