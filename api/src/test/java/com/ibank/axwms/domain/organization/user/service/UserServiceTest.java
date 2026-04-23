@@ -4,9 +4,9 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.BDDMockito.given;
 
+import org.assertj.core.groups.Tuple;
 import com.ibank.axwms.domain.organization.department.entity.Department;
 import com.ibank.axwms.domain.organization.department.repository.DepartmentRepository;
-import com.ibank.axwms.domain.organization.team.TeamRole;
 import com.ibank.axwms.domain.organization.team.TeamStatus;
 import com.ibank.axwms.domain.organization.team.entity.Team;
 import com.ibank.axwms.domain.organization.team.entity.UserTeam;
@@ -76,12 +76,15 @@ class UserServiceTest {
         assertThat(result.titleName()).isEqualTo("팀장");
         assertThat(result.profileImageUrl()).isEqualTo("https://cdn.axwms.com/profile/101.png");
         assertThat(result.teams())
-                .extracting(GetMyProfileApiDto.TeamSummary::isPrimary,
-                        GetMyProfileApiDto.TeamSummary::teamId,
-                        GetMyProfileApiDto.TeamSummary::teamName)
+                .extracting(GetMyProfileApiDto.Response.TeamSummary::isPrimary,
+                        GetMyProfileApiDto.Response.TeamSummary::teamId,
+                        GetMyProfileApiDto.Response.TeamSummary::teamName,
+                        GetMyProfileApiDto.Response.TeamSummary::teamLeader,
+                        GetMyProfileApiDto.Response.TeamSummary::teamRole,
+                        GetMyProfileApiDto.Response.TeamSummary::allocation)
                 .containsExactly(
-                        org.assertj.core.groups.Tuple.tuple(true, 21L, "물류혁신TF"),
-                        org.assertj.core.groups.Tuple.tuple(false, 22L, "SCM분석팀")
+                        Tuple.tuple(true, 21L, "물류혁신TF", true, "플랫폼 총괄", "주담당"),
+                        Tuple.tuple(false, 22L, "SCM분석팀", false, "SCM 분석", "겸임")
                 );
     }
 
@@ -163,6 +166,13 @@ class UserServiceTest {
     }
 
     private UserTeam createUserTeam(Long userId, Long teamId, boolean isPrimary) {
-        return UserTeam.create(userId, teamId, isPrimary ? TeamRole.LEADER : TeamRole.MEMBER, isPrimary);
+        return UserTeam.create(
+                userId,
+                teamId,
+                isPrimary,
+                isPrimary ? "플랫폼 총괄" : "SCM 분석",
+                isPrimary ? "주담당" : "겸임",
+                isPrimary
+        );
     }
 }

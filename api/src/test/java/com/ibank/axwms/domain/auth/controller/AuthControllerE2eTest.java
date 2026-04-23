@@ -38,6 +38,7 @@ import org.springframework.test.context.TestPropertySource;
 @TestPropertySource(properties = "auth.refresh-cookie.name=e2eRefreshToken")
 class AuthControllerE2eTest extends E2eTestSupport {
 
+    private static final String API_CONTEXT_PATH = "/api";
     private static final String EMAIL = "e2e-login@ibank.com";
     private static final String RAW_PASSWORD = "password1!";
 
@@ -91,7 +92,9 @@ class AuthControllerE2eTest extends E2eTestSupport {
                 {"email":"%s","password":"%s"}
                 """.formatted(EMAIL, RAW_PASSWORD);
 
-        mockMvc.perform(post("/auth/login")
+        mockMvc.perform(post("/api/auth/login")
+                        .contextPath(API_CONTEXT_PATH)
+                        .servletPath("/auth/login")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(body))
                 .andExpect(status().isOk())
@@ -110,7 +113,9 @@ class AuthControllerE2eTest extends E2eTestSupport {
     void refresh_남은_수명이_절반_이하이면_새_Authorization_헤더와_refresh_쿠키를_함께_내려준다() throws Exception {
         String refreshToken = saveRefreshToken(activeUser, "rotate-session", createRefreshToken("rotate-session", activeUser.getId(), 20, 5));
 
-        mockMvc.perform(post("/auth/refresh")
+        mockMvc.perform(post("/api/auth/refresh")
+                        .contextPath(API_CONTEXT_PATH)
+                        .servletPath("/auth/refresh")
                         .cookie(new Cookie(refreshCookieProperties.name(), refreshToken)))
                 .andExpect(status().isOk())
                 .andExpect(header().string("Authorization", startsWith("Bearer ")))
@@ -126,7 +131,9 @@ class AuthControllerE2eTest extends E2eTestSupport {
     void refresh_남은_수명이_절반_초과이면_Authorization_헤더만_재발급하고_Set_Cookie_는_추가하지_않는다() throws Exception {
         String refreshToken = saveRefreshToken(activeUser, "keep-session", createRefreshToken("keep-session", activeUser.getId(), 5, 15));
 
-        mockMvc.perform(post("/auth/refresh")
+        mockMvc.perform(post("/api/auth/refresh")
+                        .contextPath(API_CONTEXT_PATH)
+                        .servletPath("/auth/refresh")
                         .cookie(new Cookie(refreshCookieProperties.name(), refreshToken)))
                 .andExpect(status().isOk())
                 .andExpect(header().string("Authorization", startsWith("Bearer ")))
@@ -137,7 +144,9 @@ class AuthControllerE2eTest extends E2eTestSupport {
     @Test
     @DisplayName("refresh cookie 가 없으면 401 표준 에러 응답을 반환한다")
     void refresh_cookie_가_없으면_401_표준_에러_응답을_반환한다() throws Exception {
-        mockMvc.perform(post("/auth/refresh"))
+        mockMvc.perform(post("/api/auth/refresh")
+                        .contextPath(API_CONTEXT_PATH)
+                        .servletPath("/auth/refresh"))
                 .andExpect(status().isUnauthorized())
                 .andExpect(header().doesNotExist("Authorization"))
                 .andExpect(jsonPath("$.success", is(false)))
@@ -147,7 +156,9 @@ class AuthControllerE2eTest extends E2eTestSupport {
     @Test
     @DisplayName("잘못된 refresh token 이면 인증 없이 접근해도 401 로 거부된다")
     void 잘못된_refresh_token_이면_인증_없이_접근해도_401_로_거부된다() throws Exception {
-        mockMvc.perform(post("/auth/refresh")
+        mockMvc.perform(post("/api/auth/refresh")
+                        .contextPath(API_CONTEXT_PATH)
+                        .servletPath("/auth/refresh")
                         .cookie(new Cookie(refreshCookieProperties.name(), "malformed-token")))
                 .andExpect(status().isUnauthorized())
                 .andExpect(header().doesNotExist("Authorization"))
@@ -168,7 +179,9 @@ class AuthControllerE2eTest extends E2eTestSupport {
                 createRefreshToken("inactive-session", inactiveUser.getId(), 20, 5)
         );
 
-        mockMvc.perform(post("/auth/refresh")
+        mockMvc.perform(post("/api/auth/refresh")
+                        .contextPath(API_CONTEXT_PATH)
+                        .servletPath("/auth/refresh")
                         .cookie(new Cookie(refreshCookieProperties.name(), refreshToken)))
                 .andExpect(status().isForbidden())
                 .andExpect(jsonPath("$.success", is(false)))
@@ -182,7 +195,9 @@ class AuthControllerE2eTest extends E2eTestSupport {
                 {"email":"%s","password":"%s"}
                 """.formatted(EMAIL, RAW_PASSWORD);
 
-        mockMvc.perform(post("/auth/login")
+        mockMvc.perform(post("/api/auth/login")
+                        .contextPath(API_CONTEXT_PATH)
+                        .servletPath("/auth/login")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(body))
                 .andExpect(status().isOk())
@@ -197,7 +212,9 @@ class AuthControllerE2eTest extends E2eTestSupport {
                 {"email":"%s","password":"wrong-password!"}
                 """.formatted(EMAIL);
 
-        mockMvc.perform(post("/auth/login")
+        mockMvc.perform(post("/api/auth/login")
+                        .contextPath(API_CONTEXT_PATH)
+                        .servletPath("/auth/login")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(body))
                 .andExpect(status().isUnauthorized())

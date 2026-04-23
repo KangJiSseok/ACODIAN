@@ -65,7 +65,14 @@ class UserControllerTest {
                 "과장",
                 "팀장",
                 "https://cdn.axwms.com/profile/101.png",
-                java.util.List.of(new GetMyProfileApiDto.TeamSummary(true, 21L, "물류혁신TF"))
+                java.util.List.of(new GetMyProfileApiDto.Response.TeamSummary(
+                        true,
+                        21L,
+                        "물류혁신TF",
+                        true,
+                        "플랫폼 총괄",
+                        "주담당"
+                ))
         );
         given(userService.getMyProfile(principal)).willReturn(responseFromService);
 
@@ -75,16 +82,30 @@ class UserControllerTest {
         assertThat(response.userName()).isEqualTo("홍길동");
         assertThat(response.departmentId()).isEqualTo(10L);
         assertThat(response.departmentName()).isEqualTo("물류본부");
-        assertThat(response.teams()).containsExactly(new GetMyProfileApiDto.TeamSummary(true, 21L, "물류혁신TF"));
+        assertThat(response.teams()).containsExactly(new GetMyProfileApiDto.Response.TeamSummary(
+                true,
+                21L,
+                "물류혁신TF",
+                true,
+                "플랫폼 총괄",
+                "주담당"
+        ));
     }
 
     @Test
     @DisplayName("팀 요약 응답은 isPrimary 필드를 먼저 직렬화한다")
     void 팀_요약_응답은_isPrimary_필드를_먼저_직렬화한다() throws Exception {
-        GetMyProfileApiDto.TeamSummary teamSummary = new GetMyProfileApiDto.TeamSummary(true, 21L, "물류혁신TF");
+        GetMyProfileApiDto.Response.TeamSummary teamSummary = new GetMyProfileApiDto.Response.TeamSummary(
+                true,
+                21L,
+                "물류혁신TF",
+                true,
+                "플랫폼 총괄",
+                "주담당"
+        );
 
         String json = objectMapper.writeValueAsString(teamSummary);
 
-        assertThat(json).startsWith("{\"isPrimary\":true,\"teamId\":21,\"teamName\":\"물류혁신TF\"");
+        assertThat(json).startsWith("{\"isPrimary\":true,\"teamId\":21,\"teamName\":\"물류혁신TF\",\"teamLeader\":true,\"teamRole\":\"플랫폼 총괄\",\"allocation\":\"주담당\"");
     }
 }
