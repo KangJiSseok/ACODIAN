@@ -46,7 +46,7 @@ ops:
     rule: 배포 후 자동 검증이 필요하면 현재 운영 경로에 맞는 health check 또는 서비스 상태 확인으로 설계하되, 과거 임시 검증 절차를 운영 표준처럼 재사용하지 않는다.
     stacks: [ec2, gitlab, springboot]
   - id: OPS-004
-    rule: 외부 공개 포트와 내부 바인딩 포트는 모두 EC2 보안그룹이 허용하는 8000–9000 범위 안에서 고정한다. staging/production 의 `API_HOST_PORT`, Nginx listen 포트, 추후 추가되는 서비스 포트도 동일 규칙을 따른다.
+    rule: 컨테이너 내부 listen 포트와 호스트 바인딩 포트는 8000–9000 범위 안에서 고정한다(web 8000, api 8100, ai 8200, postgres 8300/8301, redis 8400/8401). Nginx 진입 포트(production 80/443, staging 8080/8443) 는 이 규칙의 예외로 허용한다. 근거는 ADR-010.
     stacks: [ec2, nginx, compose]
   - id: OPS-005
     rule: GitLab CI 가 사용하는 SSH 키는 개인 접속 키와 분리된 전용 키페어로 운영한다. 키 회수/재발급 시 GitLab `SSH_PRIVATE_KEY` 와 EC2 `authorized_keys` 를 동시에 갱신해 두 쪽이 어긋나지 않게 한다.
@@ -60,3 +60,12 @@ ops:
   - id: OPS-008
     rule: '`.gitlab-ci.yml` 의 `cache.key.files` 는 GitLab 제약(최대 2개) 에 맞춰 최대 2개까지만 지정한다. Gradle 기반 job 은 `api/gradle/libs.versions.toml` 과 `api/build.gradle` 두 파일을 기본 조합으로 쓰고, 추가 파일이 필요해지면 files 를 늘리지 말고 cache key 전략 자체를 재설계(prefix + checksum 조합 등) 한다.'
     stacks: [gitlab, ci]
+  - id: OPS-009
+    rule: 한 EC2 에 staging/production 이 공존하므로 staging 의 호스트 포트는 production 호스트 포트 +1 오프셋으로 고정한다. 예 — api production `127.0.0.1:8100:8100` / staging `127.0.0.1:8101:8100`, postgres production `8300:5432` / staging `8301:5432`, redis production `8400:6379` / staging `8401:6379`. Nginx listen(production 80/443, staging 8080/8443) 은 이 오프셋 규칙의 예외다. 근거는 ADR-010.
+    stacks: [ec2, compose, nginx]
+  - id: OPS-010
+    rule: web/api/ai 컨테이너는 호스트 바인딩을 `127.0.0.1:` 로 제한해 외부에서 Nginx 를 우회한 직접 접근을 차단한다. Nginx 는 같은 호스트에서 `proxy_pass http://127.0.0.1:<port>` 로 upstream 을 연다. DB 컨테이너(postgres/redis) 는 개발 편의(ADR-011) 를 위해 `0.0.0.0` 바인딩을 유지하고, 대신 OPS-011 의 비밀번호 정책으로 완화한다. 근거는 ADR-010.
+    stacks: [compose, nginx, security]
+  - id: OPS-011
+    rule: '`DB_PASSWORD` 는 staging/production 각각 별도의 강한 무작위 값(최소 24자, 대소문자·숫자·기호 혼합) 으로 관리한다. ADR-011 로 DB 가 외부 개방되어 비밀번호가 유일한 1차 방어선이므로 재사용·예측 가능 패턴·기본값 복사를 금지한다. 운영 저장소는 GitLab CI/CD Variables(`DB_PASSWORD_STAGING`, `DB_PASSWORD_PRODUCTION`) 를 Protected + Mask 로 유지하고 서버 `.env` 에만 주입한다. 근거는 ADR-011.'
+    stacks: [security, postgres, gitlab]
