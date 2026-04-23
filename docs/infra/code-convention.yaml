@@ -1,0 +1,56 @@
+# infra 모듈의 단일 source of truth 코드 컨벤션 파일.
+general:
+  - id: GEN-001
+    rule: 인프라 문서는 과거의 일회성 검증 절차가 아니라, 현재 운영 기준인 EC2 + GitLab CI/CD 배포 흐름을 기준으로 설명한다.
+    stacks: [infra, ec2, gitlab]
+  - id: GEN-002
+    rule: 민감정보(DB_PASSWORD, JWT_SECRET, SSH 키 등)는 커밋되는 YAML/Markdown에 실제 값으로 하드코딩하지 않는다. 저장소에는 샘플 파일(infra/.env.example)만 두고 실제 값은 EC2 `.env` 또는 GitLab CI/CD Variables 로 주입한다.
+    stacks: [infra, docker, compose, gitlab]
+  - id: GEN-003
+    rule: 배포 절차나 브랜치 정책을 바꾸면 `.gitlab-ci.yml`, `infra/compose.deploy.yml`, `docs/infra/ec2-gitlab-cicd-guide.md`, `docs/infra/adr.yaml`을 함께 점검해 문서 drift를 남기지 않는다.
+    stacks: [infra, gitlab, docs]
+
+docker:
+  - id: DO-001
+    rule: API 컨테이너 이미지는 `api/Dockerfile`을 사용하고, Dockerfile 은 build/libs/*.jar 만 복사하는 외부 빌드 방식을 유지한다. EC2 서버에서 소스 빌드를 수행하는 방향으로 우회하지 않는다.
+    stacks: [docker, springboot, gitlab]
+  - id: DO-002
+    rule: `api/.dockerignore`는 실행에 필요한 JAR만 허용하는 화이트리스트 방식으로 유지한다. 소스코드, .git, 로컬 설정 파일을 이미지 빌드 컨텍스트에 포함하지 않는다.
+    stacks: [docker]
+
+compose:
+  - id: CMP-001
+    rule: EC2 배포용 compose source of truth 는 `infra/compose.deploy.yml` 하나로 유지한다. 동일 목적의 중복 compose 파일을 추가하지 않는다.
+    stacks: [compose, ec2]
+  - id: CMP-002
+    rule: `api` 서비스는 `postgres`, `redis`에 대해 `depends_on: condition: service_healthy` 를 사용한다. 시작 순서만 보장하는 느슨한 구성으로 완화하지 않는다.
+    stacks: [compose, postgres, redis]
+  - id: CMP-003
+    rule: postgres 데이터는 환경별 named volume(`axwms-${APP_ENV}-postgres-data`)에 저장한다. staging/production 데이터를 같은 volume 이름으로 공유하지 않는다.
+    stacks: [compose, postgres]
+  - id: CMP-004
+    rule: 운영 compose 는 `build:` 대신 Registry 이미지 변수(`API_IMAGE`)를 사용한다. CI 와 서버가 서로 다른 방식으로 애플리케이션 이미지를 해석하지 않게 한다.
+    stacks: [compose, docker, gitlab]
+
+ops:
+  - id: OPS-001
+    rule: EC2 운영 문서는 `/opt/axwms/{staging|production}` 디렉터리 구조, `.env` 위치, Nginx 포트 연결, GitLab Variables 를 초심자도 따라 할 수 있게 단계별로 설명해야 한다.
+    stacks: [ec2, nginx, gitlab]
+  - id: OPS-002
+    rule: `master`는 production 배포 브랜치로 간주하고 protected branch 로 유지한다. `dev`도 staging 자동배포에 필요한 protected variable 정책을 고려해 운영한다.
+    stacks: [gitlab, ec2]
+  - id: OPS-003
+    rule: 배포 후 자동 검증이 필요하면 현재 운영 경로에 맞는 health check 또는 서비스 상태 확인으로 설계하되, 과거 임시 검증 절차를 운영 표준처럼 재사용하지 않는다.
+    stacks: [ec2, gitlab, springboot]
+  - id: OPS-004
+    rule: 외부 공개 포트와 내부 바인딩 포트는 모두 EC2 보안그룹이 허용하는 8000–9000 범위 안에서 고정한다. staging/production 의 `API_HOST_PORT`, Nginx listen 포트, 추후 추가되는 서비스 포트도 동일 규칙을 따른다.
+    stacks: [ec2, nginx, compose]
+  - id: OPS-005
+    rule: GitLab CI 가 사용하는 SSH 키는 개인 접속 키와 분리된 전용 키페어로 운영한다. 키 회수/재발급 시 GitLab `SSH_PRIVATE_KEY` 와 EC2 `authorized_keys` 를 동시에 갱신해 두 쪽이 어긋나지 않게 한다.
+    stacks: [ec2, gitlab, security]
+  - id: OPS-006
+    rule: GitLab CI/CD Variables 는 모두 Protected 로 등록한다. 값에 `$` 문자가 섞일 수 있는 `SSH_PRIVATE_KEY`, `SSH_KNOWN_HOSTS` 는 "Expand variable reference" 를 비활성화한다. 이미지 레지스트리 자격증명(`GHCR_USER`, `GHCR_TOKEN`) 은 GitHub 개인 계정 username 과 classic PAT 을 값으로 넣고 `GHCR_TOKEN` 에는 Mask 를 적용한다.
+    stacks: [gitlab, ci, security]
+  - id: OPS-007
+    rule: GitLab Runner(`gitlab-runner`) 는 EC2 에 docker executor 로 등록하고 `[runners.docker]` 섹션의 `privileged = true` 를 유지한다. `api_ci` / `api_image` 가 DinD service 를 요구하므로 privileged 를 비활성화하지 않는다. Runner 는 "Lock to current projects" 로 프로젝트 전용으로 운영한다.
+    stacks: [gitlab, runner, docker]
