@@ -42,7 +42,7 @@ public class UserService {
 
         User user = getRequiredUser(principal.userId());
         Department department = getRequiredDepartment(user.getDepartmentId());
-        List<GetMyProfileApiDto.TeamSummary> teams = getTeamSummaries(user.getId());
+        List<GetMyProfileApiDto.Response.TeamSummary> teams = getTeamSummaries(user.getId());
 
         return GetMyProfileApiDto.Response.of(user, department, teams);
     }
@@ -70,7 +70,7 @@ public class UserService {
      * 주 소속 팀을 먼저 보이게 한 뒤, JPA findAllById 결과가 입력 순서를 보장하지 않으므로
      * teamId -> Team 맵을 만든 뒤 사용자-팀 관계 목록 순서대로 재조립한다.
      */
-    private List<GetMyProfileApiDto.TeamSummary> getTeamSummaries(Long userId) {
+    private List<GetMyProfileApiDto.Response.TeamSummary> getTeamSummaries(Long userId) {
         List<UserTeam> userTeams = userTeamRepository.findAllByUserIdOrderByIsPrimaryDesc(userId);
         if (userTeams.isEmpty()) {
             return List.of();
@@ -93,14 +93,17 @@ public class UserService {
      * 사용자-팀 관계와 팀 엔티티를 응답용 팀 요약으로 변환한다.
      * FK 무결성상 team 은 존재해야 하지만, 운영 데이터 불일치가 있더라도 전체 조회를 500 으로 깨지 않게 누락 팀은 제외한다.
      */
-    private GetMyProfileApiDto.TeamSummary toTeamSummary(UserTeam userTeam, Team team) {
+    private GetMyProfileApiDto.Response.TeamSummary toTeamSummary(UserTeam userTeam, Team team) {
         if (team == null) {
             return null;
         }
-        return new GetMyProfileApiDto.TeamSummary(
+        return new GetMyProfileApiDto.Response.TeamSummary(
                 Boolean.TRUE.equals(userTeam.getIsPrimary()),
                 team.getId(),
-                team.getTeamName()
+                team.getTeamName(),
+                Boolean.TRUE.equals(userTeam.getTeamLeader()),
+                userTeam.getTeamRole(),
+                userTeam.getAllocation()
         );
     }
 }

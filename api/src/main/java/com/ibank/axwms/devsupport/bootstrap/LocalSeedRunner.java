@@ -2,7 +2,6 @@ package com.ibank.axwms.devsupport.bootstrap;
 
 import com.ibank.axwms.domain.organization.department.entity.Department;
 import com.ibank.axwms.domain.organization.department.repository.DepartmentRepository;
-import com.ibank.axwms.domain.organization.team.TeamRole;
 import com.ibank.axwms.domain.organization.team.TeamStatus;
 import com.ibank.axwms.domain.organization.team.entity.Team;
 import com.ibank.axwms.domain.organization.team.entity.UserTeam;
@@ -63,12 +62,12 @@ public class LocalSeedRunner implements ApplicationRunner {
         Long salesTeamId = ensureTeam(salesDepartmentId, "영업운영팀", "로컬 검증용 영업본부 팀");
         Long salesStrategyTeamId = ensureTeam(salesDepartmentId, "영업전략TF", "로컬 검증용 영업본부 추가 팀");
 
-        ensureUserTeam(directorUserId, platformTeamId, TeamRole.LEADER, true);
-        ensureUserTeam(directorUserId, architectureTeamId, TeamRole.MEMBER, false);
-        ensureUserTeam(deptHeadUserId, platformTeamId, TeamRole.MEMBER, true);
-        ensureUserTeam(deptHeadUserId, architectureTeamId, TeamRole.LEADER, false);
-        ensureUserTeam(memberUserId, salesTeamId, TeamRole.MEMBER, true);
-        ensureUserTeam(memberUserId, salesStrategyTeamId, TeamRole.MEMBER, false);
+        ensureUserTeam(directorUserId, platformTeamId, true, "플랫폼 총괄", "주담당", true);
+        ensureUserTeam(directorUserId, architectureTeamId, false, "아키텍처 자문", "겸임", false);
+        ensureUserTeam(deptHeadUserId, platformTeamId, false, "플랫폼 운영", "주담당", true);
+        ensureUserTeam(deptHeadUserId, architectureTeamId, true, "아키텍처 리드", "겸임", false);
+        ensureUserTeam(memberUserId, salesTeamId, false, "영업 운영", "주담당", true);
+        ensureUserTeam(memberUserId, salesStrategyTeamId, false, "영업 전략 지원", "겸임", false);
     }
 
     /**
@@ -154,12 +153,18 @@ public class LocalSeedRunner implements ApplicationRunner {
      * 사용자-팀 관계가 없으면 생성한다.
      * 로컬 로그인 후 현재 사용자 조회 API 가 항상 팀 컨텍스트를 돌려줄 수 있도록 최소 한 건의 소속을 보장한다.
      */
-    private void ensureUserTeam(Long userId, Long teamId, TeamRole teamRole, boolean isPrimary) {
+    private void ensureUserTeam(Long userId,
+                                Long teamId,
+                                boolean teamLeader,
+                                String teamRole,
+                                String allocation,
+                                boolean isPrimary) {
         if (userTeamRepository.findByUserIdAndTeamId(userId, teamId).isPresent()) {
             log.info("[LocalSeed] 사용자-팀 관계 skip - userId={} teamId={} (이미 존재)", userId, teamId);
             return;
         }
-        userTeamRepository.save(UserTeam.create(userId, teamId, teamRole, isPrimary));
-        log.info("[LocalSeed] 사용자-팀 관계 생성 - userId={} teamId={} primary={}", userId, teamId, isPrimary);
+        userTeamRepository.save(UserTeam.create(userId, teamId, teamLeader, teamRole, allocation, isPrimary));
+        log.info("[LocalSeed] 사용자-팀 관계 생성 - userId={} teamId={} leader={} role={} allocation={} primary={}",
+                userId, teamId, teamLeader, teamRole, allocation, isPrimary);
     }
 }

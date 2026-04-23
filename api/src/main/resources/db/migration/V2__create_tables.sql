@@ -64,15 +64,15 @@ CREATE TABLE tb_user_team (
     user_team_id          BIGSERIAL PRIMARY KEY,                -- PK, 사용자-팀 관계 식별자
     user_id               BIGINT NOT NULL,                     -- N:1, 사용자 ID -> tb_user.user_id
     team_id               BIGINT NOT NULL,                     -- N:1, 팀 ID -> tb_team.team_id
-    team_role             VARCHAR(20) NOT NULL DEFAULT 'MEMBER', -- 팀 내 역할 코드 (LEADER/MEMBER)
+    team_leader           BOOLEAN NOT NULL DEFAULT FALSE,      -- 팀장 여부
+    team_role             VARCHAR(50) NOT NULL,                -- 팀 내 업무 역할명
+    allocation            VARCHAR(50),                         -- 참여/배치 성격
     is_primary            BOOLEAN NOT NULL DEFAULT FALSE,      -- 주 소속 팀 여부 (대시보드/알림 기본 기준)
     joined_at             TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP, -- 팀 합류 시각
     created_at            TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP, -- 관계 생성 시각
     updated_at            TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP, -- 관계 수정 시각
     CONSTRAINT uq_user_team_pair
-        UNIQUE (user_id, team_id),
-    CONSTRAINT ck_user_team_role
-        CHECK (team_role IN ('LEADER', 'MEMBER'))
+        UNIQUE (user_id, team_id)
 );
 
 -- =====================================================================
