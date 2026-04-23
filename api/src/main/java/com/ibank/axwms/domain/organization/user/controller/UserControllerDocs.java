@@ -3,8 +3,6 @@ package com.ibank.axwms.domain.organization.user.controller;
 import com.ibank.axwms.domain.organization.user.dto.GetMyProfileApiDto;
 import com.ibank.axwms.global.security.CustomUserPrincipal;
 import io.swagger.v3.oas.annotations.Operation;
-import io.swagger.v3.oas.annotations.Parameter;
-import io.swagger.v3.oas.annotations.enums.ParameterIn;
 import io.swagger.v3.oas.annotations.media.Content;
 import io.swagger.v3.oas.annotations.media.Schema;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
@@ -30,6 +28,6 @@ public interface UserControllerDocs {
             @ApiResponse(responseCode = "404", description = "현재 사용자 문맥에 해당하는 사용자를 찾을 수 없다.", content = @Content)
     })
     GetMyProfileApiDto.Response getMyProfile(
-            @Parameter(hidden = true, in = ParameterIn.HEADER) CustomUserPrincipal principal
+            CustomUserPrincipal principal
     );
 }
