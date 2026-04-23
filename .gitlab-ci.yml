@@ -18,6 +18,7 @@ default:
 variables:
   DEPLOY_ROOT: /opt/axwms
   PIP_CACHE_DIR: "$CI_PROJECT_DIR/.cache/pip"
+  API_IMAGE_BASE: ghcr.io/axwms-s209/axwms-api
 
 .web_changes: &web_changes
   - web/**/*
@@ -160,11 +161,11 @@ api_image:
     - job: api_ci
       artifacts: true
   before_script:
-    - echo "$CI_REGISTRY_PASSWORD" | docker login "$CI_REGISTRY" -u "$CI_REGISTRY_USER" --password-stdin
+    - echo "$GHCR_TOKEN" | docker login ghcr.io -u "$GHCR_USER" --password-stdin
   script:
-    - docker build -t "$CI_REGISTRY_IMAGE/api:$CI_COMMIT_SHA" -t "$CI_REGISTRY_IMAGE/api:$CI_COMMIT_REF_SLUG" api
-    - docker push "$CI_REGISTRY_IMAGE/api:$CI_COMMIT_SHA"
-    - docker push "$CI_REGISTRY_IMAGE/api:$CI_COMMIT_REF_SLUG"
+    - docker build -t "$API_IMAGE_BASE:$CI_COMMIT_SHA" -t "$API_IMAGE_BASE:$CI_COMMIT_REF_SLUG" api
+    - docker push "$API_IMAGE_BASE:$CI_COMMIT_SHA"
+    - docker push "$API_IMAGE_BASE:$CI_COMMIT_REF_SLUG"
   rules:
     - if: '$CI_PIPELINE_SOURCE == "push" && ($CI_COMMIT_BRANCH == "dev" || $CI_COMMIT_BRANCH == "master")'
       changes: *api_deploy_changes
@@ -194,7 +195,7 @@ deploy_dev:
     - scp infra/compose.deploy.yml "$DEPLOY_USER@$TARGET_HOST:$REMOTE_DIR/compose.deploy.yml"
     - scp infra/scripts/remote-deploy-api.sh "$DEPLOY_USER@$TARGET_HOST:$REMOTE_DIR/remote-deploy-api.sh"
     - ssh "$DEPLOY_USER@$TARGET_HOST" "chmod +x '$REMOTE_DIR/remote-deploy-api.sh'"
-    - ssh "$DEPLOY_USER@$TARGET_HOST" "APP_ENV='$APP_ENV' DEPLOY_ROOT='$DEPLOY_ROOT' API_IMAGE='$CI_REGISTRY_IMAGE/api:$CI_COMMIT_REF_SLUG' CI_REGISTRY='$CI_REGISTRY' CI_REGISTRY_USER='$CI_REGISTRY_USER' CI_REGISTRY_PASSWORD='$CI_REGISTRY_PASSWORD' sh '$REMOTE_DIR/remote-deploy-api.sh'"
+    - ssh "$DEPLOY_USER@$TARGET_HOST" "APP_ENV='$APP_ENV' DEPLOY_ROOT='$DEPLOY_ROOT' API_IMAGE='$API_IMAGE_BASE:$CI_COMMIT_REF_SLUG' GHCR_USER='$GHCR_USER' GHCR_TOKEN='$GHCR_TOKEN' sh '$REMOTE_DIR/remote-deploy-api.sh'"
   rules:
     - if: '$CI_PIPELINE_SOURCE == "push" && $CI_COMMIT_BRANCH == "dev"'
       changes: *api_deploy_changes
@@ -213,7 +214,7 @@ deploy_prod:
     - scp infra/compose.deploy.yml "$DEPLOY_USER@$TARGET_HOST:$REMOTE_DIR/compose.deploy.yml"
     - scp infra/scripts/remote-deploy-api.sh "$DEPLOY_USER@$TARGET_HOST:$REMOTE_DIR/remote-deploy-api.sh"
     - ssh "$DEPLOY_USER@$TARGET_HOST" "chmod +x '$REMOTE_DIR/remote-deploy-api.sh'"
-    - ssh "$DEPLOY_USER@$TARGET_HOST" "APP_ENV='$APP_ENV' DEPLOY_ROOT='$DEPLOY_ROOT' API_IMAGE='$CI_REGISTRY_IMAGE/api:$CI_COMMIT_REF_SLUG' CI_REGISTRY='$CI_REGISTRY' CI_REGISTRY_USER='$CI_REGISTRY_USER' CI_REGISTRY_PASSWORD='$CI_REGISTRY_PASSWORD' sh '$REMOTE_DIR/remote-deploy-api.sh'"
+    - ssh "$DEPLOY_USER@$TARGET_HOST" "APP_ENV='$APP_ENV' DEPLOY_ROOT='$DEPLOY_ROOT' API_IMAGE='$API_IMAGE_BASE:$CI_COMMIT_REF_SLUG' GHCR_USER='$GHCR_USER' GHCR_TOKEN='$GHCR_TOKEN' sh '$REMOTE_DIR/remote-deploy-api.sh'"
   rules:
     - if: '$CI_PIPELINE_SOURCE == "push" && $CI_COMMIT_BRANCH == "master"'
       changes: *api_deploy_changes

@@ -49,7 +49,7 @@ ops:
     rule: GitLab CI 가 사용하는 SSH 키는 개인 접속 키와 분리된 전용 키페어로 운영한다. 키 회수/재발급 시 GitLab `SSH_PRIVATE_KEY` 와 EC2 `authorized_keys` 를 동시에 갱신해 두 쪽이 어긋나지 않게 한다.
     stacks: [ec2, gitlab, security]
   - id: OPS-006
-    rule: GitLab CI/CD Variables 는 모두 Protected 로 등록한다. 값에 `$` 문자가 섞일 수 있는 `SSH_PRIVATE_KEY`, `SSH_KNOWN_HOSTS` 는 "Expand variable reference" 를 비활성화한다. `CI_REGISTRY`, `CI_REGISTRY_USER`, `CI_REGISTRY_PASSWORD` 는 GitLab 이 자동 주입하는 predefined 변수이므로 수동으로 등록하지 않는다.
+    rule: GitLab CI/CD Variables 는 모두 Protected 로 등록한다. 값에 `$` 문자가 섞일 수 있는 `SSH_PRIVATE_KEY`, `SSH_KNOWN_HOSTS` 는 "Expand variable reference" 를 비활성화한다. 이미지 레지스트리 자격증명(`GHCR_USER`, `GHCR_TOKEN`) 은 GitHub 개인 계정 username 과 classic PAT 을 값으로 넣고 `GHCR_TOKEN` 에는 Mask 를 적용한다.
     stacks: [gitlab, ci, security]
   - id: OPS-007
     rule: GitLab Runner(`gitlab-runner`) 는 EC2 에 docker executor 로 등록하고 `[runners.docker]` 섹션의 `privileged = true` 를 유지한다. `api_ci` / `api_image` 가 DinD service 를 요구하므로 privileged 를 비활성화하지 않는다. Runner 는 "Lock to current projects" 로 프로젝트 전용으로 운영한다.

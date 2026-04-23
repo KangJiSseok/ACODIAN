@@ -108,3 +108,69 @@
     대신 빌드 부하가 운영 서비스와 같은 호스트에서 경쟁하고,
     privileged runner 는 보안 경계가 느슨하므로 프로젝트 Lock + Protected variables 로 범위를 좁혀야 한다.
     장기적으로는 별도 Runner 호스트 분리를 후속 과제로 둔다.
+
+- id: ADR-007
+  title: 이미지 레지스트리 구현체 — GitHub Container Registry(ghcr.io) 채택
+  status: adopted
+  date: 2026-04-23
+  stacks: [gitlab, docker, github, ghcr]
+  context: |
+    ADR-005 는 빌드 재현성과 이미지 이력 추적을 위해 "GitLab Container Registry + SSH 원격 compose 실행" 조합을 결정했다.
+    그러나 이 프로젝트가 사용하는 SSafy GitLab 인스턴스는 Container Registry 기능이 인스턴스 수준에서 비활성이고,
+    프로젝트 Settings → General Visibility 에 "Container registry" 토글 자체가 노출되지 않아 팀 권한으로는 활성화 경로 자체가 없다.
+    GitLab 관리자 권한을 기대할 수 없는 환경이라 "GitLab Container Registry 사용" 이라는 ADR-005 의 전제가 사실상 성립하지 않는다.
+    따라서 외부 레지스트리로 대체하는 결정이 불가피했다.
+
+    동시에 ADR-001 은 현재 자동배포 범위를 api 단일 서비스로 좁혔지만,
+    후속 과제로 web/ai 컨테이너화가 예정되어 있다.
+    "어떤 레지스트리로 가느냐" 는 이미지 1개의 단발성 선택이 아니라
+    이후 팀이 관리할 이미지 수·배포 빈도·자격증명 수명에 지속적으로 영향을 주는 결정이다.
+    단순히 "지금 push/pull 되는 곳" 을 고르지 않고 private 이미지 확장성, pull rate limit, 운영 부담을 함께 비교해야 했다.
+
+    검토 대안은 세 가지였다.
+      1. Docker Hub
+         - 무료 플랜: private repo 1개 한도, pull rate limit 200/6h (IP 기준).
+         - web/ai 추가 시 유료 전환 또는 public 공개를 강제한다.
+         - CI 가 공용 NAT 뒤에 있으면 다른 프로젝트와 쿼터를 공유해 무작위 `toomanyrequests` 실패가 생길 수 있다.
+         - 함정: rate limit 실패는 원인 추적이 늦어 디버깅 시간이 길어진다.
+      2. GitHub Container Registry(ghcr.io)
+         - 무료 private repo 무제한, pull rate limit 은 사실상 없음.
+         - 이미지 경로가 `ghcr.io/<owner>/<image>` 로 표준적이다.
+         - 자격증명은 GitHub classic PAT 하나로 해결된다.
+         - 단점: PAT 만료(기본 90일) 관리 책임, 이미지가 GitHub Organization 네임스페이스에 귀속된다.
+      3. EC2 자체 registry:2 컨테이너
+         - 외부 의존 없음.
+         - HTTPS 인증서 또는 insecure registry 허용 설정 필요, 이미지 누적 시 EC2 디스크가 차 cleanup/retention 정책 운영 필요.
+         - 운영 부담이 팀 규모 대비 과도하고, 지금 EC2 는 "실행 전용 호스트" 로 유지하려던 ADR-005 의 방향과도 어긋난다.
+  decision: |
+    이미지 레지스트리는 GitHub Container Registry(ghcr.io) 를 사용한다.
+    ADR-005 의 "GitLab Container Registry 사용" 결정은 이 결정이 갱신한다(SSH 원격 compose 실행 부분은 유지).
+
+    ghcr.io 를 고른 근거는 다음과 같다.
+      - private 이미지 수 한도: 무제한. web/ai 컨테이너가 추가되어도 유료 전환이나 public 공개 없이 그대로 확장된다.
+      - pull rate limit: 사실상 제약 없음. CI/CD 반복 실행이나 재배포 빈도가 늘어도 `toomanyrequests` 로 CI 가 멈출 리스크가 없다.
+      - 운영 부담: PAT 갱신 한 건에 집중되어 캘린더 리마인더로 사전 예방 가능. registry 서버 자체를 운영 책임에서 제외한다.
+      - 재현성 유지: ADR-002/ADR-005 가 요구한 "CI 선빌드 + 이미지 pull" 설계가 ghcr.io 에서도 그대로 성립하므로 추가 재설계가 필요 없다.
+      - 팀 확장성: GitHub Organization `axwms-s209` 아래 네임스페이스를 두면 팀원 추가·권한 분리를 organization 설정으로 처리할 수 있다.
+
+    Docker Hub 를 탈락시킨 이유는 web/ai 확장 시 private repo 한도가 즉시 걸리고, rate limit 실패가 CI 디버깅 난이도를 높이기 때문이다.
+    EC2 자체 registry 를 탈락시킨 이유는 디스크/HTTPS/cleanup 운영 부담이 초기 자동화 범위(ADR-001) 대비 과도하고,
+    EC2 를 실행 전용 호스트로 유지한다는 기존 설계 방향과 어긋나기 때문이다.
+
+    구성 확정:
+      - 이미지 네임스페이스: `ghcr.io/axwms-s209/axwms-api`
+      - 자격증명: GitHub 개인 계정의 classic PAT (scopes: `write:packages`, `read:packages`, `repo`)
+      - GitLab CI/CD Variables: `GHCR_USER`(개인 username), `GHCR_TOKEN`(PAT) 을 Protected 로 등록, `GHCR_TOKEN` 은 Mask 적용
+      - `.gitlab-ci.yml` 은 이미지 식별자를 `API_IMAGE_BASE` 변수로 상수화해 레지스트리 교체 시 수정 지점이 한 곳에 모이게 한다.
+  consequence: |
+    긍정적 영향:
+      - Docker Hub 의 private 1개 한도와 rate limit 리스크를 회피한다.
+      - web/ai 이미지가 추가되어도 같은 네임스페이스에서 일관되게 관리된다.
+      - registry 서버 자체의 운영(디스크, HTTPS, cleanup) 책임에서 해방된다.
+
+    부정적 영향 및 후속 책임:
+      - PAT 이 만료되면 CI 가 `unauthorized` 로 조용히 실패한다. 만료 전 갱신이 필수이며 운영 루틴에 "PAT 만료 D-7 캘린더 알림" 을 포함한다.
+      - 이미지가 GitHub Organization `axwms-s209` 에 귀속된다. Organization 이름이 바뀌거나 이전될 경우
+        `API_IMAGE_BASE` 한 줄과 ADR 기록을 함께 갱신한다(상수화 덕분에 변경 지점은 최소).
+      - 소스(GitLab) 와 이미지(GitHub) 로 인프라가 두 서비스에 분산된다.
+        장기적으로 SSafy GitLab 이 Container Registry 를 열어주면 이 결정을 재검토해 GitLab Container Registry 로 되돌리는 선택지를 남겨 둔다.

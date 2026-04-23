@@ -14,9 +14,8 @@ require_var() {
 require_var APP_ENV
 require_var DEPLOY_ROOT
 require_var API_IMAGE
-require_var CI_REGISTRY
-require_var CI_REGISTRY_USER
-require_var CI_REGISTRY_PASSWORD
+require_var GHCR_USER
+require_var GHCR_TOKEN
 
 APP_DIR="${DEPLOY_ROOT%/}/${APP_ENV}"
 COMPOSE_FILE="$APP_DIR/compose.deploy.yml"
@@ -33,7 +32,7 @@ if [ ! -f "$ENV_FILE" ]; then
   exit 1
 fi
 
-echo "$CI_REGISTRY_PASSWORD" | docker login "$CI_REGISTRY" -u "$CI_REGISTRY_USER" --password-stdin
+echo "$GHCR_TOKEN" | docker login ghcr.io -u "$GHCR_USER" --password-stdin
 
 export APP_ENV
 export API_IMAGE

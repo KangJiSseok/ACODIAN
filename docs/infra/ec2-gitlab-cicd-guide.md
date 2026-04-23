@@ -295,15 +295,17 @@ GitLab 경로:
 - `DEPLOY_HOST_PRODUCTION` — 현재는 staging 과 같은 서버여도 된다
 - `PRODUCTION_URL` — 외부 공개 URL (예: `https://k14s209.p.ssafy.io:8989`)
 
-### Registry 자격증명은 등록하지 않는다
-`CI_REGISTRY`, `CI_REGISTRY_USER`, `CI_REGISTRY_PASSWORD` 는 GitLab 이 파이프라인 실행 시 자동 주입하는 **predefined 변수**다.
+### Registry 자격증명 — ghcr.io 기준
 
-- `CI_REGISTRY_USER` = `gitlab-ci-token`
-- `CI_REGISTRY_PASSWORD` = `$CI_JOB_TOKEN` (해당 job 실행 동안만 유효)
+이미지 레지스트리는 GitHub Container Registry(`ghcr.io`) 를 사용한다 (ADR-007).
+이미지 네임스페이스는 `ghcr.io/axwms-s209/axwms-api` 로 고정한다.
 
-`.gitlab-ci.yml` 의 `api_image`, `deploy_dev`, `deploy_prod` 가 이 이름을 그대로 참조하므로 **별도 등록이 불필요**하다.
-수동으로 등록하면 값이 고정되어 Job Token 수명 주기 이점을 잃는다.
-권한 범위를 더 좁히고 싶다면 후속 단계에서 Deploy Token 으로 전환을 검토한다.
+- `GHCR_USER` — PAT 을 발급한 **GitHub 개인 계정 username** (Organization 이름 아님 ⚠)
+- `GHCR_TOKEN` — GitHub classic PAT (scopes: `write:packages`, `read:packages`, `repo`)
+
+두 변수 모두 Protected 로 등록하고 `GHCR_TOKEN` 은 Mask 를 적용한다.
+PAT 은 만료 기한이 있으므로 만료 전에 갱신하지 않으면 CI 가 `unauthorized` 로 실패한다.
+갱신 일정을 캘린더에 미리 등록한다.
 
 ### protected variable 주의
 `master`는 protected branch라 production 변수와 잘 맞는다.
