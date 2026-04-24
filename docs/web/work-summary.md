@@ -63,7 +63,7 @@
 
 - `web/src/app/layout.tsx`
 - `web/src/app/(protected)/layout.tsx`
-- `web/src/middleware.ts`
+- `web/src/proxy.ts`
 
 적용 내용:
 
@@ -73,8 +73,8 @@
 
 참고:
 
-- 현재는 `accessToken` 쿠키 존재 여부만 보는 최소 보호 정책이다.
-- Next.js 16 기준 `middleware.ts`는 deprecated 경고가 있으므로 추후 `proxy.ts` 전환 검토가 필요하다.
+- 현재는 `refreshToken` 쿠키 존재 여부만 보는 최소 보호 정책이다.
+- Next.js 16 기준 파일 convention에 맞춰 `proxy.ts`를 사용한다.
 
 ---
 
@@ -180,7 +180,7 @@
 
 #### 주석 추가 파일
 
-- `web/src/middleware.ts`
+- `web/src/proxy.ts`
 - `web/src/app/layout.tsx`
 - `web/src/app/(protected)/layout.tsx`
 - `web/src/app/(protected)/page.tsx`
@@ -278,6 +278,6 @@
 
 ## 비고
 
-- `middleware.ts`는 현재 동작하지만 Next.js 16에서는 deprecated 경고가 있다.
-- 추후 `proxy.ts` 전환 여부를 별도 작업으로 정리하는 것이 좋다.
+- Next.js 16 기준 파일 convention에 맞춰 `proxy.ts`로 전환했다.
+- 보호 라우트 차단은 인증 화면 구현 중 임시 비활성화 상태이다.
 - 이번 작업은 아직 커밋되지 않은 작업 트리 기준 정리이다.

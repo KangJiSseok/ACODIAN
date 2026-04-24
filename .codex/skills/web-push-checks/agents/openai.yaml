@@ -1,0 +1,7 @@
+interface:
+  display_name: "Web Push Checks"
+  short_description: "Run web lint before pushing changes"
+  default_prompt: "Use $web-push-checks before pushing AX-WMS web changes."
+
+policy:
+  allow_implicit_invocation: true

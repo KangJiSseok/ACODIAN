@@ -39,7 +39,7 @@
 
 - React 컴포넌트 파일명은 `camelCase`
 - React 컴포넌트 export 이름은 `PascalCase`
-- 예약 파일명은 `page.tsx`, `layout.tsx`, `middleware.ts` 유지
+- 예약 파일명은 `page.tsx`, `layout.tsx`, `proxy.ts` 유지
 - 도메인 코드는 각 라우트 폴더 아래 `_components`, `_hooks`, `_service`, `_types`에 둔다
 - 공통 코드는 `apps/web/src/app/_common`에 둔다
 
