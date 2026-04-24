@@ -158,21 +158,14 @@ api_image:
   needs:
     - job: api_ci
       artifacts: true
-      # TEMP: fix 브랜치 probe 용 optional. 진단 완료 후 제거
-      optional: true
   before_script:
     - echo "GHCR_USER len=${#GHCR_USER} TOKEN len=${#GHCR_TOKEN}"
     - echo "$GHCR_TOKEN" | docker login ghcr.io -u "$GHCR_USER" --password-stdin
   script:
-    # TEMP: probe 기간 동안 build/push 비활성화 (jar artifact 없음). 진단 완료 후 주석 해제
-    # - docker build -t "$API_IMAGE_BASE:$CI_COMMIT_SHA" -t "$API_IMAGE_BASE:$CI_COMMIT_REF_SLUG" api
-    # - docker push "$API_IMAGE_BASE:$CI_COMMIT_SHA"
-    # - docker push "$API_IMAGE_BASE:$CI_COMMIT_REF_SLUG"
-    - echo "build/push skipped during GHCR probe"
+    - docker build -t "$API_IMAGE_BASE:$CI_COMMIT_SHA" -t "$API_IMAGE_BASE:$CI_COMMIT_REF_SLUG" api
+    - docker push "$API_IMAGE_BASE:$CI_COMMIT_SHA"
+    - docker push "$API_IMAGE_BASE:$CI_COMMIT_REF_SLUG"
   rules:
-    # TEMP: GHCR 변수 진단용 feature 브랜치 트리거 (진단 완료 후 제거)
-    - if: '$CI_PIPELINE_SOURCE == "push" && $CI_COMMIT_BRANCH == "fix/api/jooq-codegen-dind-host"'
-      changes: *api_deploy_changes
     - if: '$CI_PIPELINE_SOURCE == "push" && ($CI_COMMIT_BRANCH == "dev" || $CI_COMMIT_BRANCH == "master")'
       changes: *api_deploy_changes
 
