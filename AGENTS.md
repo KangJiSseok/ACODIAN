@@ -1,67 +1,44 @@
-# AGENT.md — AX-WMS 프로젝트 AI 에이전트 지침
+# AGENTS.md — AX-WMS 전역 공통 원칙
 
-## 기본 응답 규칙
+## 1. 응답 언어
 
-**항상 한국어로 답변한다.** 코드, 파일 경로, 기술 식별자(변수명, 클래스명 등)는 원문 그대로 유지하되,
-설명과 커뮤니케이션은 반드시 한국어로 작성한다.
+- 항상 한국어로 답변한다.
+- 코드, 파일 경로, 기술 식별자(변수명, 클래스명, 라이브러리명 등)는 원문 그대로 유지한다.
 
----
+## 2. 적용 범위
 
-## 프로젝트 개요
+- 이 파일은 저장소 전체에 적용되는 공통 원칙이다.
+- 하위 디렉토리에 별도 `AGENTS.md` 가 있으면 그 파일이 해당 디렉토리 아래에서 **추가 규칙**과 **우선 규칙**을 제공한다.
+- 실제로 수정하는 파일 경로 기준으로 관련 `AGENTS.md` 를 모두 따른다.
+  - 예: `api/...` 수정 시 `/AGENTS.md` + `/api/AGENTS.md`
+  - 예: `web/...` 수정 시 `/AGENTS.md` + `/web/AGENTS.md`
+  - 예: `infra/...` 수정 시 `/AGENTS.md` + `/infra/AGENTS.md`
+
+## 3. 프로젝트 개요
 
 - **프로젝트**: AX-WMS (`S14P31S209`)
-- **구조**: 모노레포 — `web` / `api` / `ai` / `nginx` 4개 영역으로 구성
+- **구조**: 모노레포 — `web` / `api` / `ai` / `infra`
 
 | 영역 | 기술 | 역할 |
 |---|---|---|
 | `web` | Next.js | 사용자 UI, 화면 조합, 사용자 상호작용 진입점 |
 | `api` | Spring Boot | 비즈니스 규칙, 인증/인가, 조직/업무/파일/알림 기준 시스템 |
 | `ai` | FastAPI | AI 파이프라인 — 요약/태그/청킹/임베딩/시맨틱 검색 |
-| `nginx` | Nginx | 외부 진입 게이트웨이, 라우팅, 보안 경계 |
+| `infra` | Nginx / Docker / GitLab CI/CD | 외부 진입 게이트웨이, 배포, 운영 자동화, 보안 경계 |
 
-전체 아키텍처 기준 문서: [`docs/AX-WMS_기획서_아키텍처가이드.md`](docs/AX-WMS_기획서_아키텍처가이드.md)
+전체 아키텍처 기준 문서:
+- `docs/AX-WMS_기획서_아키텍처가이드.md`
 
----
+## 4. 작업 전 공통 규칙
 
-## 영역별 참조 문서
-
-작업하는 영역에 따라 아래 문서를 **반드시 먼저 읽고** 규칙을 따른다.
-
-### `api` — Spring Boot
-
-| 문서 | 경로 |
-|---|---|
-| ADR (설계 결정 기록) | [`docs/api/adr.yaml`](docs/api/adr.yaml) |
-| 코드 컨벤션 | [`docs/api/code-convention.yaml`](docs/api/code-convention.yaml) |
-
-### `web` — Next.js
-
-| 문서 | 경로 |
-|---|---|
-| 표준 가이드 | `docs/AX-WMS_NextJS_표준가이드.docx` |
-| ADR | `docs/web/adr.yaml` _(추가 예정)_ |
-| 코드 컨벤션 | `docs/web/code-convention.yaml` _(추가 예정)_ |
-
-### `ai` — FastAPI
-
-| 문서 | 경로 |
-|---|---|
-| 표준 가이드 | `docs/AX-WMS_FastAPI_표준가이드.docx` |
-| ADR | `docs/ai/adr.yaml` _(추가 예정)_ |
-| 코드 컨벤션 | `docs/ai/code-convention.yaml` _(추가 예정)_ |
-
-### `nginx` (infra)
-
-| 문서 | 경로 |
-|---|---|
-| 표준 가이드 | `docs/AX-WMS_Nginx_표준가이드.docx` |
-| ADR | `docs/infra/adr.yaml` _(추가 예정)_ |
-| 코드 컨벤션 | `docs/infra/code-convention.yaml` _(추가 예정)_ |
-
----
-
-## 코드 작업 시 주의사항
-
+- 작업 대상 디렉토리의 하위 `AGENTS.md` 가 있으면 **코드 수정 전에 먼저 읽는다.**
 - 요청한 범위 밖의 리팩토링이나 불필요한 변경을 하지 않는다.
-- 보안 취약점(SQL Injection, XSS, CSRF 등)이 생기지 않도록 주의한다.
-- UI/프론트엔드 변경 후에는 개발 서버에서 직접 동작을 확인한 뒤 완료로 보고한다.
+- 보안 취약점(SQL Injection, XSS, CSRF, 비밀정보 노출 등)이 생기지 않도록 주의한다.
+- 새 규칙을 추측하지 말고, 해당 영역 문서에 있는 규칙을 우선 적용한다.
+
+## 5. 영역별 진입점
+
+- `api` 작업: `/api/AGENTS.md`
+- `infra` 작업: `/infra/AGENTS.md`
+
+`ai` 는 아직 하위 `AGENTS.md` 가 없으므로, 현재는 이 전역 규칙과 `docs/ai/*` 문서를 직접 따른다.

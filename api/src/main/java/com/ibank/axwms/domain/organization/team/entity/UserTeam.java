@@ -76,4 +76,15 @@ public class UserTeam {
         userTeam.isPrimary = isPrimary;
         return userTeam;
     }
+
+    /** 로컬 시드 재실행 시 사용자-팀 관계의 역할/주소속 여부를 목표값으로 맞춘다. */
+    public void synchronizeSeedProfile(boolean teamLeader,
+                                       String teamRole,
+                                       String allocation,
+                                       boolean isPrimary) {
+        this.teamLeader = teamLeader;
+        this.teamRole = teamRole;
+        this.allocation = allocation;
+        this.isPrimary = isPrimary;
+    }
 }

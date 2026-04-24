@@ -78,4 +78,19 @@ public class Team {
         team.expectedEndDate = expectedEndDate;
         return team;
     }
+
+    /** 로컬 시드 재실행 시 팀의 소속/표시명/상태를 목표값으로 맞춘다. */
+    public void synchronizeSeedProfile(Long departmentId,
+                                       String teamName,
+                                       TeamStatus statusCode,
+                                       String description,
+                                       LocalDate startDate,
+                                       LocalDate expectedEndDate) {
+        this.departmentId = departmentId;
+        this.teamName = teamName;
+        this.statusCode = statusCode;
+        this.description = description;
+        this.startDate = startDate;
+        this.expectedEndDate = expectedEndDate;
+    }
 }

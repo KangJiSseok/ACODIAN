@@ -1,19 +1,21 @@
 package com.ibank.axwms.domain.organization.department.entity;
 
+import com.ibank.axwms.domain.organization.department.DepartmentStatus;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
+import jakarta.persistence.EnumType;
+import jakarta.persistence.Enumerated;
 import jakarta.persistence.GeneratedValue;
 import jakarta.persistence.GenerationType;
 import jakarta.persistence.Id;
 import jakarta.persistence.Table;
 import jakarta.persistence.UniqueConstraint;
+import java.time.LocalDateTime;
 import lombok.AccessLevel;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
 import org.hibernate.annotations.CreationTimestamp;
 import org.hibernate.annotations.UpdateTimestamp;
-
-import java.time.LocalDateTime;
 
 @Entity
 @Table(name = "tb_department", uniqueConstraints = {
@@ -38,6 +40,10 @@ public class Department {
     @Column(name = "department_head_user_id")
     private Long departmentHeadUserId;
 
+    @Enumerated(EnumType.STRING)
+    @Column(name = "status_code", nullable = false, length = 20)
+    private DepartmentStatus statusCode;
+
     @CreationTimestamp
     @Column(name = "created_at", nullable = false, updatable = false)
     private LocalDateTime createdAt;
@@ -55,6 +61,28 @@ public class Department {
         Department department = new Department();
         department.departmentName = departmentName;
         department.description = description;
+        department.statusCode = DepartmentStatus.ACTIVE;
         return department;
+    }
+
+    /** 로컬 시드 재실행이나 기본 정보 수정 시 부서 식별 문맥과 상태를 목표값으로 동기화한다. */
+    public void synchronizeSeedProfile(String departmentName,
+                                       String description,
+                                       Long departmentHeadUserId,
+                                       DepartmentStatus statusCode) {
+        this.departmentName = departmentName;
+        this.description = description;
+        assignHeadUserId(departmentHeadUserId);
+        changeStatus(statusCode);
+    }
+
+    /** 부서장 지정 상태를 바꾼다. head 가 없으면 null 을 허용한다. */
+    public void assignHeadUserId(Long departmentHeadUserId) {
+        this.departmentHeadUserId = departmentHeadUserId;
+    }
+
+    /** soft-delete 수명주기를 위해 부서 상태를 변경한다. */
+    public void changeStatus(DepartmentStatus statusCode) {
+        this.statusCode = statusCode;
     }
 }
