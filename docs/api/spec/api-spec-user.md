@@ -4,7 +4,7 @@
 - 인덱스: [api-spec-index.md](./api-spec-index.md)
 
 ## 1. 도메인 목적 / 개요
-사용자 계정, 조직 소속, 역할/재직 상태를 관리하는 계약을 정의한다. 본 문서는 inventory 의 legacy 단수형 path 표기와 분리해 normalized path 인 `/api/users/*` 를 사용한다.
+사용자 계정, 조직 소속, 역할/재직 상태를 관리하는 계약을 정의한다. 본 문서는 inventory 의 legacy 단수형 path 표기와 분리해 normalized path 인 `/api/users/*` 를 사용한다. 사용자 membership 정보는 주 소속 부서와 별개인 교차 부서 팀 참여까지 포함할 수 있으며, `teamLeader`/`teamRole`/`allocation`/`isPrimary` vocabulary 를 `tb_user_team` 기준으로 설명한다.
 
 ## 2. 주요 ERD 연관
 - `tb_user`
@@ -38,6 +38,11 @@
 - 응답 (`data` 기준)
   - `userId`, `userName`, `departmentId`, `departmentName`, `positionName`, `titleName`, `profileImageUrl`
   - `teams[*]`: `isPrimary`, `teamId`, `teamName`, `teamLeader`, `teamRole`, `allocation`
+- 응답 필드 메모
+  - `teamLeader`: `tb_user_team.team_leader` boolean 이다.
+  - `teamRole`: 사용자의 팀 내 업무 역할명이다.
+  - `allocation`: 배치 성격이다.
+  - `isPrimary`: 사용자 관점의 대표 소속 팀 여부다. 팀의 소유 부서와는 별개다.
 - 요청 JSON 예시
 ```json
 {
@@ -168,7 +173,12 @@
   - Path: `id`
 - 응답 (`data` 기준)
   - `userId`, `userName`, `email`, `departmentId`, `departmentName`, `positionName`, `titleName`, `joinDate`, `roleCode`, `profileImageUrl`, `phone`, `employmentStatus`
-  - `teams[*]`: `teamId`, `teamName`, `teamLeader`, `teamRole`, `allocation`
+  - `teams[*]`: `isPrimary`, `teamId`, `teamName`, `teamLeader`, `teamRole`, `allocation`
+- 응답 필드 메모
+  - `teamLeader`: `tb_user_team.team_leader` boolean 이다.
+  - `teamRole`: 사용자의 팀 내 업무 역할명이다.
+  - `allocation`: 배치 성격이다.
+  - `isPrimary`: 사용자 관점의 대표 소속 팀 여부다. 교차 부서 팀 참여가 가능하더라도 주 소속 부서를 대체하지 않는다.
 - 요청 JSON 예시
 ```json
 {
@@ -196,6 +206,7 @@
     "employmentStatus": "ACTIVE",
     "teams": [
       {
+        "isPrimary": true,
         "teamId": 21,
         "teamName": "물류혁신TF",
         "teamLeader": true,

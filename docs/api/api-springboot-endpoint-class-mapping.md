@@ -172,38 +172,38 @@
     <tr>
       <td><code>GET /api/teams</code></td>
       <td><code>Documented</code></td>
-      <td>팀 목록과 팀별 상태/소속 정보를 조회한다.</td>
+      <td>팀 목록과 UserTeam membership 기반 리더/소속 정보를 조회한다.</td>
       <td><code>domain.organization.team.controller.TeamController</code></td>
       <td><code>domain.organization.team.service.TeamService</code></td>
       <td><code>domain.organization.team.entity.Team</code>, <code>domain.organization.team.repository.TeamRepository</code>, <code>domain.organization.team.repository.jooq.TeamJooqRepository</code></td>
-      <td>팀 read/write ownership은 <code>team</code> feature가 가진다.</td>
+      <td>팀 read/write ownership은 <code>team</code> feature가 가지며, 팀장 파생값은 <code>UserTeam.teamLeader</code> 해석을 따른다.</td>
     </tr>
     <tr>
       <td><code>GET /api/teams/{id}</code></td>
       <td><code>Documented</code></td>
-      <td>단일 팀 상세와 리더/멤버 컨텍스트를 조회한다.</td>
+      <td>단일 팀 상세와 UserTeam membership 기반 리더/멤버 컨텍스트를 조회한다.</td>
       <td><code>domain.organization.team.controller.TeamController</code></td>
       <td><code>domain.organization.team.service.TeamService</code></td>
       <td><code>domain.organization.team.entity.Team</code>, <code>domain.organization.team.entity.UserTeam</code>, <code>domain.organization.team.repository.TeamRepository</code></td>
-      <td>팀 상세는 소속 관계(<code>UserTeam</code>)를 함께 참고한다.</td>
+      <td>팀 상세는 소속 관계(<code>UserTeam</code>)를 함께 참고하며, 교차 부서 참여도 membership 으로 해석한다.</td>
     </tr>
     <tr>
       <td><code>POST /api/teams</code></td>
       <td><code>Documented</code></td>
-      <td>새 팀과 기본 소속 관계를 생성한다.</td>
+      <td>새 팀과 기본 UserTeam membership 을 생성한다.</td>
       <td><code>domain.organization.team.controller.TeamController</code></td>
       <td><code>domain.organization.team.service.TeamService</code></td>
       <td><code>domain.organization.team.entity.Team</code>, <code>domain.organization.team.entity.UserTeam</code>, <code>domain.organization.team.repository.TeamRepository</code>, <code>domain.organization.team.repository.UserTeamRepository</code></td>
-      <td>user-team 관계 ownership도 <code>team</code> feature에 둔다.</td>
+      <td>user-team 관계 ownership도 <code>team</code> feature에 두며, 초기 팀장 지정도 membership 플래그로 해석한다.</td>
     </tr>
     <tr>
       <td><code>PUT /api/teams/{id}</code></td>
       <td><code>Documented</code></td>
-      <td>팀 기본 정보와 운영 속성을 수정한다.</td>
+      <td>팀 기본 정보와 membership 기반 리더 운영 속성을 수정한다.</td>
       <td><code>domain.organization.team.controller.TeamController</code></td>
       <td><code>domain.organization.team.service.TeamService</code></td>
       <td><code>domain.organization.team.entity.Team</code>, <code>domain.organization.team.repository.TeamRepository</code>, <code>domain.organization.team.repository.jooq.TeamJooqRepository</code></td>
-      <td>feature-first 구조에서 team 관련 조회/수정 책임을 한곳에 둔다.</td>
+      <td>feature-first 구조에서 team 관련 조회/수정 책임을 한곳에 두고, 리더 의미도 membership 갱신으로 수렴한다.</td>
     </tr>
     <tr>
       <td><code>PATCH /api/teams/{id}/status</code></td>
@@ -221,7 +221,7 @@
       <td><code>domain.organization.team.controller.TeamController</code></td>
       <td><code>domain.organization.team.service.TeamService</code></td>
       <td><code>domain.organization.team.entity.Team</code>, <code>domain.organization.team.entity.UserTeam</code>, <code>domain.organization.team.repository.UserTeamRepository</code></td>
-      <td>clarified-scope addendum. user-team 관계 일괄 반영 ownership은 team feature 안에 둔다.</td>
+      <td>clarified-scope addendum. user-team 관계 일괄 반영 ownership은 team feature 안에 두며, 교차 부서 참여도 membership 으로 허용한다.</td>
     </tr>
   </tbody>
 </table>
