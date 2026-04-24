@@ -171,7 +171,8 @@
     Integration Test (30%): Testcontainers로 실제 PostgreSQL/Redis 사용. `application-integration.yml` + `@ActiveProfiles("integration")` 를 사용하며, Flyway 마이그레이션, JPA/JOOQ 매핑, Repository/Service wiring 검증을 포함한다.
     E2E Test (10%): MockMvc + full Spring context로 인증 포함 핵심 API 흐름 검증. `application-e2e.yml` + `@ActiveProfiles({"integration","e2e"})` 를 사용하며, 브라우저는 없지만 Security, Service, DB/Redis 연동은 실제로 검증한다.
     테스트의 직접 소유 계층은 Controller, Service, Repository/Query, 도메인 규칙 판단형 Policy 로 한정한다.
-    DTO, ExceptionHandler, Response wrapper, 단순 설정 객체는 기본적으로 standalone 테스트를 만들지 않고, Controller/E2E/통합 테스트를 통해 간접 검증한다.
+    DTO, projection, ExceptionHandler, Response wrapper, 단순 설정 객체는 기본적으로 standalone 테스트를 만들지 않고, Controller/E2E/통합 테스트를 통해 간접 검증한다.
+    `*ProjectionTest`, `*ApiDtoTest` 같은 형태로 단순 record/직렬화/필드 전달만 검증하는 테스트는 기본적으로 만들지 않는다.
     단, 위 계층이더라도 분기 로직·상태 전이·복잡한 포맷 규칙처럼 독립 실패 가능성이 큰 경우에만 예외적으로 전용 테스트를 허용한다.
     JPA-aware 공통 설정(`@EnableJpaAuditing` 등)은 JPA 인프라가 존재할 때만 활성화되도록 구성해 smoke profile과 충돌하지 않게 한다.
     전체 커버리지 목표: 75%+, 비즈니스 로직 80%+.
@@ -350,3 +351,26 @@
     baseline migration 과 코드/문서가 최신 ERD 와 즉시 일치해 `/api/users/me` 계약과 로컬 수동 검증 기준이 단순해진다.
     대신 shared/stable baseline 환경에는 이 결정을 그대로 적용할 수 없으며, 그런 환경이 존재하면 별도 migration 전환안이 필요하다.
     이후 팀 관련 계약은 `teamLeader(boolean)` / `teamRole(업무 역할명)` / `allocation(배치 성격)` vocabulary 를 기준으로 유지해야 한다.
+
+- id: ADR-019
+  title: Repository 조회 결과 타입 명명 — JOOQ projection vocabulary 통일
+  status: adopted
+  date: 2026-04-25
+  stacks: [springboot]
+  context: |
+    JOOQ 기반 repository 조회 결과를 어디까지를 Entity 로 보고 어디부터를 조회 전용 조합 타입으로 볼지 문서상 용어가 고정되어 있지 않았다.
+    어떤 곳은 nested record 로 선언한 조회 결과를 `dao` 처럼 부르거나, 어떤 곳은 DTO 와 projection 의 경계를 분리하지 않아 Service 가 소비하는 read shape 의 책임이 흐려질 수 있었다.
+    특히 department GET 조회는 repository 내부 nested record 를 외부에서 소비하는 형태로 진행되고 있어, 패키지 위치와 타입 소유권을 더 명확히 정리할 필요가 있었다.
+  decision: |
+    Repository 가 Service 에 제공하는 조회 전용 read shape 는 `projection` 으로 통일한다.
+    `dao` 용어는 repository 조회 결과 타입 명명에서 사용하지 않는다.
+    projection 은 read-only 조회 결과 타입이며 Entity 나 controller/service 외부 API 계약 DTO 와 구분한다.
+    projection 기본 위치는 `domain/{module}/repository/jooq/projection/` 하위 패키지로 둔다.
+    controller/service 외부 API 계약 타입은 기존대로 `dto/` 규칙을 유지한다.
+    projection 은 repository 내부 nested record 보다 재사용 가능한 top-level 타입을 기본으로 사용한다.
+    projection 과 API DTO 는 단순 data carrier 성격의 standalone 테스트를 만들지 않고, Service/Controller/E2E/통합 테스트에서 간접 검증한다.
+    이번 변경의 첫 적용 대상으로 department GET 조회용 타입을 nested record 에서 projection 디렉토리의 top-level projection 타입으로 이동한다.
+  consequence: |
+    Service 는 repository 조회 결과를 projection vocabulary 로 일관되게 소비하고, Entity/API DTO 와의 경계도 문서상 명확해진다.
+    JOOQ hand-written query 패키지 아래에 projection 전용 디렉토리가 생겨 조회 타입의 위치를 예측하기 쉬워진다.
+    이후 신규 조회 타입이 `dao` 또는 임의 nested record 로 추가되면 문서 규약 위반으로 간주한다.

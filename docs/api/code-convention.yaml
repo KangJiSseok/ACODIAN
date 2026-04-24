@@ -59,6 +59,8 @@ springboot:
       Integration Test: 실제 PostgreSQL/Redis(Testcontainers)와 함께 Repository/Service/JPA/Flyway wiring 을 검증한다. 클래스명은 {Subject}IntegrationTest, 공통 기반은 IntegrationTestSupport 와 `application-integration.yml` + `@ActiveProfiles("integration")` 를 우선 사용한다.
       E2E Test: MockMvc 기반이라도 full Spring context + Security + Service + DB/Redis 연동을 포함한 백엔드 API end-to-end 검증으로 취급한다. 클래스명은 {Subject}E2eTest, 공통 기반은 E2eTestSupport 와 `application-e2e.yml` + `@ActiveProfiles({"integration","e2e"})` 를 우선 사용한다.
       JPA-aware 공통 설정(`@EnableJpaAuditing` 등)은 JPA 인프라가 있을 때만 활성화되도록 구성해 smoke/context 테스트와 충돌시키지 않는다.
+      DTO, projection, ExceptionHandler, Response wrapper, 단순 설정 객체는 standalone 테스트를 기본으로 만들지 않고 Controller/E2E/Integration 테스트로 간접 검증한다.
+      `*ProjectionTest`, `*ApiDtoTest` 처럼 단순 record/직렬화/필드 전달만 검증하는 테스트는 기본적으로 금지한다.
       메서드 @DisplayName 은 한국어로 작성한다. 패턴은 `@DisplayName("{조건}이면 {기대결과}한다")` 를 기본으로 하고, 조건이 없으면 `@DisplayName("{기대결과}한다")` 형태를 사용한다.
       예 - `@DisplayName("이메일이 중복되면 예외를 던진다")`, `@DisplayName("payload 가 없으면 빈 성공 응답을 만든다")`.
       @Nested 클래스의 @DisplayName 은 그룹을 가리키는 한국어 명사구로 작성한다(예 - `"성공 응답 팩토리"`, `"유효성 검증"`).
@@ -94,10 +96,12 @@ springboot:
     rule: |
       DTO 변환 명시성 컨벤션.
       API 요청/응답 DTO 변환은 자동 매핑 도구를 기본 규칙으로 도입하지 않는다.
+      Controller/Service 외부 API 계약 타입은 기존대로 `dto/` 패키지 규칙을 따른다.
       Request 는 Controller 바인딩/검증과 Service 입력을 겸하며, 기본적으로 Service 메서드는 Request DTO 를 그대로 인자로 받는다.
       Request 값을 가공해 Service 입력을 만들어야 할 때에만 `{UseCase}Command` / `{UseCase}Criteria` 같은 별도 record 를 `dto/` 아래에 두고 사용한다.
       Response는 from(), of() 정적 팩토리 메서드로 생성한다.
       Request DTO를 Entity로 직접 매핑하지 않는다.
+      Repository 조회 전용 read shape 는 API DTO 와 구분하며 `dto` 로 부르지 않는다. Repository read shape 의 상세 규칙과 패키지 배치는 SB-016 JOOQ projection 규칙을 따른다.
       Entity 생성/수정은 Service 또는 Domain의 책임으로 둔다.
       필드 복사 로직이 필요하더라도 우선 명시적 코드로 작성하고, 실제 중복 문제가 확인될 때만 별도 추상화를 검토한다.
     stacks: [springboot]
@@ -108,6 +112,10 @@ springboot:
       복잡한 동적 쿼리(다중 조건 필터, 집계, 다중 테이블 JOIN)는 JOOQ를 사용한다.
       JOOQ 공통 설정/생성 클래스는 global/jooq/ 아래에 둔다.
       도메인 쿼리 클래스는 domain/{module}/repository/jooq/ 패키지에 배치한다.
+      Repository 가 Service 에 제공하는 조회 전용 read shape 는 `projection` 으로 통일하고, `dao` 용어는 사용하지 않는다.
+      projection 은 read-only 조회 결과 타입이며 Entity, API DTO 와 구분한다.
+      projection 기본 위치는 domain/{module}/repository/jooq/projection/ 하위 패키지다.
+      projection 은 재사용 가능한 top-level 타입으로 선언하는 것을 기본으로 하며, 특정 JOOQ repository 내부 nested record 로 숨기지 않는다.
       인터페이스: {Entity}JooqRepository. 구현: {Entity}JooqRepositoryImpl.
       Spring Data JPA의 Custom Repository 패턴으로 메인 Repository가 JooqRepository를 extends.
       DSLContext는 생성자 주입(@RequiredArgsConstructor + final)으로 사용한다.
