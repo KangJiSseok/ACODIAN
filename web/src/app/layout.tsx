@@ -1,10 +1,7 @@
 import type { Metadata } from "next";
 import "./globals.css";
-import { Geist } from "next/font/google";
 import { cn } from "@/lib/utils";
 import QueryProvider from "@/app/_common/providers/queryProvider";
-
-const geist = Geist({subsets:['latin'],variable:'--font-sans'});
 
 export const metadata: Metadata = {
   title: "AX-WMS",
@@ -18,7 +15,7 @@ export default function RootLayout({
 }>) {
   return (
     // 전역 레이아웃은 폰트, 전역 스타일, HTML 기본 속성만 담당합니다.
-    <html lang="ko" className={cn("h-full", "font-sans", geist.variable)}>
+    <html lang="ko" className={cn("h-full", "font-sans")}>
       <body className="min-h-full bg-background text-foreground antialiased">
         {/* useQuery/useMutation을 어디서든 쓸 수 있게 앱 전체를 provider로 감쌉니다. */}
         <QueryProvider>{children}</QueryProvider>
