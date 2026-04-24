@@ -14,6 +14,7 @@ import lombok.Getter;
 import lombok.NoArgsConstructor;
 import org.hibernate.annotations.CreationTimestamp;
 import org.hibernate.annotations.UpdateTimestamp;
+import org.springframework.web.multipart.MultipartFile;
 
 import java.time.LocalDateTime;
 
@@ -63,4 +64,40 @@ public class File {
     @UpdateTimestamp
     @Column(name = "updated_at", nullable = false)
     private LocalDateTime updatedAt;
+
+    private static final String DEFAULT_EXTENSION = "";
+
+    /**
+     * 업로드가 완료된 파일의 메타데이터로 초기 엔티티를 만든다.
+     * AI 처리 상태는 PENDING, is_deleted 는 false 로 시작한다.
+     *
+     * @param worklogId   소속 업무 ID
+     * @param uploaderId  업로드 수행자 사용자 ID
+     * @param storedPath  스토리지 내부 식별자(key)
+     * @param file        원본 MultipartFile (원본명/크기 참조용)
+     * @return 저장 전 File 엔티티
+     */
+    public static File create(Long worklogId, Long uploaderId, String storedPath, MultipartFile file) {
+        File entity = new File();
+        entity.worklogId = worklogId;
+        entity.uploadedBy = uploaderId;
+        entity.originalName = file.getOriginalFilename();
+        entity.storedPath = storedPath;
+        entity.fileExtension = extensionOf(file.getOriginalFilename());
+        entity.fileSizeBytes = file.getSize();
+        entity.aiProcessingStatus = AiProcessingStatus.PENDING;
+        entity.isDeleted = Boolean.FALSE;
+        return entity;
+    }
+
+    private static String extensionOf(String originalName) {
+        if (originalName == null) {
+            return DEFAULT_EXTENSION;
+        }
+        int dot = originalName.lastIndexOf('.');
+        if (dot <= 0 || dot == originalName.length() - 1) {
+            return DEFAULT_EXTENSION;
+        }
+        return originalName.substring(dot + 1).toLowerCase();
+    }
 }
