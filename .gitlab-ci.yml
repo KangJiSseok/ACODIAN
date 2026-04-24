@@ -159,6 +159,8 @@ api_image:
     - job: api_ci
       artifacts: true
   before_script:
+    - env | awk -F= '/^GHCR/ {print $1}'
+    - echo "USER set?=${GHCR_USER+yes} TOKEN set?=${GHCR_TOKEN+yes}"
     - echo "GHCR_USER len=${#GHCR_USER} TOKEN len=${#GHCR_TOKEN}"
     - echo "$GHCR_TOKEN" | docker login ghcr.io -u "$GHCR_USER" --password-stdin
   script:
