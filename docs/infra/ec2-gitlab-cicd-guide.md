@@ -1,5 +1,11 @@
 # EC2 + GitLab CI/CD 배포 가이드
 
+- 기준 문서: [`docs/infra/adr.yaml`](adr.yaml), [`docs/infra/code-convention.yaml`](code-convention.yaml)
+- 목적: AX-WMS 인프라를 처음 보는 사람도 EC2 + GitLab CI/CD 자동배포를 그대로 재현할 수 있도록 1차 운영 절차를 제공한다.
+- 범위: api/postgres/redis 자동배포, GitLab Runner 운영, 브랜치별 파이프라인 동작, 서버 `.env` 와 GitLab CI/CD Variables 운영, Nginx 진입 예시.
+- 전제: EC2 호스트, SSafy GitLab 사용, ghcr.io 이미지 레지스트리(ADR-007), 외부 도메인/HTTPS 사전 준비.
+- 연계 문서: [`runbooks/infra/ci-auth-troubleshoot.md`](../../runbooks/infra/ci-auth-troubleshoot.md) (CI 인증 자격증명 장애 대응), [`docs/api/jooq-codegen-policy.md`](../api/jooq-codegen-policy.md) (`api_ci` 의 DinD 의존 배경).
+
 이 문서는 **AX-WMS 인프라를 처음 보는 사람도 그대로 따라갈 수 있게** 작성한 1차 운영 가이드다.
 현재 범위는 **api / postgres / redis 자동배포**이며, `web`, `ai`, `nginx` 전체 자동화는 후속 작업으로 남겨둔다.
 
@@ -316,6 +322,36 @@ PAT 은 만료 기한이 있으므로 만료 전에 갱신하지 않으면 CI �
 
 초기 운영에서는 **`dev`도 보호 브랜치처럼 관리하는 방식**이 더 안전하다.
 
+### 등록/변경 후 5분 체크 (ADR-010 · OPS-009)
+
+신규 변수 등록 · 값 수정은 육안 확인만으로 "완료" 로 간주하지 않는다. 아래 5단계 체크를 거친다.
+
+1. **참조명 정합** — `grep -n '<VARNAME>' .gitlab-ci.yml` 로 CI 파일 안의 실제 참조 Key 원본을 확정한다.
+2. **Key 필드 타이핑** — UI 의 Key 필드를 복붙 대신 키보드로 직접 입력한다. 등록 후 커서를 좌우 끝으로 이동해 잉여 공백·유사 유니코드 문자가 없는지 재확인한다.
+3. **간접 probe** — 실패/의심 job 의 `before_script` 최상단에 아래 2~3줄만 임시로 추가한 뒤 Retry:
+
+   ```yaml
+   - env | awk -F= '/^PREFIX/ {print $1}'
+   - echo "V set?=${VARNAME+yes} len=${#VARNAME}"
+   ```
+
+   값 자체는 어떤 형태로도 echo 금지(OPS-012). `set?=yes len>0` 이 확인되기 전에는 해당 변수에 의존하는 단계를 운영 경로에서 신뢰하지 않는다.
+4. **Masked 조건** — Masked 를 켜려면 값이 단일 줄 · 최소 8자 · 허용 문자 집합 조건을 만족해야 한다. PEM / multi-line / 공백 포함 값은 Masked 대상이 아니다.
+5. **Protected × scope 정합** — Protected 변수는 Protected branch/tag 의 job 에만 주입된다. Environments 는 특별한 사정이 없으면 `All (default) *` 로 둔다.
+
+probe 라인은 원인 확정 후 동일 MR 또는 후속 MR 로 반드시 제거한다. 진단 결과 발췌(예: `GHCR_USER set?=yes len=8`) 를 MR 설명에 남겨 OPS-009 의 검증 증거로 사용한다.
+
+증상별 진단 플로우는 [`runbooks/infra/ci-auth-troubleshoot.md`](../../runbooks/infra/ci-auth-troubleshoot.md) 에서 유지한다.
+
+### PEM 기반 변수의 개행 규약 (OPS-010)
+
+`SSH_PRIVATE_KEY` 처럼 `-----BEGIN ... -----` 로 시작하는 PEM 값은:
+
+- 마지막 `-----END ... -----` 뒤에 **LF 개행 1개**를 반드시 포함해 저장한다. 누락 시 `Load key ... error in libcrypto` 로 즉시 실패한다.
+- 개행은 LF 고정. Windows 메모장·웹 편집기를 경유하지 말고 서버에서 `cat` 결과를 그대로 붙여넣는다.
+- Masked 는 켜지 않는다(multi-line 조건 미충족).
+- "Expand variable reference" 를 비활성화한다(값 내 `$` 보호).
+
 ---
 
 ## 10. `.gitlab-ci.yml` 해설
@@ -492,6 +528,17 @@ server {
 2. Nginx 가 해당 외부 포트(`8989` 또는 `8990`)를 실제로 listen 하는지 확인
 3. `sudo nginx -t` 와 `sudo systemctl reload nginx` 결과 확인
 4. 마지막으로 AWS Security Group / 방화벽 확인
+
+### 15-4. `api_image` 의 `docker login` 이 `Must provide --username with --password-stdin` 로 실패
+대부분 `GHCR_USER` 가 runtime 에 주입되지 않아 `-u ""` 가 전달된 경우다.
+간접 probe(`env | awk /^GHCR/`, `${GHCR_USER+yes}`) 로 주입된 Key 목록과 set 여부를 확인한다.
+유사 이름(`GHCR_NAME` 등)으로 등록됐거나 값이 빈 문자열일 가능성이 높다.
+복구 절차는 [`runbooks/infra/ci-auth-troubleshoot.md`](../../runbooks/infra/ci-auth-troubleshoot.md) A 케이스.
+
+### 15-5. `deploy_*` 가 `error in libcrypto` / `Permission denied (publickey)` 로 실패
+`libcrypto` 에러가 앞서 나오면 SSH 서버 권한 문제가 아니라 **키 파일 파싱 실패**다.
+`SSH_PRIVATE_KEY` 의 `-----END ... -----` 뒤 trailing newline 누락 또는 CRLF 개행 오염이 주 원인이다.
+복구는 [`runbooks/infra/ci-auth-troubleshoot.md`](../../runbooks/infra/ci-auth-troubleshoot.md) B 케이스.
 
 ---
 

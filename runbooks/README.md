@@ -8,6 +8,7 @@
 | 모듈 | 인덱스 | 상태 |
 |---|---|---|
 | api | [`api/README.md`](api/README.md) | 인덱스 존재, 개별 runbook 미작성 |
+| infra | [`infra/README.md`](infra/README.md) | 인덱스 존재, CI 인증 자격증명 runbook 1건 |
 | web | 추후 `runbooks/web/README.md` | 예정 |
 | ai | 추후 `runbooks/ai/README.md` | 예정 |
 | nginx | 추후 `runbooks/nginx/README.md` | 예정 |
