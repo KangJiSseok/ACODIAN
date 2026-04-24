@@ -163,9 +163,13 @@ api_image:
     - echo "$GHCR_TOKEN" | docker login ghcr.io -u "$GHCR_USER" --password-stdin
   script:
     - docker build -t "$API_IMAGE_BASE:$CI_COMMIT_SHA" -t "$API_IMAGE_BASE:$CI_COMMIT_REF_SLUG" api
-    - docker push "$API_IMAGE_BASE:$CI_COMMIT_SHA"
-    - docker push "$API_IMAGE_BASE:$CI_COMMIT_REF_SLUG"
+    # TEMP: 진단 완료 후 주석 해제
+    # - docker push "$API_IMAGE_BASE:$CI_COMMIT_SHA"
+    # - docker push "$API_IMAGE_BASE:$CI_COMMIT_REF_SLUG"
   rules:
+    # TEMP: GHCR 변수 진단용 feature 브랜치 트리거 (진단 완료 후 제거)
+    - if: '$CI_PIPELINE_SOURCE == "push" && $CI_COMMIT_BRANCH == "fix/api/jooq-codegen-dind-host"'
+      changes: *api_deploy_changes
     - if: '$CI_PIPELINE_SOURCE == "push" && ($CI_COMMIT_BRANCH == "dev" || $CI_COMMIT_BRANCH == "master")'
       changes: *api_deploy_changes
 
