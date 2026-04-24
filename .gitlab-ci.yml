@@ -159,6 +159,7 @@ api_image:
     - job: api_ci
       artifacts: true
   before_script:
+    - echo "GHCR_USER len=${#GHCR_USER} TOKEN len=${#GHCR_TOKEN}"
     - echo "$GHCR_TOKEN" | docker login ghcr.io -u "$GHCR_USER" --password-stdin
   script:
     - docker build -t "$API_IMAGE_BASE:$CI_COMMIT_SHA" -t "$API_IMAGE_BASE:$CI_COMMIT_REF_SLUG" api
