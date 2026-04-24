@@ -2,7 +2,7 @@
 
 GitLab CI 파이프라인에서 `GHCR_USER` / `GHCR_TOKEN` / `SSH_PRIVATE_KEY` 같은 자격증명 변수가
 runtime 에 원하는 형태로 주입되지 않아 `docker login` · `ssh` 가 실패하는 케이스를 다룬다.
-규정 기준은 ADR-010 · OPS-006 · OPS-009 · OPS-010 · OPS-012.
+규정 기준은 ADR-013 · OPS-006 · OPS-012 · OPS-013 · OPS-015.
 
 ## 증상 (Symptoms)
 
@@ -55,7 +55,7 @@ ERROR: Job failed: exit code 255
 
 ## 복구 절차 (Recovery)
 
-### 0. 간접 probe 주입 (원인 확정용, OPS-012)
+### 0. 간접 probe 주입 (원인 확정용, OPS-015)
 
 실패하는 job 의 `before_script` 최상단에 임시로 아래 2줄만 추가한다.
 값 자체는 절대 노출하지 않는다.
@@ -113,8 +113,8 @@ PAT 만료 기한은 캘린더 D-7 알림으로 관리한다(ADR-007).
 
 ### 공통 마무리
 
-- probe 라인은 원인 확정 후 동일 MR 또는 후속 MR 로 **반드시 제거** (OPS-012)
-- MR 설명에 probe 실행 결과 발췌(예: `GHCR_USER set?=yes len=8`) 를 검증 증거로 남긴다 (OPS-009)
+- probe 라인은 원인 확정 후 동일 MR 또는 후속 MR 로 **반드시 제거** (OPS-015)
+- MR 설명에 probe 실행 결과 발췌(예: `GHCR_USER set?=yes len=8`) 를 검증 증거로 남긴다 (OPS-012)
 
 ---
 
@@ -122,20 +122,20 @@ PAT 만료 기한은 캘린더 D-7 알림으로 관리한다(ADR-007).
 
 | 분류 | 증상 신호 | 예방 지점 |
 |---|---|---|
-| **Key 불일치** (오타·유사 문자·trailing space) | probe 이름 목록에 기대 Key 가 없음 | ADR-010 (1), OPS-009 |
-| **값이 빈 문자열** (Masked 저장 실패 잔재, Value 공란 저장) | `set?=yes len=0` | ADR-010 (3), OPS-009 |
-| **Protected × 브랜치 불일치** | 비-Protected 브랜치 job 에서 주입 실패 | ADR-010 (5), OPS-006 |
-| **Environment scope 불일치** | `environment:` 미선언 job 에 env-scoped 변수 | ADR-010 (5) |
-| **PEM trailing newline 누락** | `error in libcrypto` → `Permission denied` | OPS-010 |
-| **CRLF 개행 오염** | 이관 경로에 Windows 편집기/웹 위젯 | OPS-010 |
+| **Key 불일치** (오타·유사 문자·trailing space) | probe 이름 목록에 기대 Key 가 없음 | ADR-013 (1), OPS-012 |
+| **값이 빈 문자열** (Masked 저장 실패 잔재, Value 공란 저장) | `set?=yes len=0` | ADR-013 (3), OPS-012 |
+| **Protected × 브랜치 불일치** | 비-Protected 브랜치 job 에서 주입 실패 | ADR-013 (5), OPS-006 |
+| **Environment scope 불일치** | `environment:` 미선언 job 에 env-scoped 변수 | ADR-013 (5) |
+| **PEM trailing newline 누락** | `error in libcrypto` → `Permission denied` | OPS-013 |
+| **CRLF 개행 오염** | 이관 경로에 Windows 편집기/웹 위젯 | OPS-013 |
 | **Variable Type 혼동** (File vs Variable) | key 파일에 경로 문자열이 들어감, `printf` vs `cp` 미스매치 | B 복구 절차 참조 |
 
 ---
 
 ## 후속 조치 (Follow-up)
 
-1. probe 제거 커밋을 원인 확정 MR 에 포함 (OPS-012 강제)
-2. 새 신호가 나오면 "근본 원인 분류" 표에 행을 추가하고, 해당 예방 지점(ADR-010 / OPS-009~012) 을 갱신
+1. probe 제거 커밋을 원인 확정 MR 에 포함 (OPS-015 강제)
+2. 새 신호가 나오면 "근본 원인 분류" 표에 행을 추가하고, 해당 예방 지점(ADR-013 / OPS-012~OPS-015) 을 갱신
 3. `SSH_PRIVATE_KEY` 는 OPS-005 에 따라 개인 접속 키와 분리된 CI 전용 키페어로 운영한다. 키 재생성 시 EC2 `authorized_keys` 와 GitLab Variables 를 **동시** 갱신
 4. 분기 1회 GitLab CI/CD Variables 감사 로그를 훑어 Protected/Mask 해제 같은 비정상 변경이 없는지 점검
 
@@ -151,4 +151,4 @@ PAT 만료 기한은 캘린더 D-7 알림으로 관리한다(ADR-007).
 - **증상 B**: 같은 날 후속 `deploy_dev` 가 `Load key ... error in libcrypto` 로 실패
 - **진단**: `SSH_PRIVATE_KEY` 값 마지막 `-----END OPENSSH PRIVATE KEY-----` 뒤 LF 누락
 - **복구**: 키 재등록 시 마지막 줄 개행 포함
-- **후속 반영**: ADR-010 신설, OPS-009 / OPS-010 / OPS-011 / OPS-012 신설, 본 runbook 생성
+- **후속 반영**: ADR-013 신설, OPS-012 / OPS-013 / OPS-014 / OPS-015 신설, 본 runbook 생성

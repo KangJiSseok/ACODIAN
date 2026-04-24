@@ -225,6 +225,165 @@
         환경 특화면 서버 `.env` 에만, 스모크 기본값을 둘 수 있으면 `.env.example` 에 둔다.
 
 - id: ADR-010
+  title: "외부 진입 포트 재정의 — Nginx 80/443·8080/8443, 컨테이너 내부 8x00, 127.0.0.1 바인딩, staging +1 오프셋"
+  status: adopted
+  date: 2026-04-24
+  stacks: [infra, nginx, compose, ec2, security]
+  context: |
+    기존 스킴은 "외부에서 8989/8990 으로 들어와 컨테이너 호스트 포트(8080/8081) 에 직접 도달" 하는 구조였다.
+    이 구조는 세 가지 한계가 있었다.
+      1. TLS 종료 지점이 명확하지 않다. 브라우저가 요구하는 HTTPS/HTTP 상호작용(특히 FE 가 HTTPS 면 API 도 HTTPS 여야 mixed content 회피) 을 체계적으로 처리할 경로가 없었다.
+      2. 외부에서 컨테이너 호스트 포트에 직접 꽂힐 수 있어 Nginx 의 로깅/속도 제한/헤더 정책 같은 경계 정책이 우회될 여지가 있었다.
+      3. 포트 번호가 8989/8990 처럼 불규칙해 서비스 증설 시 기억 부담이 커졌다. web/ai 가 자동배포 범위에 들어오면 더 악화될 수 있다.
+
+    동시에 환경/현실 조건을 재확인한 결과:
+      - SSAFY 보안그룹은 443/80 을 포함해 일반 포트가 이미 열려 있다. 팀이 8000–9000 으로 좁혀 쓰던 것은 "어디가 열렸는지 파악하기 귀찮아서" 의 편의 규칙이었을 뿐 제도적 제약이 아니다.
+      - Nginx 를 EC2 systemd 로 두는 방향은 합의돼 있다(ADR-001 의 "nginx/HTTPS 는 외부에서 제공된 환경" 은 상위 인프라가 아니라 이 EC2 자체의 systemd nginx 로 재해석).
+      - TLS 인증서 발급 경로(ADR-012) 는 Let's Encrypt + certbot 으로 확정한다.
+
+    따라서 "Nginx 를 전면에 두고 컨테이너는 내부 포트만 쓰게" 구조를 명시적으로 바꿀 수 있는 시점이다.
+  decision: |
+    Nginx 를 EC2 systemd 로 운영하고 외부 진입 포트를 재정의한다.
+
+    1. 외부 진입 포트 (Nginx listen)
+       - production: 80, 443 (ACME HTTP-01 challenge + HTTPS)
+       - staging:    8080, 8443
+       Nginx 는 이 네 포트를 점유하고 모든 외부 요청을 받는다.
+       이 포트들은 OPS-004 의 "8000–9000" 규칙의 예외로 허용한다 (OPS-004 갱신).
+
+    2. 컨테이너 내부 listen 포트 (고정)
+       - web (Next.js):    8000
+       - api (Spring):     8100
+       - ai (FastAPI):     8200
+       컨테이너가 "어느 서비스인가" 를 포트 한 자리수로 기억할 수 있게 8x00 네이밍으로 통일한다.
+
+    3. 컨테이너 호스트 바인딩
+       - web/api/ai 는 `127.0.0.1:<HOST>:<INTERNAL>` 형태로 바인딩해 외부에서 Nginx 를 우회할 수 없게 한다 (OPS-010).
+       - production 호스트 포트는 컨테이너 내부 포트와 동일하게 둔다 (예: `127.0.0.1:8100:8100`).
+       - staging 호스트 포트는 production +1 오프셋으로 둔다 (예: `127.0.0.1:8101:8100`). 이 규칙은 OPS-009 로 상수화한다.
+       - Nginx 는 `proxy_pass http://127.0.0.1:8100` 처럼 로컬로만 upstream 을 연다.
+
+    4. 서비스 증설 시 운용 규칙
+       - web/ai 자동배포 범위 확장(ADR-001) 은 별개 결정이다. 이 ADR 은 web/ai 도 8000/8200 으로 내부 listen 한다는 네이밍만 확정하고, 실제 compose/코드 반영은 자동배포 범위가 열릴 때 동반 진행한다.
+
+    이 결정은 ADR-005(이미지 pull + SSH compose 실행) 와 ADR-007(ghcr.io) 을 갱신하지 않고, ADR-001 의 "외부 nginx/HTTPS" 해석을 "EC2 systemd nginx" 로 구체화한다.
+  consequence: |
+    긍정적 영향:
+      - TLS 종료가 Nginx 단일 지점에 모여 FE/API/AI HTTPS 일관성이 확보된다. mixed content 문제 해소.
+      - 외부 스캔에 노출되는 TCP 포트가 Nginx(80/443, 8080/8443) 와 DB(ADR-011) 로 축소된다. 공격 표면 감소.
+      - 포트 번호 규칙성이 높아 팀원이 외워서 디버깅 가능.
+      - production/staging 이 같은 EC2 에 공존해도 충돌이 구조적으로 방지된다 (+1 오프셋 + 127.0.0.1 바인딩).
+
+    부정적 영향 및 수용 범위:
+      - Nginx 가 단일 장애 지점이 된다 — reload 실패 시 전체 외부 접근 중단. 완화: `sudo nginx -t` 선행, systemd 재시작 대신 reload 사용, 설정 변경은 PR 리뷰 필수화 (Nginx conf 저장소화는 pending-decisions 참고).
+      - `server.port` 를 8100 으로 옮기면서 기존 application.yml default(8080) 와 문서(`API_HOST_PORT=8080`) 를 같이 갱신해야 한다. 이번 MR 에서 api 영역에 한해 반영한다.
+      - web/ai 는 실제 반영이 자동배포 범위에 들어올 때까지 유예된다. 그동안 web/ai 개발자는 기본 포트(Next 3000, Uvicorn 8000) 를 쓰다가 자동배포 편입 시점에 일괄 교체해야 한다 — pending-decisions 에 기록.
+
+    후속 책임:
+      - OPS-004 / OPS-009 / OPS-010 을 이 ADR 의 근거로 한다.
+      - 가이드(`docs/infra/ec2-gitlab-cicd-guide.md`) 섹션 6·8·13 을 이 스킴으로 재작성한다.
+      - Nginx conf 저장소 편입(가이드 섹션 17 후속 과제) 은 실제 서버 작업과 동기화가 필요해 별도 MR 로 분리한다.
+
+- id: ADR-011
+  title: "DB 개발 편의 외부 노출 — postgres 8300/8301, redis 8400/8401, production 포함 리스크 수용"
+  status: adopted
+  date: 2026-04-24
+  stacks: [infra, postgres, redis, security]
+  context: |
+    팀 개발 루프에서 스키마/데이터를 DBeaver, RedisInsight 같은 클라이언트 툴로 직접 확인해야 하는 빈도가 높다.
+    기존 compose 는 postgres/redis 를 호스트 포트로 노출하지 않아 매번 `docker exec -it` 또는 SSH 포트포워딩을 거쳐야 했고,
+    이 마찰이 디버깅 속도를 눈에 띄게 떨어뜨리고 있었다.
+
+    검토한 대안:
+      (a) 호스트 포트 외부 개방 (이 ADR)
+          - 장점: DB 툴이 바로 붙는다. 설정 단순.
+          - 단점: 공개 인터넷에 DB 포트가 상시 listen 된다. 비밀번호 유출 시 즉시 공격 가능.
+      (b) SSH 터널 only (외부 비노출)
+          - 장점: 외부 표면 0. 가장 안전.
+          - 단점: 매번 `ssh -L` 세팅. 팀원별 SSH 키 관리가 필요. 툴 연결 템플릿 배포 부담.
+      (c) VPN (WireGuard 등)
+          - 장점: 내부망처럼 사용. 표면 최소.
+          - 단점: VPN 서버 운영·계정 관리·클라이언트 배포. 팀 규모 대비 운영 오버헤드 과도.
+
+    ADR-001 의 "EC2 는 실행 전용 호스트" 방향과 (a) 는 긴장 관계에 있지만, 지금 팀 규모와 개발 속도 요구를 고려하면 (a) 의 이득이 크다.
+    사용자(팀 리드) 가 "개발 편의를 위해 production 포함 외부 개방" 을 명시적으로 결정했다.
+  decision: |
+    postgres 와 redis 를 호스트 포트로 외부에 개방한다. production 도 개방 대상에 포함한다.
+
+    호스트 포트 매핑 (OPS-009 의 +1 오프셋 규칙 적용):
+      - postgres: production `8300:5432`, staging `8301:5432`
+      - redis:    production `8400:6379`, staging `8401:6379`
+
+    컨테이너 내부 listen 포트는 기본값(postgres 5432, redis 6379) 을 유지한다.
+    "내부 listen 도 8300/8400 으로 바꾸자" 는 초기 제안은, 클라이언트 드라이버 기본값(5432/6379) 과 mismatch 로 인한 실수 가능성이 커 이번 단계에서는 채택하지 않았다.
+    문제가 발생하면 그때 내부 포트도 변경한다.
+
+    완화책(공격 표면 확장에 대한 방어선):
+      - `DB_PASSWORD` 는 staging/production 각각 다른 강한 무작위 값(최소 24자, 혼합) 으로 관리한다 (OPS-011).
+      - 비밀번호는 GitLab CI/CD Variables 로만 보관하고 저장소·문서에 실제 값을 커밋하지 않는다.
+      - SSAFY 보안그룹에서 IP 화이트리스트가 가능해지면 DB 포트만 팀원 IP 로 제한한다 (pending-decisions).
+      - 비정상 접속 패턴이 감지되면 임시로 DB 포트만 보안그룹에서 닫는 runbook 을 운영한다 (후속 문서화).
+
+  consequence: |
+    긍정적 영향:
+      - 개발 속도 가속 — DBeaver/RedisInsight 연결 한 번으로 스키마 검증, 데이터 수정, 쿼리 디버깅이 즉시 가능.
+      - compose 레벨에서 호스트 포트만 다루므로 컨테이너 내부/서비스 코드에 영향 없음.
+
+    부정적 영향 및 수용 범위:
+      - 공개 인터넷에 DB 포트가 상시 listen 된다. 자동 스캐너 입장에서 유의미한 타깃이다.
+      - 비밀번호 유출 시 즉시 공격이 가능하다. OPS-011 의 강한 비밀번호 정책이 유일한 1차 방어선이다.
+      - ADR-001 의 "EC2 실행 전용 호스트" 방향과 긴장 — 이번 결정은 "개발 편의 vs 보안 표면" 트레이드오프에서 편의를 명시적으로 선택한 기록이다.
+
+    재검토 트리거 (아래 중 하나라도 해당되면 이 ADR 을 재검토한다):
+      - 저장 데이터가 민감정보 수준(개인정보/결제 등) 으로 격상되는 경우
+      - 팀 인원 확대로 DB 접속이 필요한 사람 수가 급증하는 경우
+      - 실제 침해 사고 또는 유사 사고가 인접 프로젝트에서 발생하는 경우
+      - SSAFY 가 IP 화이트리스트 기능을 열어줘 (b)/(c) 에 준하는 수준의 표면 축소가 가능해지는 경우
+
+- id: ADR-012
+  title: "TLS 인증서 출처 — Let's Encrypt + certbot 자동 갱신"
+  status: adopted
+  date: 2026-04-24
+  stacks: [infra, nginx, security, ec2]
+  context: |
+    ADR-010 으로 Nginx 가 443/8443 에서 HTTPS 를 제공하는 구조가 확정되면서 인증서가 실제로 필요해졌다.
+
+    검토한 대안:
+      (a) Let's Encrypt + certbot
+          - 무료, 90일 만료 + 자동 갱신 가능, 표준 ACME 클라이언트.
+          - 도메인 `k14s209.p.ssafy.io` 가 공개 인터넷에서 80 포트로 HTTP-01 challenge 를 받을 수 있으면 발급 가능.
+          - 갱신 실패 시 `certbot renew` 로그만 확인하면 된다.
+      (b) SSAFY 제공 와일드카드 인증서
+          - 팀에서 출처·갱신 주기·private key 보관 책임 경계가 불명확.
+          - 와일드카드 특성상 대상 범위가 넓어 키 분실 시 영향 범위가 크다.
+      (c) 자체 서명 (self-signed)
+          - 브라우저 경고로 정상 운영 불가. 내부 툴용이라도 FE 연결 시 API HTTPS 는 실제 CA 인증서가 필요.
+
+    도메인이 이미 존재하고 80 포트 개방이 (ADR-010) 로 확정된 상태라 (a) 의 전제가 성립한다.
+  decision: |
+    Let's Encrypt + certbot 으로 TLS 인증서를 발급·갱신한다.
+
+    운영 방식:
+      - 초기 발급: `certbot --nginx -d k14s209.p.ssafy.io` 로 Nginx plugin 이 conf 자동 수정 + 인증서 발급을 동시 수행.
+      - 인증서 위치: `/etc/letsencrypt/live/k14s209.p.ssafy.io/fullchain.pem` / `privkey.pem`
+      - 자동 갱신: certbot 설치 시 systemd timer(`certbot.timer`) 가 자동 활성화되어 하루 2회 `certbot renew` 실행. 만료 D-30 시점부터 갱신 시도.
+      - 갱신 후 hook: `--deploy-hook "systemctl reload nginx"` 를 systemd timer 의 환경 또는 `/etc/letsencrypt/renewal/*.conf` 에 설정해 reload 를 자동화.
+      - 80 포트는 Nginx 가 항상 listen 해야 ACME HTTP-01 challenge 가 가능하다. 설령 443 으로만 트래픽을 받아도 80 은 redirect 목적 + challenge 목적으로 남겨둔다.
+  consequence: |
+    긍정적 영향:
+      - 무료·자동 갱신·Nginx 통합. 운영 오버헤드 최소.
+      - 인증서 출처가 표준 공개 CA 이므로 브라우저 경고 없음.
+
+    부정적 영향과 완화:
+      - Let's Encrypt 서비스 장애 시 갱신이 지연될 수 있다. 완화: 만료 7일 전 알림 루틴(외부 모니터링) 을 pending-decisions 의 후속 과제로 기록.
+      - 80 포트가 반드시 외부 개방되어야 한다. ADR-010 과 연동되어 있어 두 결정은 함께 움직인다.
+      - `k14s209.p.ssafy.io` 의 DNS 제어권이 SSAFY 측에 있다. SSAFY 가 도메인을 회수하거나 DNS 변경을 지체하면 신규 발급이 막힌다. 완화: 사고 시점에 DNS 관리 주체에 긴급 요청할 연락 창구를 운영 문서에 명시한다 (후속 과제).
+
+    후속 책임:
+      - 실제 `certbot --nginx` 초기 발급은 EC2 서버 작업이 수반되므로 코드 변경만으로 완결되지 않는다 — pending-decisions 참고.
+      - Nginx conf 저장소 편입이 이뤄지면 인증서 경로도 저장소 conf 와 정합성 유지.
+
+- id: ADR-013
   title: CI/CD 인증 자격증명의 등록·검증 규칙 — `.gitlab-ci.yml` 참조명과 Variables Key 정합성
   status: adopted
   date: 2026-04-24
@@ -245,7 +404,7 @@
       (4) Masked 조건 준수 — 단일 줄·최소 8자·허용 문자 집합을 만족할 때만 Masked 를 켠다. PEM/multi-line/공백 포함 값은 Masked 대상이 아니다.
       (5) Protected × Environment scope 정합 — Protected 변수는 Protected branch/tag 의 job 에만 주입된다. environment 미선언 job 에서는 Environments 를 `All (default) *` 로 둬야 주입된다.
     PEM 기반 변수(`SSH_PRIVATE_KEY` 등) 는 마지막 `-----END ... -----` 뒤에 LF 개행 1개를 반드시 포함하고 개행은 LF 고정으로 저장한다(`SSH_PRIVATE_KEY`, `SSH_KNOWN_HOSTS` 는 "Expand variable reference" 비활성화).
-    상세 단계별 절차·진단 사례·복구 명령은 `docs/infra/code-convention.yaml` 의 OPS-009 / OPS-010 / OPS-012 와 `runbooks/infra/ci-auth-troubleshoot.md` 가 SSOT 다.
+    상세 단계별 절차·진단 사례·복구 명령은 `docs/infra/code-convention.yaml` 의 OPS-012 / OPS-013 / OPS-015 와 `runbooks/infra/ci-auth-troubleshoot.md` 가 SSOT 다.
   consequence: |
     변수 등록 실수(Key 오타, 보이지 않는 문자, Masked 저장 실패, PEM 개행 누락) 가 배포 단계까지 흘러가는 경로가 차단된다.
     간접 probe 패턴이 표준화되어 장애 진단 시간이 예측 가능해지고, OPS-006 의 "Protected 등록" 원칙이 실제 검증 가능한 절차로 보강된다.

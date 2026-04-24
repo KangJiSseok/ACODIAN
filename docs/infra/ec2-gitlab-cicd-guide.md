@@ -150,20 +150,28 @@ EC2에서는:
 
 ### 왜 staging/production을 나누는가?
 
-`dev`와 `master`가 같은 서버를 써도,
+`dev`와 `master`가 같은 EC2 를 써도,
 서로 다른 포트 / 서로 다른 volume / 서로 다른 compose project 로 분리해야 충돌이 없다.
 
-예를 들어 내부 애플리케이션 포트는 아래처럼 둔다.
-- staging API: `127.0.0.1:8081`
-- production API: `127.0.0.1:8080`
+포트 스킴은 ADR-010 / OPS-009 / OPS-010 으로 아래와 같이 확정돼 있다.
 
-그리고 외부 공개 포트는 같은 도메인에서 아래처럼 분리한다.
-- production 외부 URL: `https://k14s209.p.ssafy.io:8989`
-- staging 외부 URL: `https://k14s209.p.ssafy.io:8990`
+| 대상 | 컨테이너 내부 listen | production 호스트 | staging 호스트 |
+|---|---|---|---|
+| Nginx (EC2 systemd) | — | **80, 443** | **8080, 8443** |
+| web (Next.js) | 8000 | `127.0.0.1:8000:8000` | `127.0.0.1:8001:8000` |
+| api (Spring) | 8100 | `127.0.0.1:8100:8100` | `127.0.0.1:8101:8100` |
+| ai (FastAPI) | 8200 | `127.0.0.1:8200:8200` | `127.0.0.1:8201:8200` |
+| postgres | 5432 (표준) | `8300:5432` | `8301:5432` |
+| redis | 6379 (표준) | `8400:6379` | `8401:6379` |
 
-EC2 보안그룹 정책상 외부에서 열 수 있는 포트는 **8000–9000 범위**로 제한되므로, 내부 바인딩 포트도 같은 범위 안에서 고른다.
+핵심 규칙:
+- Nginx 가 외부 진입점이고, web/api/ai 컨테이너는 `127.0.0.1:` 로 묶여 외부에서 직접 접근할 수 없다.
+- staging 은 production 호스트 포트 **+1 오프셋** 이다. Nginx listen 만 예외.
+- postgres/redis 는 개발 편의(ADR-011) 로 `0.0.0.0` 바인딩을 유지하되 OPS-011 의 강한 비밀번호 정책으로 완화한다.
 
-즉, Nginx가 같은 도메인에서 포트별로 다른 내부 포트로 프록시하는 구조다.
+외부에서 보이는 URL:
+- production: `https://k14s209.p.ssafy.io` (443 기본)
+- staging:    `https://k14s209.p.ssafy.io:8443`
 
 ---
 
@@ -250,11 +258,13 @@ sudo systemctl restart gitlab-runner
 
 ```dotenv
 APP_ENV=staging
-API_HOST_PORT=8081
+API_HOST_PORT=8101
+POSTGRES_HOST_PORT=8301
+REDIS_HOST_PORT=8401
 DB_NAME=postgres
 DB_USERNAME=postgres
-DB_PASSWORD=change-me
-JWT_SECRET=change-me-to-a-long-random-string
+DB_PASSWORD=<staging 전용 강한 무작위 값, 최소 24자>
+JWT_SECRET=<staging 전용 최소 32바이트 무작위 값>
 JWT_ACCESS_EXPIRATION=3600000
 JWT_REFRESH_EXPIRATION=1209600000
 ```
@@ -264,14 +274,18 @@ JWT_REFRESH_EXPIRATION=1209600000
 
 ```dotenv
 APP_ENV=production
-API_HOST_PORT=8080
+API_HOST_PORT=8100
+POSTGRES_HOST_PORT=8300
+REDIS_HOST_PORT=8400
 DB_NAME=postgres
 DB_USERNAME=postgres
-DB_PASSWORD=change-me
-JWT_SECRET=change-me-to-a-long-random-string
+DB_PASSWORD=<production 전용 강한 무작위 값, staging 과 반드시 다른 값>
+JWT_SECRET=<production 전용 최소 32바이트 무작위 값, staging 과 반드시 다른 값>
 JWT_ACCESS_EXPIRATION=3600000
 JWT_REFRESH_EXPIRATION=1209600000
 ```
+
+OPS-011 에 따라 `DB_PASSWORD` 는 staging/production 서로 다른 강한 무작위 값으로 유지한다. DB 가 외부 개방된 구조(ADR-011) 에서 비밀번호가 1차 방어선이 된다.
 
 ### 중요한 점
 - `.env`는 **서버에만** 둔다.
@@ -295,11 +309,11 @@ GitLab 경로:
 
 ### staging 변수
 - `DEPLOY_HOST_STAGING` — EC2 SSH 외부 주소
-- `STAGING_URL` — 외부 공개 URL (예: `https://k14s209.p.ssafy.io:8990`)
+- `STAGING_URL` — 외부 공개 URL (예: `https://k14s209.p.ssafy.io:8443`)
 
 ### production 변수
 - `DEPLOY_HOST_PRODUCTION` — 현재는 staging 과 같은 서버여도 된다
-- `PRODUCTION_URL` — 외부 공개 URL (예: `https://k14s209.p.ssafy.io:8989`)
+- `PRODUCTION_URL` — 외부 공개 URL (예: `https://k14s209.p.ssafy.io`)
 
 ### Registry 자격증명 — ghcr.io 기준
 
@@ -322,7 +336,7 @@ PAT 은 만료 기한이 있으므로 만료 전에 갱신하지 않으면 CI �
 
 초기 운영에서는 **`dev`도 보호 브랜치처럼 관리하는 방식**이 더 안전하다.
 
-### 등록/변경 후 5분 체크 (ADR-010 · OPS-009)
+### 등록/변경 후 5분 체크 (ADR-013 · OPS-012)
 
 신규 변수 등록 · 값 수정은 육안 확인만으로 "완료" 로 간주하지 않는다. 아래 5단계 체크를 거친다.
 
@@ -335,15 +349,15 @@ PAT 은 만료 기한이 있으므로 만료 전에 갱신하지 않으면 CI �
    - echo "V set?=${VARNAME+yes} len=${#VARNAME}"
    ```
 
-   값 자체는 어떤 형태로도 echo 금지(OPS-012). `set?=yes len>0` 이 확인되기 전에는 해당 변수에 의존하는 단계를 운영 경로에서 신뢰하지 않는다.
+   값 자체는 어떤 형태로도 echo 금지(OPS-015). `set?=yes len>0` 이 확인되기 전에는 해당 변수에 의존하는 단계를 운영 경로에서 신뢰하지 않는다.
 4. **Masked 조건** — Masked 를 켜려면 값이 단일 줄 · 최소 8자 · 허용 문자 집합 조건을 만족해야 한다. PEM / multi-line / 공백 포함 값은 Masked 대상이 아니다.
 5. **Protected × scope 정합** — Protected 변수는 Protected branch/tag 의 job 에만 주입된다. Environments 는 특별한 사정이 없으면 `All (default) *` 로 둔다.
 
-probe 라인은 원인 확정 후 동일 MR 또는 후속 MR 로 반드시 제거한다. 진단 결과 발췌(예: `GHCR_USER set?=yes len=8`) 를 MR 설명에 남겨 OPS-009 의 검증 증거로 사용한다.
+probe 라인은 원인 확정 후 동일 MR 또는 후속 MR 로 반드시 제거한다. 진단 결과 발췌(예: `GHCR_USER set?=yes len=8`) 를 MR 설명에 남겨 OPS-012 의 검증 증거로 사용한다.
 
 증상별 진단 플로우는 [`runbooks/infra/ci-auth-troubleshoot.md`](../../runbooks/infra/ci-auth-troubleshoot.md) 에서 유지한다.
 
-### PEM 기반 변수의 개행 규약 (OPS-010)
+### PEM 기반 변수의 개행 규약 (OPS-013)
 
 `SSH_PRIVATE_KEY` 처럼 `-----BEGIN ... -----` 로 시작하는 PEM 값은:
 
@@ -417,76 +431,125 @@ probe 라인은 원인 확정 후 동일 MR 또는 후속 MR 로 반드시 제�
 
 ---
 
-## 13. Nginx 연결 예시
+## 13. Nginx 진입 구조
 
-현재는 별도 서브도메인을 추가하지 않고, **같은 도메인 + 다른 외부 포트**로 staging/production 을 분리하는 것이 가장 현실적이다.
+Nginx 를 EC2 systemd 로 운영해 **모든 외부 요청의 단일 진입점** 으로 둔다 (ADR-010).
+컨테이너(web/api/ai) 는 `127.0.0.1:` 로만 바인딩되어 외부에서 Nginx 를 우회할 수 없다.
 
-### 13-1. 권장 포트 매핑
+### 13-1. 진입 경로 요약
 
-- production 외부 포트: `8989`
-- staging 외부 포트: `8990`
-- production 내부 API 포트: `8080`
-- staging 내부 API 포트: `8081`
-
-> 참고: EC2 보안그룹이 **8000–9000 범위만 허용**하므로 내부 바인딩도 이 범위 안으로 고정한다.
-
-즉, 브라우저 기준으로는 아래처럼 접근한다.
-
-- production: `https://k14s209.p.ssafy.io:8989`
-- staging: `https://k14s209.p.ssafy.io:8990`
+```text
+외부 사용자
+    │
+    ▼  https://k14s209.p.ssafy.io[:8443]
+┌──────────────────────────────────────────────┐
+│  systemd Nginx (EC2 호스트)                   │  ← 외부에 보이는 유일한 문
+│  ├─ TLS 종료 (Let's Encrypt 인증서)           │
+│  ├─ 80  → 443 redirect (production)           │
+│  ├─ 443 (production) / 8443 (staging): HTTPS  │
+│  │  ├─ /       → 127.0.0.1:8000|8001 (web)   │
+│  │  ├─ /api/   → 127.0.0.1:8100|8101 (api)   │
+│  │  └─ /ai/    → 127.0.0.1:8200|8201 (ai)    │
+└──────────────────────────────────────────────┘
+```
 
 ### 13-2. Nginx 예시 설정
 
+실제 conf 저장소 편입은 후속 MR 예정이며(아래 섹션 17 참고), 현재는 EC2 의 `/etc/nginx/sites-available/axwms.conf` 에 아래 골격을 유지한다.
+
 ```nginx
-upstream axwms_api_prod {
-    server 127.0.0.1:8080;
-}
+upstream axwms_web_prod      { server 127.0.0.1:8000; }
+upstream axwms_web_staging   { server 127.0.0.1:8001; }
+upstream axwms_api_prod      { server 127.0.0.1:8100; }
+upstream axwms_api_staging   { server 127.0.0.1:8101; }
+upstream axwms_ai_prod       { server 127.0.0.1:8200; }
+upstream axwms_ai_staging    { server 127.0.0.1:8201; }
 
-upstream axwms_api_staging {
-    server 127.0.0.1:8081;
-}
-
+# ACME challenge + HTTPS redirect (production)
 server {
-    listen 8989 ssl http2;
+    listen 80;
+    server_name k14s209.p.ssafy.io;
+
+    location /.well-known/acme-challenge/ {
+        root /var/www/certbot;
+    }
+    location / {
+        return 301 https://$host$request_uri;
+    }
+}
+
+# production (HTTPS)
+server {
+    listen 443 ssl http2;
     server_name k14s209.p.ssafy.io;
 
     ssl_certificate     /etc/letsencrypt/live/k14s209.p.ssafy.io/fullchain.pem;
     ssl_certificate_key /etc/letsencrypt/live/k14s209.p.ssafy.io/privkey.pem;
 
-    location / {
-        proxy_pass http://axwms_api_prod;
-        proxy_http_version 1.1;
-        proxy_set_header Host $host;
-        proxy_set_header X-Real-IP $remote_addr;
-        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
-        proxy_set_header X-Forwarded-Proto $scheme;
-    }
+    location /api/ { proxy_pass http://axwms_api_prod; include /etc/nginx/snippets/proxy-headers.conf; }
+    location /ai/  { proxy_pass http://axwms_ai_prod;  include /etc/nginx/snippets/proxy-headers.conf; }
+    location /     { proxy_pass http://axwms_web_prod; include /etc/nginx/snippets/proxy-headers.conf; }
 }
 
+# staging (HTTPS)
 server {
-    listen 8990 ssl http2;
+    listen 8080;
+    server_name k14s209.p.ssafy.io;
+    return 301 https://$host:8443$request_uri;
+}
+server {
+    listen 8443 ssl http2;
     server_name k14s209.p.ssafy.io;
 
     ssl_certificate     /etc/letsencrypt/live/k14s209.p.ssafy.io/fullchain.pem;
     ssl_certificate_key /etc/letsencrypt/live/k14s209.p.ssafy.io/privkey.pem;
 
-    location / {
-        proxy_pass http://axwms_api_staging;
-        proxy_http_version 1.1;
-        proxy_set_header Host $host;
-        proxy_set_header X-Real-IP $remote_addr;
-        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
-        proxy_set_header X-Forwarded-Proto $scheme;
-    }
+    location /api/ { proxy_pass http://axwms_api_staging; include /etc/nginx/snippets/proxy-headers.conf; }
+    location /ai/  { proxy_pass http://axwms_ai_staging;  include /etc/nginx/snippets/proxy-headers.conf; }
+    location /     { proxy_pass http://axwms_web_staging; include /etc/nginx/snippets/proxy-headers.conf; }
 }
 ```
 
-### 13-3. 꼭 같이 확인할 것
+`/etc/nginx/snippets/proxy-headers.conf` 예시:
 
-1. AWS Security Group 에 `8989`, `8990` 인바운드가 열려 있는지
-2. 서버 내부 방화벽(`ufw`)이 있다면 `8990`도 허용했는지
-3. staging `.env`의 `API_HOST_PORT=8081`, production `.env`의 `API_HOST_PORT=8080` 이 실제 compose 와 맞는지 (둘 다 8000–9000 범위인지 재확인)
+```nginx
+proxy_http_version 1.1;
+proxy_set_header Host              $host;
+proxy_set_header X-Real-IP         $remote_addr;
+proxy_set_header X-Forwarded-For   $proxy_add_x_forwarded_for;
+proxy_set_header X-Forwarded-Proto $scheme;
+```
+
+### 13-3. TLS 인증서 (Let's Encrypt + certbot)
+
+ADR-012 에 따라 certbot 으로 발급·갱신한다.
+
+초기 발급 (서버 작업 1회):
+
+```bash
+sudo apt install -y certbot python3-certbot-nginx
+sudo certbot --nginx -d k14s209.p.ssafy.io
+```
+
+자동 갱신: certbot 설치 시 `certbot.timer` 가 자동 활성화되며 하루 2회 `certbot renew` 를 수행한다. 갱신 후 Nginx reload 를 위해 아래를 등록한다.
+
+```bash
+sudo tee /etc/letsencrypt/renewal-hooks/deploy/reload-nginx.sh <<'EOF'
+#!/usr/bin/env bash
+systemctl reload nginx
+EOF
+sudo chmod +x /etc/letsencrypt/renewal-hooks/deploy/reload-nginx.sh
+```
+
+주의: 80 포트는 ACME HTTP-01 challenge 를 위해 Nginx 가 항상 listen 해야 한다. production 이 443 만 쓰더라도 80 은 redirect + challenge 용도로 남긴다.
+
+### 13-4. 꼭 같이 확인할 것
+
+1. SSAFY 보안그룹에 `80`, `443`, `8080`, `8443`, `8300/8301`(postgres), `8400/8401`(redis) 인바운드가 열려 있는지
+2. 서버 내부 방화벽(`ufw`) 사용 시 같은 포트 허용 여부
+3. staging `.env` 의 `API_HOST_PORT=8101` / production `.env` 의 `API_HOST_PORT=8100` 이 실제 compose 와 일치하는지 (+1 오프셋 규칙 재확인)
 4. Nginx reload 전에 `sudo nginx -t` 로 설정 검증을 했는지
+5. `sudo certbot certificates` 로 인증서 만료 일자 확인 (갱신 실패 시 수동 `certbot renew`)
 
 ---
 
@@ -495,13 +558,14 @@ server {
 1. EC2에 Docker 설치
 2. `/opt/axwms/staging`, `/opt/axwms/production` 생성
 3. GitLab Runner 설치 및 프로젝트 register (privileged 포함)
-4. 각 환경 `.env` 작성 (600, 배포 계정 소유)
+4. 각 환경 `.env` 작성 (600, 배포 계정 소유) — `DB_PASSWORD` 는 staging/production 각각 강한 무작위 값 (OPS-011)
 5. CI 전용 SSH 키페어 생성 및 EC2 `authorized_keys` 등록
 6. GitLab Variables 등록 + `master` / `dev` Protected Branch 설정
-7. Nginx가 staging/prod 포트를 바라보도록 확인
-8. 작업 브랜치 -> `dev` MR 생성
-9. merge 후 staging 배포 로그 확인
-10. staging 확인 후 `master` 반영
+7. Nginx 설치 + `/etc/nginx/sites-available/axwms.conf` 적용 + `sudo nginx -t` + reload (섹션 13-2)
+8. `sudo certbot --nginx -d k14s209.p.ssafy.io` 로 인증서 초기 발급 + renewal hook 등록 (섹션 13-3)
+9. 작업 브랜치 -> `dev` MR 생성
+10. merge 후 staging 배포 로그 확인
+11. staging 확인 후 `master` 반영
 
 ---
 
@@ -550,9 +614,10 @@ server {
 - EC2에서 소스 직접 빌드
 - web/ai 운영 자동배포
 - 전체 스택 단일 compose 통합
-- 인증서 자동 발급/갱신 자동화
+- Nginx conf 저장소 편입 (서버 작업 1회 발급과 동기화가 필요, `docs/infra/pending-decisions.md` 참고)
 
 이유는 지금은 **배포 경로를 단순하게 만들고, api 자동배포를 먼저 안정화하는 것**이 우선이기 때문이다.
+TLS 자동 갱신은 ADR-012 로 범위에 포함되었다.
 
 ---
 
