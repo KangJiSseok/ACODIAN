@@ -47,7 +47,7 @@ jwt:
 auth:
   refresh-cookie:
     name: ${AUTH_REFRESH_COOKIE_NAME:refreshToken}
-    path: ${AUTH_REFRESH_COOKIE_PATH:/api/auth/refresh}
+    path: ${AUTH_REFRESH_COOKIE_PATH:/api/auth}
     secure: ${AUTH_REFRESH_COOKIE_SECURE:true}
     same-site: ${AUTH_REFRESH_COOKIE_SAMESITE:Strict}
     domain: ${AUTH_REFRESH_COOKIE_DOMAIN:}

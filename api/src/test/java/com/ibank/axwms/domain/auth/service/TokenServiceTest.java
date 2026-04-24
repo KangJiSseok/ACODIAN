@@ -7,6 +7,7 @@ import static org.mockito.BDDMockito.given;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.verifyNoInteractions;
 
 import com.ibank.axwms.domain.auth.entity.RefreshToken;
 import com.ibank.axwms.domain.auth.repository.RefreshTokenRepository;
@@ -15,6 +16,8 @@ import com.ibank.axwms.domain.organization.user.entity.User;
 import com.ibank.axwms.global.error.BusinessException;
 import com.ibank.axwms.global.error.ErrorCode;
 import com.ibank.axwms.global.security.JwtTokenProvider;
+import io.jsonwebtoken.Claims;
+import io.jsonwebtoken.JwtException;
 import java.time.Instant;
 import java.time.temporal.ChronoUnit;
 import java.util.Optional;
@@ -39,6 +42,9 @@ class TokenServiceTest {
 
     @InjectMocks
     private TokenService tokenService;
+
+    @Mock
+    private Claims claims;
 
     @Test
     @DisplayName("refresh token 이 없으면 AUTH_INVALID_REFRESH_TOKEN 을 던진다")
@@ -148,6 +154,71 @@ class TokenServiceTest {
         assertThat(result.accessToken()).isEqualTo("new-access-token");
         assertThat(result.rotatedRefreshToken()).isNull();
         verify(refreshTokenRepository, never()).save(any());
+    }
+
+    @Test
+    void refresh_token_세션이_저장소에_있고_값이_일치하면_삭제한다() {
+        RefreshToken savedToken = RefreshToken.issue("session-1", 1L, "refresh-token", 100L);
+        given(jwtTokenProvider.parseClaims("refresh-token")).willReturn(claims);
+        given(claims.get(JwtTokenProvider.TOKEN_TYPE_CLAIM, String.class)).willReturn(JwtTokenProvider.REFRESH_TOKEN_TYPE);
+        given(claims.getId()).willReturn("session-1");
+        given(refreshTokenRepository.findById("session-1")).willReturn(Optional.of(savedToken));
+
+        tokenService.revokeRefreshToken("refresh-token");
+
+        verify(refreshTokenRepository).delete(savedToken);
+    }
+
+    @Test
+    void refresh_token_이_없으면_조용히_종료한다() {
+        tokenService.revokeRefreshToken(null);
+
+        verify(jwtTokenProvider, never()).parseClaims("refresh-token");
+        verify(refreshTokenRepository, never()).findById("session-1");
+    }
+
+    @Test
+    void 잘못된_refresh_token_이면_예외없이_종료한다() {
+        given(jwtTokenProvider.parseClaims("broken-token")).willThrow(new JwtException("invalid") {
+        });
+
+        tokenService.revokeRefreshToken("broken-token");
+
+        verify(refreshTokenRepository, never()).findById("session-1");
+    }
+
+    @Test
+    void access_token_이면_저장소를_건드리지_않는다() {
+        given(jwtTokenProvider.parseClaims("access-token")).willReturn(claims);
+        given(claims.get(JwtTokenProvider.TOKEN_TYPE_CLAIM, String.class)).willReturn(JwtTokenProvider.ACCESS_TOKEN_TYPE);
+
+        tokenService.revokeRefreshToken("access-token");
+
+        verifyNoInteractions(refreshTokenRepository);
+    }
+
+    @Test
+    void sessionId_가_blank_이면_저장소를_건드리지_않는다() {
+        given(jwtTokenProvider.parseClaims("refresh-token")).willReturn(claims);
+        given(claims.get(JwtTokenProvider.TOKEN_TYPE_CLAIM, String.class)).willReturn(JwtTokenProvider.REFRESH_TOKEN_TYPE);
+        given(claims.getId()).willReturn("   ");
+
+        tokenService.revokeRefreshToken("refresh-token");
+
+        verifyNoInteractions(refreshTokenRepository);
+    }
+
+    @Test
+    void 저장된_token_값이_다르면_삭제하지_않는다() {
+        RefreshToken savedToken = RefreshToken.issue("session-1", 1L, "other-token", 100L);
+        given(jwtTokenProvider.parseClaims("refresh-token")).willReturn(claims);
+        given(claims.get(JwtTokenProvider.TOKEN_TYPE_CLAIM, String.class)).willReturn(JwtTokenProvider.REFRESH_TOKEN_TYPE);
+        given(claims.getId()).willReturn("session-1");
+        given(refreshTokenRepository.findById("session-1")).willReturn(Optional.of(savedToken));
+
+        tokenService.revokeRefreshToken("refresh-token");
+
+        verify(refreshTokenRepository, never()).delete(savedToken);
     }
 
     private JwtTokenProvider.RefreshTokenClaims refreshClaims(String sessionId, Long userId, long issuedSecondsAgo, long expiresSecondsAfter) {

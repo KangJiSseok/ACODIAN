@@ -1,12 +1,9 @@
 package com.ibank.axwms;
 
+import com.ibank.axwms.testsupport.IntegrationTestSupport;
 import org.junit.jupiter.api.Test;
-import org.springframework.boot.test.context.SpringBootTest;
-import org.springframework.test.context.ActiveProfiles;
 
-@SpringBootTest
-@ActiveProfiles("test")
-class AxWmsApplicationTests {
+class AxWmsApplicationTests extends IntegrationTestSupport {
 
     @Test
     void contextLoads() {

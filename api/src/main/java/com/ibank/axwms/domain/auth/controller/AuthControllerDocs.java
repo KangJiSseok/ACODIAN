@@ -13,6 +13,7 @@ import io.swagger.v3.oas.annotations.responses.ApiResponses;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
+import org.springframework.web.bind.annotation.PostMapping;
 
 @Tag(name = "Auth", description = "인증/인가 API")
 public interface AuthControllerDocs {
@@ -20,7 +21,7 @@ public interface AuthControllerDocs {
     @Operation(
             summary = "로그인",
             description = "이메일과 비밀번호로 인증 후 accessToken 은 Authorization 응답 헤더, "
-                    + "refreshToken 은 설정된 이름의 HttpOnly 쿠키(Path=/api/auth/refresh)로 전달한다. "
+                    + "refreshToken 은 설정된 이름의 HttpOnly 쿠키(Path=/api/auth)로 전달한다. "
                     + "응답 바디는 비어 있으며, 사용자 정보는 별도 현재 사용자 조회 API 로 제공한다."
     )
     @ApiResponses({
@@ -35,7 +36,7 @@ public interface AuthControllerDocs {
                             ),
                             @Header(
                                     name = "Set-Cookie",
-                                    description = "<configured-refresh-cookie-name>=<token>; HttpOnly; Secure; SameSite=Strict; Path=/api/auth/refresh; Max-Age=<jwt.refresh-token-expiration(초)>",
+                                    description = "<configured-refresh-cookie-name>=<token>; HttpOnly; Secure; SameSite=Strict; Path=/api/auth; Max-Age=<jwt.refresh-token-expiration(초)>",
                                     schema = @Schema(type = "string")
                             )
                     }
@@ -75,6 +76,28 @@ public interface AuthControllerDocs {
             @ApiResponse(responseCode = "403", description = "현재 계정 상태로는 재발급할 수 없다.", content = @Content)
     })
     EmptyResponse refresh(
+            @Parameter(hidden = true, in = ParameterIn.COOKIE) HttpServletRequest request,
+            @Parameter(hidden = true, in = ParameterIn.HEADER) HttpServletResponse response
+    );
+
+    @Operation(
+            summary = "로그아웃",
+            description = "HttpOnly refresh 쿠키가 가리키는 현재 세션을 종료한다. "
+                    + "refresh cookie 는 /api/auth 하위 인증 엔드포인트에서 자동 전송되며, 로그아웃은 이를 사용해 현재 세션을 종료한다."
+    )
+    @ApiResponses({
+            @ApiResponse(
+                    responseCode = "200",
+                    description = "로그아웃에 성공한다. refresh 쿠키가 없거나 이미 만료된 경우에도 멱등적으로 성공한다.",
+                    headers = @Header(
+                            name = "Set-Cookie",
+                            description = "refreshToken=; HttpOnly; Secure; SameSite=Strict; Path=/api/auth; Max-Age=0",
+                            schema = @Schema(type = "string")
+                    )
+            )
+    })
+    @PostMapping("/logout")
+    EmptyResponse logout(
             @Parameter(hidden = true, in = ParameterIn.COOKIE) HttpServletRequest request,
             @Parameter(hidden = true, in = ParameterIn.HEADER) HttpServletResponse response
     );

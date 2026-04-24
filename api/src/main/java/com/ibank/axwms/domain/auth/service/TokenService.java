@@ -5,6 +5,8 @@ import com.ibank.axwms.domain.auth.repository.RefreshTokenRepository;
 import com.ibank.axwms.domain.organization.user.entity.User;
 import com.ibank.axwms.global.error.BusinessException;
 import com.ibank.axwms.global.error.ErrorCode;
+import io.jsonwebtoken.Claims;
+import io.jsonwebtoken.JwtException;
 import com.ibank.axwms.global.security.JwtTokenProvider;
 import java.time.Duration;
 import java.time.Instant;
@@ -99,6 +101,35 @@ public class TokenService {
     /** refresh 재발급은 저장소 미존재·불일치·형식 오류를 모두 동일한 401 코드로 처리한다. */
     private BusinessException invalidRefreshToken() {
         return new BusinessException(ErrorCode.AUTH_INVALID_REFRESH_TOKEN);
+    }
+
+    /**
+     * refresh token 에 대응하는 현재 세션을 저장소에서 제거한다.
+     * logout API 는 멱등 성공 정책을 따르므로 토큰 누락, 만료, 서명 오류, 저장소 미존재를 모두 no-op 으로 흡수한다.
+     */
+    @Transactional
+    public void revokeRefreshToken(String refreshToken) {
+        if (!StringUtils.hasText(refreshToken)) {
+            return;
+        }
+
+        try {
+            Claims claims = jwtTokenProvider.parseClaims(refreshToken);
+            if (!JwtTokenProvider.REFRESH_TOKEN_TYPE.equals(claims.get(JwtTokenProvider.TOKEN_TYPE_CLAIM, String.class))) {
+                return;
+            }
+
+            String sessionId = claims.getId();
+            if (!StringUtils.hasText(sessionId)) {
+                return;
+            }
+
+            refreshTokenRepository.findById(sessionId)
+                    .filter(savedToken -> refreshToken.equals(savedToken.getToken()))
+                    .ifPresent(refreshTokenRepository::delete);
+        } catch (JwtException | IllegalArgumentException exception) {
+            // 로그아웃은 멱등 성공 정책을 따르므로 잘못된/만료된 refresh token 은 조용히 무시한다.
+        }
     }
 
     public record IssuedTokens(

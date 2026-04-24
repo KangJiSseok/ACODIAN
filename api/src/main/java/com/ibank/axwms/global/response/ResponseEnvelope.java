@@ -12,12 +12,12 @@ import org.springframework.web.servlet.mvc.method.annotation.StreamingResponseBo
  * 서로 다른 지점에서 실행되지만 동일한 규칙을 써야 Swagger 문서와 실제 응답이 일치한다.
  * 규칙이 두 곳에 복제되면 한쪽만 갱신돼 문서/런타임 이탈이 생기므로 이 유틸 한 곳에만 둔다.
  */
-public final class ResponseEnvelopePolicy {
+public final class ResponseEnvelope {
 
     private static final String SPRINGDOC_PACKAGE_PREFIX = "org.springdoc";
     private static final String SWAGGER_PACKAGE_PREFIX = "io.swagger";
 
-    private ResponseEnvelopePolicy() {
+    private ResponseEnvelope() {
     }
 
     /** ResponseBodyAdvice 경로에서 호출한다. */

@@ -21,9 +21,9 @@ import org.springframework.util.StringUtils;
 @Component
 public class JwtTokenProvider {
 
-    private static final String TOKEN_TYPE_CLAIM = "tokenType";
-    private static final String ACCESS_TOKEN_TYPE = "ACCESS";
-    private static final String REFRESH_TOKEN_TYPE = "REFRESH";
+    public static final String TOKEN_TYPE_CLAIM = "tokenType";
+    public static final String ACCESS_TOKEN_TYPE = "ACCESS";
+    public static final String REFRESH_TOKEN_TYPE = "REFRESH";
     private static final String EMAIL_CLAIM = "email";
     private static final String ROLE_CODE_CLAIM = "roleCode";
 

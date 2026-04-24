@@ -29,8 +29,6 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
 
     private static final String AUTHORIZATION_HEADER = "Authorization";
     private static final String BEARER_PREFIX = "Bearer ";
-    private static final String ACCESS_TOKEN_TYPE = "ACCESS";
-    private static final String TOKEN_TYPE_CLAIM = "tokenType";
     private static final String EMAIL_CLAIM = "email";
     private static final String ROLE_CODE_CLAIM = "roleCode";
 
@@ -65,7 +63,7 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
     private void authenticateAccessToken(HttpServletRequest request, String accessToken) {
         try {
             Claims claims = jwtTokenProvider.parseClaims(accessToken);
-            if (!ACCESS_TOKEN_TYPE.equals(claims.get(TOKEN_TYPE_CLAIM, String.class))) {
+            if (!JwtTokenProvider.ACCESS_TOKEN_TYPE.equals(claims.get(JwtTokenProvider.TOKEN_TYPE_CLAIM, String.class))) {
                 return;
             }
 

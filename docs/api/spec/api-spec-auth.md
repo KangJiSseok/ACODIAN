@@ -19,7 +19,7 @@
 | Method | Path | Status | 목적 |
 |---|---|---|---|
 | `POST` | `/api/auth/login` | `Documented` | 로그인 후 access/refresh token 과 사용자 권한 문맥을 발급한다. |
-| `POST` | `/api/auth/logout` | `Documented` | 현재 세션 또는 refresh token 을 무효화한다. |
+| `POST` | `/api/auth/logout` | `Documented` | 현재 세션을 종료하고 refresh cookie 를 만료시킨다. |
 | `POST` | `/api/auth/refresh` | `Documented` | refresh cookie 검증 후 access token 재발급을 수행한다. |
 | `POST` | `/api/auth/change-password` | `Proposed-risk-closure` | 본인 비밀번호를 변경한다. |
 
@@ -34,7 +34,7 @@
 - 응답 (`data` 기준)
   - 빈 객체 (`EmptyResponse`)
   - accessToken: 응답 헤더 `Authorization: Bearer <token>` 으로 전달한다. 클라이언트는 받은 값을 이후 요청의 `Authorization` 헤더에 그대로 재사용한다.
-  - refreshToken: `Set-Cookie` 로 전달한다. 쿠키 속성은 `<configured-refresh-cookie-name>=<token>; HttpOnly; Path=/api/auth/refresh; Max-Age=<jwt.refresh-token-expiration(초)>` 형식이며, 이름/Path/Secure/SameSite/Domain 은 `auth.refresh-cookie.*` 설정을 따른다.
+  - refreshToken: `Set-Cookie` 로 전달한다. 쿠키 속성은 `<configured-refresh-cookie-name>=<token>; HttpOnly; Path=/api/auth; Max-Age=<jwt.refresh-token-expiration(초)>` 형식이며, 이름/Path/Secure/SameSite/Domain 은 `auth.refresh-cookie.*` 설정을 따른다. 로컬/테스트 프로파일은 `Secure=false; SameSite=Lax` 로 override 된다.
 - 요청 JSON 예시
 ```json
 {
@@ -47,7 +47,7 @@
 - 응답 헤더 예시
 ```
 Authorization: Bearer eyJhbGciOi...sample
-Set-Cookie: <configured-refresh-cookie-name>=refresh-token-sample; Max-Age=1209600; Path=/api/auth/refresh; Secure; HttpOnly; SameSite=Strict
+Set-Cookie: <configured-refresh-cookie-name>=refresh-token-sample; Max-Age=1209600; Path=/api/auth; Secure; HttpOnly; SameSite=Strict
 ```
 - 응답 JSON 예시
 ```json
@@ -70,25 +70,13 @@ Set-Cookie: <configured-refresh-cookie-name>=refresh-token-sample; Max-Age=12096
   - source: ADR — 로그인 토큰 전송 규약 (access=Authorization 헤더, refresh=HttpOnly 쿠키, 바디 비움)
 
 ### POST /api/auth/logout
-- 목적: 현재 세션 또는 refresh token 을 무효화한다.
+- 목적: 현재 세션을 종료하고 refresh cookie 를 만료한다.
 - 상태: `Documented`
-- 권한/접근 주체: 인증된 사용자만 호출한다.
+- 권한/접근 주체: 현재 브라우저 세션을 가진 클라이언트가 호출한다.
 - 요청
-  - Header: `Authorization: Bearer <token>`
-  - 선택 Body: `refreshToken` [추론]
+  - HttpOnly cookie: `refreshToken`
 - 응답 (`data` 기준)
   - 빈 객체 (`ApiResponse.empty()`)
-- 요청 JSON 예시
-```json
-{
-  "headers": {
-    "Authorization": "Bearer <access-token>"
-  },
-  "body": {
-    "refreshToken": "refresh-token-sample"
-  }
-}
-```
 - 응답 JSON 예시
 ```json
 {
@@ -98,9 +86,8 @@ Set-Cookie: <configured-refresh-cookie-name>=refresh-token-sample; Max-Age=12096
 }
 ```
 - 상태/에러
-  - 성공: `200 OK` [추론]
-  - 대표 오류: `AUTH_UNAUTHORIZED` [추론]
-  - 대표 오류: `AUTH_REFRESH_TOKEN_NOT_FOUND` [추론]
+  - 성공: `200 OK`
+  - refresh cookie 가 없거나 이미 만료된 경우에도 멱등적으로 성공한다.
 - ERD 연관
   - refresh token 저장소
 - 근거
