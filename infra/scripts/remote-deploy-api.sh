@@ -37,6 +37,13 @@ echo "$GHCR_TOKEN" | docker login ghcr.io -u "$GHCR_USER" --password-stdin
 export APP_ENV
 export API_IMAGE
 
+echo "[remote-deploy-api] pre-deploy state"
+docker compose \
+  --env-file "$ENV_FILE" \
+  -f "$COMPOSE_FILE" \
+  -p "$PROJECT_NAME" \
+  ps || true
+
 docker compose \
   --env-file "$ENV_FILE" \
   -f "$COMPOSE_FILE" \
@@ -47,8 +54,15 @@ docker compose \
   --env-file "$ENV_FILE" \
   -f "$COMPOSE_FILE" \
   -p "$PROJECT_NAME" \
-  up -d postgres redis api
+  rm -sf api || true
 
+docker compose \
+  --env-file "$ENV_FILE" \
+  -f "$COMPOSE_FILE" \
+  -p "$PROJECT_NAME" \
+  up -d --remove-orphans postgres redis api
+
+echo "[remote-deploy-api] post-deploy state"
 docker compose \
   --env-file "$ENV_FILE" \
   -f "$COMPOSE_FILE" \
