@@ -1,0 +1,419 @@
+- id: ADR-001
+  title: EC2 1차 자동배포 범위 — api/postgres/redis 3서비스 최소 구성
+  status: adopted
+  date: 2026-04-22
+  stacks: [docker, compose, ec2]
+  context: |
+    현재 인프라 목표는 EC2에서 전체 스택(web, api, ai, nginx)을 한 번에 완성형으로 배포하는 것이 아니라,
+    먼저 api가 의존하는 postgres/redis와 함께 안정적으로 자동배포되도록 만드는 것이다.
+    web과 ai는 아직 production Docker image 및 compose 편성이 준비되지 않았고,
+    nginx/HTTPS는 이미 외부에서 제공된 환경을 활용하는 전제다.
+  decision: |
+    1차 자동배포 범위는 api/postgres/redis 3서비스로 제한한다.
+    EC2 배포의 source of truth compose 파일은 `infra/compose.deploy.yml` 하나로 유지한다.
+    web, ai, nginx의 운영 자동배포는 후속 단계로 분리한다.
+  consequence: |
+    배포 대상과 실패 지점을 api 중심으로 좁혀 초기 자동화를 빠르게 안정화할 수 있다.
+    반면 전체 서비스 일괄 배포는 아직 지원하지 않으므로 web/ai 확장은 별도 인프라 작업이 필요하다.
+
+- id: ADR-002
+  title: API 컨테이너 패키징 — CI 선빌드 JAR + 단순 런타임 이미지
+  status: adopted
+  date: 2026-04-22
+  stacks: [docker, springboot, gitlab]
+  context: |
+    api/Dockerfile 은 build/libs/*.jar 를 런타임 이미지에 복사하는 단순 패키징 구조다.
+    EC2 서버가 직접 git clone 과 Gradle build 를 수행하면 서버에 JDK/Gradle 의존성을 오래 유지해야 하고,
+    배포 재현성도 CI 기준보다 낮아진다.
+    현재 Gradle 빌드에는 jOOQ codegen과 Docker 의존이 있어, 빌드 책임을 CI로 모으는 편이 더 일관적이다.
+  decision: |
+    API 이미지는 GitLab CI 에서 `./gradlew clean test bootJar` 후 빌드한다.
+    Dockerfile 은 외부 빌드된 JAR만 복사하는 현재 구조를 유지한다.
+    EC2 는 빌드 서버가 아니라 Registry 이미지를 pull 받아 실행하는 런타임 호스트로 취급한다.
+  consequence: |
+    빌드 책임과 실행 책임이 분리되어 배포 재현성이 높아진다.
+    대신 GitLab Runner가 Java 21과 Docker-in-Docker 환경을 사용할 수 있어야 한다.
+
+- id: ADR-003
+  title: 배포 설정 주입과 기동 순서 — 서버 .env + healthcheck gating
+  status: adopted
+  date: 2026-04-22
+  stacks: [docker, compose, postgres, redis]
+  context: |
+    DB 계정, JWT 시크릿, 포트 같은 값은 staging/production 마다 다르므로 저장소에 실제 값을 둘 수 없다.
+    또한 postgres 와 redis 가 실제 연결 가능한 상태가 되기 전에 api 가 먼저 기동하면,
+    초기 배포 시 연결 실패와 migration 실패가 발생할 수 있다.
+  decision: |
+    환경별 설정은 EC2 의 `/opt/axwms/{staging|production}/.env` 파일로 주입한다.
+    compose 파일에는 샘플만 남기고, 실제 비밀값은 서버 또는 GitLab protected variable 로만 관리한다.
+    api 서비스는 postgres 와 redis 의 healthcheck 통과 이후에만 기동한다.
+  consequence: |
+    환경별 설정을 분리하고 민감정보를 커밋하지 않을 수 있다.
+    초기 배포 순서 문제를 줄일 수 있지만, 서버 `.env` 파일 관리 책임이 운영 쪽에 생긴다.
+
+- id: ADR-004
+  title: GitLab 브랜치 이벤트별 파이프라인 분리 — dev/master 외 브랜치 CI, dev/master merge 후 CD
+  status: adopted
+  date: 2026-04-22
+  stacks: [gitlab, ci, cd]
+  context: |
+    현재 실무 브랜치 해석은 `feat`라는 접두사 그 자체가 아니라,
+    `dev`와 `master`를 제외한 모든 작업 브랜치에서 빠르게 CI만 돌리고 싶다는 요구에 가깝다.
+    반대로 dev/master 는 merge 결과를 기준으로 staging/production 에 반영되어야 흐름이 단순하다.
+  decision: |
+    push 이벤트에서는 `dev`, `master`를 제외한 모든 브랜치에서 CI만 수행한다.
+    `dev`, `master` 대상 merge request 생성·업데이트 시에도 CI만 수행한다.
+    merge 완료 후 `dev`, `master`에 생긴 push pipeline 에서만 CI + CD 를 수행한다.
+  consequence: |
+    브랜치 이름 접두사에 의존하지 않고 모든 작업 브랜치에서 일관된 검증이 가능하다.
+    운영 반영은 dev/master merge 결과로 제한되어 staging/production 추적이 쉬워진다.
+
+- id: ADR-005
+  title: EC2 배포 방식 — GitLab Container Registry 이미지 pull + SSH 원격 compose 실행
+  status: superseded
+  date: 2026-04-22
+  stacks: [gitlab, docker, compose, ec2, ssh]
+  context: |
+    EC2 에서 직접 소스코드를 pull 받아 빌드하는 방식은 서버 상태에 따라 결과가 흔들리고,
+    롤백 시 어떤 커밋/이미지가 올라갔는지 추적하기 어렵다.
+    GitLab CI 에서 이미지를 만들고, EC2 는 해당 이미지만 받아 실행하는 편이 단순하다.
+  decision: |
+    CI 는 `api` 이미지를 GitLab Container Registry 에 push 한다.
+    deploy job 은 SSH 로 EC2 에 접속해 `infra/compose.deploy.yml`과 배포 스크립트를 전달한다.
+    서버에서는 `docker compose pull` 후 `docker compose up -d` 로 반영한다.
+    staging 과 production 은 `/opt/axwms/{env}` 및 `API_HOST_PORT` 로 분리한다.
+  consequence: |
+    이미지 단위로 배포/롤백 추적이 쉬워진다.
+    다만 Registry 자격증명, SSH 키, 환경별 `.env`, Nginx 포트 연결을 별도로 관리해야 한다.
+
+- id: ADR-006
+  title: GitLab Runner 배치 — 배포 대상 EC2 에 공존 + docker executor + privileged
+  status: adopted
+  date: 2026-04-23
+  stacks: [gitlab, runner, docker, ec2]
+  context: |
+    SSafy GitLab 환경은 프로젝트에 공유 Runner 를 제공하지 않고,
+    Container Registry 활성화 권한도 프로젝트 수준에서 닫혀 있다.
+    `api_ci` / `api_image` 는 `docker:27.5.1-dind` service 로 DinD 빌드를 요구하므로
+    Runner 는 docker executor + privileged 권한이 반드시 필요하다.
+    별도 빌드 전용 VM 을 확보하기 어려운 초기 단계라 추가 자원 없이 Runner 를 띄울 곳이 필요했다.
+  decision: |
+    `gitlab-runner` 는 배포 대상 EC2 에 같이 설치하고 docker executor 로 등록한다.
+    `/etc/gitlab-runner/config.toml` 의 `[runners.docker]` 에 `privileged = true` 를 설정해
+    `api_ci` / `api_image` 의 DinD service 가 정상 기동하게 한다.
+    Runner 는 "Lock to current projects" 로 프로젝트 전용으로 운영하고
+    "Protected" 옵션은 해제해 작업 브랜치 push 에서도 CI 를 수행할 수 있게 한다.
+  consequence: |
+    별도 VM 없이 자동화 CI/CD 를 기동할 수 있다.
+    대신 빌드 부하가 운영 서비스와 같은 호스트에서 경쟁하고,
+    privileged runner 는 보안 경계가 느슨하므로 프로젝트 Lock + Protected variables 로 범위를 좁혀야 한다.
+    장기적으로는 별도 Runner 호스트 분리를 후속 과제로 둔다.
+
+- id: ADR-007
+  title: 이미지 레지스트리 구현체 — GitHub Container Registry(ghcr.io) 채택
+  status: adopted
+  date: 2026-04-23
+  stacks: [gitlab, docker, github, ghcr]
+  context: |
+    ADR-005 는 빌드 재현성과 이미지 이력 추적을 위해 "GitLab Container Registry + SSH 원격 compose 실행" 조합을 결정했다.
+    그러나 이 프로젝트가 사용하는 SSafy GitLab 인스턴스는 Container Registry 기능이 인스턴스 수준에서 비활성이고,
+    프로젝트 Settings → General Visibility 에 "Container registry" 토글 자체가 노출되지 않아 팀 권한으로는 활성화 경로 자체가 없다.
+    GitLab 관리자 권한을 기대할 수 없는 환경이라 "GitLab Container Registry 사용" 이라는 ADR-005 의 전제가 사실상 성립하지 않는다.
+    따라서 외부 레지스트리로 대체하는 결정이 불가피했다.
+
+    동시에 ADR-001 은 현재 자동배포 범위를 api 단일 서비스로 좁혔지만,
+    후속 과제로 web/ai 컨테이너화가 예정되어 있다.
+    "어떤 레지스트리로 가느냐" 는 이미지 1개의 단발성 선택이 아니라
+    이후 팀이 관리할 이미지 수·배포 빈도·자격증명 수명에 지속적으로 영향을 주는 결정이다.
+    단순히 "지금 push/pull 되는 곳" 을 고르지 않고 private 이미지 확장성, pull rate limit, 운영 부담을 함께 비교해야 했다.
+
+    검토 대안은 세 가지였다.
+      1. Docker Hub
+         - 무료 플랜: private repo 1개 한도, pull rate limit 200/6h (IP 기준).
+         - web/ai 추가 시 유료 전환 또는 public 공개를 강제한다.
+         - CI 가 공용 NAT 뒤에 있으면 다른 프로젝트와 쿼터를 공유해 무작위 `toomanyrequests` 실패가 생길 수 있다.
+         - 함정: rate limit 실패는 원인 추적이 늦어 디버깅 시간이 길어진다.
+      2. GitHub Container Registry(ghcr.io)
+         - 무료 private repo 무제한, pull rate limit 은 사실상 없음.
+         - 이미지 경로가 `ghcr.io/<owner>/<image>` 로 표준적이다.
+         - 자격증명은 GitHub classic PAT 하나로 해결된다.
+         - 단점: PAT 만료(기본 90일) 관리 책임, 이미지가 GitHub Organization 네임스페이스에 귀속된다.
+      3. EC2 자체 registry:2 컨테이너
+         - 외부 의존 없음.
+         - HTTPS 인증서 또는 insecure registry 허용 설정 필요, 이미지 누적 시 EC2 디스크가 차 cleanup/retention 정책 운영 필요.
+         - 운영 부담이 팀 규모 대비 과도하고, 지금 EC2 는 "실행 전용 호스트" 로 유지하려던 ADR-005 의 방향과도 어긋난다.
+  decision: |
+    이미지 레지스트리는 GitHub Container Registry(ghcr.io) 를 사용한다.
+    ADR-005 의 "GitLab Container Registry 사용" 결정은 이 결정이 갱신한다(SSH 원격 compose 실행 부분은 유지).
+
+    ghcr.io 를 고른 근거는 다음과 같다.
+      - private 이미지 수 한도: 무제한. web/ai 컨테이너가 추가되어도 유료 전환이나 public 공개 없이 그대로 확장된다.
+      - pull rate limit: 사실상 제약 없음. CI/CD 반복 실행이나 재배포 빈도가 늘어도 `toomanyrequests` 로 CI 가 멈출 리스크가 없다.
+      - 운영 부담: PAT 갱신 한 건에 집중되어 캘린더 리마인더로 사전 예방 가능. registry 서버 자체를 운영 책임에서 제외한다.
+      - 재현성 유지: ADR-002/ADR-005 가 요구한 "CI 선빌드 + 이미지 pull" 설계가 ghcr.io 에서도 그대로 성립하므로 추가 재설계가 필요 없다.
+      - 팀 확장성: GitHub Organization `axwms-s209` 아래 네임스페이스를 두면 팀원 추가·권한 분리를 organization 설정으로 처리할 수 있다.
+
+    Docker Hub 를 탈락시킨 이유는 web/ai 확장 시 private repo 한도가 즉시 걸리고, rate limit 실패가 CI 디버깅 난이도를 높이기 때문이다.
+    EC2 자체 registry 를 탈락시킨 이유는 디스크/HTTPS/cleanup 운영 부담이 초기 자동화 범위(ADR-001) 대비 과도하고,
+    EC2 를 실행 전용 호스트로 유지한다는 기존 설계 방향과 어긋나기 때문이다.
+
+    구성 확정:
+      - 이미지 네임스페이스: `ghcr.io/axwms-s209/axwms-api`
+      - 자격증명: GitHub 개인 계정의 classic PAT (scopes: `write:packages`, `read:packages`, `repo`)
+      - GitLab CI/CD Variables: `GHCR_USER`(개인 username), `GHCR_TOKEN`(PAT) 을 Protected 로 등록, `GHCR_TOKEN` 은 Mask 적용
+      - `.gitlab-ci.yml` 은 이미지 식별자를 `API_IMAGE_BASE` 변수로 상수화해 레지스트리 교체 시 수정 지점이 한 곳에 모이게 한다.
+  consequence: |
+    긍정적 영향:
+      - Docker Hub 의 private 1개 한도와 rate limit 리스크를 회피한다.
+      - web/ai 이미지가 추가되어도 같은 네임스페이스에서 일관되게 관리된다.
+      - registry 서버 자체의 운영(디스크, HTTPS, cleanup) 책임에서 해방된다.
+
+    부정적 영향 및 후속 책임:
+      - PAT 이 만료되면 CI 가 `unauthorized` 로 조용히 실패한다. 만료 전 갱신이 필수이며 운영 루틴에 "PAT 만료 D-7 캘린더 알림" 을 포함한다.
+      - 이미지가 GitHub Organization `axwms-s209` 에 귀속된다. Organization 이름이 바뀌거나 이전될 경우
+        `API_IMAGE_BASE` 한 줄과 ADR 기록을 함께 갱신한다(상수화 덕분에 변경 지점은 최소).
+      - 소스(GitLab) 와 이미지(GitHub) 로 인프라가 두 서비스에 분산된다.
+        장기적으로 SSafy GitLab 이 Container Registry 를 열어주면 이 결정을 재검토해 GitLab Container Registry 로 되돌리는 선택지를 남겨 둔다.
+
+- id: ADR-008
+  title: CI Runner privileged 허용 — DinD 기반 이미지 빌드의 전제와 재검토 트리거
+  status: adopted
+  date: 2026-04-23
+  stacks: [gitlab, runner, docker, security]
+  context: |
+    ADR-006 은 Runner 를 배포 대상 EC2 에 docker executor 로 띄우고 `[runners.docker]` 의 `privileged = true` 를 유지한다고 기록했다.
+    그러나 privileged = true 는 "컨테이너 안의 root 가 호스트 root 에 근접" 할 만큼 보안적으로 민감한 옵션이므로,
+    이 결정이 왜 필요했고 어떤 완화 장치가 같이 작동하는지, 언제 어떻게 재검토·전환하는지를 독립된 ADR 로 남긴다.
+
+    1) 왜 DinD 가 필요한가 — jOOQ bootstrap-first + Testcontainers 체인
+       privileged 의 근본 원인은 "이미지 빌드" 가 아니라 "Gradle 자체가 Docker 를 쓰는 설계" 다.
+       api 모듈의 Gradle 빌드는 두 지점에서 Docker daemon 접근을 요구한다.
+       - jOOQ codegen: `docs/api/jooq-codegen-policy.md` 의 bootstrap-first workflow 에 따라
+         `./gradlew jooqGenerate` 가 실제 `pgvector/pgvector:pg17` 컨테이너를 띄우고
+         Flyway migration 을 적용한 뒤 메타데이터를 읽어 generated source 를 만든다.
+         `build`/`test`/`bootRun`/`assemble` 도 필요 시 jooqGenerate 를 선행 보장한다.
+       - Testcontainers: `api/build.gradle` 가 `org.testcontainers:postgresql`,
+         `spring-boot-testcontainers`, Redis testcontainers 를 testImplementation 으로 사용해
+         `./gradlew test` 가 PostgreSQL / Redis 컨테이너를 즉석 기동한다.
+       결과적으로 `api_ci` 의 `./gradlew clean test bootJar` 는 "내부적으로 Docker 를 호출하는 Gradle 빌드" 가 된다.
+       CI 컨테이너 안에서 이 Gradle 을 실행하려면 컨테이너 안쪽에서도 쓸 수 있는 Docker daemon 이 필요하고,
+       GitLab 표준 해법이 services 로 `docker:dind` 를 붙이는 Docker-in-Docker 패턴이다.
+       `api_image` 의 docker build / push 는 여기에 더해지는 두 번째 요구일 뿐이다.
+
+    2) 왜 privileged 가 필요한가 — DinD 메커니즘
+       dind 의 Docker daemon 은 커널 namespace 조작, cgroups 생성, overlay/loopback mount,
+       iptables NAT 규칙 추가, `/dev` 디바이스 접근 같은 작업을 수행해야 한다.
+       unprivileged 컨테이너는 이 기능들이 대부분 커널 수준에서 차단되므로
+       DinD 를 쓰기로 결정한 순간 privileged 는 선택 옵션이 아니라 전제 조건이 된다.
+
+    3) privileged 가 실제로 허용하는 것
+       - 모든 Linux capability(특히 `CAP_SYS_ADMIN`) 부여
+       - 호스트 `/dev/*` 디바이스 전부 접근
+       - AppArmor / seccomp 프로필 해제
+       - iptables 및 network namespace 조작, mount 시스템콜 허용
+       그 결과 privileged 컨테이너 안의 root 는 호스트 root 에 근접하며,
+       컨테이너 탈출(container escape) 공격이 성공하면 호스트 장악으로 이어질 수 있다.
+
+    4) 검토한 대안과 기각 사유
+       a. DooD (Docker-outside-of-Docker, 호스트 `/var/run/docker.sock` 바인딩)
+          - privileged 플래그는 불필요해지지만, docker.sock 접근 자체가 실질적으로 privileged 와 동급 또는 그 이상의 위험.
+          - GitLab 공식 문서도 "security implications are similar to or worse than privileged" 라고 명시.
+       b. Kaniko (Google, rootless image builder)
+          - daemon 없이 Dockerfile 빌드가 가능해 privileged 가 진짜로 불필요해진다.
+          - `api/Dockerfile` 이 FROM + COPY + ENTRYPOINT 단순 구조라 전환 영향은 작다.
+          - 단점: `api_image` job 재작성이 필요하고, 일부 Dockerfile 지시어 호환이 완전하지 않다.
+       c. BuildKit rootless / Buildah
+          - 커널·OS 의존성이 있고 팀 전원 학습 허들이 비교적 크다.
+       d. Shell executor + 호스트 docker daemon 직접 사용
+          - privileged 옵션 자체가 사라지지만 CI job 이 호스트 shell 을 그대로 실행할 수 있어 격리가 없다.
+          - 이 프로젝트 맥락에서는 오히려 공격 표면이 넓어진다.
+  decision: |
+    현 단계에서는 `[runners.docker]` 의 `privileged = true` 를 유지한다.
+    "privileged 의 이론적 위험을 실제 공격 경로로 전환시키는 인자" 가 아래 방어 조합으로 대부분 차단된다는 판단이다.
+
+    방어 조합:
+      - Runner 가 "Lock to current projects" 로 이 프로젝트에만 바인딩되어 타 프로젝트 파이프라인이 이 Runner 를 사용할 수 없다.
+      - `SSH_PRIVATE_KEY`, `GHCR_TOKEN` 같은 민감 자격증명은 Protected variable 로 등록되어 protected branch(master/dev) 파이프라인에만 주입된다.
+        작업 브랜치 CI 는 privileged 컨테이너를 얻더라도 탈취할 비밀값 자체가 없다.
+      - 저장소는 SSafy GitLab 내부 전용이라 외부 fork MR 이 존재하지 않는다. MR 은 팀원만 생성할 수 있다.
+      - dev / master 에는 직접 push 가 금지되고 MR 리뷰를 거쳐야 반영된다. 악성 코드가 protected branch 파이프라인에 들어가려면 동료 최소 1명을 속이거나 공모해야 한다.
+      - 팀 규모가 작고 서로 신뢰 가능한 구성이라 trust boundary 가 좁다.
+
+    거부한 대안의 이유:
+      - DooD: privileged 와 동급 또는 그 이상 위험이라 보안상 이득이 없다.
+      - Kaniko: `api_image` 만 rootless 빌드로 바꿀 수는 있으나, `api_ci` 가 jOOQ + Testcontainers 때문에 여전히 DinD 를 요구하므로 `config.toml` 의 privileged 자체는 끌 수 없다. 재작성 비용 대비 이득이 제한적이라 현 단계에서는 기각한다.
+      - Shell executor: 격리 자체를 포기해야 하므로 공격 표면이 오히려 넓어진다.
+  consequence: |
+    긍정적 영향:
+      - GitLab 표준 DinD 패턴을 그대로 써서 학습 허들과 디버깅 비용이 낮다.
+      - ADR-002 / ADR-005 / ADR-006 의 "CI 선빌드 + Registry 이미지 pull" 설계가 변경 없이 성립한다.
+      - `api_image` 이미지 빌드·push 가 단순하게 동작한다.
+
+    부정적 영향과 수용 범위:
+      - privileged 컨테이너 탈출이 성공하면 호스트(EC2) 장악으로 이어질 수 있다.
+      - 악성 MR 이 protected branch 에 병합되면 배포 파이프라인이 공격 벡터가 될 수 있다.
+      이 위험은 위의 방어 조합으로 감수 가능한 수준으로 판단한다.
+
+    재검토 트리거 (아래 중 하나라도 해당되면 이 ADR 을 재검토한다):
+      - 저장소가 public 으로 전환되어 fork MR 파이프라인을 받게 되는 경우
+      - 팀 인원이 커져 코드 리뷰 기반 신뢰 모델이 느슨해지는 경우
+      - SSafy 또는 외부 감사 · 보안 요구사항이 privileged 를 금지하는 경우
+      - api 외에 web / ai 컨테이너화까지 확장되어 privileged Runner 의 blast radius 가 넓어지는 경우
+      - SSafy GitLab 이 Container Registry 를 다시 열어 ADR-007 의 기반 전제가 바뀌는 경우
+
+    전환 시 선택지 (실질 이득이 큰 순서):
+      중요 전제: `api_ci` 의 Gradle 빌드가 jOOQ codegen 과 Testcontainers 때문에 Docker daemon 을 요구하므로,
+      `api_ci` 자체에서 DinD 를 제거하는 것은 api 모듈의 codegen · test 아키텍처를 먼저 바꾸지 않는 한 불가능하다.
+      아래 선택지는 그 제약을 전제로 privileged 노출을 줄이는 방향을 나열한다.
+
+      1. Runner 를 별도 빌드 VM 으로 분리
+         - privileged Runner 를 배포 대상 EC2 에서 떼어내 전용 빌드 VM 으로 옮긴다.
+         - 실행 호스트(production / staging 서비스가 도는 EC2) 와 빌드 호스트가 분리되어 blast radius 가 실제로 줄어든다.
+         - 변경 범위: 인프라 토폴로지 변경 + ADR-006 갱신. Gradle 의 Docker 의존은 그대로 유지된다.
+         - 가장 큰 실질 이득을 주는 완화책.
+      2. api_image 만 Kaniko 로 전환
+         - image 를 `gcr.io/kaniko-project/executor:debug` 로 바꾸고 script 를 `/kaniko/executor --dockerfile=api/Dockerfile --context=... --destination="$API_IMAGE_BASE:..."` 형태로 재작성한다.
+         - `api_image` 한 job 만 DinD / privileged 없이 rootless 로 이미지 빌드·push 를 수행할 수 있다.
+         - 단, `api_ci` 가 여전히 DinD 를 요구하므로 `config.toml` 의 `privileged = true` 자체는 유지해야 한다.
+         - 기대 효과는 "privileged 컨테이너가 네트워크·이미지 레지스트리에 접근하는 구간을 줄이는" 정도로 제한적이며, 1번과 조합해야 의미가 커진다.
+      3. api 의 codegen / test 아키텍처 변경 — privileged 자체를 끌 수 있는 유일한 경로
+         - generated jOOQ source 를 커밋해 CI 에서 `jooqGenerate` 실행을 제거하거나,
+           Testcontainers 기반 통합 테스트를 H2 또는 embedded/inmemory 대체재로 전환하거나,
+           CI 를 "codegen job(Docker 접근 허용) + 빌드 job(Docker 불필요)" 두 단계로 쪼개 아티팩트로 연결한다.
+         - `docs/api/jooq-codegen-policy.md` 의 운영 모델(bootstrap-first + generated source 비커밋)을 포기하거나 크게 바꿔야 하므로
+           보안 요구가 privileged 자체를 금지하는 수준일 때만 고려한다.
+
+    세 선택지는 조합 가능하며, 지금 당장 가장 가벼운 실질 완화책은 1번(Runner 분리) 이다. 2번은 1번과 함께 갈 때 의미가 커진다.
+
+- id: ADR-009
+  title: "`infra/.env.example` 역할 재정의 — compose 렌더·스모크 테스트용 기본값 파일"
+  status: adopted
+  date: 2026-04-23
+  stacks: [infra, docker, compose, ci]
+  context: |
+    ADR-003 은 환경별 값(DB 계정, JWT 시크릿, 포트 등) 을 저장소가 아니라 EC2 `/opt/axwms/{staging|production}/.env`
+    또는 GitLab CI/CD Variables 로만 주입한다고 확정했다.
+    그러나 실제 `infra/.env.example` 에는 `APP_ENV=staging`, `API_HOST_PORT=8081` 같은 환경 특화 값이 남아 있어
+    "이 파일을 그대로 서버에 복사해도 되는가" 라는 혼동을 유발하고, ADR-003 의 "환경별 값은 서버 `.env` 에서만" 원칙과도 충돌했다.
+
+    동시에 `.gitlab-ci.yml` 의 `infra_validate` job 이 이 파일을 `infra/.env.validate` 로 복사한 뒤
+    `APP_ENV` / `API_IMAGE` / `API_HOST_PORT` 만 append 하고 `docker compose config` 로 렌더한다.
+    즉 `.env.example` 에 담긴 DB/JWT 기본값은 실제 CI 렌더 입력으로 쓰인다.
+    문제는 기존 `JWT_SECRET=change-me-to-a-long-random-string` (31바이트) 가 HMAC-SHA256 의 최소 32바이트 요구에 1바이트 부족해,
+    로컬에서 compose 로 스모크 기동할 때 Spring 기동이 실패할 수 있는 잠재 리스크가 있었다.
+
+    요컨대 `.env.example` 이 "운영 샘플" 이라는 명목을 유지하는 한
+    (1) ADR-003 원칙과의 문구 drift, (2) `infra_validate` 및 로컬 스모크에서 실제 사용되는 값의 안전성 보증
+    두 가지가 동시에 해결되지 않는다.
+  decision: |
+    `infra/.env.example` 의 역할을 "운영 샘플" 이 아니라
+    "compose 렌더 / `infra_validate` / 로컬 스모크 테스트에서 그대로 동작하는 기본값 파일" 로 축소 재정의한다.
+
+    구체 변경:
+      - 환경 특화 값(`APP_ENV`, `API_HOST_PORT`) 은 `.env.example` 에서 제거한다.
+        compose.deploy.yml 은 `${APP_ENV:-deploy}` / `${API_HOST_PORT:-8080}` default 를 갖고,
+        `infra_validate` 는 자체적으로 `APP_ENV=ci` / `API_HOST_PORT=8081` 을 append 하므로 제거해도 렌더가 깨지지 않는다.
+      - 헤더 주석에 "스모크 테스트용 기본값 / 프로덕션 절대 금지 / 환경 특화 값과 비밀값은 서버 `.env` 또는 GitLab Variables 로만 주입" 을 명시한다.
+      - `DB_PASSWORD` 는 `postgres` 로 고정해 compose 의 postgres/redis 기본값과 일치시킨다.
+      - `JWT_SECRET` 은 HMAC-SHA256 이 요구하는 최소 32바이트를 만족하는 더미 값으로 교체해
+        `infra_validate` 렌더와 로컬 스모크 기동이 별도 값 주입 없이 성공하도록 한다.
+      - `JWT_ACCESS_EXPIRATION` / `JWT_REFRESH_EXPIRATION` 은 그대로 둔다 — compose default 와 중복되지만 명시 값이 가독성을 높인다.
+
+    이 결정은 ADR-003("환경별 값은 서버 `.env` 에서만 주입") 을 갱신하지 않고 보강한다.
+    `.env.example` 이 서버 `.env` 를 대체하는 원본이라는 해석을 명시적으로 닫는다.
+  consequence: |
+    긍정적 영향:
+      - `infra_validate` 가 추가 append 없이도 compose 렌더에 필요한 DB/JWT 값을 안전하게 확보한다.
+        (JWT_SECRET 길이 부족으로 기동이 실패할 리스크 제거)
+      - `.env.example` 과 ADR-003 사이 문서 drift 가 사라진다. "환경 특화 값은 서버 `.env` 에서만" 이라는 단일 원칙이 파일 구조에서도 드러난다.
+      - 로컬 개발자가 `docker compose -f infra/compose.deploy.yml --env-file infra/.env.example up` 으로 즉시 스모크 기동할 수 있다.
+
+    부정적 영향 및 완화:
+      - 스모크 테스트용 기본값(DB_PASSWORD=postgres, JWT_SECRET=smoke-test-...) 이 실수로 서버 `.env` 로 복사되면 약한 비밀값이 운영에 유입될 수 있다.
+        완화: 헤더 주석에 "프로덕션 절대 금지" 를 명시하고, 코드 리뷰 단계에서 서버 배포 체크리스트로 차단한다.
+      - 기존 `.env.example` 을 그대로 서버에 복사하는 운영 흐름은 이 결정 이후 사용할 수 없다.
+        완화: `docs/infra/ec2-gitlab-cicd-guide.md` 가 이미 서버 `.env` 를 별도로 작성하도록 안내하므로 실제 운영 절차에는 영향 없다.
+
+    후속 책임:
+      - 향후 compose 변수 추가 시 "환경 특화 값인가 / 스모크 기본값이 안전하게 잡히는가" 두 기준을 먼저 판단한다.
+        환경 특화면 서버 `.env` 에만, 스모크 기본값을 둘 수 있으면 `.env.example` 에 둔다.
+
+- id: ADR-010
+  title: CI/CD 인증 자격증명의 등록·검증 규칙 — `.gitlab-ci.yml` 참조명과 Variables Key 정합성
+  status: adopted
+  date: 2026-04-24
+  stacks: [gitlab, ci, security, ops]
+  context: |
+    ADR-007 은 ghcr.io 레지스트리 채택을, OPS-006 은 CI/CD Variables 의 Protected/Mask 정책을 규정했다.
+    그러나 dev push 파이프라인의 `api_image` job 이
+    `docker login ghcr.io -u "$GHCR_USER" --password-stdin` 에서
+    `Must provide --username with --password-stdin` 으로 반복 실패하는 장애가 발생했다.
+
+    단계적 진단 결과 원인은 아래 조합이었다.
+      1) GitLab CI/CD Variables 에 Key 가 `GHCR_USER` 가 아니라 `GHCR_NAME` 으로 등록되어 있었다.
+         UI 상 Value 칸에 올바른 GitHub username(`sbturtle`) 이 들어 있어
+         "변수는 제대로 등록됐다" 고 오인됐다.
+      2) `.gitlab-ci.yml` 은 `$GHCR_USER` 를 참조하므로 runtime 에 undefined 로 주입되어 `-u ""` 가 전달됐다.
+      3) 초기 진단 시 Key 불일치 가능성을 UI 육안 확인만으로 기각해 원인 확정이 지연됐다.
+         이후 `env | awk -F= '/^GHCR/ {print $1}'` 와 `${VAR+yes}` 기반 간접 probe 로
+         "주입된 Key 목록에 `GHCR_USER` 가 없음" 을 확인해 원인을 확정했다.
+
+    동일 배포 경로에서 `SSH_PRIVATE_KEY` 의
+    `-----END OPENSSH PRIVATE KEY-----` 뒤에 trailing newline 이 누락되어
+    `Load key ... error in libcrypto` / `Permission denied (publickey)` 가 별도로 발생했다.
+
+    두 사건의 공통 구조는 "UI 에 값이 있어 보이는데 runtime 에 원하는 형태로 들어오지 않는" 변수 주입 실패였고,
+    현재 규범(OPS-006) 은 이를 사전 차단하거나 사후 5분 내 판정할 수 있는 검증 절차를 제공하지 않는다.
+  decision: |
+    신규 CI/CD Variable 을 등록하거나 기존 값을 수정할 때마다 아래 5단계 검증을 의무로 한다.
+
+      1) Key 정합성 확인
+         - `.gitlab-ci.yml` 등 참조 파일에서 `grep -n 'VARNAME' .gitlab-ci.yml` 로 참조명 원본을 먼저 확정한다.
+         - UI 등록 시 Key 필드를 복붙 대신 **키보드로 직접 타이핑**하여 trailing space, zero-width space,
+           라틴/키릴 유사 문자 오염을 피한다.
+         - 등록 후 Key 필드에서 커서를 좌우 끝까지 이동해 잉여 공백이 없는지 눈으로 재확인한다.
+
+      2) 주입 여부 간접 probe
+         - 민감값 자체는 어떤 형태로도 echo 하지 않는다.
+         - 임시 job 또는 해당 job 의 `before_script` 최상단에 아래 3줄만 넣어 재실행한다.
+             - `env | awk -F= '/^PREFIX/ {print $1}'`  (주입된 Key 이름 목록)
+             - `echo "V set?=${VARNAME+yes} len=${#VARNAME}"` (정의 여부와 길이)
+         - `set?=yes len>0` 이 확인되기 전에는 해당 변수에 의존하는 단계를 운영 경로에서 신뢰하지 않는다.
+         - 진단용 probe 라인은 원인 확정 후 같은 MR 또는 후속 MR 로 반드시 제거한다.
+
+      3) Masked 저장 규칙 준수
+         - GitLab Masked 변수는 단일 줄 / 최소 8자 / 허용 문자 집합을 만족해야 한다.
+         - 조건 위반 시 GitLab 은 저장 시점에 빨간 배너로 거부하지만, 닫히는 속도가 빨라 놓치기 쉽다.
+         - PEM · multi-line · 공백 포함 값은 Masked 를 켜지 않는다.
+           Masked 를 켜야 할 값이 조건을 못 맞추면 해당 값은 Masked 대상이 아니라고 판단한다.
+
+      4) PEM / multi-line 값의 개행 규약
+         - `-----BEGIN ... -----` 로 시작하는 모든 PEM 은 마지막 `-----END ... -----` 뒤에 반드시 LF 하나를 포함해 저장한다.
+           trailing newline 누락은 `libcrypto` 파싱 실패로 이어져 SSH/GPG 가 즉시 거부한다.
+         - 개행은 LF 고정. Windows 메모장·웹 위젯을 경유하지 말고 서버에서 `cat` 결과를 그대로 붙여넣는다.
+         - `SSH_PRIVATE_KEY`, `SSH_KNOWN_HOSTS` 는 "Expand variable reference" 를 비활성화한다(값 내 `$` 보호).
+
+      5) Protected × Environment scope 정합
+         - Protected 변수는 Protected branch/tag 의 job 에만 주입된다. 비-Protected feature 브랜치에서 주입을 기대하지 않는다.
+         - Environment scope 를 지정한 변수는 해당 `environment:` 를 선언한 job 에만 주입된다.
+           image build 처럼 environment 가 없는 job 에서는 Environments 를 `All (default) *` 로 둬야 주입된다.
+
+    운영 보조 원칙:
+      - "UI 에는 있는데 runtime 에 없다" 증상이 반복되면 **Key 불일치 가설을 먼저 배제**한 뒤에 다른 가설로 시간을 쓴다.
+      - 의심 Variable 은 이름을 별칭(`VARNAME_ALT`) 으로 한 개 추가 등록한 뒤 CI 에서 그 별칭이 주입되는지 확인해
+        Key 측 문제와 값 측 문제를 분리할 수 있다.
+  consequence: |
+    긍정적 영향:
+      - 변수 등록 실수(Key 오타, 보이지 않는 문자, Masked 저장 실패, PEM 개행 누락) 가 배포 단계까지 흘러가는 경로가 차단된다.
+      - 장애 발생 시에도 간접 probe 패턴이 표준화되어 진단 시간이 예측 가능해진다.
+      - OPS-006 의 "Protected 등록" 원칙을 실제 검증 가능한 절차로 보강한다.
+
+    부정적 영향 및 완화:
+      - 변수 추가마다 probe 커밋/제거 쌍이 발생할 수 있다.
+        완화: 진단용 probe 는 본 작업 MR 끝자락에 포함하고 동일 MR 안에서 제거하거나, 후속 cleanup MR 로 정리한다.
+      - 육안 검증만으로 "등록 완료" 를 승인하는 관행이 남으면 규칙이 실효성을 잃는다.
+        완화: MR 리뷰에서 "등록/변경 검증 완료 증거(probe 로그 발췌)" 를 요구한다.
+
+    참조:
+      - 증상별 진단 플로우는 `runbooks/infra/ci-auth-troubleshoot.md` 에서 유지한다.
+      - 운영 체크리스트는 `docs/infra/ec2-gitlab-cicd-guide.md` 9절 CI/CD Variables 섹션에서 유지한다.
