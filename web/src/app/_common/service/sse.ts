@@ -9,8 +9,6 @@ export interface SseClientOptions<TData = unknown> {
   path: string;
   baseUrl?: string;
   params?: Record<string, SseParamValue>;
-  accessToken?: string;
-  accessTokenParamName?: string;
   withCredentials?: boolean;
   onOpen?: (event: Event) => void;
   onMessage?: SseMessageHandler<TData>;
@@ -48,22 +46,15 @@ function resolveSseUrl({
   path,
   baseUrl,
   params,
-  accessToken,
-  accessTokenParamName = "accessToken",
 }: Pick<
   SseClientOptions,
-  "path" | "baseUrl" | "params" | "accessToken" | "accessTokenParamName"
+  "path" | "baseUrl" | "params"
 >) {
   const resolvedBaseUrl =
     baseUrl ?? process.env.NEXT_PUBLIC_API_BASE_URL ?? window.location.origin;
   const url = new URL(path, resolvedBaseUrl);
   // URLSearchParams로 정리해두면 SSE 연결 주소를 한 방식으로 조합할 수 있습니다.
   const searchParams = serializeQueryParams(params);
-
-  if (accessToken) {
-    // EventSource는 커스텀 Authorization 헤더를 직접 붙일 수 없어 query param 방식을 함께 지원합니다.
-    searchParams.set(accessTokenParamName, accessToken);
-  }
 
   searchParams.forEach((value, key) => {
     url.searchParams.set(key, value);
