@@ -87,4 +87,41 @@ public class Worklog {
     @UpdateTimestamp
     @Column(name = "updated_at", nullable = false)
     private LocalDateTime updatedAt;
+
+    /**
+     * 업무 등록 요청을 서버 기본값과 함께 초기 엔티티로 만든다.
+     *
+     * @param authorId 작성자 사용자 ID
+     * @param teamId 소속 팀 ID
+     * @param title 업무 제목
+     * @param requestContent 업무 요청/지시 내용
+     * @param workContent 실제 수행 업무 내용
+     * @param importanceCode 중요도 코드
+     * @param instructionDate 지시 일자
+     * @param dueDate 마감 일자
+     * @return 저장 전 Worklog 엔티티
+     */
+    public static Worklog create(Long authorId,
+                                 Long teamId,
+                                 String title,
+                                 String requestContent,
+                                 String workContent,
+                                 WorklogImportance importanceCode,
+                                 LocalDate instructionDate,
+                                 LocalDate dueDate) {
+        Worklog worklog = new Worklog();
+        worklog.authorId = authorId;
+        worklog.teamId = teamId;
+        worklog.title = title;
+        worklog.requestContent = requestContent;
+        worklog.workContent = workContent;
+        worklog.statusCode = WorklogStatus.PENDING;
+        worklog.importanceCode = importanceCode;
+        worklog.instructionDate = instructionDate;
+        worklog.dueDate = dueDate;
+        worklog.aiSummaryEdited = Boolean.FALSE;
+        worklog.aiProcessingStatus = AiProcessingStatus.PENDING;
+        worklog.isDeleted = Boolean.FALSE;
+        return worklog;
+    }
 }
