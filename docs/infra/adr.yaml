@@ -70,7 +70,7 @@
 
 - id: ADR-005
   title: EC2 배포 방식 — GitLab Container Registry 이미지 pull + SSH 원격 compose 실행
-  status: adopted
+  status: superseded
   date: 2026-04-22
   stacks: [gitlab, docker, compose, ec2, ssh]
   context: |
