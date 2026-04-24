@@ -204,7 +204,19 @@ tasks.register('bootstrapJooqCodegenDatabase') {
                 throw new GradleException('jOOQ codegen용 PostgreSQL 호스트 포트를 확인하지 못했습니다.')
             }
 
-            def jdbcUrl = "jdbc:postgresql://localhost:${hostPort}/axwms_jooq_codegen"
+            // DinD 환경에서 pgvector 컨테이너는 DOCKER_HOST 가 가리키는 daemon 위에 뜨고,
+            // 공개된 호스트 포트도 그 daemon 호스트에서만 도달 가능하다. 로컬에서는 DOCKER_HOST 가
+            // 비어 있어 기존 동작(localhost) 이 유지된다.
+            def dockerHostEnv = System.getenv('DOCKER_HOST')
+            def resolvedHost = 'localhost'
+            if (dockerHostEnv) {
+                def matcher = dockerHostEnv =~ /^tcp:\/\/([^:\/]+)/
+                if (matcher.find()) {
+                    resolvedHost = matcher.group(1)
+                }
+            }
+
+            def jdbcUrl = "jdbc:postgresql://${resolvedHost}:${hostPort}/axwms_jooq_codegen"
             def flyway = Flyway.configure()
                     .cleanDisabled(false)
                     .connectRetries(30)

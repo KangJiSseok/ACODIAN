@@ -9,6 +9,9 @@ general:
   - id: GEN-003
     rule: 배포 절차나 브랜치 정책을 바꾸면 `.gitlab-ci.yml`, `infra/compose.deploy.yml`, `docs/infra/ec2-gitlab-cicd-guide.md`, `docs/infra/adr.yaml`을 함께 점검해 문서 drift를 남기지 않는다.
     stacks: [infra, gitlab, docs]
+  - id: GEN-004
+    rule: `infra/.env.example` 는 서버 `.env` 샘플이 아니라 compose 렌더, `infra_validate`, 로컬 스모크 테스트를 위한 기본값 파일로 설명한다. 환경 특화 값과 실제 비밀값은 이 파일에 넣지 않고 EC2 `.env` 또는 GitLab CI/CD Variables 로만 주입한다.
+    stacks: [infra, docker, compose, ci]
 
 docker:
   - id: DO-001
