@@ -3,11 +3,11 @@ package com.ibank.axwms.domain.auth.dto;
 import io.swagger.v3.oas.annotations.media.Schema;
 import jakarta.validation.constraints.Email;
 import jakarta.validation.constraints.NotBlank;
+import lombok.AccessLevel;
+import lombok.NoArgsConstructor;
 
+@NoArgsConstructor(access = AccessLevel.PRIVATE)
 public final class LoginApiDto {
-
-    private LoginApiDto() {
-    }
 
     @Schema(description = "로그인 요청 DTO. Controller 바인딩과 AuthService 입력을 겸한다.")
     public record Request(
