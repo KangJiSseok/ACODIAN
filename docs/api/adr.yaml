@@ -95,6 +95,7 @@
     Request 는 Controller 바인딩/검증과 Service 입력을 겸한다. Service 메서드는 기본적으로 Request DTO 를 그대로 인자로 받고, 별도 Command/Criteria 클래스는 기본으로 만들지 않는다.
     Service 입력을 Request 로 직결할 수 없는 경우(여러 소스 조립·정규화, HTTP 외 경로에서도 같은 유스케이스 호출 등) 에 한해 같은 {UseCase}ApiDto 안에 Command/Criteria nested record 를 추가한다. 별도 dto 파일로 분리하지 않는다.
     Response는 static factory method(from/of)로 Service 결과 또는 도메인 객체를 받아 생성한다. Response 조립에 중간 Result 가 꼭 필요하지 않다면 Response.of()/from() 으로 바로 생성한다.
+    외부 DTO holder class 와 인스턴스화가 불필요한 nested utility class 는 수기 private 생성자 대신 Lombok `@NoArgsConstructor(access = AccessLevel.PRIVATE)` 로 선언한다.
     Request DTO를 Entity로 직접 매핑하지 않는다.
     API 요청/응답 변환은 명시적 코드로 작성하며, 자동 매핑 도구를 기본 규칙으로 도입하지 않는다.
     Entity 생성/수정은 Service 또는 Domain의 책임으로 둔다.
@@ -103,6 +104,7 @@
     Service 는 Request DTO 를 직접 받아 단순 유스케이스에서는 Command 보일러플레이트가 제거된다.
     Command/Criteria 도입 여부 자체가 "Request 로 직결이 어렵다" 는 설계 신호로 작동한다.
     응답 DTO 생성 규칙이 각 DTO 내부에 드러나 가독성과 추적성이 높아진다.
+    DTO holder 의 인스턴스화 금지 의도가 애노테이션 한 줄로 통일되어 수기 생성자 보일러플레이트와 접근 제어 누락을 줄인다.
     자동 매핑 설정과 숨겨진 변환 규칙 없이, 명시적인 코드 중심으로 일관된 DTO 변환 방식을 유지할 수 있다.
 
 - id: ADR-007

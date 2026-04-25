@@ -172,20 +172,38 @@
     <tr>
       <td><code>GET /api/teams</code></td>
       <td><code>Documented</code></td>
-      <td>팀 목록과 UserTeam membership 기반 리더/소속 정보를 조회한다.</td>
+      <td>팀 목록과 ACTIVE membership 기반 대표 리더/부서 요약을 조회한다.</td>
       <td><code>domain.organization.team.controller.TeamController</code></td>
       <td><code>domain.organization.team.service.TeamService</code></td>
       <td><code>domain.organization.team.entity.Team</code>, <code>domain.organization.team.repository.TeamRepository</code>, <code>domain.organization.team.repository.jooq.TeamJooqRepository</code></td>
-      <td>팀 read/write ownership은 <code>team</code> feature가 가지며, 팀장 파생값은 <code>UserTeam.teamLeader</code> 해석을 따른다.</td>
+      <td>팀 read ownership은 <code>team</code> feature가 가지며, soft-delete 된 팀은 기본 조회에서 제외한다.</td>
     </tr>
     <tr>
       <td><code>GET /api/teams/{id}</code></td>
       <td><code>Documented</code></td>
-      <td>단일 팀 상세와 UserTeam membership 기반 리더/멤버 컨텍스트를 조회한다.</td>
+      <td>단일 팀 상세와 대표 membership 컨텍스트를 조회한다.</td>
       <td><code>domain.organization.team.controller.TeamController</code></td>
       <td><code>domain.organization.team.service.TeamService</code></td>
-      <td><code>domain.organization.team.entity.Team</code>, <code>domain.organization.team.entity.UserTeam</code>, <code>domain.organization.team.repository.TeamRepository</code></td>
-      <td>팀 상세는 소속 관계(<code>UserTeam</code>)를 함께 참고하며, 교차 부서 참여도 membership 으로 해석한다.</td>
+      <td><code>domain.organization.team.entity.Team</code>, <code>domain.organization.team.entity.UserTeam</code>, <code>domain.organization.team.repository.TeamRepository</code>, <code>domain.organization.team.repository.UserTeamRepository</code></td>
+      <td>교차 부서 참여도 <code>UserTeam</code> membership 으로 해석한다.</td>
+    </tr>
+    <tr>
+      <td><code>GET /api/teams/{id}/users</code></td>
+      <td><code>Documented</code></td>
+      <td>특정 팀의 ACTIVE membership 사용자 목록을 조회한다.</td>
+      <td><code>domain.organization.team.controller.TeamController</code></td>
+      <td><code>domain.organization.team.service.TeamService</code></td>
+      <td><code>domain.organization.team.entity.UserTeam</code>, <code>domain.organization.team.repository.UserTeamRepository</code>, <code>domain.organization.team.repository.jooq.UserTeamJooqRepository</code></td>
+      <td>membership 상태값은 <code>ACTIVE</code>, <code>LEFT</code> 두 종류만 사용한다.</td>
+    </tr>
+    <tr>
+      <td><code>GET /api/teams/{id}/worklogs</code></td>
+      <td><code>Documented</code></td>
+      <td>특정 팀 기준 업무일지 목록을 조회한다.</td>
+      <td><code>domain.organization.team.controller.TeamController</code></td>
+      <td><code>domain.organization.team.service.TeamService</code></td>
+      <td><code>domain.organization.team.entity.Team</code>, <code>domain.organization.team.repository.jooq.TeamJooqRepository</code>, <code>domain.worklog.repository.WorklogRepository</code></td>
+      <td>team feature 가 ownership 을 집행하고, 실제 projection 은 worklog 연동을 포함할 수 있다.</td>
     </tr>
     <tr>
       <td><code>POST /api/teams</code></td>
@@ -194,34 +212,43 @@
       <td><code>domain.organization.team.controller.TeamController</code></td>
       <td><code>domain.organization.team.service.TeamService</code></td>
       <td><code>domain.organization.team.entity.Team</code>, <code>domain.organization.team.entity.UserTeam</code>, <code>domain.organization.team.repository.TeamRepository</code>, <code>domain.organization.team.repository.UserTeamRepository</code></td>
-      <td>user-team 관계 ownership도 <code>team</code> feature에 두며, 초기 팀장 지정도 membership 플래그로 해석한다.</td>
+      <td>leader source of truth 는 별도 team 컬럼이 아니라 membership 이다.</td>
     </tr>
     <tr>
       <td><code>PUT /api/teams/{id}</code></td>
       <td><code>Documented</code></td>
-      <td>팀 기본 정보와 membership 기반 리더 운영 속성을 수정한다.</td>
+      <td>팀 기본 정보와 대표 membership 운영 속성을 수정한다.</td>
       <td><code>domain.organization.team.controller.TeamController</code></td>
       <td><code>domain.organization.team.service.TeamService</code></td>
-      <td><code>domain.organization.team.entity.Team</code>, <code>domain.organization.team.repository.TeamRepository</code>, <code>domain.organization.team.repository.jooq.TeamJooqRepository</code></td>
-      <td>feature-first 구조에서 team 관련 조회/수정 책임을 한곳에 두고, 리더 의미도 membership 갱신으로 수렴한다.</td>
+      <td><code>domain.organization.team.entity.Team</code>, <code>domain.organization.team.entity.UserTeam</code>, <code>domain.organization.team.repository.TeamRepository</code>, <code>domain.organization.team.repository.UserTeamRepository</code></td>
+      <td>활성 팀 uniqueness 는 <code>deleted_at IS NULL</code> 기준으로 해석한다.</td>
     </tr>
     <tr>
       <td><code>PATCH /api/teams/{id}/status</code></td>
       <td><code>Documented</code></td>
-      <td>팀 상태 활성/비활성 전환을 담당한다.</td>
+      <td>팀 운영 상태 활성/비활성 전환을 담당한다.</td>
+      <td><code>domain.organization.team.controller.TeamController</code></td>
+      <td><code>domain.organization.team.service.TeamService</code></td>
+      <td><code>domain.organization.team.TeamStatus</code>, <code>domain.organization.team.entity.Team</code>, <code>domain.organization.team.repository.TeamRepository</code></td>
+      <td><code>deleted_at</code> lifecycle 과 분리된 운영 상태만 다룬다.</td>
+    </tr>
+    <tr>
+      <td><code>POST /api/teams/{id}/users/bulk</code></td>
+      <td><code>Documented</code></td>
+      <td>팀 membership 을 일괄 추가/복구/LEFT 전환한다.</td>
+      <td><code>domain.organization.team.controller.TeamController</code></td>
+      <td><code>domain.organization.team.service.TeamService</code></td>
+      <td><code>domain.organization.team.entity.UserTeam</code>, <code>domain.organization.team.UserTeamStatus</code>, <code>domain.organization.team.repository.UserTeamRepository</code></td>
+      <td>user-team 관계 일괄 반영 ownership 은 team feature 안에 두며, legacy <code>/members/bulk</code> 를 대체한다.</td>
+    </tr>
+    <tr>
+      <td><code>DELETE /api/teams/{id}</code></td>
+      <td><code>Documented</code></td>
+      <td>팀을 soft-delete 한다.</td>
       <td><code>domain.organization.team.controller.TeamController</code></td>
       <td><code>domain.organization.team.service.TeamService</code></td>
       <td><code>domain.organization.team.entity.Team</code>, <code>domain.organization.team.repository.TeamRepository</code></td>
-      <td>상태 enum은 <code>domain.organization.team.TeamStatus</code>와 연결된다.</td>
-    </tr>
-    <tr>
-      <td><code>POST /api/teams/{id}/members/bulk</code></td>
-      <td><code>Documented</code></td>
-      <td>팀 멤버를 일괄 추가/삭제한다.</td>
-      <td><code>domain.organization.team.controller.TeamController</code></td>
-      <td><code>domain.organization.team.service.TeamService</code></td>
-      <td><code>domain.organization.team.entity.Team</code>, <code>domain.organization.team.entity.UserTeam</code>, <code>domain.organization.team.repository.UserTeamRepository</code></td>
-      <td>clarified-scope addendum. user-team 관계 일괄 반영 ownership은 team feature 안에 두며, 교차 부서 참여도 membership 으로 허용한다.</td>
+      <td>삭제는 row 제거가 아니라 <code>deleted_at</code> 변경으로 처리한다.</td>
     </tr>
   </tbody>
 </table>
