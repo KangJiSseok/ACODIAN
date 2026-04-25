@@ -2,6 +2,7 @@ package com.ibank.axwms.domain.organization.user.service;
 
 import com.ibank.axwms.domain.organization.department.entity.Department;
 import com.ibank.axwms.domain.organization.department.repository.DepartmentRepository;
+import com.ibank.axwms.domain.organization.team.UserTeamStatus;
 import com.ibank.axwms.domain.organization.team.entity.Team;
 import com.ibank.axwms.domain.organization.team.entity.UserTeam;
 import com.ibank.axwms.domain.organization.team.repository.TeamRepository;
@@ -66,12 +67,11 @@ public class UserService {
     }
 
     /**
-     * 사용자-팀 관계 순서를 유지한 채 팀 요약 목록을 만든다.
-     * 주 소속 팀을 먼저 보이게 한 뒤, JPA findAllById 결과가 입력 순서를 보장하지 않으므로
-     * teamId -> Team 맵을 만든 뒤 사용자-팀 관계 목록 순서대로 재조립한다.
+     * 사용자-팀 관계 순서를 유지한 채 ACTIVE membership 기준 팀 요약 목록을 만든다.
+     * soft-delete 된 팀이나 LEFT membership 은 현재 사용자 문맥에서 노출하지 않는다.
      */
     private List<GetMyProfileApiDto.Response.TeamSummary> getTeamSummaries(Long userId) {
-        List<UserTeam> userTeams = userTeamRepository.findAllByUserIdOrderByIsPrimaryDesc(userId);
+        List<UserTeam> userTeams = userTeamRepository.findAllByUserIdAndStatusCodeOrderByIsPrimaryDesc(userId, UserTeamStatus.ACTIVE);
         if (userTeams.isEmpty()) {
             return List.of();
         }
@@ -81,6 +81,7 @@ public class UserService {
                                 .map(UserTeam::getTeamId)
                                 .toList()
                 ).stream()
+                .filter(team -> team.getDeletedAt() == null)
                 .collect(Collectors.toMap(Team::getId, Function.identity()));
 
         return userTeams.stream()

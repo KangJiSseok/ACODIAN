@@ -10,13 +10,13 @@ import com.ibank.axwms.domain.organization.department.DepartmentStatus;
 import com.ibank.axwms.domain.organization.department.repository.jooq.projection.DepartmentListItemProjection;
 import com.ibank.axwms.domain.organization.department.repository.jooq.projection.DepartmentOverviewProjection;
 import com.ibank.axwms.domain.organization.team.TeamStatus;
+import com.ibank.axwms.domain.organization.team.repository.jooq.TeamMembershipConditionSupport;
 import com.ibank.axwms.domain.organization.user.EmploymentStatus;
 import com.ibank.axwms.global.jooq.tables.TbUser;
+import java.util.List;
 import lombok.RequiredArgsConstructor;
 import org.jooq.DSLContext;
 import org.springframework.stereotype.Repository;
-
-import java.util.List;
 
 @Repository
 @RequiredArgsConstructor
@@ -27,6 +27,7 @@ public class DepartmentJooqRepositoryImpl implements DepartmentJooqRepository {
     private static final String ACTIVE_EMPLOYMENT_STATUS = EmploymentStatus.ACTIVE.name();
 
     private final DSLContext dsl;
+    private final TeamMembershipConditionSupport teamMembershipConditionSupport;
 
     /**
      * 활성 부서 목록 화면의 상단 집계를 조회한다.
@@ -71,6 +72,22 @@ public class DepartmentJooqRepositoryImpl implements DepartmentJooqRepository {
                         record.get(TB_DEPARTMENT.CREATED_AT),
                         record.get(TB_DEPARTMENT.UPDATED_AT)
                 ));
+    }
+
+    /**
+     * 현재 부서에 속하고 ACTIVE membership 으로 연결된 사용자 수를 조회한다.
+     * /users/me 와 team skeleton 이 공유하는 membership 조건을 재사용해 soft-delete 팀과 LEFT membership 을 제외한다.
+     */
+    @Override
+    public int fetchActiveUserCount(Long departmentId) {
+        return dsl.select(countDistinct(TB_USER.USER_ID))
+                .from(TB_USER)
+                .join(TB_USER_TEAM).on(TB_USER.USER_ID.eq(TB_USER_TEAM.USER_ID))
+                .join(TB_TEAM).on(TB_USER_TEAM.TEAM_ID.eq(TB_TEAM.TEAM_ID))
+                .where(TB_USER.DEPARTMENT_ID.eq(departmentId))
+                .and(teamMembershipConditionSupport.activeMembership(TB_USER_TEAM.STATUS_CODE))
+                .and(teamMembershipConditionSupport.activeTeam(TB_TEAM.DELETED_AT))
+                .fetchSingle(0, Integer.class);
     }
 
     /** ACTIVE 상태인 department row 수를 계산한다. */

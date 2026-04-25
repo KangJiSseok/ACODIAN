@@ -11,4 +11,7 @@ public interface DepartmentJooqRepository {
 
     /** 활성 상태인 부서 목록과 부서장 표시 정보를 조회한다. */
     List<DepartmentListItemProjection> findActiveDepartments();
+
+    /** ACTIVE membership 기준 현재 부서에 연결된 사용자 수를 조회한다. */
+    int fetchActiveUserCount(Long departmentId);
 }
