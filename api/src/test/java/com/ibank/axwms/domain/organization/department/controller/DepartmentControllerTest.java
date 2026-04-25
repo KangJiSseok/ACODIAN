@@ -9,6 +9,8 @@ import com.ibank.axwms.domain.organization.department.dto.GetDepartmentsApiDto;
 import com.ibank.axwms.domain.organization.department.dto.UpdateDepartmentApiDto;
 import com.ibank.axwms.domain.organization.department.service.DepartmentService;
 import com.ibank.axwms.global.response.EmptyResponse;
+import jakarta.validation.Valid;
+import java.lang.reflect.Parameter;
 import java.lang.reflect.Method;
 import java.time.LocalDateTime;
 import java.util.List;
@@ -91,11 +93,13 @@ class DepartmentControllerTest {
         Method method = DepartmentController.class.getMethod("updateDepartment", Long.class, UpdateDepartmentApiDto.Request.class);
         PutMapping putMapping = method.getAnnotation(PutMapping.class);
         PreAuthorize preAuthorize = method.getAnnotation(PreAuthorize.class);
+        Parameter requestParameter = method.getParameters()[1];
 
         assertThat(putMapping).isNotNull();
         assertThat(putMapping.value()).containsExactly("/{id}");
         assertThat(preAuthorize).isNotNull();
         assertThat(preAuthorize.value()).isEqualTo("hasRole('DIRECTOR')");
+        assertThat(requestParameter.getAnnotation(Valid.class)).isNotNull();
     }
 
     @Test

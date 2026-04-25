@@ -36,6 +36,8 @@ public enum ErrorCode {
     DEPARTMENT_DUPLICATE_HEAD_USER(HttpStatus.CONFLICT, "이미 다른 부서의 부서장으로 지정된 사용자입니다."),
     /** DIRECTOR 또는 DEPT_HEAD 가 아닌 사용자를 부서장으로 지정하려 할 때 사용한다. */
     DEPARTMENT_HEAD_ROLE_NOT_ALLOWED(HttpStatus.CONFLICT, "부서장은 DIRECTOR 또는 DEPT_HEAD 역할의 사용자만 지정할 수 있습니다."),
+    /** 수정 대상 부서와 다른 부서 소속 사용자를 부서장으로 지정하려 할 때 사용한다. */
+    DEPARTMENT_HEAD_USER_DEPARTMENT_MISMATCH(HttpStatus.CONFLICT, "부서장은 수정 대상 부서에 소속된 사용자만 지정할 수 있습니다."),
     /** 활성 부서를 찾지 못했거나 요청한 부서 자체가 존재하지 않을 때 사용한다. */
     DEPARTMENT_NOT_FOUND(HttpStatus.NOT_FOUND, "부서를 찾을 수 없습니다."),
     /** 활성 팀이 남아 있어 부서를 비활성화할 수 없을 때 사용한다. */

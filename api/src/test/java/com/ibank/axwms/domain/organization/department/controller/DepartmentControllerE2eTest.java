@@ -49,7 +49,9 @@ class DepartmentControllerE2eTest extends E2eTestSupport {
     private Long dormantDepartmentId;
     private Long headlessDepartmentId;
     private Long deptHeadCandidateUserId;
+    private Long logisticsCandidateUserId;
     private Long freeCandidateUserId;
+    private Long duplicateHeadCandidateUserId;
     private Long directorCandidateUserId;
     private Long memberCandidateUserId;
     private Long teamLeadCandidateUserId;
@@ -279,6 +281,73 @@ class DepartmentControllerE2eTest extends E2eTestSupport {
     }
 
     @Test
+    @DisplayName("인증 없이 부서를 수정하면 AUTH_UNAUTHORIZED 응답을 반환한다")
+    void 인증_없이_부서를_수정하면_auth_unauthorized_응답을_반환한다() throws Exception {
+        mockMvc.perform(apiPut("/departments/" + logisticsDepartmentId)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {
+                                  "departmentName": "플랫폼전략본부",
+                                  "description": "전사 플랫폼 전략"
+                                }
+                                """))
+                .andExpect(status().isUnauthorized())
+                .andExpect(jsonPath("$.success", is(false)))
+                .andExpect(jsonPath("$.error.code", is("AUTH_UNAUTHORIZED")));
+    }
+
+    @Test
+    @DisplayName("DIRECTOR 권한이 아니면 부서 수정을 AUTH_ACCESS_DENIED 로 거부한다")
+    void director_권한이_아니면_부서_수정을_auth_access_denied로_거부한다() throws Exception {
+        mockMvc.perform(apiPut("/departments/" + logisticsDepartmentId)
+                        .with(user("member@ibank.com").roles("MEMBER"))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {
+                                  "departmentName": "플랫폼전략본부",
+                                  "description": "전사 플랫폼 전략"
+                                }
+                                """))
+                .andExpect(status().isForbidden())
+                .andExpect(jsonPath("$.success", is(false)))
+                .andExpect(jsonPath("$.error.code", is("AUTH_ACCESS_DENIED")));
+    }
+
+    @Test
+    @DisplayName("departmentName 이 비어 있으면 COMMON_VALIDATION_ERROR 응답을 반환한다")
+    void departmentName_이_비어_있으면_common_validation_error_응답을_반환한다() throws Exception {
+        mockMvc.perform(apiPut("/departments/" + logisticsDepartmentId)
+                        .with(user("director@ibank.com").roles("DIRECTOR"))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {
+                                  "departmentName": "",
+                                  "description": "전사 플랫폼 전략"
+                                }
+                                """))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.success", is(false)))
+                .andExpect(jsonPath("$.error.code", is("COMMON_VALIDATION_ERROR")));
+    }
+
+    @Test
+    @DisplayName("departmentName 이 100자를 초과하면 COMMON_VALIDATION_ERROR 응답을 반환한다")
+    void departmentName_이_100자를_초과하면_common_validation_error_응답을_반환한다() throws Exception {
+        mockMvc.perform(apiPut("/departments/" + logisticsDepartmentId)
+                        .with(user("director@ibank.com").roles("DIRECTOR"))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {
+                                  "departmentName": "%s",
+                                  "description": "전사 플랫폼 전략"
+                                }
+                                """.formatted("가".repeat(101))))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.success", is(false)))
+                .andExpect(jsonPath("$.error.code", is("COMMON_VALIDATION_ERROR")));
+    }
+
+    @Test
     @DisplayName("DIRECTOR 가 활성 부서를 수정하면 200 OK 와 빈 응답을 반환한다")
     void director_가_활성_부서를_수정하면_200_ok와_빈_응답을_반환한다() throws Exception {
         mockMvc.perform(apiPut("/departments/" + logisticsDepartmentId)
@@ -290,14 +359,14 @@ class DepartmentControllerE2eTest extends E2eTestSupport {
                                   "description": "전사 플랫폼 전략",
                                   "departmentHeadUserId": %d
                                 }
-                                """.formatted(freeCandidateUserId)))
+                                """.formatted(logisticsCandidateUserId)))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.success", is(true)));
 
         Department updated = departmentRepository.findById(logisticsDepartmentId).orElseThrow();
         assertThat(updated.getDepartmentName()).isEqualTo("플랫폼전략본부");
         assertThat(updated.getDescription()).isEqualTo("전사 플랫폼 전략");
-        assertThat(updated.getDepartmentHeadUserId()).isEqualTo(freeCandidateUserId);
+        assertThat(updated.getDepartmentHeadUserId()).isEqualTo(logisticsCandidateUserId);
     }
 
     @Test
@@ -318,6 +387,23 @@ class DepartmentControllerE2eTest extends E2eTestSupport {
 
         Department updated = departmentRepository.findById(emptyHeadDepartmentId).orElseThrow();
         assertThat(updated.getDepartmentHeadUserId()).isEqualTo(directorCandidateUserId);
+    }
+
+    @Test
+    @DisplayName("다른 부서 소속 사용자를 부서장으로 지정하면 DEPARTMENT_HEAD_USER_DEPARTMENT_MISMATCH 응답을 반환한다")
+    void 다른_부서_소속_사용자를_부서장으로_지정하면_department_head_user_department_mismatch_응답을_반환한다() throws Exception {
+        mockMvc.perform(apiPut("/departments/" + logisticsDepartmentId)
+                        .with(user("director@ibank.com").roles("DIRECTOR"))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {
+                                  "departmentName": "물류본부",
+                                  "description": "다른 부서 사용자 지정 시도",
+                                  "departmentHeadUserId": %d
+                                }
+                                """.formatted(freeCandidateUserId)))
+                .andExpect(status().isConflict())
+                .andExpect(jsonPath("$.error.code", is("DEPARTMENT_HEAD_USER_DEPARTMENT_MISMATCH")));
     }
 
     @Test
@@ -381,7 +467,7 @@ class DepartmentControllerE2eTest extends E2eTestSupport {
                                   "description": "수정 설명",
                                   "departmentHeadUserId": %d
                                 }
-                                """.formatted(logisticsHeadUserId)))
+                                """.formatted(duplicateHeadCandidateUserId)))
                 .andExpect(status().isConflict())
                 .andExpect(jsonPath("$.error.code", is("DEPARTMENT_DUPLICATE_HEAD_USER")));
     }
@@ -512,6 +598,26 @@ class DepartmentControllerE2eTest extends E2eTestSupport {
                 UserRole.DEPT_HEAD
         ));
         freeCandidateUserId = freeCandidate.getId();
+
+        User logisticsCandidate = userRepository.save(createUser(
+                logisticsDepartment.getId(),
+                "류후보",
+                "logistics-candidate-" + System.nanoTime() + "@ibank.com",
+                EmploymentStatus.ACTIVE,
+                UserRole.DEPT_HEAD
+        ));
+        logisticsCandidateUserId = logisticsCandidate.getId();
+
+        User duplicateHeadCandidate = userRepository.save(createUser(
+                operationsDepartment.getId(),
+                "중복부서장후보",
+                "duplicate-head-candidate-" + System.nanoTime() + "@ibank.com",
+                EmploymentStatus.ACTIVE,
+                UserRole.DEPT_HEAD
+        ));
+        duplicateHeadCandidateUserId = duplicateHeadCandidate.getId();
+        inactiveDepartment.assignHeadUserId(duplicateHeadCandidateUserId);
+        departmentRepository.save(inactiveDepartment);
 
         User directorCandidate = userRepository.save(createUser(
                 operationsDepartment.getId(),

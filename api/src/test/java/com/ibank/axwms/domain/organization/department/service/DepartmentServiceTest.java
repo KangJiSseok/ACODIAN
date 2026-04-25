@@ -102,7 +102,7 @@ class DepartmentServiceTest {
         department.assignHeadUserId(1001L);
         UpdateDepartmentApiDto.Request request = new UpdateDepartmentApiDto.Request("플랫폼전략본부", "새 설명", 2001L);
         given(departmentRepository.findByIdAndStatusCode(10L, DepartmentStatus.ACTIVE)).willReturn(java.util.Optional.of(department));
-        given(userRepository.findById(2001L)).willReturn(java.util.Optional.of(createUser(2001L, UserRole.DEPT_HEAD)));
+        given(userRepository.findById(2001L)).willReturn(java.util.Optional.of(createUser(10L, 2001L, UserRole.DEPT_HEAD)));
 
         departmentService.updateDepartment(10L, request);
 
@@ -117,7 +117,7 @@ class DepartmentServiceTest {
         Department department = Department.create("물류본부", "기존 설명");
         UpdateDepartmentApiDto.Request request = new UpdateDepartmentApiDto.Request("물류본부", "새 설명", 3001L);
         given(departmentRepository.findByIdAndStatusCode(10L, DepartmentStatus.ACTIVE)).willReturn(java.util.Optional.of(department));
-        given(userRepository.findById(3001L)).willReturn(java.util.Optional.of(createUser(3001L, UserRole.DIRECTOR)));
+        given(userRepository.findById(3001L)).willReturn(java.util.Optional.of(createUser(10L, 3001L, UserRole.DIRECTOR)));
 
         departmentService.updateDepartment(10L, request);
 
@@ -183,7 +183,7 @@ class DepartmentServiceTest {
         Department department = Department.create("물류본부", "기존 설명");
         UpdateDepartmentApiDto.Request request = new UpdateDepartmentApiDto.Request("물류본부", "새 설명", 1001L);
         given(departmentRepository.findByIdAndStatusCode(10L, DepartmentStatus.ACTIVE)).willReturn(java.util.Optional.of(department));
-        given(userRepository.findById(1001L)).willReturn(java.util.Optional.of(createUser(1001L, UserRole.TEAM_LEAD)));
+        given(userRepository.findById(1001L)).willReturn(java.util.Optional.of(createUser(10L, 1001L, UserRole.TEAM_LEAD)));
 
         assertThatThrownBy(() -> departmentService.updateDepartment(10L, request))
                 .isInstanceOf(BusinessException.class)
@@ -197,7 +197,7 @@ class DepartmentServiceTest {
         Department department = Department.create("물류본부", "기존 설명");
         UpdateDepartmentApiDto.Request request = new UpdateDepartmentApiDto.Request("물류본부", "새 설명", 1001L);
         given(departmentRepository.findByIdAndStatusCode(10L, DepartmentStatus.ACTIVE)).willReturn(java.util.Optional.of(department));
-        given(userRepository.findById(1001L)).willReturn(java.util.Optional.of(createUser(1001L, UserRole.MEMBER)));
+        given(userRepository.findById(1001L)).willReturn(java.util.Optional.of(createUser(10L, 1001L, UserRole.MEMBER)));
 
         assertThatThrownBy(() -> departmentService.updateDepartment(10L, request))
                 .isInstanceOf(BusinessException.class)
@@ -211,7 +211,7 @@ class DepartmentServiceTest {
         Department department = Department.create("물류본부", "기존 설명");
         UpdateDepartmentApiDto.Request request = new UpdateDepartmentApiDto.Request("물류본부", "새 설명", 1001L);
         given(departmentRepository.findByIdAndStatusCode(10L, DepartmentStatus.ACTIVE)).willReturn(java.util.Optional.of(department));
-        given(userRepository.findById(1001L)).willReturn(java.util.Optional.of(createUser(1001L, UserRole.MEMBER)));
+        given(userRepository.findById(1001L)).willReturn(java.util.Optional.of(createUser(20L, 1001L, UserRole.MEMBER)));
 
         assertThatThrownBy(() -> departmentService.updateDepartment(10L, request))
                 .isInstanceOf(BusinessException.class)
@@ -226,13 +226,28 @@ class DepartmentServiceTest {
         Department department = Department.create("물류본부", "기존 설명");
         UpdateDepartmentApiDto.Request request = new UpdateDepartmentApiDto.Request("물류본부", "새 설명", 1001L);
         given(departmentRepository.findByIdAndStatusCode(10L, DepartmentStatus.ACTIVE)).willReturn(java.util.Optional.of(department));
-        given(userRepository.findById(1001L)).willReturn(java.util.Optional.of(createUser(1001L, UserRole.DIRECTOR)));
+        given(userRepository.findById(1001L)).willReturn(java.util.Optional.of(createUser(10L, 1001L, UserRole.DIRECTOR)));
         given(departmentRepository.existsByDepartmentHeadUserIdAndIdNot(1001L, 10L)).willReturn(true);
 
         assertThatThrownBy(() -> departmentService.updateDepartment(10L, request))
                 .isInstanceOf(BusinessException.class)
                 .extracting(ex -> ((BusinessException) ex).getErrorCode())
                 .isEqualTo(ErrorCode.DEPARTMENT_DUPLICATE_HEAD_USER);
+    }
+
+    @Test
+    @DisplayName("허용 역할 사용자라도 다른 부서 소속이면 부서장으로 지정할 수 없다")
+    void 허용_역할_사용자라도_다른_부서_소속이면_부서장으로_지정할_수_없다() {
+        Department department = Department.create("물류본부", "기존 설명");
+        UpdateDepartmentApiDto.Request request = new UpdateDepartmentApiDto.Request("물류본부", "새 설명", 1001L);
+        given(departmentRepository.findByIdAndStatusCode(10L, DepartmentStatus.ACTIVE)).willReturn(java.util.Optional.of(department));
+        given(userRepository.findById(1001L)).willReturn(java.util.Optional.of(createUser(20L, 1001L, UserRole.DEPT_HEAD)));
+
+        assertThatThrownBy(() -> departmentService.updateDepartment(10L, request))
+                .isInstanceOf(BusinessException.class)
+                .extracting(ex -> ((BusinessException) ex).getErrorCode())
+                .isEqualTo(ErrorCode.DEPARTMENT_HEAD_USER_DEPARTMENT_MISMATCH);
+        then(departmentRepository).should(never()).existsByDepartmentHeadUserIdAndIdNot(1001L, 10L);
     }
 
     @Test
@@ -301,7 +316,7 @@ class DepartmentServiceTest {
     @DisplayName("부서장 사용자가 DEPT_HEAD 이면 새 부서를 저장한다")
     void 부서장_사용자가_dept_head이면_새_부서를_저장한다() {
         CreateDepartmentApiDto.Request request = new CreateDepartmentApiDto.Request("플랫폼전략본부", "전사 전략", 101L);
-        User headUser = User.create(10L, "윤후보", "candidate@ibank.com", "hash", UserRole.DEPT_HEAD, EmploymentStatus.ACTIVE, "차장", "부서장 후보", LocalDate.of(2025, 1, 1));
+        User headUser = User.create(10L, "윤후보", "candidate@ibank.com", "hash", UserRole.DEPT_HEAD, EmploymentStatus.ACTIVE, "차장", "부서장 후보", java.time.LocalDate.of(2025, 1, 1));
         given(userRepository.findById(101L)).willReturn(java.util.Optional.of(headUser));
         given(departmentRepository.save(any(Department.class))).willAnswer(invocation -> invocation.getArgument(0));
 
@@ -319,7 +334,7 @@ class DepartmentServiceTest {
     @DisplayName("부서장 사용자가 DIRECTOR 이면 새 부서를 저장한다")
     void 부서장_사용자가_director이면_새_부서를_저장한다() {
         CreateDepartmentApiDto.Request request = new CreateDepartmentApiDto.Request("플랫폼전략본부", "전사 전략", 101L);
-        User headUser = User.create(10L, "박본부", "director@ibank.com", "hash", UserRole.DIRECTOR, EmploymentStatus.ACTIVE, "상무", "본부장", LocalDate.of(2025, 1, 1));
+        User headUser = User.create(10L, "박본부", "director@ibank.com", "hash", UserRole.DIRECTOR, EmploymentStatus.ACTIVE, "상무", "본부장", java.time.LocalDate.of(2025, 1, 1));
         given(userRepository.findById(101L)).willReturn(java.util.Optional.of(headUser));
         given(departmentRepository.save(any(Department.class))).willAnswer(invocation -> invocation.getArgument(0));
 
@@ -358,7 +373,7 @@ class DepartmentServiceTest {
     @DisplayName("부서장 사용자가 TEAM_LEAD 이면 역할 예외를 던진다")
     void 부서장_사용자가_team_lead이면_역할_예외를_던진다() {
         CreateDepartmentApiDto.Request request = new CreateDepartmentApiDto.Request("플랫폼전략본부", "설명", 101L);
-        User headUser = User.create(10L, "김리드", "teamlead@ibank.com", "hash", UserRole.TEAM_LEAD, EmploymentStatus.ACTIVE, "과장", "팀장", LocalDate.of(2025, 1, 1));
+        User headUser = User.create(10L, "김리드", "teamlead@ibank.com", "hash", UserRole.TEAM_LEAD, EmploymentStatus.ACTIVE, "과장", "팀장", java.time.LocalDate.of(2025, 1, 1));
         given(userRepository.findById(101L)).willReturn(java.util.Optional.of(headUser));
 
         assertThatThrownBy(() -> departmentService.createDepartment(request))
@@ -371,7 +386,7 @@ class DepartmentServiceTest {
     @DisplayName("부서장 사용자가 MEMBER 이면 역할 예외를 던진다")
     void 부서장_사용자가_member이면_역할_예외를_던진다() {
         CreateDepartmentApiDto.Request request = new CreateDepartmentApiDto.Request("플랫폼전략본부", "설명", 101L);
-        User headUser = User.create(10L, "김사원", "member@ibank.com", "hash", UserRole.MEMBER, EmploymentStatus.ACTIVE, "사원", null, LocalDate.of(2025, 1, 1));
+        User headUser = User.create(10L, "김사원", "member@ibank.com", "hash", UserRole.MEMBER, EmploymentStatus.ACTIVE, "사원", null, java.time.LocalDate.of(2025, 1, 1));
         given(userRepository.findById(101L)).willReturn(java.util.Optional.of(headUser));
 
         assertThatThrownBy(() -> departmentService.createDepartment(request))
@@ -384,7 +399,7 @@ class DepartmentServiceTest {
     @DisplayName("이미 다른 부서의 head 인 사용자를 지정하면 예외를 던진다")
     void 이미_다른_부서의_head_인_사용자를_지정하면_예외를_던진다() {
         CreateDepartmentApiDto.Request request = new CreateDepartmentApiDto.Request("플랫폼전략본부", "설명", 101L);
-        User headUser = User.create(10L, "윤후보", "candidate@ibank.com", "hash", UserRole.DEPT_HEAD, EmploymentStatus.ACTIVE, "차장", "부서장 후보", LocalDate.of(2025, 1, 1));
+        User headUser = User.create(10L, "윤후보", "candidate@ibank.com", "hash", UserRole.DEPT_HEAD, EmploymentStatus.ACTIVE, "차장", "부서장 후보", java.time.LocalDate.of(2025, 1, 1));
         given(userRepository.findById(101L)).willReturn(java.util.Optional.of(headUser));
         given(departmentRepository.existsByDepartmentHeadUserId(101L)).willReturn(true);
 
@@ -398,7 +413,7 @@ class DepartmentServiceTest {
     @DisplayName("역할이 허용되지 않으면 head 중복보다 역할 예외를 우선한다")
     void 역할이_허용되지_않으면_head_중복보다_역할_예외를_우선한다() {
         CreateDepartmentApiDto.Request request = new CreateDepartmentApiDto.Request("플랫폼전략본부", "설명", 101L);
-        User headUser = User.create(10L, "김리드", "teamlead@ibank.com", "hash", UserRole.TEAM_LEAD, EmploymentStatus.ACTIVE, "과장", "팀장", LocalDate.of(2025, 1, 1));
+        User headUser = User.create(10L, "김리드", "teamlead@ibank.com", "hash", UserRole.TEAM_LEAD, EmploymentStatus.ACTIVE, "과장", "팀장", java.time.LocalDate.of(2025, 1, 1));
         given(userRepository.findById(101L)).willReturn(java.util.Optional.of(headUser));
 
         assertThatThrownBy(() -> departmentService.createDepartment(request))
@@ -408,9 +423,9 @@ class DepartmentServiceTest {
         then(departmentRepository).should(never()).existsByDepartmentHeadUserId(101L);
     }
 
-    private User createUser(Long userId, UserRole roleCode) {
+    private User createUser(Long departmentId, Long userId, UserRole roleCode) {
         return User.create(
-                10L,
+                departmentId,
                 "테스트사용자",
                 "user-" + userId + "@ibank.com",
                 "$2a$10$abcdefghijklmnopqrstuv",

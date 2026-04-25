@@ -52,7 +52,7 @@ public class DepartmentService {
     public void updateDepartment(Long departmentId, UpdateDepartmentApiDto.Request request) {
         Department department = getActiveDepartment(departmentId);
         ensureDepartmentNameAvailable(request.departmentName(), departmentId);
-        Long departmentHeadUserId = resolveDepartmentHeadUserId(request.departmentHeadUserId());
+        Long departmentHeadUserId = resolveDepartmentHeadUserId(request.departmentHeadUserId(), departmentId);
         ensureDepartmentHeadUserAvailable(departmentHeadUserId, departmentId);
 
         department.updateBasicInfo(request.departmentName(), request.description());
@@ -135,8 +135,8 @@ public class DepartmentService {
         return departmentHeadUserId;
     }
 
-    /** head 사용자 입력이 있을 때만 존재와 허용 역할을 검증하고, 없으면 null 을 그대로 반환한다. */
-    private Long resolveDepartmentHeadUserId(Long departmentHeadUserId) {
+    /** head 사용자 입력이 있을 때만 존재, 허용 역할, 수정 대상 부서 소속 여부를 검증하고 없으면 null 을 그대로 반환한다. */
+    private Long resolveDepartmentHeadUserId(Long departmentHeadUserId, Long departmentId) {
         if (departmentHeadUserId == null) {
             return null;
         }
@@ -145,6 +145,9 @@ public class DepartmentService {
                 .orElseThrow(() -> new BusinessException(ErrorCode.USER_NOT_FOUND));
         if (!isAssignableDepartmentHeadRole(user.getRoleCode())) {
             throw new BusinessException(ErrorCode.DEPARTMENT_HEAD_ROLE_NOT_ALLOWED);
+        }
+        if (!departmentId.equals(user.getDepartmentId())) {
+            throw new BusinessException(ErrorCode.DEPARTMENT_HEAD_USER_DEPARTMENT_MISMATCH);
         }
         return departmentHeadUserId;
     }
