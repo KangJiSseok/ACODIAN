@@ -120,16 +120,21 @@
 - 요청 Body
   - `departmentName` (필수)
   - `description` (선택)
-  - `departmentHeadUserId` (선택)
+  - `departmentHeadUserId` (선택, `DIRECTOR` 또는 `DEPT_HEAD` 역할 사용자만 허용)
 - 제약
   - `status` / `statusCode` 는 수정 입력으로 받지 않는다.
   - `INACTIVE` 부서는 수정 대상이 아니며 `DEPARTMENT_NOT_FOUND` 로 응답한다.
   - duplicate name / duplicate head-user 정책은 POST 와 동일하다.
+  - `departmentHeadUserId` 가 `TEAM_LEAD`, `MEMBER` 등 비허용 역할 사용자를 가리키면 `DEPARTMENT_HEAD_ROLE_NOT_ALLOWED` 로 응답한다.
+  - `departmentHeadUserId` 가 `null` 이거나 필드가 생략되면 기존 부서장을 해제한다.
+  - 비허용 역할 검증이 부서장 중복 검증보다 먼저 수행되므로, 비허용 역할 사용자는 다른 부서의 head 여부와 무관하게 `DEPARTMENT_HEAD_ROLE_NOT_ALLOWED` 로 실패한다.
+  - `DEPARTMENT_DUPLICATE_HEAD_USER` 는 `DIRECTOR` 또는 `DEPT_HEAD` 역할 사용자에 대해서만 검사된다.
 - 상태/에러
   - 성공: `200 OK`
   - 활성 부서 없음: `DEPARTMENT_NOT_FOUND`
   - 부서명 중복: `DEPARTMENT_DUPLICATE_NAME`
   - 부서장 사용자 없음: `USER_NOT_FOUND`
+  - 부서장 역할 제한 위반: `DEPARTMENT_HEAD_ROLE_NOT_ALLOWED`
   - 부서장 중복: `DEPARTMENT_DUPLICATE_HEAD_USER`
 
 ### DELETE /api/departments/{id}
