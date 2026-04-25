@@ -50,7 +50,11 @@ public interface DepartmentControllerDocs {
     )
     @SecurityRequirement(name = "bearerAuth")
     @ApiResponses({
-            @ApiResponse(responseCode = "201", description = "부서 등록에 성공한다."),
+            @ApiResponse(
+                    responseCode = "201",
+                    description = "부서 등록에 성공한다.",
+                    content = @Content(schema = @Schema(implementation = EmptyResponse.class))
+            ),
             @ApiResponse(responseCode = "400", description = "요청 값 검증에 실패했거나 부서장 사용자 역할이 DEPT_HEAD 또는 DIRECTOR 가 아니다.", content = @Content),
             @ApiResponse(responseCode = "401", description = "access token 이 없거나 유효하지 않다.", content = @Content),
             @ApiResponse(responseCode = "403", description = "DIRECTOR 권한이 없어 접근할 수 없다.", content = @Content),
