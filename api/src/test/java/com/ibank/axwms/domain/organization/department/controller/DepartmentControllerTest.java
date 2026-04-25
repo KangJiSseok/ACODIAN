@@ -2,9 +2,11 @@ package com.ibank.axwms.domain.organization.department.controller;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.BDDMockito.given;
+import static org.mockito.BDDMockito.then;
 
 import com.ibank.axwms.domain.organization.department.dto.GetDepartmentsApiDto;
 import com.ibank.axwms.domain.organization.department.service.DepartmentService;
+import com.ibank.axwms.global.response.EmptyResponse;
 import java.lang.reflect.Method;
 import java.time.LocalDateTime;
 import java.util.List;
@@ -15,6 +17,7 @@ import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.security.access.prepost.PreAuthorize;
+import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
 
@@ -56,17 +59,15 @@ class DepartmentControllerTest {
                 2,
                 5,
                 18,
-                List.of(
-                        new GetDepartmentsApiDto.Response.DepartmentSummary(
-                                10L,
-                                "물류본부",
-                                "전사 물류 운영 총괄",
-                                1001L,
-                                "박본부",
-                                LocalDateTime.of(2026, 4, 1, 9, 0),
-                                LocalDateTime.of(2026, 4, 20, 9, 0)
-                        )
-                )
+                List.of(new GetDepartmentsApiDto.Response.DepartmentSummary(
+                        10L,
+                        "물류본부",
+                        "전사 물류 운영 총괄",
+                        1001L,
+                        "박본부",
+                        LocalDateTime.of(2026, 4, 1, 9, 0),
+                        LocalDateTime.of(2026, 4, 20, 9, 0)
+                ))
         );
         given(departmentService.getDepartments()).willReturn(responseFromService);
 
@@ -76,5 +77,27 @@ class DepartmentControllerTest {
         assertThat(response.activeTeamCount()).isEqualTo(5);
         assertThat(response.activeUserCount()).isEqualTo(18);
         assertThat(response.departments()).containsExactlyElementsOf(responseFromService.departments());
+    }
+
+    @Test
+    @DisplayName("부서 삭제 메서드는 DELETE 경로와 DIRECTOR 권한을 사용한다")
+    void 부서_삭제_메서드는_delete_경로와_director_권한을_사용한다() throws NoSuchMethodException {
+        Method method = DepartmentController.class.getMethod("deleteDepartment", Long.class);
+        DeleteMapping deleteMapping = method.getAnnotation(DeleteMapping.class);
+        PreAuthorize preAuthorize = method.getAnnotation(PreAuthorize.class);
+
+        assertThat(deleteMapping).isNotNull();
+        assertThat(deleteMapping.value()).containsExactly("/{id}");
+        assertThat(preAuthorize).isNotNull();
+        assertThat(preAuthorize.value()).isEqualTo("hasRole('DIRECTOR')");
+    }
+
+    @Test
+    @DisplayName("부서 삭제 메서드는 서비스를 호출하고 EmptyResponse 를 반환한다")
+    void 부서_삭제_메서드는_서비스를_호출하고_EmptyResponse를_반환한다() {
+        EmptyResponse response = departmentController.deleteDepartment(10L);
+
+        then(departmentService).should().deleteDepartment(10L);
+        assertThat(response).isSameAs(EmptyResponse.INSTANCE);
     }
 }
