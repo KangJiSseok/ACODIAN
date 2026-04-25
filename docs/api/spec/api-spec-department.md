@@ -96,6 +96,7 @@
 - 제약
   - request body 에 `status` / `statusCode` 를 받지 않는다.
   - `departmentHeadUserId` 가 있으면 사용자 존재를 검증한다.
+  - `departmentHeadUserId` 가 있으면 사용자 역할은 `DEPT_HEAD` 또는 `DIRECTOR` 여야 한다.
   - 이미 다른 부서의 head 로 지정된 사용자는 `DEPARTMENT_DUPLICATE_HEAD_USER` 로 거부한다.
   - 비활성 부서도 기존 UNIQUE 를 유지하므로, inactive row 의 이름/부서장도 재사용 대상이 아니다.
 - 응답 예시
@@ -110,6 +111,7 @@
   - 성공: `201 Created`
   - 부서명 중복: `DEPARTMENT_DUPLICATE_NAME`
   - 부서장 사용자 없음: `USER_NOT_FOUND`
+  - 부서장 역할 부적합: `DEPARTMENT_INVALID_HEAD_USER_ROLE`
   - 부서장 중복: `DEPARTMENT_DUPLICATE_HEAD_USER`
 
 ### PUT /api/departments/{id}
