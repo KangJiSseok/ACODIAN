@@ -1,6 +1,7 @@
 package com.ibank.axwms.domain.organization.department.service;
 
 import com.ibank.axwms.domain.organization.department.DepartmentStatus;
+import com.ibank.axwms.domain.organization.department.dto.CreateDepartmentApiDto;
 import com.ibank.axwms.domain.organization.department.dto.GetDepartmentsApiDto;
 import com.ibank.axwms.domain.organization.department.entity.Department;
 import com.ibank.axwms.domain.organization.department.repository.DepartmentRepository;
@@ -8,6 +9,9 @@ import com.ibank.axwms.domain.organization.department.repository.jooq.projection
 import com.ibank.axwms.domain.organization.department.repository.jooq.projection.DepartmentOverviewProjection;
 import com.ibank.axwms.domain.organization.team.TeamStatus;
 import com.ibank.axwms.domain.organization.team.repository.TeamRepository;
+import com.ibank.axwms.domain.organization.user.UserRole;
+import com.ibank.axwms.domain.organization.user.entity.User;
+import com.ibank.axwms.domain.organization.user.repository.UserRepository;
 import com.ibank.axwms.global.error.BusinessException;
 import com.ibank.axwms.global.error.ErrorCode;
 import java.util.List;
@@ -22,6 +26,7 @@ public class DepartmentService {
 
     private final DepartmentRepository departmentRepository;
     private final TeamRepository teamRepository;
+    private final UserRepository userRepository;
 
     /**
      * 활성 부서 목록 화면이 필요한 상단 집계와 부서 목록을 함께 조립해 반환한다.
@@ -58,6 +63,18 @@ public class DepartmentService {
         department.changeStatus(DepartmentStatus.INACTIVE);
     }
 
+    /** 새 부서를 등록한다. 부서명/부서장 UNIQUE 와 부서장 사용자 존재 여부를 사전에 검증한다. */
+    @Transactional
+    public void createDepartment(CreateDepartmentApiDto.Request request) {
+        ensureDepartmentNameAvailable(request.departmentName());
+        Long validatedDepartmentHeadUserId = validateDepartmentHeadAssignmentCandidate(request.departmentHeadUserId());
+        ensureDepartmentHeadUserAvailable(validatedDepartmentHeadUserId);
+
+        Department department = Department.create(request.departmentName(), request.description());
+        department.assignHeadUserId(validatedDepartmentHeadUserId);
+        departmentRepository.save(department);
+    }
+
     /** JOOQ projection 을 API 응답용 부서 요약 record 로 변환한다. */
     private GetDepartmentsApiDto.Response.DepartmentSummary toDepartmentSummary(DepartmentListItemProjection department) {
         return new GetDepartmentsApiDto.Response.DepartmentSummary(
@@ -69,5 +86,38 @@ public class DepartmentService {
                 department.createdAt(),
                 department.updatedAt()
         );
+    }
+
+    /** 신규 등록 전에 department_name UNIQUE 충돌을 확인한다. */
+    private void ensureDepartmentNameAvailable(String departmentName) {
+        if (departmentRepository.existsByDepartmentName(departmentName)) {
+            throw new BusinessException(ErrorCode.DEPARTMENT_DUPLICATE_NAME);
+        }
+    }
+
+    /** 부서장 후보 사용자 ID 를 검증하고, 허용 가능한 head 후보면 같은 ID 를 반환한다. */
+    private Long validateDepartmentHeadAssignmentCandidate(Long departmentHeadUserId) {
+        if (departmentHeadUserId == null) {
+            return null;
+        }
+
+        User departmentHeadUser = userRepository.findById(departmentHeadUserId)
+                .orElseThrow(() -> new BusinessException(ErrorCode.USER_NOT_FOUND));
+        if (!isAssignableDepartmentHeadRole(departmentHeadUser.getRoleCode())) {
+            throw new BusinessException(ErrorCode.DEPARTMENT_INVALID_HEAD_USER_ROLE);
+        }
+        return departmentHeadUserId;
+    }
+
+    /** 부서장으로 지정 가능한 역할인지 확인한다. */
+    private boolean isAssignableDepartmentHeadRole(UserRole roleCode) {
+        return roleCode == UserRole.DEPT_HEAD || roleCode == UserRole.DIRECTOR;
+    }
+
+    /** 같은 사용자가 다른 부서 head 로 이미 지정되어 있으면 등록을 차단한다. */
+    private void ensureDepartmentHeadUserAvailable(Long departmentHeadUserId) {
+        if (departmentHeadUserId != null && departmentRepository.existsByDepartmentHeadUserId(departmentHeadUserId)) {
+            throw new BusinessException(ErrorCode.DEPARTMENT_DUPLICATE_HEAD_USER);
+        }
     }
 }
