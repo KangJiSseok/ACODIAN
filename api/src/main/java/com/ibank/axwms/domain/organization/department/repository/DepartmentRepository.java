@@ -1,5 +1,6 @@
 package com.ibank.axwms.domain.organization.department.repository;
 
+import com.ibank.axwms.domain.organization.department.DepartmentStatus;
 import com.ibank.axwms.domain.organization.department.entity.Department;
 import com.ibank.axwms.domain.organization.department.repository.jooq.DepartmentJooqRepository;
 import java.util.Optional;
@@ -15,4 +16,13 @@ public interface DepartmentRepository extends JpaRepository<Department, Long>, D
 
     /** 이미 다른 부서에 head 로 지정된 사용자인지 확인한다. */
     boolean existsByDepartmentHeadUserId(Long departmentHeadUserId);
+
+    /** 활성 부서 수정 유스케이스에서 대상 부서를 찾는다. */
+    Optional<Department> findByIdAndStatusCode(Long id, DepartmentStatus statusCode);
+
+    /** 자기 자신을 제외한 동일 부서명 존재 여부를 확인한다. */
+    boolean existsByDepartmentNameAndIdNot(String departmentName, Long id);
+
+    /** 자기 자신을 제외한 다른 부서의 head 충돌 여부를 확인한다. */
+    boolean existsByDepartmentHeadUserIdAndIdNot(Long departmentHeadUserId, Long id);
 }
