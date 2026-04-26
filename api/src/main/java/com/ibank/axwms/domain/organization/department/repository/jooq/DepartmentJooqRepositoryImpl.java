@@ -16,6 +16,8 @@ import lombok.RequiredArgsConstructor;
 import org.jooq.DSLContext;
 import org.springframework.stereotype.Repository;
 
+import java.util.List;
+
 @Repository
 @RequiredArgsConstructor
 public class DepartmentJooqRepositoryImpl implements DepartmentJooqRepository {
@@ -44,7 +46,7 @@ public class DepartmentJooqRepositoryImpl implements DepartmentJooqRepository {
      * 부서장은 nullable 이므로 head user 는 LEFT JOIN 으로 연결하고, 화면의 안정적인 정렬을 위해 department_id 오름차순을 사용한다.
      */
     @Override
-    public java.util.List<DepartmentListItemProjection> findActiveDepartments() {
+    public List<DepartmentListItemProjection> findActiveDepartments() {
         TbUser headUser = TB_USER.as("head_user");
 
         return dsl.select(

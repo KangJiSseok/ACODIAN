@@ -4,6 +4,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.BDDMockito.given;
 import static org.mockito.BDDMockito.then;
 
+import com.ibank.axwms.domain.organization.department.dto.CreateDepartmentApiDto;
 import com.ibank.axwms.domain.organization.department.dto.GetDepartmentsApiDto;
 import com.ibank.axwms.domain.organization.department.service.DepartmentService;
 import com.ibank.axwms.global.response.EmptyResponse;
@@ -16,10 +17,13 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.http.HttpStatus;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.ResponseStatus;
 
 @ExtendWith(MockitoExtension.class)
 class DepartmentControllerTest {
@@ -98,6 +102,33 @@ class DepartmentControllerTest {
         EmptyResponse response = departmentController.deleteDepartment(10L);
 
         then(departmentService).should().deleteDepartment(10L);
+        assertThat(response).isSameAs(EmptyResponse.INSTANCE);
+    }
+
+    @Test
+    @DisplayName("부서 등록 메서드는 POST 매핑과 201 응답 상태와 DIRECTOR 권한을 사용한다")
+    void 부서_등록_메서드는_post_매핑과_201_응답_상태와_director_권한을_사용한다() throws NoSuchMethodException {
+        Method method = DepartmentController.class.getMethod("createDepartment", CreateDepartmentApiDto.Request.class);
+        PostMapping postMapping = method.getAnnotation(PostMapping.class);
+        ResponseStatus responseStatus = method.getAnnotation(ResponseStatus.class);
+        PreAuthorize preAuthorize = method.getAnnotation(PreAuthorize.class);
+
+        assertThat(postMapping).isNotNull();
+        assertThat(postMapping.value()).isEmpty();
+        assertThat(responseStatus).isNotNull();
+        assertThat(responseStatus.value()).isEqualTo(HttpStatus.CREATED);
+        assertThat(preAuthorize).isNotNull();
+        assertThat(preAuthorize.value()).isEqualTo("hasRole('DIRECTOR')");
+    }
+
+    @Test
+    @DisplayName("부서 등록 메서드는 서비스를 호출하고 EmptyResponse 를 반환한다")
+    void 부서_등록_메서드는_서비스를_호출하고_EmptyResponse를_반환한다() {
+        CreateDepartmentApiDto.Request request = new CreateDepartmentApiDto.Request("플랫폼전략본부", "전사 전략", 1001L);
+
+        EmptyResponse response = departmentController.createDepartment(request);
+
+        then(departmentService).should().createDepartment(request);
         assertThat(response).isSameAs(EmptyResponse.INSTANCE);
     }
 }

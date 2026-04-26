@@ -26,6 +26,7 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.http.MediaType;
 
 class DepartmentControllerE2eTest extends E2eTestSupport {
 
@@ -45,6 +46,11 @@ class DepartmentControllerE2eTest extends E2eTestSupport {
     private Long operationsDepartmentId;
     private Long dormantDepartmentId;
     private Long headlessDepartmentId;
+    private Long logisticsHeadUserId;
+    private Long deptHeadCandidateUserId;
+    private Long directorCandidateUserId;
+    private Long teamLeadCandidateUserId;
+    private Long memberCandidateUserId;
 
     @BeforeEach
     void setUpData() {
@@ -58,7 +64,8 @@ class DepartmentControllerE2eTest extends E2eTestSupport {
         mockMvc.perform(apiGet("/departments"))
                 .andExpect(status().isUnauthorized())
                 .andExpect(jsonPath("$.success", is(false)))
-                .andExpect(jsonPath("$.error.code", is("AUTH_UNAUTHORIZED")));
+                .andExpect(jsonPath("$.error.code", is("AUTH_UNAUTHORIZED")))
+                .andExpect(jsonPath("$.error.statusCode", is(401)));
     }
 
     @Test
@@ -68,7 +75,8 @@ class DepartmentControllerE2eTest extends E2eTestSupport {
                         .with(user("member@ibank.com").roles("MEMBER")))
                 .andExpect(status().isForbidden())
                 .andExpect(jsonPath("$.success", is(false)))
-                .andExpect(jsonPath("$.error.code", is("AUTH_ACCESS_DENIED")));
+                .andExpect(jsonPath("$.error.code", is("AUTH_ACCESS_DENIED")))
+                .andExpect(jsonPath("$.error.statusCode", is(403)));
     }
 
     @Test
@@ -80,11 +88,15 @@ class DepartmentControllerE2eTest extends E2eTestSupport {
                 .andExpect(jsonPath("$.success", is(true)))
                 .andExpect(jsonPath("$.data.activeDepartmentCount", is(3)))
                 .andExpect(jsonPath("$.data.activeTeamCount", is(2)))
-                .andExpect(jsonPath("$.data.activeUserCount", is(1)))
+                .andExpect(jsonPath("$.data.activeUserCount", is(2)))
                 .andExpect(jsonPath("$.data.departments", hasSize(3)))
-                .andExpect(jsonPath("$.data.departments[0].departmentName", is("개발본부")))
-                .andExpect(jsonPath("$.data.departments[2].departmentName", is("비상대응본부")))
-                .andExpect(jsonPath("$.data.departments[2].departmentHeadUserId", nullValue()));
+                .andExpect(jsonPath("$.data.departments[0].departmentName", is("물류본부")))
+                .andExpect(jsonPath("$.data.departments[0].departmentHeadUserName", is("박본부")))
+                .andExpect(jsonPath("$.data.departments[1].departmentName", is("운영지원본부")))
+                .andExpect(jsonPath("$.data.departments[1].departmentHeadUserId", nullValue()))
+                .andExpect(jsonPath("$.data.departments[2].departmentName", is("무부장본부")))
+                .andExpect(jsonPath("$.data.departments[2].departmentHeadUserId", nullValue()))
+                .andExpect(jsonPath("$.data.departments[2].departmentHeadUserName", nullValue()));
     }
 
     @Test
@@ -141,6 +153,135 @@ class DepartmentControllerE2eTest extends E2eTestSupport {
                 .andExpect(jsonPath("$.error.code", is("DEPARTMENT_NOT_FOUND")));
     }
 
+    @Test
+    @DisplayName("DIRECTOR 가 새 부서를 등록하면 201 Created 와 빈 응답을 반환한다")
+    void director_가_새_부서를_등록하면_201_created와_빈_응답을_반환한다() throws Exception {
+        mockMvc.perform(apiPost("/departments")
+                        .with(user("director@ibank.com").roles("DIRECTOR"))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {
+                                  "departmentName": "플랫폼전략본부",
+                                  "description": "전사 플랫폼 전략",
+                                  "departmentHeadUserId": %d
+                                }
+                                """.formatted(deptHeadCandidateUserId)))
+                .andExpect(status().isCreated())
+                .andExpect(jsonPath("$.success", is(true)));
+
+        Department saved = departmentRepository.findByDepartmentName("플랫폼전략본부").orElseThrow();
+        assertThat(saved.getDepartmentHeadUserId()).isEqualTo(deptHeadCandidateUserId);
+    }
+
+    @Test
+    @DisplayName("DIRECTOR 가 DIRECTOR 사용자를 부서장으로 지정해도 201 Created 를 반환한다")
+    void director_가_director_사용자를_부서장으로_지정해도_201_created를_반환한다() throws Exception {
+        mockMvc.perform(apiPost("/departments")
+                        .with(user("director@ibank.com").roles("DIRECTOR"))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {
+                                  "departmentName": "전략운영본부",
+                                  "description": "전사 운영 전략",
+                                  "departmentHeadUserId": %d
+                                }
+                                """.formatted(directorCandidateUserId)))
+                .andExpect(status().isCreated())
+                .andExpect(jsonPath("$.success", is(true)));
+
+        Department saved = departmentRepository.findByDepartmentName("전략운영본부").orElseThrow();
+        assertThat(saved.getDepartmentHeadUserId()).isEqualTo(directorCandidateUserId);
+    }
+
+    @Test
+    @DisplayName("중복 부서명으로 등록하면 DEPARTMENT_DUPLICATE_NAME 응답을 반환한다")
+    void 중복_부서명으로_등록하면_department_duplicate_name_응답을_반환한다() throws Exception {
+        mockMvc.perform(apiPost("/departments")
+                        .with(user("director@ibank.com").roles("DIRECTOR"))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {
+                                  "departmentName": "물류본부",
+                                  "description": "중복 이름"
+                                }
+                                """))
+                .andExpect(status().isConflict())
+                .andExpect(jsonPath("$.success", is(false)))
+                .andExpect(jsonPath("$.error.code", is("DEPARTMENT_DUPLICATE_NAME")));
+    }
+
+    @Test
+    @DisplayName("존재하지 않는 부서장 사용자 ID 로 등록하면 USER_NOT_FOUND 응답을 반환한다")
+    void 존재하지_않는_부서장_사용자_id로_등록하면_user_not_found_응답을_반환한다() throws Exception {
+        mockMvc.perform(apiPost("/departments")
+                        .with(user("director@ibank.com").roles("DIRECTOR"))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {
+                                  "departmentName": "플랫폼전략본부",
+                                  "description": "전사 플랫폼 전략",
+                                  "departmentHeadUserId": 999999
+                                }
+                                """))
+                .andExpect(status().isNotFound())
+                .andExpect(jsonPath("$.success", is(false)))
+                .andExpect(jsonPath("$.error.code", is("USER_NOT_FOUND")));
+    }
+
+    @Test
+    @DisplayName("이미 다른 부서의 부서장인 사용자를 지정하면 DEPARTMENT_DUPLICATE_HEAD_USER 응답을 반환한다")
+    void 이미_다른_부서의_부서장인_사용자를_지정하면_department_duplicate_head_user_응답을_반환한다() throws Exception {
+        mockMvc.perform(apiPost("/departments")
+                        .with(user("director@ibank.com").roles("DIRECTOR"))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {
+                                  "departmentName": "플랫폼전략본부",
+                                  "description": "전사 플랫폼 전략",
+                                  "departmentHeadUserId": %d
+                                }
+                                """.formatted(logisticsHeadUserId)))
+                .andExpect(status().isConflict())
+                .andExpect(jsonPath("$.success", is(false)))
+                .andExpect(jsonPath("$.error.code", is("DEPARTMENT_DUPLICATE_HEAD_USER")));
+    }
+
+    @Test
+    @DisplayName("TEAM_LEAD 사용자를 부서장으로 지정하면 DEPARTMENT_INVALID_HEAD_USER_ROLE 응답을 반환한다")
+    void team_lead_사용자를_부서장으로_지정하면_department_invalid_head_user_role_응답을_반환한다() throws Exception {
+        mockMvc.perform(apiPost("/departments")
+                        .with(user("director@ibank.com").roles("DIRECTOR"))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {
+                                  "departmentName": "전략운영본부",
+                                  "description": "전사 운영 전략",
+                                  "departmentHeadUserId": %d
+                                }
+                                """.formatted(teamLeadCandidateUserId)))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.success", is(false)))
+                .andExpect(jsonPath("$.error.code", is("DEPARTMENT_INVALID_HEAD_USER_ROLE")));
+    }
+
+    @Test
+    @DisplayName("MEMBER 사용자를 부서장으로 지정하면 DEPARTMENT_INVALID_HEAD_USER_ROLE 응답을 반환한다")
+    void member_사용자를_부서장으로_지정하면_department_invalid_head_user_role_응답을_반환한다() throws Exception {
+        mockMvc.perform(apiPost("/departments")
+                        .with(user("director@ibank.com").roles("DIRECTOR"))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {
+                                  "departmentName": "전략운영본부",
+                                  "description": "전사 운영 전략",
+                                  "departmentHeadUserId": %d
+                                }
+                                """.formatted(memberCandidateUserId)))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.success", is(false)))
+                .andExpect(jsonPath("$.error.code", is("DEPARTMENT_INVALID_HEAD_USER_ROLE")));
+    }
+
     /** FK 제약을 피하기 위해 부서장의 head reference 를 먼저 해제한 뒤 테스트 데이터를 비운다. */
     private void clearDatabase() {
         java.util.List<Department> departments = departmentRepository.findAll();
@@ -154,16 +295,16 @@ class DepartmentControllerE2eTest extends E2eTestSupport {
         departmentRepository.deleteAll();
     }
 
-    /** GET /departments 스펙과 DELETE 시나리오를 함께 검증할 수 있는 최소 테스트 데이터를 구성한다. */
+    /** GET /departments, DELETE, POST 시나리오를 함께 검증할 수 있는 테스트 데이터를 구성한다. */
     private void seedDepartments() {
-        Department logisticsDepartment = departmentRepository.save(createDepartment("개발본부", DepartmentStatus.ACTIVE));
+        Department logisticsDepartment = departmentRepository.save(createDepartment("물류본부", DepartmentStatus.ACTIVE));
         Department operationsDepartment = departmentRepository.save(createDepartment("운영지원본부", DepartmentStatus.ACTIVE));
+        Department headlessDepartment = departmentRepository.save(createDepartment("무부장본부", DepartmentStatus.ACTIVE));
         Department inactiveDepartment = departmentRepository.save(createDepartment("휴면본부", DepartmentStatus.INACTIVE));
-        Department headlessDepartment = departmentRepository.save(createDepartment("비상대응본부", DepartmentStatus.ACTIVE));
         logisticsDepartmentId = logisticsDepartment.getId();
         operationsDepartmentId = operationsDepartment.getId();
-        dormantDepartmentId = inactiveDepartment.getId();
         headlessDepartmentId = headlessDepartment.getId();
+        dormantDepartmentId = inactiveDepartment.getId();
 
         User departmentHead = userRepository.save(createUser(
                 logisticsDepartment.getId(),
@@ -172,13 +313,50 @@ class DepartmentControllerE2eTest extends E2eTestSupport {
                 EmploymentStatus.ACTIVE,
                 UserRole.DIRECTOR
         ));
+        logisticsHeadUserId = departmentHead.getId();
         logisticsDepartment.assignHeadUserId(departmentHead.getId());
         departmentRepository.save(logisticsDepartment);
 
-        Team logisticsActiveTeam = teamRepository.save(createTeam(logisticsDepartment.getId(), "플랫폼개발팀", TeamStatus.ACTIVE));
+        User freeCandidate = userRepository.save(createUser(
+                headlessDepartment.getId(),
+                "윤후보",
+                "candidate-head-" + System.nanoTime() + "@ibank.com",
+                EmploymentStatus.ACTIVE,
+                UserRole.DEPT_HEAD
+        ));
+        deptHeadCandidateUserId = freeCandidate.getId();
+
+        User directorCandidate = userRepository.save(createUser(
+                headlessDepartment.getId(),
+                "정본부",
+                "director-candidate-" + System.nanoTime() + "@ibank.com",
+                EmploymentStatus.ACTIVE,
+                UserRole.DIRECTOR
+        ));
+        directorCandidateUserId = directorCandidate.getId();
+
+        User teamLeadCandidate = userRepository.save(createUser(
+                headlessDepartment.getId(),
+                "오팀장",
+                "teamlead-candidate-" + System.nanoTime() + "@ibank.com",
+                EmploymentStatus.ACTIVE,
+                UserRole.TEAM_LEAD
+        ));
+        teamLeadCandidateUserId = teamLeadCandidate.getId();
+
+        User memberCandidate = userRepository.save(createUser(
+                headlessDepartment.getId(),
+                "김사원",
+                "member-candidate-" + System.nanoTime() + "@ibank.com",
+                EmploymentStatus.ACTIVE,
+                UserRole.MEMBER
+        ));
+        memberCandidateUserId = memberCandidate.getId();
+
+        Team logisticsActiveTeam = teamRepository.save(createTeam(logisticsDepartment.getId(), "물류혁신TF", TeamStatus.ACTIVE));
         Team logisticsSecondActiveTeam = teamRepository.save(createTeam(logisticsDepartment.getId(), "아키텍처TF", TeamStatus.ACTIVE));
-        Team operationsInactiveTeam = teamRepository.save(createTeam(operationsDepartment.getId(), "운영지원팀", TeamStatus.INACTIVE));
-        Team operationsSecondInactiveTeam = teamRepository.save(createTeam(operationsDepartment.getId(), "운영정산TF", TeamStatus.INACTIVE));
+        Team operationsInactiveTeam = teamRepository.save(createTeam(operationsDepartment.getId(), "운영지원TF", TeamStatus.INACTIVE));
+        Team inactiveDepartmentActiveTeam = teamRepository.save(createTeam(inactiveDepartment.getId(), "휴면본부활성팀", TeamStatus.ACTIVE));
 
         User activeMemberOne = userRepository.save(createUser(
                 logisticsDepartment.getId(),
@@ -188,10 +366,17 @@ class DepartmentControllerE2eTest extends E2eTestSupport {
                 UserRole.MEMBER
         ));
         User activeMemberTwo = userRepository.save(createUser(
-                operationsDepartment.getId(),
+                logisticsDepartment.getId(),
                 "활성사용자2",
                 "active-two-" + System.nanoTime() + "@ibank.com",
                 EmploymentStatus.ACTIVE,
+                UserRole.MEMBER
+        ));
+        User leaveMember = userRepository.save(createUser(
+                logisticsDepartment.getId(),
+                "휴직사용자",
+                "leave-" + System.nanoTime() + "@ibank.com",
+                EmploymentStatus.LEAVE,
                 UserRole.MEMBER
         ));
         User inactiveTeamOnlyMember = userRepository.save(createUser(
@@ -201,11 +386,19 @@ class DepartmentControllerE2eTest extends E2eTestSupport {
                 EmploymentStatus.ACTIVE,
                 UserRole.MEMBER
         ));
+        User inactiveDepartmentTeamMember = userRepository.save(createUser(
+                inactiveDepartment.getId(),
+                "비활성부서팀사용자",
+                "inactive-department-team-" + System.nanoTime() + "@ibank.com",
+                EmploymentStatus.ACTIVE,
+                UserRole.MEMBER
+        ));
 
         userTeamRepository.save(UserTeam.create(activeMemberOne.getId(), logisticsActiveTeam.getId(), false, "담당", "주담당", true));
-        userTeamRepository.save(UserTeam.create(activeMemberOne.getId(), logisticsSecondActiveTeam.getId(), false, "협업", "겸임", false));
-        userTeamRepository.save(UserTeam.create(activeMemberTwo.getId(), operationsInactiveTeam.getId(), true, "리드", "주담당", true));
-        userTeamRepository.save(UserTeam.create(inactiveTeamOnlyMember.getId(), operationsSecondInactiveTeam.getId(), false, "담당", "겸임", false));
+        userTeamRepository.save(UserTeam.create(activeMemberTwo.getId(), logisticsSecondActiveTeam.getId(), true, "리드", "주담당", true));
+        userTeamRepository.save(UserTeam.create(leaveMember.getId(), logisticsActiveTeam.getId(), false, "담당", "주담당", true));
+        userTeamRepository.save(UserTeam.create(inactiveTeamOnlyMember.getId(), operationsInactiveTeam.getId(), false, "담당", "주담당", true));
+        userTeamRepository.save(UserTeam.create(inactiveDepartmentTeamMember.getId(), inactiveDepartmentActiveTeam.getId(), false, "담당", "주담당", true));
     }
 
     /** 테스트용 부서 엔티티를 상태까지 포함해 생성한다. */

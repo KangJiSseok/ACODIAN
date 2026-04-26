@@ -1,5 +1,6 @@
 package com.ibank.axwms.domain.organization.department.controller;
 
+import com.ibank.axwms.domain.organization.department.dto.CreateDepartmentApiDto;
 import com.ibank.axwms.domain.organization.department.dto.GetDepartmentsApiDto;
 import com.ibank.axwms.global.response.EmptyResponse;
 import io.swagger.v3.oas.annotations.Operation;
@@ -43,4 +44,22 @@ public interface DepartmentControllerDocs {
             @ApiResponse(responseCode = "409", description = "활성 팀이 남아 있어 비활성화할 수 없다.", content = @Content)
     })
     EmptyResponse deleteDepartment(@Parameter(description = "부서 ID", example = "10") Long id);
+    @Operation(
+            summary = "부서 등록",
+            description = "새 부서를 등록한다. 부서명과 부서장은 기존 inactive row 까지 포함한 UNIQUE 제약을 따른다."
+    )
+    @SecurityRequirement(name = "bearerAuth")
+    @ApiResponses({
+            @ApiResponse(
+                    responseCode = "201",
+                    description = "부서 등록에 성공한다.",
+                    content = @Content(schema = @Schema(implementation = EmptyResponse.class))
+            ),
+            @ApiResponse(responseCode = "400", description = "요청 값 검증에 실패했거나 부서장 사용자 역할이 DEPT_HEAD 또는 DIRECTOR 가 아니다.", content = @Content),
+            @ApiResponse(responseCode = "401", description = "access token 이 없거나 유효하지 않다.", content = @Content),
+            @ApiResponse(responseCode = "403", description = "DIRECTOR 권한이 없어 접근할 수 없다.", content = @Content),
+            @ApiResponse(responseCode = "404", description = "부서장 사용자 ID 가 유효하지 않다.", content = @Content),
+            @ApiResponse(responseCode = "409", description = "부서명 또는 부서장 UNIQUE 제약과 충돌한다.", content = @Content)
+    })
+    EmptyResponse createDepartment(CreateDepartmentApiDto.Request request);
 }
