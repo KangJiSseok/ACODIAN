@@ -4,7 +4,6 @@ import com.ibank.axwms.domain.auth.dto.LoginApiDto;
 import com.ibank.axwms.global.response.EmptyResponse;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
-import io.swagger.v3.oas.annotations.enums.ParameterIn;
 import io.swagger.v3.oas.annotations.headers.Header;
 import io.swagger.v3.oas.annotations.media.Content;
 import io.swagger.v3.oas.annotations.media.Schema;
@@ -47,7 +46,7 @@ public interface AuthControllerDocs {
     })
     EmptyResponse login(
             LoginApiDto.Request request,
-            @Parameter(hidden = true, in = ParameterIn.HEADER) HttpServletResponse response
+            HttpServletResponse response
     );
 
     @Operation(
@@ -76,8 +75,8 @@ public interface AuthControllerDocs {
             @ApiResponse(responseCode = "403", description = "현재 계정 상태로는 재발급할 수 없다.", content = @Content)
     })
     EmptyResponse refresh(
-            @Parameter(hidden = true, in = ParameterIn.COOKIE) HttpServletRequest request,
-            @Parameter(hidden = true, in = ParameterIn.HEADER) HttpServletResponse response
+            HttpServletRequest request,
+            HttpServletResponse response
     );
 
     @Operation(
@@ -98,7 +97,7 @@ public interface AuthControllerDocs {
     })
     @PostMapping("/logout")
     EmptyResponse logout(
-            @Parameter(hidden = true, in = ParameterIn.COOKIE) HttpServletRequest request,
-            @Parameter(hidden = true, in = ParameterIn.HEADER) HttpServletResponse response
+            HttpServletRequest request,
+            HttpServletResponse response
     );
 }
