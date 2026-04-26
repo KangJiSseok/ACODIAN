@@ -24,6 +24,7 @@ public class WorklogService {
     private final WorklogRepository worklogRepository;
     private final TeamService teamService;
     private final FileService fileService;
+    private final WorklogStatusHistoryService worklogStatusHistoryService;
 
     /**
      * 로그인 사용자의 권한으로 업무를 등록한다.
@@ -61,6 +62,7 @@ public class WorklogService {
         ));
 
         fileService.uploadWorklogFiles(savedWorklog.getId(), principal.userId(), files);
+        worklogStatusHistoryService.createStatusHistory(savedWorklog.getId(), principal.userId());
 
         return CreateWorklogApiDto.Response.of(savedWorklog.getId());
     }

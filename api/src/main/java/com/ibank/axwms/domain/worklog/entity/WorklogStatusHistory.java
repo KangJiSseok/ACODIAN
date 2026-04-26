@@ -47,4 +47,17 @@ public class WorklogStatusHistory {
 
     @Column(name = "changed_by", nullable = false)
     private Long changedBy;
+
+    public static WorklogStatusHistory create(
+            Long worklogId,
+            WorklogStatus newStatusCode,
+            Long changedBy
+    ) {
+        WorklogStatusHistory worklogStatusHistory = new WorklogStatusHistory();
+        worklogStatusHistory.worklogId = worklogId;
+        worklogStatusHistory.changedBy = changedBy;
+        worklogStatusHistory.newStatusCode = newStatusCode;
+
+        return  worklogStatusHistory;
+    }
 }
