@@ -1,11 +1,10 @@
 package com.ibank.axwms.domain.organization.team.dto;
 
-import com.ibank.axwms.domain.organization.team.repository.jooq.TeamWorklogProjection;
+import com.ibank.axwms.domain.organization.team.repository.jooq.projection.TeamWorklogProjection;
 import com.ibank.axwms.global.response.PageResponse;
 import io.swagger.v3.oas.annotations.media.Schema;
 import jakarta.validation.constraints.Max;
 import jakarta.validation.constraints.Min;
-import java.time.LocalDateTime;
 import lombok.AccessLevel;
 import lombok.NoArgsConstructor;
 import org.springframework.data.domain.Page;
@@ -20,11 +19,7 @@ public final class GetTeamWorklogsApiDto {
     @Schema(description = "팀 업무일지 목록 조회 요청 DTO")
     public record Request(
             @Min(1) Integer page,
-            @Min(1) @Max(MAX_PAGE_SIZE) Integer pageSize,
-            String sortBy,
-            String sortDirection,
-            String statusCode,
-            String keyword
+            @Min(1) @Max(MAX_PAGE_SIZE) Integer pageSize
     ) {
         public int pageOrDefault() {
             return page == null ? DEFAULT_PAGE : page;
@@ -46,22 +41,22 @@ public final class GetTeamWorklogsApiDto {
         public record Item(
                 Long worklogId,
                 String title,
+                String requestContent,
+                String workContent,
+                String aiSummary,
                 String statusCode,
-                Long authorUserId,
-                String authorUserName,
-                LocalDateTime createdAt,
-                LocalDateTime updatedAt
+                String importanceCode
         ) {
 
             public static Item from(TeamWorklogProjection projection) {
                 return new Item(
                         projection.worklogId(),
                         projection.title(),
+                        projection.requestContent(),
+                        projection.workContent(),
+                        projection.aiSummary(),
                         projection.statusCode(),
-                        projection.authorUserId(),
-                        projection.authorUserName(),
-                        projection.createdAt(),
-                        projection.updatedAt()
+                        projection.importanceCode()
                 );
             }
         }

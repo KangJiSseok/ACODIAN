@@ -1,7 +1,6 @@
 package com.ibank.axwms.domain.organization.team.dto;
 
-import com.ibank.axwms.domain.organization.team.UserTeamStatus;
-import com.ibank.axwms.domain.organization.team.repository.jooq.TeamUserProjection;
+import com.ibank.axwms.domain.organization.team.repository.jooq.projection.TeamUserProjection;
 import com.ibank.axwms.global.response.PageResponse;
 import io.swagger.v3.oas.annotations.media.Schema;
 import jakarta.validation.constraints.Max;
@@ -20,11 +19,7 @@ public final class GetTeamUsersApiDto {
     @Schema(description = "팀 사용자 목록 조회 요청 DTO")
     public record Request(
             @Min(1) Integer page,
-            @Min(1) @Max(MAX_PAGE_SIZE) Integer pageSize,
-            String sortBy,
-            String sortDirection,
-            String keyword,
-            UserTeamStatus statusCode
+            @Min(1) @Max(MAX_PAGE_SIZE) Integer pageSize
     ) {
         public int pageOrDefault() {
             return page == null ? DEFAULT_PAGE : page;
@@ -44,28 +39,24 @@ public final class GetTeamUsersApiDto {
 
         @Schema(description = "팀 사용자 목록 항목")
         public record Item(
+                Boolean teamLeader,
                 Long userId,
                 String userName,
                 String positionName,
-                String titleName,
-                Boolean teamLeader,
+                String email,
                 String teamRole,
-                String allocation,
-                Boolean isPrimary,
-                UserTeamStatus statusCode
+                String allocation
         ) {
 
             public static Item from(TeamUserProjection projection) {
                 return new Item(
+                        projection.teamLeader(),
                         projection.userId(),
                         projection.userName(),
                         projection.positionName(),
-                        projection.titleName(),
-                        projection.teamLeader(),
+                        projection.email(),
                         projection.teamRole(),
-                        projection.allocation(),
-                        projection.isPrimary(),
-                        projection.statusCode()
+                        projection.allocation()
                 );
             }
         }
