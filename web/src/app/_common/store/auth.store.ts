@@ -1,8 +1,10 @@
 import { create } from "zustand";
 import type { UserRoleCode } from "@/app/_common/constants/roles";
 
+// 인증 흐름의 단계만 표현하고, 실제 API 호출은 이후 service/hook 계층에서 붙입니다.
 export type AuthStatus = "idle" | "loading" | "authenticated" | "unauthenticated";
 
+// /api/users/me 응답의 teams[] 문맥을 프론트에서 사용하는 형태로 둡니다.
 export interface AuthUserTeam {
   isPrimary: boolean;
   teamId: number;
@@ -12,6 +14,7 @@ export interface AuthUserTeam {
   allocation: string | null;
 }
 
+// 현재 사용자 문맥은 /api/users/me 문서를 기준으로 하되, roleCode는 추후 백엔드 보강을 고려해 optional로 열어둡니다.
 export interface AuthUser {
   userId: number;
   userName: string;
@@ -46,11 +49,13 @@ const initialAuthState = {
   user: null,
 };
 
+// accessToken은 localStorage에 저장하지 않고 현재 탭의 메모리 상태에만 유지합니다.
 export const useAuthStore = create<AuthState>()((set) => ({
   ...initialAuthState,
   setStatus: (status) => set({ status }),
   setAccessToken: (accessToken) => set({ accessToken }),
   setUser: (user) => set({ user }),
+  // 로그인/refresh 이후 accessToken과 사용자 문맥을 한 번에 반영하는 진입점입니다.
   setAuth: ({ accessToken, user }) =>
     set({
       accessToken,
@@ -60,6 +65,7 @@ export const useAuthStore = create<AuthState>()((set) => ({
   resetAuth: () => set(initialAuthState),
 }));
 
+// 컴포넌트가 필요한 조각만 구독할 수 있도록 selector를 분리합니다.
 export const selectAuthUser = (state: AuthState) => state.user;
 
 export const selectAccessToken = (state: AuthState) => state.accessToken;
