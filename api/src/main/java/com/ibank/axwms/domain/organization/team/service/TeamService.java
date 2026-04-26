@@ -180,9 +180,6 @@ public class TeamService {
         }
     }
 
-    private final TeamRepository teamRepository;
-    private final UserTeamRepository userTeamRepository;
-
     /**
      * 팀 ID로 팀을 조회하고 없으면 도메인 오류를 던진다.
      *
