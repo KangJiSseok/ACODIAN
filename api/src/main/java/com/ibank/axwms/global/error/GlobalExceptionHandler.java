@@ -5,6 +5,7 @@ import com.ibank.axwms.global.response.EmptyResponse;
 import jakarta.validation.ConstraintViolationException;
 import org.springframework.http.ResponseEntity;
 import org.springframework.http.converter.HttpMessageNotReadableException;
+import org.springframework.security.access.AccessDeniedException;
 import org.springframework.validation.BindException;
 import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
@@ -34,6 +35,11 @@ public class GlobalExceptionHandler {
     @ExceptionHandler({MethodArgumentNotValidException.class, BindException.class, ConstraintViolationException.class})
     public ResponseEntity<ApiResponse<EmptyResponse>> handleValidationException(Exception exception) {
         return buildErrorResponse(ErrorCode.COMMON_VALIDATION_ERROR);
+    }
+
+    @ExceptionHandler(AccessDeniedException.class)
+    public ResponseEntity<ApiResponse<EmptyResponse>> handleAccessDeniedException(AccessDeniedException exception) {
+        return buildErrorResponse(ErrorCode.AUTH_ACCESS_DENIED);
     }
 
     @ExceptionHandler(Exception.class)
