@@ -359,8 +359,8 @@ class DepartmentServiceTest {
     }
 
     @Test
-    @DisplayName("부서장 사용자가 없으면 USER_NOT_FOUND 예외를 던진다")
-    void 부서장_사용자가_없으면_user_not_found_예외를_던진다() {
+    @DisplayName("등록용 부서장 사용자가 없으면 USER_NOT_FOUND 예외를 던진다")
+    void 등록용_부서장_사용자가_없으면_user_not_found_예외를_던진다() {
         CreateDepartmentApiDto.Request request = new CreateDepartmentApiDto.Request("플랫폼전략본부", "설명", 999L);
 
         assertThatThrownBy(() -> departmentService.createDepartment(request))
