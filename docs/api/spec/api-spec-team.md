@@ -42,13 +42,15 @@
 
 ### 4.3 역할별 조회 범위
 - `DIRECTOR`: 모든 부서/모든 팀 접근 가능
-- `DEPT_HEAD`: 본인 소속 부서의 팀 접근 가능. `departmentId` 가 없으면 본인 부서를 기본값으로 사용한다. 다른 부서 `departmentId` 요청은 `AUTH_ACCESS_DENIED` 로 본다.
-- `TEAM_LEAD`, `MEMBER`: 본인이 현재 소속된 팀만 접근 가능
+- `DEPT_HEAD`: 기본 visible scope 는 본인 소속 부서의 전체 팀 + 본인이 현재 소속된 전체 팀의 합집합이다. `departmentId = null` 인 목록/요약 조회에서는 이 합집합을 사용하고, 중복 팀은 DISTINCT 처리한다. `departmentId` 가 있으면 본인 부서와 동일한 값만 허용하며 다른 부서 요청은 `AUTH_ACCESS_DENIED` 로 본다.
+- `TEAM_LEAD`, `MEMBER`: 기본 visible scope 는 본인이 현재 소속된 전체 팀이다. `departmentId = null` 이면 이 전체 visible scope 를 조회하고, 값이 있으면 visible scope 내 추가 필터로만 해석한다.
 - controller 는 역할 확인을 수행하고, service 는 실제 부서/팀 ownership 을 검증한다.
 
 ### 4.4 집계/정렬 공통 해석
 - 별도 언급이 없으면 team 목록의 `memberCount` 는 해당 팀의 `ACTIVE` membership 수다.
-- 별도 언급이 없으면 user 집계는 visible scope 내 **DISTINCT user 수** 기준이다.
+- visible scope 가 부서 ownership + membership 합집합으로 계산되는 경우 팀 집합은 먼저 **DISTINCT team** 기준으로 정규화한다.
+- 목록 pagination 의 `items`, `totalCount`, `totalPages` 는 정규화된 visible scope 기준으로 계산한다.
+- 별도 언급이 없으면 user 집계는 정규화된 visible scope 내 **DISTINCT user 수** 기준이다.
 - `GET /api/teams/{id}` 및 `GET /api/teams/{id}/worklogs` 는 soft-delete 되지 않은 업무일지만 대상으로 한다.
 
 ## 5. 엔드포인트 목록
@@ -72,8 +74,8 @@
 - 상태: `Documented`
 - 권한/접근 주체
   - `DIRECTOR`: 전체 팀 조회 가능
-  - `DEPT_HEAD`: 본인 소속 부서 팀만 조회 가능
-  - `TEAM_LEAD`, `MEMBER`: 본인 소속 팀만 조회 가능
+  - `DEPT_HEAD`: `departmentId = null` 이면 본인 소속 부서의 전체 팀 + 본인 소속 팀 전체를 DISTINCT 기준으로 조회 가능하며, 값이 있으면 본인 부서와 동일한 `departmentId` 범위만 조회 가능
+  - `TEAM_LEAD`, `MEMBER`: `departmentId = null` 이면 본인 소속 팀 전체 조회 가능하며, 값이 있으면 visible scope 내 추가 필터만 허용
 - 요청
   - Query: `page`, `pageSize`
   - Query: `departmentId` (선택)
@@ -85,8 +87,8 @@
   4. 호출자의 `isPrimary = true` 인 팀 우선
 - `departmentId` 해석
   - `DIRECTOR`: `null` 이면 전체 부서, 값이 있으면 해당 부서만 필터링
-  - `DEPT_HEAD`: `null` 이면 본인 부서 기본값, 값이 있으면 본인 부서와 동일한 값만 허용
-  - `TEAM_LEAD`, `MEMBER`: visible team scope 내에서만 추가 필터로 적용 가능하다.
+  - `DEPT_HEAD`: `null` 이면 본인 부서의 전체 팀 + 본인 소속 팀 전체의 합집합을 조회하며, 중복 팀은 DISTINCT 처리한다. 값이 있으면 본인 부서와 동일한 값만 허용한다.
+  - `TEAM_LEAD`, `MEMBER`: `null` 이면 본인 소속 팀 전체를 조회하고, 값이 있으면 visible team scope 내 추가 필터로만 적용한다.
 - 응답 (`data` 기준)
   - `PageResponse<TeamSummary>`
   - `items[*]`
@@ -165,20 +167,20 @@
 - 상태: `Proposed-risk-closure`
 - 권한/접근 주체
   - `DIRECTOR`: 전체 팀 집계 조회 가능
-  - `DEPT_HEAD`: 본인 소속 부서 팀 집계만 조회 가능
-  - `TEAM_LEAD`, `MEMBER`: 본인 소속 팀 범위 집계만 조회 가능
+  - `DEPT_HEAD`: `departmentId = null` 이면 본인 소속 부서의 전체 팀 + 본인 소속 팀 전체를 DISTINCT 기준으로 집계 가능하며, 값이 있으면 본인 부서와 동일한 `departmentId` 범위만 집계 가능
+  - `TEAM_LEAD`, `MEMBER`: `departmentId = null` 이면 본인 소속 팀 전체 범위를 집계 가능하며, 값이 있으면 visible scope 내 추가 필터만 허용
 - 요청
   - Query: `departmentId` (선택)
 - `departmentId` 해석
   - `DIRECTOR`: `null` 이면 전체 부서, 값이 있으면 해당 부서만 필터링
-  - `DEPT_HEAD`: `null` 이면 본인 부서 기본값, 값이 있으면 본인 부서와 동일한 값만 허용
-  - `TEAM_LEAD`, `MEMBER`: visible team scope 내에서만 추가 필터로 적용 가능하다.
+  - `DEPT_HEAD`: `null` 이면 본인 부서의 전체 팀 + 본인 소속 팀 전체의 합집합을 집계하며, 중복 팀은 DISTINCT 처리한다. 값이 있으면 본인 부서와 동일한 값만 허용한다.
+  - `TEAM_LEAD`, `MEMBER`: `null` 이면 본인 소속 팀 전체를 집계하고, 값이 있으면 visible team scope 내 추가 필터로만 적용한다.
 - 응답 (`data` 기준)
-  - `activeTeamCount`: visible scope 내 `ACTIVE` team 수
-  - `totalTeamCount`: visible scope 내 전체 team 수 (`deletedAt IS NULL` 기준)
-  - `activeUserCount`: visible scope 내 `employmentStatus = ACTIVE` 인 DISTINCT user 수
-  - `activeTeamUserCount`: visible scope 내 `ACTIVE` team 에 속한 DISTINCT user 수
-  - `allTeamUserCount`: visible scope 내 `ACTIVE` + `INACTIVE` team 에 속한 DISTINCT user 수
+  - `activeTeamCount`: DISTINCT 처리된 visible scope 내 `ACTIVE` team 수
+  - `totalTeamCount`: DISTINCT 처리된 visible scope 내 전체 team 수 (`deletedAt IS NULL` 기준)
+  - `activeUserCount`: DISTINCT 처리된 visible scope 내 `employmentStatus = ACTIVE` 인 DISTINCT user 수
+  - `activeTeamUserCount`: DISTINCT 처리된 visible scope 내 `ACTIVE` team 에 속한 DISTINCT user 수
+  - `allTeamUserCount`: DISTINCT 처리된 visible scope 내 `ACTIVE` + `INACTIVE` team 에 속한 DISTINCT user 수
 - 요청 JSON 예시
 ```json
 {
@@ -219,8 +221,8 @@
 - 상태: `Documented`
 - 권한/접근 주체
   - `DIRECTOR`: 모든 팀 접근 가능
-  - `DEPT_HEAD`: 본인 소속 부서 팀만 접근 가능
-  - `TEAM_LEAD`, `MEMBER`: 본인 소속 팀만 접근 가능
+  - `DEPT_HEAD`: 본인 소속 부서 팀 + 본인 소속 팀 접근 가능
+  - `TEAM_LEAD`, `MEMBER`: 본인 소속 팀 접근 가능
 - 요청
   - Path: `id`
 - 응답 (`data` 기준)
@@ -278,8 +280,8 @@
 - 상태: `Documented`
 - 권한/접근 주체
   - `DIRECTOR`: 모든 팀 접근 가능
-  - `DEPT_HEAD`: 본인 소속 부서 팀만 접근 가능
-  - `TEAM_LEAD`, `MEMBER`: 본인 소속 팀만 접근 가능
+  - `DEPT_HEAD`: 본인 소속 부서 팀 + 본인 소속 팀 접근 가능
+  - `TEAM_LEAD`, `MEMBER`: 본인 소속 팀 접근 가능
 - 요청
   - Path: `id`
   - Query: `page`, `pageSize`
@@ -361,8 +363,8 @@
 - 상태: `Documented`
 - 권한/접근 주체
   - `DIRECTOR`: 모든 팀 접근 가능
-  - `DEPT_HEAD`: 본인 소속 부서 팀만 접근 가능
-  - `TEAM_LEAD`, `MEMBER`: 본인 소속 팀만 접근 가능
+  - `DEPT_HEAD`: 본인 소속 부서 팀 + 본인 소속 팀 접근 가능
+  - `TEAM_LEAD`, `MEMBER`: 본인 소속 팀 접근 가능
 - 요청
   - Path: `id`
   - Query: `page`, `pageSize`
