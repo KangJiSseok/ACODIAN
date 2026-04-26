@@ -117,6 +117,9 @@ springboot:
       projection 은 read-only 조회 결과 타입이며 Entity, API DTO 와 구분한다.
       projection 기본 위치는 domain/{module}/repository/jooq/projection/ 하위 패키지다.
       projection 은 재사용 가능한 top-level 타입으로 선언하는 것을 기본으로 하며, 특정 JOOQ repository 내부 nested record 로 숨기지 않는다.
+      Service 가 repository 조회 입력을 별도로 정규화해야 하면 입력 vocabulary 는 `domain/{module}/repository/jooq/query/*Query` top-level 타입으로 둔다.
+      repository 는 `Get*ApiDto.Request` 같은 controller Request DTO 를 직접 받지 않고, service 가 기본값/정렬/visibility 를 반영한 query 를 받는다.
+      `query/*Query` 는 public API DTO 가 아니라 service -> repository 내부 계약이다.
       인터페이스: {Entity}JooqRepository. 구현: {Entity}JooqRepositoryImpl.
       Spring Data JPA의 Custom Repository 패턴으로 메인 Repository가 JooqRepository를 extends.
       DSLContext는 생성자 주입(@RequiredArgsConstructor + final)으로 사용한다.
@@ -169,7 +172,7 @@ springboot:
       다른 도메인은 domain/<module>/<layer> 기준을 유지한다.
       domain 하위 DTO는 request/, response/ 로 분리하지 않고 dto/ 단일 패키지로 둔다.
       dto/ 는 controller/, service/, repository/ 와 동등한 계층에 둔다.
-      Query DTO, Request DTO, Response DTO 는 모두 각 도메인(또는 organization feature) 아래 dto/ 에 배치한다.
+      Query DTO, Request DTO, Response DTO 는 public/service DTO 인 경우 각 도메인(또는 organization feature) 아래 dto/ 에 배치한다. repository/jooq 내부 조회 입력은 예외적으로 `repository/jooq/query/*Query` 에 둔다.
       Service 가 반환하는 출력 계약이 Response 와 다를 때만 그 출력 record 와 동반 타입을 별도 파일로 만들지 않고 동일 유스케이스의 `{UseCase}ApiDto` 안에 nested record(`Result`, `Result.UserContext` 등) 로 배치해 유스케이스 1:1 파일 매핑을 유지한다.
       Service 출력이 Response 와 1:1 이면 `Response` 를 직접 반환하고, 그 경우 `Result` 를 억지로 만들지 않는다.
       Service 입력을 Request DTO 로 직결하지 않고 별도로 조립해야 하는 예외 상황(enrichment/정규화/비 HTTP 호출 경로)에서는 같은 `{UseCase}ApiDto` 안에 `Command` / `Criteria` nested record 를 추가한다. 이 경우에도 별도 dto 파일이나 Service 내부 nested record 로 두지 않는다.

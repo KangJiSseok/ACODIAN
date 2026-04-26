@@ -376,3 +376,24 @@
     Service 는 repository 조회 결과를 projection vocabulary 로 일관되게 소비하고, Entity/API DTO 와의 경계도 문서상 명확해진다.
     JOOQ hand-written query 패키지 아래에 projection 전용 디렉토리가 생겨 조회 타입의 위치를 예측하기 쉬워진다.
     이후 신규 조회 타입이 `dao` 또는 임의 nested record 로 추가되면 문서 규약 위반으로 간주한다.
+
+- id: ADR-020
+  title: Repository 조회 입력 타입 명명 — JOOQ query vocabulary 도입
+  status: adopted
+  date: 2026-04-26
+  stacks: [springboot]
+  context: |
+    team 조회 구현을 최신 spec 에 맞추는 과정에서 controller Request DTO 가 service 를 지나 repository/jooq 까지 직접 전달되고 있었다.
+    이 구조는 public API contract 와 repository read input vocabulary 를 섞어 두어, 고정 정렬/visibility/default 값을 service 에서 정규화해도
+    repository 시그니처가 여전히 HTTP query shape 에 묶이는 문제가 있었다.
+    projection vocabulary 는 ADR-019 로 정리됐지만, 조회 입력 vocabulary 는 별도 문서 규칙이 없어 Criteria/Request/query 사이 기준이 흔들릴 수 있었다.
+  decision: |
+    Service 가 repository 조회 입력을 별도로 정규화해야 하는 경우, JOOQ read input 은 `domain/{module}/repository/jooq/query/*Query` top-level 타입으로 선언한다.
+    이 query 는 controller Request DTO 가 아니라 service -> repository 경계의 내부 vocabulary 다.
+    controller Request DTO 는 기존대로 `{UseCase}ApiDto.Request` 를 유지하고, service 가 기본값/정렬/visibility/ownership 문맥을 반영해 query 로 변환한다.
+    repository 는 `Get*ApiDto.Request` 같은 public API DTO 를 직접 받지 않는다.
+    첫 적용 범위는 organization/team read path(`TeamPageQuery`, `TeamSummaryQuery`, `TeamUsersQuery`, `TeamWorklogsQuery`) 이다.
+  consequence: |
+    public contract 변경과 repository query 변경 책임이 분리되어 drift 추적이 쉬워진다.
+    service 가 default/ownership normalization 의 단일 책임을 가지게 되고, repository 시그니처는 HTTP 바인딩 세부사항에서 분리된다.
+    이후 repository read input 을 별도 정규화해야 하는 신규 JOOQ 조회도 같은 `query/*Query` vocabulary 를 따라야 한다.
