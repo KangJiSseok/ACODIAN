@@ -43,7 +43,7 @@ public interface DepartmentControllerDocs {
             @ApiResponse(responseCode = "401", description = "access token 이 없거나 유효하지 않다.", content = @Content),
             @ApiResponse(responseCode = "403", description = "DIRECTOR 권한이 없어 접근할 수 없다.", content = @Content),
             @ApiResponse(responseCode = "404", description = "활성 부서를 찾지 못했거나 부서장 사용자 ID 가 유효하지 않다.", content = @Content),
-            @ApiResponse(responseCode = "409", description = "부서명 중복, 부서장 중복, 또는 허용되지 않는 부서장 역할로 인해 충돌한다.", content = @Content)
+            @ApiResponse(responseCode = "409", description = "부서명 중복, 부서장 중복, 허용되지 않는 부서장 역할, 또는 다른 부서 소속 사용자 지정으로 충돌한다.", content = @Content)
     })
     EmptyResponse updateDepartment(
             @Parameter(description = "부서 ID", example = "10") Long id,
