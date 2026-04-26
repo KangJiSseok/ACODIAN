@@ -20,6 +20,7 @@
 | Tag | [api-spec-tag.md](./api-spec-tag.md) |
 | Notification | [api-spec-notification.md](./api-spec-notification.md) |
 | Dashboard | [api-spec-dashboard.md](./api-spec-dashboard.md) |
+| Enum Reference | [api-spec-enums.md](./api-spec-enums.md) |
 
 ## 3. 상태 분포
 | Status | Count |

@@ -19,15 +19,17 @@ import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.responses.ApiResponses;
 import io.swagger.v3.oas.annotations.security.SecurityRequirement;
 import io.swagger.v3.oas.annotations.tags.Tag;
+import org.springdoc.core.annotations.ParameterObject;
 
 @Tag(name = "Team", description = "팀 API")
 public interface TeamControllerDocs {
 
     @Operation(summary = "팀 목록 조회", description = "skeleton 단계에서 팀 목록 조회 응답 계약을 고정한다.")
     @SecurityRequirement(name = "bearerAuth")
-    @ApiResponses(@ApiResponse(responseCode = "200", description = "팀 목록을 반환한다.", content = @Content(schema = @Schema(implementation = GetTeamsApiDto.Response.Item.class))))
+    @ApiResponses(@ApiResponse(responseCode = "200", description = "팀 목록을 반환한다."))
     PageResponse<GetTeamsApiDto.Response.Item> getTeams(
             @Parameter(hidden = true) CustomUserPrincipal principal,
+            @ParameterObject
             GetTeamsApiDto.Request request
     );
 
@@ -44,6 +46,7 @@ public interface TeamControllerDocs {
     PageResponse<GetTeamUsersApiDto.Response.Item> getTeamUsers(
             @Parameter(hidden = true) CustomUserPrincipal principal,
             Long id,
+            @ParameterObject
             GetTeamUsersApiDto.Request request
     );
 
@@ -52,6 +55,7 @@ public interface TeamControllerDocs {
     PageResponse<GetTeamWorklogsApiDto.Response.Item> getTeamWorklogs(
             @Parameter(hidden = true) CustomUserPrincipal principal,
             Long id,
+            @ParameterObject
             GetTeamWorklogsApiDto.Request request
     );
 
