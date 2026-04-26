@@ -28,6 +28,6 @@ public interface WorklogControllerDocs {
     CreateWorklogApiDto.Response createWorklog(
             CreateWorklogApiDto.Request request,
             List<MultipartFile> files,
-            @Parameter(hidden = true) CustomUserPrincipal principal
+            CustomUserPrincipal principal
     );
 }
