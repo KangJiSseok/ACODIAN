@@ -1,12 +1,12 @@
 package com.ibank.axwms.domain.organization.team.dto;
 
 import com.ibank.axwms.domain.organization.team.TeamStatus;
-import com.ibank.axwms.domain.organization.team.repository.jooq.TeamListProjection;
+import com.ibank.axwms.domain.organization.team.repository.jooq.projection.TeamListProjection;
 import com.ibank.axwms.global.response.PageResponse;
 import io.swagger.v3.oas.annotations.media.Schema;
 import jakarta.validation.constraints.Max;
 import jakarta.validation.constraints.Min;
-import java.time.LocalDateTime;
+import java.time.LocalDate;
 import lombok.AccessLevel;
 import lombok.NoArgsConstructor;
 import org.springframework.data.domain.Page;
@@ -27,16 +27,8 @@ public final class GetTeamsApiDto {
             @Min(value = 1, message = "pageSize 는 1 이상이어야 합니다.")
             @Max(value = MAX_PAGE_SIZE, message = "pageSize 는 100 이하여야 합니다.")
             Integer pageSize,
-            @Schema(description = "정렬 필드", example = "teamName")
-            String sortBy,
-            @Schema(description = "정렬 방향", example = "ASC")
-            String sortDirection,
             @Schema(description = "부서 ID", example = "10")
-            Long departmentId,
-            @Schema(description = "팀 상태", example = "ACTIVE")
-            TeamStatus statusCode,
-            @Schema(description = "검색 키워드", example = "혁신")
-            String keyword
+            Long departmentId
     ) {
         public int pageOrDefault() {
             return page == null ? DEFAULT_PAGE : page;
@@ -61,33 +53,57 @@ public final class GetTeamsApiDto {
                 Long teamId,
                 @Schema(description = "팀명", example = "물류혁신TF")
                 String teamName,
+                @Schema(description = "운영 상태", example = "ACTIVE")
+                TeamStatus statusCode,
                 @Schema(description = "부서 ID", example = "10")
                 Long departmentId,
                 @Schema(description = "부서명", example = "물류본부")
                 String departmentName,
-                @Schema(description = "운영 상태", example = "ACTIVE")
-                TeamStatus statusCode,
-                @Schema(description = "soft-delete 시각", nullable = true)
-                LocalDateTime deletedAt,
-                @Schema(description = "대표 리더 사용자 ID", example = "101")
-                Long leaderUserId,
-                @Schema(description = "대표 리더 사용자명", example = "홍길동")
-                String leaderUserName,
-                @Schema(description = "활성 사용자 수", example = "8")
-                Integer memberCount
+                @Schema(description = "팀 설명", example = "창고 자동화 개선 전담")
+                String description,
+                @Schema(description = "부서장 사용자 ID", example = "1001")
+                Long departmentHeadUserId,
+                @Schema(description = "부서장 사용자명", example = "박본부")
+                String departmentHeadUserName,
+                @Schema(description = "팀장 사용자 ID", example = "101")
+                Long teamLeaderId,
+                @Schema(description = "팀장 사용자명", example = "홍길동")
+                String teamLeaderName,
+                @Schema(description = "활성 멤버 수", example = "8")
+                Integer memberCount,
+                @Schema(description = "호출자가 해당 팀 팀장인지 여부", example = "true")
+                Boolean myTeamLeader,
+                @Schema(description = "호출자의 팀 역할", example = "플랫폼 총괄")
+                String teamRole,
+                @Schema(description = "호출자의 배치 성격", example = "PRIMARY")
+                String allocation,
+                @Schema(description = "호출자의 대표 소속 여부", example = "true")
+                Boolean isPrimary,
+                @Schema(description = "팀 시작일", example = "2026-04-01")
+                LocalDate startDate,
+                @Schema(description = "예상 종료일", example = "2026-12-31")
+                LocalDate expectedEndDate
         ) {
 
             public static Item from(TeamListProjection projection) {
                 return new Item(
                         projection.teamId(),
                         projection.teamName(),
+                        projection.statusCode(),
                         projection.departmentId(),
                         projection.departmentName(),
-                        projection.statusCode(),
-                        projection.deletedAt(),
-                        projection.leaderUserId(),
-                        projection.leaderUserName(),
-                        projection.memberCount()
+                        projection.description(),
+                        projection.departmentHeadUserId(),
+                        projection.departmentHeadUserName(),
+                        projection.teamLeaderId(),
+                        projection.teamLeaderName(),
+                        projection.memberCount(),
+                        projection.myTeamLeader(),
+                        projection.teamRole(),
+                        projection.allocation(),
+                        projection.isPrimary(),
+                        projection.startDate(),
+                        projection.expectedEndDate()
                 );
             }
         }

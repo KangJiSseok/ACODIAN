@@ -14,15 +14,4 @@ public final class UpdateTeamStatusApiDto {
             @NotNull TeamStatus statusCode
     ) {
     }
-
-    @Schema(description = "팀 상태 변경 응답 DTO")
-    public record Response(
-            Long teamId,
-            TeamStatus statusCode
-    ) {
-
-        public static Response of(Long teamId, TeamStatus statusCode) {
-            return new Response(teamId, statusCode);
-        }
-    }
 }

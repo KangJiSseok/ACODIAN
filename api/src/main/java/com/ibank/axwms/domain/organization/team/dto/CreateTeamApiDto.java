@@ -1,5 +1,6 @@
 package com.ibank.axwms.domain.organization.team.dto;
 
+import com.ibank.axwms.domain.organization.team.TeamStatus;
 import io.swagger.v3.oas.annotations.media.Schema;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
@@ -15,20 +16,10 @@ public final class CreateTeamApiDto {
             @NotNull Long departmentId,
             @NotBlank String teamName,
             String description,
-            LocalDate startDate,
-            LocalDate expectedEndDate,
             @NotNull Long leaderUserId,
-            @NotBlank String teamRole,
-            String allocation,
-            @NotNull Boolean isPrimary
+            @NotNull TeamStatus statusCode,
+            LocalDate startDate,
+            LocalDate expectedEndDate
     ) {
-    }
-
-    @Schema(description = "팀 생성 응답 DTO")
-    public record Response(Long teamId) {
-
-        public static Response placeholder() {
-            return new Response(null);
-        }
     }
 }

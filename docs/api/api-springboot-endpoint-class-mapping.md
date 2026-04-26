@@ -172,16 +172,25 @@
     <tr>
       <td><code>GET /api/teams</code></td>
       <td><code>Documented</code></td>
-      <td>팀 목록과 ACTIVE membership 기반 대표 리더/부서 요약을 조회한다.</td>
+      <td>역할별 조회 범위에 맞는 팀 목록을 페이지네이션으로 조회한다.</td>
       <td><code>domain.organization.team.controller.TeamController</code></td>
       <td><code>domain.organization.team.service.TeamService</code></td>
       <td><code>domain.organization.team.entity.Team</code>, <code>domain.organization.team.repository.TeamRepository</code>, <code>domain.organization.team.repository.jooq.TeamJooqRepository</code></td>
       <td>팀 read ownership은 <code>team</code> feature가 가지며, soft-delete 된 팀은 기본 조회에서 제외한다.</td>
     </tr>
     <tr>
+      <td><code>GET /api/teams/summary</code></td>
+      <td><code>Proposed-risk-closure</code></td>
+      <td>페이지네이션 응답과 분리된 상단 집계 요약을 조회한다.</td>
+      <td><code>domain.organization.team.controller.TeamController</code></td>
+      <td><code>domain.organization.team.service.TeamService</code></td>
+      <td><code>domain.organization.team.entity.Team</code>, <code>domain.organization.team.repository.TeamRepository</code>, <code>domain.organization.team.repository.jooq.TeamJooqRepository</code>, <code>domain.organization.team.repository.UserTeamRepository</code></td>
+      <td>상단 카드 집계와 목록 페이지네이션 응답의 책임을 분리하는 addendum endpoint 다.</td>
+    </tr>
+    <tr>
       <td><code>GET /api/teams/{id}</code></td>
       <td><code>Documented</code></td>
-      <td>단일 팀 상세와 대표 membership 컨텍스트를 조회한다.</td>
+      <td>역할별 조회 범위에 맞는 단일 팀 상세와 업무일지 집계를 조회한다.</td>
       <td><code>domain.organization.team.controller.TeamController</code></td>
       <td><code>domain.organization.team.service.TeamService</code></td>
       <td><code>domain.organization.team.entity.Team</code>, <code>domain.organization.team.entity.UserTeam</code>, <code>domain.organization.team.repository.TeamRepository</code>, <code>domain.organization.team.repository.UserTeamRepository</code></td>
@@ -208,7 +217,7 @@
     <tr>
       <td><code>POST /api/teams</code></td>
       <td><code>Documented</code></td>
-      <td>새 팀과 기본 UserTeam membership 을 생성한다.</td>
+      <td>새 팀을 생성하고 leaderUserId 기반 팀장 문맥을 설정한다.</td>
       <td><code>domain.organization.team.controller.TeamController</code></td>
       <td><code>domain.organization.team.service.TeamService</code></td>
       <td><code>domain.organization.team.entity.Team</code>, <code>domain.organization.team.entity.UserTeam</code>, <code>domain.organization.team.repository.TeamRepository</code>, <code>domain.organization.team.repository.UserTeamRepository</code></td>
@@ -217,7 +226,7 @@
     <tr>
       <td><code>PUT /api/teams/{id}</code></td>
       <td><code>Documented</code></td>
-      <td>팀 기본 정보와 대표 membership 운영 속성을 수정한다.</td>
+      <td>팀 기본 정보와 leaderUserId 기반 팀장 문맥을 수정한다.</td>
       <td><code>domain.organization.team.controller.TeamController</code></td>
       <td><code>domain.organization.team.service.TeamService</code></td>
       <td><code>domain.organization.team.entity.Team</code>, <code>domain.organization.team.entity.UserTeam</code>, <code>domain.organization.team.repository.TeamRepository</code>, <code>domain.organization.team.repository.UserTeamRepository</code></td>
@@ -235,7 +244,7 @@
     <tr>
       <td><code>POST /api/teams/{id}/users/bulk</code></td>
       <td><code>Documented</code></td>
-      <td>팀 membership 을 일괄 추가/복구/LEFT 전환한다.</td>
+      <td>팀 사용자 추가/제거를 일괄 반영한다.</td>
       <td><code>domain.organization.team.controller.TeamController</code></td>
       <td><code>domain.organization.team.service.TeamService</code></td>
       <td><code>domain.organization.team.entity.UserTeam</code>, <code>domain.organization.team.UserTeamStatus</code>, <code>domain.organization.team.repository.UserTeamRepository</code></td>

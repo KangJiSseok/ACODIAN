@@ -8,25 +8,29 @@ import com.ibank.axwms.global.error.ErrorCode;
 import com.ibank.axwms.domain.organization.team.UserTeamStatus;
 import com.ibank.axwms.domain.organization.team.dto.BulkUpsertTeamUsersApiDto;
 import com.ibank.axwms.domain.organization.team.dto.CreateTeamApiDto;
-import com.ibank.axwms.domain.organization.team.dto.DeleteTeamApiDto;
 import com.ibank.axwms.domain.organization.team.dto.GetTeamDetailApiDto;
 import com.ibank.axwms.domain.organization.team.dto.GetTeamUsersApiDto;
 import com.ibank.axwms.domain.organization.team.dto.GetTeamWorklogsApiDto;
 import com.ibank.axwms.domain.organization.team.dto.GetTeamsApiDto;
+import com.ibank.axwms.domain.organization.team.dto.GetTeamsSummaryApiDto;
 import com.ibank.axwms.domain.organization.team.dto.UpdateTeamApiDto;
 import com.ibank.axwms.domain.organization.team.dto.UpdateTeamStatusApiDto;
 import com.ibank.axwms.domain.organization.team.entity.Team;
 import com.ibank.axwms.domain.organization.team.entity.UserTeam;
 import com.ibank.axwms.domain.organization.team.repository.TeamRepository;
 import com.ibank.axwms.domain.organization.team.repository.UserTeamRepository;
+import com.ibank.axwms.domain.organization.team.repository.jooq.query.TeamPageQuery;
+import com.ibank.axwms.domain.organization.team.repository.jooq.query.TeamSummaryQuery;
+import com.ibank.axwms.domain.organization.team.repository.jooq.query.TeamUsersQuery;
+import com.ibank.axwms.domain.organization.team.repository.jooq.query.TeamWorklogsQuery;
 import com.ibank.axwms.domain.organization.user.UserRole;
 import com.ibank.axwms.domain.organization.user.entity.User;
 import com.ibank.axwms.domain.organization.user.repository.UserRepository;
 import com.ibank.axwms.global.error.BusinessException;
 import com.ibank.axwms.global.error.ErrorCode;
+import com.ibank.axwms.global.response.EmptyResponse;
 import com.ibank.axwms.global.response.PageResponse;
 import com.ibank.axwms.global.security.CustomUserPrincipal;
-import java.time.LocalDateTime;
 import java.util.Optional;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
@@ -42,17 +46,16 @@ public class TeamService {
     private final TeamRepository teamRepository;
     private final UserTeamRepository userTeamRepository;
 
-    /** team 목록 skeleton 시그니처를 유지하면서 repository projection 을 API 응답으로 조립한다. */
+    /** 최신 team spec 기준으로 조회 query 를 정규화한 뒤 repository projection 을 API 응답으로 조립한다. */
     public PageResponse<GetTeamsApiDto.Response.Item> getTeams(CustomUserPrincipal principal, GetTeamsApiDto.Request request) {
         teamAccessPolicy.assertReadable(principal);
-        GetTeamsApiDto.Request normalizedRequest = request == null
-                ? new GetTeamsApiDto.Request(null, null, null, null, null, null, null)
-                : request;
-        if (normalizedRequest.departmentId() != null) {
-            User principalUser = getRequiredPrincipalUser(principal);
-            teamAccessPolicy.assertDepartmentOwnership(principal, principalUser.getDepartmentId(), normalizedRequest.departmentId());
-        }
-        return GetTeamsApiDto.Response.fromPage(teamRepository.findTeamPage(normalizedRequest));
+        return GetTeamsApiDto.Response.fromPage(teamRepository.findTeamPage(normalizeTeamPageQuery(principal, request)));
+    }
+
+    /** 팀 목록과 분리된 상단 집계를 최신 spec 응답으로 반환한다. */
+    public GetTeamsSummaryApiDto.Response getTeamSummary(CustomUserPrincipal principal, GetTeamsSummaryApiDto.Request request) {
+        teamAccessPolicy.assertReadable(principal);
+        return GetTeamsSummaryApiDto.Response.from(teamRepository.findTeamSummary(normalizeTeamSummaryQuery(principal, request)));
     }
 
     /** team 상세 skeleton 시그니처를 유지하면서 projection 이 있으면 API 응답으로 조립한다. */
@@ -60,70 +63,64 @@ public class TeamService {
         assertReadableTeamOwnership(principal, teamId);
         return teamRepository.findTeamDetail(teamId)
                 .map(GetTeamDetailApiDto.Response::from)
-                .orElseGet(() -> GetTeamDetailApiDto.Response.placeholder(teamId));
+                .orElseThrow(() -> new BusinessException(ErrorCode.COMMON_INTERNAL_SERVER_ERROR));
     }
 
-    /** team users skeleton 시그니처를 유지하면서 projection 페이지를 API 응답으로 조립한다. */
+    /** 최신 spec 의 page/pageSize 계약만 남기고 repository query 로 변환한다. */
     public PageResponse<GetTeamUsersApiDto.Response.Item> getTeamUsers(CustomUserPrincipal principal,
                                                                        Long teamId,
                                                                        GetTeamUsersApiDto.Request request) {
         assertReadableTeamOwnership(principal, teamId);
-        GetTeamUsersApiDto.Request normalizedRequest = request == null
-                ? new GetTeamUsersApiDto.Request(null, null, null, null, null, null)
-                : request;
-        return GetTeamUsersApiDto.Response.fromPage(userTeamRepository.findTeamUserPage(teamId, normalizedRequest));
+        return GetTeamUsersApiDto.Response.fromPage(userTeamRepository.findTeamUserPage(teamId, normalizeTeamUsersQuery(request)));
     }
 
-    /** team worklogs skeleton 시그니처를 유지하면서 projection 페이지를 API 응답으로 조립한다. */
+    /** 최신 spec 의 page/pageSize 계약만 남기고 repository query 로 변환한다. */
     public PageResponse<GetTeamWorklogsApiDto.Response.Item> getTeamWorklogs(CustomUserPrincipal principal,
                                                                              Long teamId,
                                                                              GetTeamWorklogsApiDto.Request request) {
         assertReadableTeamOwnership(principal, teamId);
-        GetTeamWorklogsApiDto.Request normalizedRequest = request == null
-                ? new GetTeamWorklogsApiDto.Request(null, null, null, null, null, null)
-                : request;
-        return GetTeamWorklogsApiDto.Response.fromPage(teamRepository.findTeamWorklogPage(teamId, normalizedRequest));
+        return GetTeamWorklogsApiDto.Response.fromPage(teamRepository.findTeamWorklogPage(teamId, normalizeTeamWorklogsQuery(request)));
     }
 
-    /** 생성 계열은 skeleton 단계에서 response shape 만 고정한다. */
+    /** 생성 계열은 최신 spec 의 EmptyResponse/201 Created 계약을 유지한다. */
     @Transactional
-    public CreateTeamApiDto.Response createTeam(CustomUserPrincipal principal, CreateTeamApiDto.Request request) {
+    public EmptyResponse createTeam(CustomUserPrincipal principal, CreateTeamApiDto.Request request) {
         teamAccessPolicy.assertWritable(principal);
         User principalUser = getRequiredPrincipalUser(principal);
         teamAccessPolicy.assertDepartmentOwnership(principal, principalUser.getDepartmentId(), request.departmentId());
-        return CreateTeamApiDto.Response.placeholder();
+        return EmptyResponse.INSTANCE;
     }
 
-    /** 수정 계열은 skeleton 단계에서 response shape 만 고정한다. */
+    /** 수정 계열은 최신 spec 의 EmptyResponse 계약을 유지한다. */
     @Transactional
-    public UpdateTeamApiDto.Response updateTeam(CustomUserPrincipal principal, Long teamId, UpdateTeamApiDto.Request request) {
+    public EmptyResponse updateTeam(CustomUserPrincipal principal, Long teamId, UpdateTeamApiDto.Request request) {
         assertWritableTeamOwnership(principal, teamId);
-        return UpdateTeamApiDto.Response.of(teamId);
+        return EmptyResponse.INSTANCE;
     }
 
-    /** 상태 전환은 운영 상태와 soft-delete lifecycle 이 분리된 계약만 먼저 고정한다. */
+    /** 상태 전환은 운영 상태와 soft-delete lifecycle 이 분리된 최신 계약만 고정한다. */
     @Transactional
-    public UpdateTeamStatusApiDto.Response updateTeamStatus(CustomUserPrincipal principal,
-                                                            Long teamId,
-                                                            UpdateTeamStatusApiDto.Request request) {
+    public EmptyResponse updateTeamStatus(CustomUserPrincipal principal,
+                                          Long teamId,
+                                          UpdateTeamStatusApiDto.Request request) {
         assertWritableTeamOwnership(principal, teamId);
-        return UpdateTeamStatusApiDto.Response.of(teamId, request.statusCode());
+        return EmptyResponse.INSTANCE;
     }
 
-    /** users/bulk endpoint 는 legacy members/bulk 를 대체하는 canonical 경로로 고정한다. */
+    /** users/bulk endpoint 는 add/remove body shape 을 받되 성공 응답은 EmptyResponse 로 통일한다. */
     @Transactional
-    public BulkUpsertTeamUsersApiDto.Response bulkUpsertTeamUsers(CustomUserPrincipal principal,
-                                                                  Long teamId,
-                                                                  BulkUpsertTeamUsersApiDto.Request request) {
+    public EmptyResponse bulkUpsertTeamUsers(CustomUserPrincipal principal,
+                                             Long teamId,
+                                             BulkUpsertTeamUsersApiDto.Request request) {
         assertWritableTeamOwnership(principal, teamId);
-        return BulkUpsertTeamUsersApiDto.Response.of(teamId, request.items().size());
+        return EmptyResponse.INSTANCE;
     }
 
     /** 삭제는 hard delete 가 아니라 deletedAt 마킹 계약만 먼저 고정한다. */
     @Transactional
-    public DeleteTeamApiDto.Response deleteTeam(CustomUserPrincipal principal, Long teamId) {
+    public EmptyResponse deleteTeam(CustomUserPrincipal principal, Long teamId) {
         assertWritableTeamOwnership(principal, teamId);
-        return DeleteTeamApiDto.Response.of(teamId, LocalDateTime.now());
+        return EmptyResponse.INSTANCE;
     }
 
     /** 현재 인증 주체의 조직 문맥을 복원해 부서 ownership 검증의 기준값으로 사용한다. */
@@ -203,5 +200,61 @@ public class TeamService {
      */
     public boolean isMember(Long userId, Long teamId) {
         return userTeamRepository.existsByUserIdAndTeamId(userId, teamId);
+    }
+
+    private TeamPageQuery normalizeTeamPageQuery(CustomUserPrincipal principal, GetTeamsApiDto.Request request) {
+        GetTeamsApiDto.Request normalizedRequest = request == null
+                ? new GetTeamsApiDto.Request(null, null, null)
+                : request;
+        UserRole role = getRequiredRole(principal);
+        Long requestedDepartmentId = normalizedRequest.departmentId();
+        if (role == UserRole.DEPT_HEAD) {
+            User principalUser = getRequiredPrincipalUser(principal);
+            Long effectiveDepartmentId = requestedDepartmentId == null ? principalUser.getDepartmentId() : requestedDepartmentId;
+            teamAccessPolicy.assertDepartmentOwnership(principal, principalUser.getDepartmentId(), effectiveDepartmentId);
+            return new TeamPageQuery(normalizedRequest.pageOrDefault(), normalizedRequest.pageSizeOrDefault(), effectiveDepartmentId, null, principal.userId());
+        }
+        if (role == UserRole.TEAM_LEAD || role == UserRole.MEMBER) {
+            return new TeamPageQuery(
+                    normalizedRequest.pageOrDefault(),
+                    normalizedRequest.pageSizeOrDefault(),
+                    requestedDepartmentId,
+                    getRequiredPrincipalTeamId(principal.userId()),
+                    principal.userId()
+            );
+        }
+        return new TeamPageQuery(normalizedRequest.pageOrDefault(), normalizedRequest.pageSizeOrDefault(), requestedDepartmentId, null, principal.userId());
+    }
+
+    private TeamSummaryQuery normalizeTeamSummaryQuery(CustomUserPrincipal principal, GetTeamsSummaryApiDto.Request request) {
+        GetTeamsSummaryApiDto.Request normalizedRequest = request == null
+                ? new GetTeamsSummaryApiDto.Request(null)
+                : request;
+        UserRole role = getRequiredRole(principal);
+        Long requestedDepartmentId = normalizedRequest.departmentId();
+        if (role == UserRole.DEPT_HEAD) {
+            User principalUser = getRequiredPrincipalUser(principal);
+            Long effectiveDepartmentId = requestedDepartmentId == null ? principalUser.getDepartmentId() : requestedDepartmentId;
+            teamAccessPolicy.assertDepartmentOwnership(principal, principalUser.getDepartmentId(), effectiveDepartmentId);
+            return new TeamSummaryQuery(effectiveDepartmentId, null);
+        }
+        if (role == UserRole.TEAM_LEAD || role == UserRole.MEMBER) {
+            return new TeamSummaryQuery(requestedDepartmentId, getRequiredPrincipalTeamId(principal.userId()));
+        }
+        return new TeamSummaryQuery(requestedDepartmentId, null);
+    }
+
+    private TeamUsersQuery normalizeTeamUsersQuery(GetTeamUsersApiDto.Request request) {
+        GetTeamUsersApiDto.Request normalizedRequest = request == null
+                ? new GetTeamUsersApiDto.Request(null, null)
+                : request;
+        return new TeamUsersQuery(normalizedRequest.pageOrDefault(), normalizedRequest.pageSizeOrDefault());
+    }
+
+    private TeamWorklogsQuery normalizeTeamWorklogsQuery(GetTeamWorklogsApiDto.Request request) {
+        GetTeamWorklogsApiDto.Request normalizedRequest = request == null
+                ? new GetTeamWorklogsApiDto.Request(null, null)
+                : request;
+        return new TeamWorklogsQuery(normalizedRequest.pageOrDefault(), normalizedRequest.pageSizeOrDefault());
     }
 }
