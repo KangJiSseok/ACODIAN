@@ -216,14 +216,20 @@ export const worklogService = {
     return target ? { ...target } : undefined
   },
   async create(values: WorklogFormValues) {
-    const {
-      attachmentNames,
-      tagIds: _tagIds,
-      aiSummary: _aiSummary,
-      aiSummaryEdited: _aiSummaryEdited,
-      aiRegenerateRequested: _aiRegenerateRequested,
-      ...worklogValues
-    } = values
+    const { attachmentNames } = values
+    const worklogValues = {
+      title: values.title,
+      requestContent: values.requestContent,
+      workContent: values.workContent,
+      status: values.status,
+      importance: values.importance,
+      actualHours: values.actualHours,
+      instructionDate: values.instructionDate,
+      dueDate: values.dueDate,
+      teamId: values.teamId,
+      authorId: values.authorId,
+      dependencyIds: values.dependencyIds,
+    }
     const today = new Date().toISOString().slice(0, 10)
     const created: Worklog = {
       id: getNextWorklogId(),

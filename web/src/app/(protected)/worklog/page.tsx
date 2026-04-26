@@ -114,7 +114,7 @@ export default function WorklogPage() {
         periodMatch
       )
     })
-  }, [filters, query, worklogs, visibleDepartments, visibleTeams, visibleUsers])
+  }, [filters, query, worklogs])
   const worklogPagination = usePagination(filteredWorklogs, 4)
 
   return (
