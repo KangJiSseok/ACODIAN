@@ -1,5 +1,4 @@
 import { create } from "zustand";
-import type { UserRoleCode } from "@/app/_common/constants/roles";
 
 // 인증 흐름의 단계만 표현하고, 실제 API 호출은 이후 service/hook 계층에서 붙입니다.
 export type AuthStatus = "idle" | "loading" | "authenticated" | "unauthenticated";
@@ -14,7 +13,7 @@ export interface AuthUserTeam {
   allocation: string | null;
 }
 
-// 현재 사용자 문맥은 /api/users/me 문서를 기준으로 하되, roleCode는 추후 백엔드 보강을 고려해 optional로 열어둡니다.
+// 현재 사용자 문맥은 /api/users/me 응답을 기준으로 그대로 보관합니다.
 export interface AuthUser {
   userId: number;
   userName: string;
@@ -24,7 +23,6 @@ export interface AuthUser {
   titleName: string | null;
   profileImageUrl: string | null;
   teams: AuthUserTeam[];
-  roleCode?: UserRoleCode;
 }
 
 interface SetAuthPayload {
