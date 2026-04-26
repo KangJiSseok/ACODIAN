@@ -3,6 +3,7 @@ package com.ibank.axwms.domain.organization.department.service;
 import com.ibank.axwms.domain.organization.department.DepartmentStatus;
 import com.ibank.axwms.domain.organization.department.dto.CreateDepartmentApiDto;
 import com.ibank.axwms.domain.organization.department.dto.GetDepartmentsApiDto;
+import com.ibank.axwms.domain.organization.department.dto.UpdateDepartmentApiDto;
 import com.ibank.axwms.domain.organization.department.entity.Department;
 import com.ibank.axwms.domain.organization.department.repository.DepartmentRepository;
 import com.ibank.axwms.domain.organization.department.repository.jooq.projection.DepartmentListItemProjection;
@@ -44,6 +45,18 @@ public class DepartmentService {
                 overview.activeUserCount(),
                 departments
         );
+    }
+
+    /** 활성 부서의 기본 정보와 부서장을 수정한다. null head 또는 필드 생략은 부서장 해제로 처리한다. */
+    @Transactional
+    public void updateDepartment(Long departmentId, UpdateDepartmentApiDto.Request request) {
+        Department department = getActiveDepartment(departmentId);
+        ensureDepartmentNameAvailable(request.departmentName(), departmentId);
+        Long departmentHeadUserId = resolveDepartmentHeadUserId(request.departmentHeadUserId(), departmentId);
+        ensureDepartmentHeadUserAvailable(departmentHeadUserId, departmentId);
+
+        department.updateBasicInfo(request.departmentName(), request.description());
+        department.assignHeadUserId(departmentHeadUserId);
     }
 
     /** 요청한 부서를 soft-delete 한다. 이미 INACTIVE 면 no-op 성공으로 처리한다. */
@@ -88,9 +101,22 @@ public class DepartmentService {
         );
     }
 
+    /** 수정 대상은 ACTIVE 부서만 허용한다. */
+    private Department getActiveDepartment(Long departmentId) {
+        return departmentRepository.findByIdAndStatusCode(departmentId, DepartmentStatus.ACTIVE)
+                .orElseThrow(() -> new BusinessException(ErrorCode.DEPARTMENT_NOT_FOUND));
+    }
+
     /** 신규 등록 전에 department_name UNIQUE 충돌을 확인한다. */
     private void ensureDepartmentNameAvailable(String departmentName) {
         if (departmentRepository.existsByDepartmentName(departmentName)) {
+            throw new BusinessException(ErrorCode.DEPARTMENT_DUPLICATE_NAME);
+        }
+    }
+
+    /** 자기 자신을 제외한 department_name UNIQUE 충돌을 확인한다. */
+    private void ensureDepartmentNameAvailable(String departmentName, Long departmentId) {
+        if (departmentRepository.existsByDepartmentNameAndIdNot(departmentName, departmentId)) {
             throw new BusinessException(ErrorCode.DEPARTMENT_DUPLICATE_NAME);
         }
     }
@@ -109,6 +135,23 @@ public class DepartmentService {
         return departmentHeadUserId;
     }
 
+    /** head 사용자 입력이 있을 때만 존재, 허용 역할, 수정 대상 부서 소속 여부를 검증하고 없으면 null 을 그대로 반환한다. */
+    private Long resolveDepartmentHeadUserId(Long departmentHeadUserId, Long departmentId) {
+        if (departmentHeadUserId == null) {
+            return null;
+        }
+
+        User user = userRepository.findById(departmentHeadUserId)
+                .orElseThrow(() -> new BusinessException(ErrorCode.USER_NOT_FOUND));
+        if (!isAssignableDepartmentHeadRole(user.getRoleCode())) {
+            throw new BusinessException(ErrorCode.DEPARTMENT_HEAD_ROLE_NOT_ALLOWED);
+        }
+        if (!departmentId.equals(user.getDepartmentId())) {
+            throw new BusinessException(ErrorCode.DEPARTMENT_HEAD_USER_DEPARTMENT_MISMATCH);
+        }
+        return departmentHeadUserId;
+    }
+
     /** 부서장으로 지정 가능한 역할인지 확인한다. */
     private boolean isAssignableDepartmentHeadRole(UserRole roleCode) {
         return roleCode == UserRole.DEPT_HEAD || roleCode == UserRole.DIRECTOR;
@@ -117,6 +160,14 @@ public class DepartmentService {
     /** 같은 사용자가 다른 부서 head 로 이미 지정되어 있으면 등록을 차단한다. */
     private void ensureDepartmentHeadUserAvailable(Long departmentHeadUserId) {
         if (departmentHeadUserId != null && departmentRepository.existsByDepartmentHeadUserId(departmentHeadUserId)) {
+            throw new BusinessException(ErrorCode.DEPARTMENT_DUPLICATE_HEAD_USER);
+        }
+    }
+
+    /** 허용 역할 사용자에 한해 같은 사용자가 다른 부서 head 로 이미 지정되어 있으면 수정을 차단한다. */
+    private void ensureDepartmentHeadUserAvailable(Long departmentHeadUserId, Long departmentId) {
+        if (departmentHeadUserId != null
+                && departmentRepository.existsByDepartmentHeadUserIdAndIdNot(departmentHeadUserId, departmentId)) {
             throw new BusinessException(ErrorCode.DEPARTMENT_DUPLICATE_HEAD_USER);
         }
     }

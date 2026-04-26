@@ -30,16 +30,20 @@ public enum ErrorCode {
     AUTH_LOGIN_NOT_ALLOWED(HttpStatus.FORBIDDEN, "현재 계정 상태로는 로그인할 수 없습니다."),
     /** access token 으로 복원한 현재 사용자 문맥이 DB 에 존재하지 않을 때 사용한다. */
     USER_NOT_FOUND(HttpStatus.NOT_FOUND, "사용자를 찾을 수 없습니다."),
+    /** 같은 이름의 부서가 이미 존재해 부서를 생성하거나 수정할 수 없을 때 사용한다. */
+    DEPARTMENT_DUPLICATE_NAME(HttpStatus.CONFLICT, "같은 이름의 부서가 이미 존재합니다."),
+    /** 이미 다른 부서의 부서장으로 지정된 사용자를 다시 지정하려 할 때 사용한다. */
+    DEPARTMENT_DUPLICATE_HEAD_USER(HttpStatus.CONFLICT, "이미 다른 부서의 부서장으로 지정된 사용자입니다."),
+    /** DIRECTOR 또는 DEPT_HEAD 가 아닌 사용자를 부서장으로 지정하려 할 때 사용한다. */
+    DEPARTMENT_HEAD_ROLE_NOT_ALLOWED(HttpStatus.CONFLICT, "부서장은 DIRECTOR 또는 DEPT_HEAD 역할의 사용자만 지정할 수 있습니다."),
+    /** 수정 대상 부서와 다른 부서 소속 사용자를 부서장으로 지정하려 할 때 사용한다. */
+    DEPARTMENT_HEAD_USER_DEPARTMENT_MISMATCH(HttpStatus.CONFLICT, "부서장은 수정 대상 부서에 소속된 사용자만 지정할 수 있습니다."),
     /** 활성 부서를 찾지 못했거나 요청한 부서 자체가 존재하지 않을 때 사용한다. */
     DEPARTMENT_NOT_FOUND(HttpStatus.NOT_FOUND, "부서를 찾을 수 없습니다."),
     /** 활성 팀이 남아 있어 부서를 비활성화할 수 없을 때 사용한다. */
     DEPARTMENT_HAS_ACTIVE_TEAMS(HttpStatus.CONFLICT, "활성 팀이 남아 있어 부서를 비활성화할 수 없습니다."),
-    /** 같은 이름의 부서가 이미 존재해 부서를 생성하거나 수정할 수 없을 때 사용한다. */
-    DEPARTMENT_DUPLICATE_NAME(HttpStatus.CONFLICT, "같은 이름의 부서가 이미 존재합니다."),
     /** 부서장 후보 사용자의 역할이 DIRECTOR 또는 DEPT_HEAD 가 아닐 때 사용한다. */
-    DEPARTMENT_INVALID_HEAD_USER_ROLE(HttpStatus.BAD_REQUEST, "부서장으로 지정할 수 없는 사용자 역할입니다."),
-    /** 이미 다른 부서의 부서장으로 지정된 사용자를 다시 지정하려 할 때 사용한다. */
-    DEPARTMENT_DUPLICATE_HEAD_USER(HttpStatus.CONFLICT, "이미 다른 부서의 부서장으로 지정된 사용자입니다.");
+    DEPARTMENT_INVALID_HEAD_USER_ROLE(HttpStatus.BAD_REQUEST, "부서장으로 지정할 수 없는 사용자 역할입니다.");
 
     private final HttpStatus status;
     private final String message;

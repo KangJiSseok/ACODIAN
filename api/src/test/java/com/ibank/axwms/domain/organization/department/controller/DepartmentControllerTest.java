@@ -6,8 +6,11 @@ import static org.mockito.BDDMockito.then;
 
 import com.ibank.axwms.domain.organization.department.dto.CreateDepartmentApiDto;
 import com.ibank.axwms.domain.organization.department.dto.GetDepartmentsApiDto;
+import com.ibank.axwms.domain.organization.department.dto.UpdateDepartmentApiDto;
 import com.ibank.axwms.domain.organization.department.service.DepartmentService;
 import com.ibank.axwms.global.response.EmptyResponse;
+import jakarta.validation.Valid;
+import java.lang.reflect.Parameter;
 import java.lang.reflect.Method;
 import java.time.LocalDateTime;
 import java.util.List;
@@ -22,6 +25,7 @@ import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.ResponseStatus;
 
@@ -84,6 +88,32 @@ class DepartmentControllerTest {
     }
 
     @Test
+    @DisplayName("부서 수정 메서드는 PUT 경로와 DIRECTOR 권한을 사용한다")
+    void 부서_수정_메서드는_put_경로와_director_권한을_사용한다() throws NoSuchMethodException {
+        Method method = DepartmentController.class.getMethod("updateDepartment", Long.class, UpdateDepartmentApiDto.Request.class);
+        PutMapping putMapping = method.getAnnotation(PutMapping.class);
+        PreAuthorize preAuthorize = method.getAnnotation(PreAuthorize.class);
+        Parameter requestParameter = method.getParameters()[1];
+
+        assertThat(putMapping).isNotNull();
+        assertThat(putMapping.value()).containsExactly("/{id}");
+        assertThat(preAuthorize).isNotNull();
+        assertThat(preAuthorize.value()).isEqualTo("hasRole('DIRECTOR')");
+        assertThat(requestParameter.getAnnotation(Valid.class)).isNotNull();
+    }
+
+    @Test
+    @DisplayName("부서 수정 메서드는 서비스를 호출하고 EmptyResponse 를 반환한다")
+    void 부서_수정_메서드는_서비스를_호출하고_EmptyResponse를_반환한다() {
+        UpdateDepartmentApiDto.Request request = new UpdateDepartmentApiDto.Request("플랫폼전략본부", "전사 전략", null);
+
+        EmptyResponse response = departmentController.updateDepartment(10L, request);
+
+        then(departmentService).should().updateDepartment(10L, request);
+        assertThat(response).isSameAs(EmptyResponse.INSTANCE);
+    }
+
+    @Test
     @DisplayName("부서 삭제 메서드는 DELETE 경로와 DIRECTOR 권한을 사용한다")
     void 부서_삭제_메서드는_delete_경로와_director_권한을_사용한다() throws NoSuchMethodException {
         Method method = DepartmentController.class.getMethod("deleteDepartment", Long.class);
@@ -104,7 +134,6 @@ class DepartmentControllerTest {
         then(departmentService).should().deleteDepartment(10L);
         assertThat(response).isSameAs(EmptyResponse.INSTANCE);
     }
-
     @Test
     @DisplayName("부서 등록 메서드는 POST 매핑과 201 응답 상태와 DIRECTOR 권한을 사용한다")
     void 부서_등록_메서드는_post_매핑과_201_응답_상태와_director_권한을_사용한다() throws NoSuchMethodException {

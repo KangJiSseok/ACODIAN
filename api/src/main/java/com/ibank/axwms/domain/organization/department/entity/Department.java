@@ -76,6 +76,12 @@ public class Department {
         changeStatus(statusCode);
     }
 
+    /** API 수정 유스케이스에서 부서명과 설명을 함께 갱신한다. */
+    public void updateBasicInfo(String departmentName, String description) {
+        this.departmentName = departmentName;
+        this.description = description;
+    }
+
     /** 부서장 지정 상태를 바꾼다. head 가 없으면 null 을 허용한다. */
     public void assignHeadUserId(Long departmentHeadUserId) {
         this.departmentHeadUserId = departmentHeadUserId;
