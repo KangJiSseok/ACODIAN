@@ -48,6 +48,10 @@ public class TeamJooqRepositoryImpl implements TeamJooqRepository {
     private final DSLContext dsl;
     private final TeamMembershipConditionSupport teamMembershipConditionSupport;
 
+    /**
+     * 팀 목록 페이지를 최신 spec 필드 구조로 조립한다.
+     * 호출자 membership 정보를 함께 LEFT JOIN 해 고정 정렬 우선순위와 my-* 필드를 동시에 계산한다.
+     */
     @Override
     public Page<TeamListProjection> findTeamPage(TeamPageQuery query) {
         TbDepartment department = TB_DEPARTMENT.as("department");
@@ -133,6 +137,7 @@ public class TeamJooqRepositoryImpl implements TeamJooqRepository {
         return new PageImpl<>(items, PageRequest.of(query.page() - 1, query.pageSize()), totalCount);
     }
 
+    /** visible scope 기준으로 팀 목록 상단 KPI 집계를 각각 계산해 반환한다. */
     @Override
     public TeamSummaryProjection findTeamSummary(TeamSummaryQuery query) {
         return new TeamSummaryProjection(
@@ -144,6 +149,7 @@ public class TeamJooqRepositoryImpl implements TeamJooqRepository {
         );
     }
 
+    /** 단일 팀 상세에 필요한 기본 정보와 soft-delete 제외 업무일지 집계를 함께 조회한다. */
     @Override
     public Optional<TeamDetailProjection> findTeamDetail(Long teamId) {
         TbDepartment department = TB_DEPARTMENT.as("department");
@@ -199,6 +205,7 @@ public class TeamJooqRepositoryImpl implements TeamJooqRepository {
                 ));
     }
 
+    /** 단일 팀의 업무일지를 spec 우선순위 정렬로 조회한다. */
     @Override
     public Page<TeamWorklogProjection> findTeamWorklogPage(Long teamId, TeamWorklogsQuery query) {
         Condition scopeCondition = TB_WORKLOG.TEAM_ID.eq(teamId)
@@ -236,6 +243,7 @@ public class TeamJooqRepositoryImpl implements TeamJooqRepository {
         return new PageImpl<>(items, PageRequest.of(query.page() - 1, query.pageSize()), totalCount);
     }
 
+    /** jOOQ tuple 결과를 team 목록 projection 으로 명시적으로 매핑한다. */
     private TeamListProjection toTeamListProjection(Record17<Long, String, String, Long, String, String, Long, String, Long, String, Integer, Boolean, String, String, Boolean, java.time.LocalDate, java.time.LocalDate> record) {
         return new TeamListProjection(
                 record.value1(),
@@ -258,6 +266,7 @@ public class TeamJooqRepositoryImpl implements TeamJooqRepository {
         );
     }
 
+    /** visible scope 안에서 ACTIVE 상태인 팀 수를 계산한다. */
     private long fetchActiveTeamCount(TeamSummaryQuery query) {
         return dsl.selectCount()
                 .from(TB_TEAM)
@@ -267,6 +276,7 @@ public class TeamJooqRepositoryImpl implements TeamJooqRepository {
                 .longValue();
     }
 
+    /** visible scope 안에서 soft-delete 되지 않은 전체 팀 수를 계산한다. */
     private long fetchTotalTeamCount(TeamSummaryQuery query) {
         return dsl.selectCount()
                 .from(TB_TEAM)
@@ -275,6 +285,7 @@ public class TeamJooqRepositoryImpl implements TeamJooqRepository {
                 .longValue();
     }
 
+    /** visible scope 안에서 재직 상태가 ACTIVE 인 DISTINCT 사용자 수를 계산한다. */
     private long fetchActiveUserCount(TeamSummaryQuery query) {
         return dsl.select(countDistinct(TB_USER.USER_ID))
                 .from(TB_TEAM)
@@ -287,6 +298,7 @@ public class TeamJooqRepositoryImpl implements TeamJooqRepository {
                 .longValue();
     }
 
+    /** visible scope 안에서 ACTIVE 팀에 속한 DISTINCT 사용자 수를 계산한다. */
     private long fetchActiveTeamUserCount(TeamSummaryQuery query) {
         return dsl.select(countDistinct(TB_USER_TEAM.USER_ID))
                 .from(TB_TEAM)
@@ -298,6 +310,7 @@ public class TeamJooqRepositoryImpl implements TeamJooqRepository {
                 .longValue();
     }
 
+    /** visible scope 안에서 ACTIVE/INACTIVE 팀 전체에 속한 DISTINCT 사용자 수를 계산한다. */
     private long fetchAllTeamUserCount(TeamSummaryQuery query) {
         return dsl.select(countDistinct(TB_USER_TEAM.USER_ID))
                 .from(TB_TEAM)
@@ -308,6 +321,7 @@ public class TeamJooqRepositoryImpl implements TeamJooqRepository {
                 .longValue();
     }
 
+    /** soft-delete 와 visibility 규칙을 함께 반영한 공통 팀 범위 조건을 만든다. */
     private Condition teamScopeCondition(TbTeam team, Long departmentId, Long visibleTeamId) {
         Condition condition = teamMembershipConditionSupport.activeTeam(team.DELETED_AT);
         if (departmentId != null) {
@@ -319,11 +333,13 @@ public class TeamJooqRepositoryImpl implements TeamJooqRepository {
         return condition;
     }
 
+    /** 목록 정렬에서 PRIMARY/MAIN/LEAD 계열 allocation 을 우선순위 1로 승격한다. */
     private Field<Integer> allocationPriority(Field<String> allocationField) {
         return when(upper(coalesce(allocationField, inline(""))).in("PRIMARY", "MAIN", "LEAD"), inline(1))
                 .otherwise(inline(0));
     }
 
+    /** 업무일지 목록의 spec 고정 상태 우선순위를 정수 값으로 변환한다. */
     private Field<Integer> worklogStatusPriority(Field<String> statusCodeField) {
         return when(statusCodeField.eq(WorklogStatus.IN_PROGRESS.name()), inline(0))
                 .when(statusCodeField.eq(WorklogStatus.PENDING.name()), inline(1))

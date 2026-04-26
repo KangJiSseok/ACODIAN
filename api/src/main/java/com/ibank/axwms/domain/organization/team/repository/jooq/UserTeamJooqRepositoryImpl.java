@@ -20,6 +20,10 @@ public class UserTeamJooqRepositoryImpl implements UserTeamJooqRepository {
     private final DSLContext dsl;
     private final TeamMembershipConditionSupport teamMembershipConditionSupport;
 
+    /**
+     * 단일 팀의 활성 membership 목록을 조회한다.
+     * 팀장 우선 정렬과 email 노출 규칙을 한 번에 보장하기 위해 user 테이블을 함께 조인한다.
+     */
     @Override
     public Page<TeamUserProjection> findTeamUserPage(Long teamId, TeamUsersQuery query) {
         org.jooq.Condition scopeCondition = TB_USER_TEAM.TEAM_ID.eq(teamId)
