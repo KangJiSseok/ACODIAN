@@ -12,6 +12,7 @@ import jakarta.persistence.Table;
 import lombok.AccessLevel;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
+import org.hibernate.annotations.CreationTimestamp;
 
 import java.time.LocalDateTime;
 
@@ -40,9 +41,23 @@ public class WorklogStatusHistory {
     @Column(name = "reason", columnDefinition = "TEXT")
     private String reason;
 
-    @Column(name = "changed_at", nullable = false)
+    @CreationTimestamp
+    @Column(name = "changed_at", nullable = false, updatable = false)
     private LocalDateTime changedAt;
 
     @Column(name = "changed_by", nullable = false)
     private Long changedBy;
+
+    public static WorklogStatusHistory create(
+            Long worklogId,
+            WorklogStatus newStatusCode,
+            Long changedBy
+    ) {
+        WorklogStatusHistory worklogStatusHistory = new WorklogStatusHistory();
+        worklogStatusHistory.worklogId = worklogId;
+        worklogStatusHistory.changedBy = changedBy;
+        worklogStatusHistory.newStatusCode = newStatusCode;
+
+        return  worklogStatusHistory;
+    }
 }

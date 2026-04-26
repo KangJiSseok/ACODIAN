@@ -1,5 +1,10 @@
 package com.ibank.axwms.domain.organization.team.service;
 
+import com.ibank.axwms.domain.organization.team.entity.Team;
+import com.ibank.axwms.domain.organization.team.repository.TeamRepository;
+import com.ibank.axwms.domain.organization.team.repository.UserTeamRepository;
+import com.ibank.axwms.global.error.BusinessException;
+import com.ibank.axwms.global.error.ErrorCode;
 import com.ibank.axwms.domain.organization.team.UserTeamStatus;
 import com.ibank.axwms.domain.organization.team.dto.BulkUpsertTeamUsersApiDto;
 import com.ibank.axwms.domain.organization.team.dto.CreateTeamApiDto;
@@ -173,5 +178,30 @@ public class TeamService {
         } catch (RuntimeException ex) {
             throw new BusinessException(ErrorCode.AUTH_ACCESS_DENIED);
         }
+    }
+
+    /**
+     * 팀 ID로 팀을 조회하고 없으면 도메인 오류를 던진다.
+     *
+     * @param teamId 조회할 팀 ID
+     * @return 존재하는 팀 엔티티
+     * @throws BusinessException TEAM_NOT_FOUND 팀이 존재하지 않을 때
+     */
+    public Team getTeamOrThrow(Long teamId) {
+        return teamRepository.findById(teamId)
+                .orElseThrow(() -> new BusinessException(ErrorCode.TEAM_NOT_FOUND));
+    }
+
+    /**
+     * 사용자가 해당 팀 소속인지 여부를 반환한다.
+     * 호출측(예: 업무 등록) 이 "대상 팀에 대한 쓰기 권한" 을 Principal 기반으로 판단할 때 사용한다.
+     * 소속 미존재 시 던질 도메인 에러 코드는 호출측 유스케이스가 결정한다.
+     *
+     * @param userId 검증 대상 사용자 ID
+     * @param teamId 검증 대상 팀 ID
+     * @return 사용자가 해당 팀에 속해 있으면 true
+     */
+    public boolean isMember(Long userId, Long teamId) {
+        return userTeamRepository.existsByUserIdAndTeamId(userId, teamId);
     }
 }
