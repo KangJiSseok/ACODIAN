@@ -1,6 +1,7 @@
 package com.ibank.axwms.testsupport;
 
 import static org.springframework.security.test.web.servlet.setup.SecurityMockMvcConfigurers.springSecurity;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 
@@ -38,6 +39,12 @@ public abstract class E2eTestSupport extends IntegrationTestSupport {
     /** server.servlet.context-path 를 반영한 POST 요청 빌더를 만든다. */
     protected MockHttpServletRequestBuilder apiPost(String path) {
         return post(withContextPath(path))
+                .contextPath(API_CONTEXT_PATH);
+    }
+
+    /** server.servlet.context-path 를 반영한 DELETE 요청 빌더를 만든다. */
+    protected MockHttpServletRequestBuilder apiDelete(String path) {
+        return delete(withContextPath(path))
                 .contextPath(API_CONTEXT_PATH);
     }
 
