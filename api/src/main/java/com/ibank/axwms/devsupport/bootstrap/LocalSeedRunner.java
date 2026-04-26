@@ -4,6 +4,7 @@ import com.ibank.axwms.domain.organization.department.DepartmentStatus;
 import com.ibank.axwms.domain.organization.department.entity.Department;
 import com.ibank.axwms.domain.organization.department.repository.DepartmentRepository;
 import com.ibank.axwms.domain.organization.team.TeamStatus;
+import com.ibank.axwms.domain.organization.team.UserTeamStatus;
 import com.ibank.axwms.domain.organization.team.entity.Team;
 import com.ibank.axwms.domain.organization.team.entity.UserTeam;
 import com.ibank.axwms.domain.organization.team.repository.TeamRepository;
@@ -61,12 +62,12 @@ public class LocalSeedRunner implements ApplicationRunner {
             new TeamSeedSpec("운영지원본부", "운영정산TF", TeamStatus.INACTIVE, "로컬 검증용 운영지원본부 추가 팀", List.of("영업전략TF"))
     );
     private static final List<UserTeamSeedSpec> USER_TEAM_SEEDS = List.of(
-            new UserTeamSeedSpec("director@ibank.com", "개발본부", "플랫폼개발팀", true, "플랫폼 총괄", "주담당", true),
-            new UserTeamSeedSpec("director@ibank.com", "개발본부", "아키텍처TF", false, "아키텍처 자문", "겸임", false),
-            new UserTeamSeedSpec("dept@ibank.com", "개발본부", "플랫폼개발팀", false, "플랫폼 운영", "주담당", true),
-            new UserTeamSeedSpec("dept@ibank.com", "개발본부", "아키텍처TF", true, "아키텍처 리드", "겸임", false),
-            new UserTeamSeedSpec("member@ibank.com", "운영지원본부", "운영지원팀", false, "운영 지원", "주담당", true),
-            new UserTeamSeedSpec("member@ibank.com", "운영지원본부", "운영정산TF", false, "정산 지원", "겸임", false)
+            new UserTeamSeedSpec("director@ibank.com", "개발본부", "플랫폼개발팀", true, "플랫폼 총괄", "주담당", true, UserTeamStatus.ACTIVE),
+            new UserTeamSeedSpec("director@ibank.com", "개발본부", "아키텍처TF", false, "아키텍처 자문", "겸임", false, UserTeamStatus.ACTIVE),
+            new UserTeamSeedSpec("dept@ibank.com", "개발본부", "플랫폼개발팀", false, "플랫폼 운영", "주담당", true, UserTeamStatus.ACTIVE),
+            new UserTeamSeedSpec("dept@ibank.com", "개발본부", "아키텍처TF", true, "아키텍처 리드", "겸임", false, UserTeamStatus.ACTIVE),
+            new UserTeamSeedSpec("member@ibank.com", "운영지원본부", "운영지원팀", false, "운영 지원", "주담당", true, UserTeamStatus.ACTIVE),
+            new UserTeamSeedSpec("member@ibank.com", "운영지원본부", "운영정산TF", false, "정산 지원", "겸임", false, UserTeamStatus.ACTIVE)
     );
 
     private final DepartmentRepository departmentRepository;
@@ -247,30 +248,32 @@ public class LocalSeedRunner implements ApplicationRunner {
                     spec.teamLeader(),
                     spec.teamRole(),
                     spec.allocation(),
-                    spec.isPrimary()
+                    spec.isPrimary(),
+                    spec.statusCode()
             );
         }
     }
 
     /**
      * 사용자-팀 관계가 없으면 생성하고, 있으면 역할/주소속 여부를 목표값으로 보정한다.
-     * 로컬 로그인 후 현재 사용자 조회 API 가 항상 팀 컨텍스트를 돌려줄 수 있도록 관계를 유지한다.
+     * 로컬 로그인 후 현재 사용자 조회 API 가 항상 ACTIVE team 컨텍스트를 돌려줄 수 있도록 상태까지 함께 유지한다.
      */
     private void ensureUserTeam(Long userId,
                                 Long teamId,
                                 boolean teamLeader,
                                 String teamRole,
                                 String allocation,
-                                boolean isPrimary) {
+                                boolean isPrimary,
+                                UserTeamStatus statusCode) {
         userTeamRepository.findByUserIdAndTeamId(userId, teamId)
                 .ifPresentOrElse(userTeam -> {
-                    userTeam.synchronizeSeedProfile(teamLeader, teamRole, allocation, isPrimary);
-                    log.info("[LocalSeed] 사용자-팀 관계 보정 - userId={} teamId={} leader={} role={} allocation={} primary={}",
-                            userId, teamId, teamLeader, teamRole, allocation, isPrimary);
+                    userTeam.synchronizeSeedProfile(teamLeader, teamRole, allocation, isPrimary, statusCode);
+                    log.info("[LocalSeed] 사용자-팀 관계 보정 - userId={} teamId={} leader={} role={} allocation={} primary={} status={}",
+                            userId, teamId, teamLeader, teamRole, allocation, isPrimary, statusCode);
                 }, () -> {
-                    userTeamRepository.save(UserTeam.create(userId, teamId, teamLeader, teamRole, allocation, isPrimary));
-                    log.info("[LocalSeed] 사용자-팀 관계 생성 - userId={} teamId={} leader={} role={} allocation={} primary={}",
-                            userId, teamId, teamLeader, teamRole, allocation, isPrimary);
+                    userTeamRepository.save(UserTeam.create(userId, teamId, teamLeader, teamRole, allocation, isPrimary, statusCode));
+                    log.info("[LocalSeed] 사용자-팀 관계 생성 - userId={} teamId={} leader={} role={} allocation={} primary={} status={}",
+                            userId, teamId, teamLeader, teamRole, allocation, isPrimary, statusCode);
                 });
     }
 
@@ -292,15 +295,16 @@ public class LocalSeedRunner implements ApplicationRunner {
     }
 
     /**
-     * 현재 스펙 이름을 우선하고, 없으면 legacy 이름 순서로 이미 존재하는 팀을 찾는다.
+     * 현재 스펙 이름을 우선하고, 없으면 legacy 이름 순서로 이미 존재하는 팀 row 를 찾는다.
+     * soft-delete 된 팀도 복구 후보에 포함해 로컬 시드 재실행이 멱등하게 유지되도록 한다.
      */
     private java.util.Optional<Team> findTeamByNames(Long departmentId, String currentName, List<String> legacyNames) {
-        java.util.Optional<Team> current = teamRepository.findByDepartmentIdAndTeamName(departmentId, currentName);
+        java.util.Optional<Team> current = teamRepository.findFirstByDepartmentIdAndTeamNameOrderByDeletedAtDesc(departmentId, currentName);
         if (current.isPresent()) {
             return current;
         }
         for (String legacyName : legacyNames) {
-            java.util.Optional<Team> legacy = teamRepository.findByDepartmentIdAndTeamName(departmentId, legacyName);
+            java.util.Optional<Team> legacy = teamRepository.findFirstByDepartmentIdAndTeamNameOrderByDeletedAtDesc(departmentId, legacyName);
             if (legacy.isPresent()) {
                 return legacy;
             }
@@ -342,6 +346,7 @@ public class LocalSeedRunner implements ApplicationRunner {
                                     boolean teamLeader,
                                     String teamRole,
                                     String allocation,
-                                    boolean isPrimary) {
+                                    boolean isPrimary,
+                                    UserTeamStatus statusCode) {
     }
 }

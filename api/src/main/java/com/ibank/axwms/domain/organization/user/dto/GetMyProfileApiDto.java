@@ -5,11 +5,11 @@ import com.ibank.axwms.domain.organization.department.entity.Department;
 import com.ibank.axwms.domain.organization.user.entity.User;
 import io.swagger.v3.oas.annotations.media.Schema;
 import java.util.List;
+import lombok.AccessLevel;
+import lombok.NoArgsConstructor;
 
+@NoArgsConstructor(access = AccessLevel.PRIVATE)
 public final class GetMyProfileApiDto {
-
-    private GetMyProfileApiDto() {
-    }
 
     /** 현재 로그인 사용자의 프로필/조직/팀 문맥 응답 DTO. */
     @Schema(description = "현재 로그인 사용자 정보 응답")

@@ -25,10 +25,13 @@
 
 - [ ] `GET /api/teams`
 - [ ] `GET /api/teams/{id}`
+- [ ] `GET /api/teams/{id}/users`
+- [ ] `GET /api/teams/{id}/worklogs`
 - [ ] `POST /api/teams`
 - [ ] `PUT /api/teams/{id}`
 - [ ] `PATCH /api/teams/{id}/status`
-- [ ] `POST /api/teams/{id}/members/bulk`
+- [ ] `POST /api/teams/{id}/users/bulk`
+- [ ] `DELETE /api/teams/{id}`
 
 ## 4. `organization/user` 도메인
 

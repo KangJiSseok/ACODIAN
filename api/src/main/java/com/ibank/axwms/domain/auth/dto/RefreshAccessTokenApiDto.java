@@ -1,10 +1,10 @@
 package com.ibank.axwms.domain.auth.dto;
 
+import lombok.AccessLevel;
 import lombok.NoArgsConstructor;
 
-@NoArgsConstructor
+@NoArgsConstructor(access = AccessLevel.PRIVATE)
 public final class RefreshAccessTokenApiDto {
-
 
     /**
      * refresh 재발급 결과를 Controller 경계로 전달한다.

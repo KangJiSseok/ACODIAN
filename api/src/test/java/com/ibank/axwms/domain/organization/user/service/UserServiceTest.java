@@ -4,10 +4,10 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.BDDMockito.given;
 
-import org.assertj.core.groups.Tuple;
 import com.ibank.axwms.domain.organization.department.entity.Department;
 import com.ibank.axwms.domain.organization.department.repository.DepartmentRepository;
 import com.ibank.axwms.domain.organization.team.TeamStatus;
+import com.ibank.axwms.domain.organization.team.UserTeamStatus;
 import com.ibank.axwms.domain.organization.team.entity.Team;
 import com.ibank.axwms.domain.organization.team.entity.UserTeam;
 import com.ibank.axwms.domain.organization.team.repository.TeamRepository;
@@ -21,8 +21,10 @@ import com.ibank.axwms.global.error.BusinessException;
 import com.ibank.axwms.global.error.ErrorCode;
 import com.ibank.axwms.global.security.CustomUserPrincipal;
 import java.time.LocalDate;
+import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Optional;
+import org.assertj.core.groups.Tuple;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -50,19 +52,19 @@ class UserServiceTest {
     private UserService userService;
 
     @Test
-    @DisplayName("현재 사용자와 부서 및 팀이 존재하면 프로필 문맥을 반환한다")
-    void 현재_사용자와_부서_및_팀이_존재하면_프로필_문맥을_반환한다() {
+    @DisplayName("현재 사용자와 부서 및 ACTIVE 팀이 존재하면 프로필 문맥을 반환한다")
+    void 현재_사용자와_부서_및_ACTIVE_팀이_존재하면_프로필_문맥을_반환한다() {
         CustomUserPrincipal principal = new CustomUserPrincipal(101L, "user@ibank.com", "MEMBER");
         User user = createUser(101L, 10L, "홍길동", "과장", "팀장", "https://cdn.axwms.com/profile/101.png");
         Department department = createDepartment(10L, "물류본부");
-        UserTeam primaryUserTeam = createUserTeam(101L, 21L, true);
-        UserTeam secondaryUserTeam = createUserTeam(101L, 22L, false);
-        Team primaryTeam = createTeam(21L, 10L, "물류혁신TF");
-        Team secondaryTeam = createTeam(22L, 10L, "SCM분석팀");
+        UserTeam primaryUserTeam = createUserTeam(101L, 21L, true, UserTeamStatus.ACTIVE);
+        UserTeam secondaryUserTeam = createUserTeam(101L, 22L, false, UserTeamStatus.ACTIVE);
+        Team primaryTeam = createTeam(21L, 10L, "물류혁신TF", null);
+        Team secondaryTeam = createTeam(22L, 10L, "SCM분석팀", null);
 
         given(userRepository.findById(101L)).willReturn(Optional.of(user));
         given(departmentRepository.findById(10L)).willReturn(Optional.of(department));
-        given(userTeamRepository.findAllByUserIdOrderByIsPrimaryDesc(101L))
+        given(userTeamRepository.findAllByUserIdAndStatusCodeOrderByIsPrimaryDesc(101L, UserTeamStatus.ACTIVE))
                 .willReturn(List.of(primaryUserTeam, secondaryUserTeam));
         given(teamRepository.findAllById(List.of(21L, 22L))).willReturn(List.of(secondaryTeam, primaryTeam));
 
@@ -86,6 +88,48 @@ class UserServiceTest {
                         Tuple.tuple(true, 21L, "물류혁신TF", true, "플랫폼 총괄", "주담당"),
                         Tuple.tuple(false, 22L, "SCM분석팀", false, "SCM 분석", "겸임")
                 );
+    }
+
+    @Test
+    @DisplayName("LEFT membership 은 현재 사용자 팀 목록에서 제외한다")
+    void LEFT_membership_은_현재_사용자_팀_목록에서_제외한다() {
+        CustomUserPrincipal principal = new CustomUserPrincipal(101L, "user@ibank.com", "MEMBER");
+        User user = createUser(101L, 10L, "홍길동", "과장", "팀장", null);
+        Department department = createDepartment(10L, "물류본부");
+        UserTeam activeUserTeam = createUserTeam(101L, 21L, true, UserTeamStatus.ACTIVE);
+        Team activeTeam = createTeam(21L, 10L, "물류혁신TF", null);
+
+        given(userRepository.findById(101L)).willReturn(Optional.of(user));
+        given(departmentRepository.findById(10L)).willReturn(Optional.of(department));
+        given(userTeamRepository.findAllByUserIdAndStatusCodeOrderByIsPrimaryDesc(101L, UserTeamStatus.ACTIVE))
+                .willReturn(List.of(activeUserTeam));
+        given(teamRepository.findAllById(List.of(21L))).willReturn(List.of(activeTeam));
+
+        GetMyProfileApiDto.Response result = userService.getMyProfile(principal);
+
+        assertThat(result.teams())
+                .extracting(GetMyProfileApiDto.Response.TeamSummary::teamId)
+                .containsExactly(21L);
+    }
+
+    @Test
+    @DisplayName("soft-delete 된 팀은 현재 사용자 팀 목록에서 제외한다")
+    void soft_delete_된_팀은_현재_사용자_팀_목록에서_제외한다() {
+        CustomUserPrincipal principal = new CustomUserPrincipal(101L, "user@ibank.com", "MEMBER");
+        User user = createUser(101L, 10L, "홍길동", "과장", "팀장", null);
+        Department department = createDepartment(10L, "물류본부");
+        UserTeam userTeam = createUserTeam(101L, 21L, true, UserTeamStatus.ACTIVE);
+        Team deletedTeam = createTeam(21L, 10L, "물류혁신TF", LocalDateTime.of(2026, 4, 25, 0, 0));
+
+        given(userRepository.findById(101L)).willReturn(Optional.of(user));
+        given(departmentRepository.findById(10L)).willReturn(Optional.of(department));
+        given(userTeamRepository.findAllByUserIdAndStatusCodeOrderByIsPrimaryDesc(101L, UserTeamStatus.ACTIVE))
+                .willReturn(List.of(userTeam));
+        given(teamRepository.findAllById(List.of(21L))).willReturn(List.of(deletedTeam));
+
+        GetMyProfileApiDto.Response result = userService.getMyProfile(principal);
+
+        assertThat(result.teams()).isEmpty();
     }
 
     @Test
@@ -152,7 +196,7 @@ class UserServiceTest {
         return department;
     }
 
-    private Team createTeam(Long id, Long departmentId, String teamName) {
+    private Team createTeam(Long id, Long departmentId, String teamName, LocalDateTime deletedAt) {
         Team team = Team.create(
                 departmentId,
                 teamName,
@@ -162,17 +206,19 @@ class UserServiceTest {
                 null
         );
         ReflectionTestUtils.setField(team, "id", id);
+        ReflectionTestUtils.setField(team, "deletedAt", deletedAt);
         return team;
     }
 
-    private UserTeam createUserTeam(Long userId, Long teamId, boolean isPrimary) {
+    private UserTeam createUserTeam(Long userId, Long teamId, boolean isPrimary, UserTeamStatus statusCode) {
         return UserTeam.create(
                 userId,
                 teamId,
                 isPrimary,
                 isPrimary ? "플랫폼 총괄" : "SCM 분석",
                 isPrimary ? "주담당" : "겸임",
-                isPrimary
+                isPrimary,
+                statusCode
         );
     }
 }
