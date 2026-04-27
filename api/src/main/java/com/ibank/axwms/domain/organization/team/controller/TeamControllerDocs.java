@@ -25,7 +25,7 @@ import org.springdoc.core.annotations.ParameterObject;
 @Tag(name = "Team", description = "팀 API")
 public interface TeamControllerDocs {
 
-    @Operation(summary = "팀 목록 조회", description = "최신 team spec 기준으로 역할별 조회 범위의 팀 목록을 페이지네이션 조회한다.")
+    @Operation(summary = "팀 목록 조회", description = "최신 team spec 기준으로 역할별 조회 범위의 팀 목록을 페이지네이션 조회한다. 전체 부서로 요청할때에는 departmentId = null 로 주면 된다.")
     @SecurityRequirement(name = "bearerAuth")
     @ApiResponses(@ApiResponse(responseCode = "200", description = "팀 목록을 반환한다."))
     PageResponse<GetTeamsApiDto.Response.Item> getTeams(
