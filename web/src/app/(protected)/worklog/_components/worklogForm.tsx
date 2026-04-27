@@ -2,6 +2,8 @@
 
 import { useMemo, useRef, useState, type ReactNode } from "react"
 import {
+  Calendar,
+  FileText,
   GitBranchPlus,
   RefreshCw,
   Search,
@@ -32,19 +34,6 @@ const editableStatusTransitionMap: Record<WorklogStatus, WorklogStatus[]> = {
   ON_HOLD: ["IN_PROGRESS", "FAILED"],
   FAILED: ["IN_PROGRESS"],
   CANCELLED: [],
-}
-
-function normalizeDuration(actualHours: number) {
-  const totalMinutes = Math.max(0, Math.round(actualHours * 60))
-  // 시간 select가 5분 단위라 저장된 소수 시간을 가장 가까운 5분 단위로 맞춥니다.
-  const snappedMinutes = Math.round(totalMinutes / 5) * 5
-  const nextHour = Math.floor(snappedMinutes / 60)
-  const nextMinute = snappedMinutes % 60
-
-  return {
-    hour: Math.min(nextHour, 24),
-    minute: nextMinute,
-  }
 }
 
 function hasCircularDependency(
@@ -89,8 +78,9 @@ export function WorklogForm({
   submitLabel: string
   currentWorklogId?: number
 }) {
-  const controlClassName = "h-14 rounded-2xl px-4 text-base"
-  const textareaClassName = "rounded-2xl px-4 py-3 text-base"
+  const controlClassName = "h-11 rounded-2xl px-4 text-sm"
+  const textareaClassName =
+    "dashboard-scrollbar resize-none rounded-[1.25rem] px-4 py-3 text-base overflow-y-auto [scrollbar-gutter:stable]"
   const { user } = useAuth()
   const isEditMode = currentWorklogId !== undefined
   const fileInputRef = useRef<HTMLInputElement>(null)
@@ -126,22 +116,6 @@ export function WorklogForm({
       users.map((member) => ({
         label: `${member.name} / ${member.title}`,
         value: String(member.id),
-      })),
-    []
-  )
-  const hourOptions = useMemo(
-    () =>
-      Array.from({ length: 25 }, (_, hour) => ({
-        label: `${hour}시간`,
-        value: String(hour),
-      })),
-    []
-  )
-  const minuteOptions = useMemo(
-    () =>
-      Array.from({ length: 12 }, (_, index) => index * 5).map((minute) => ({
-        label: `${minute}분`,
-        value: String(minute),
       })),
     []
   )
@@ -225,18 +199,6 @@ export function WorklogForm({
     setValues({ ...values, dependencyIds: nextDependencyIds })
   }
 
-  const { hour: normalizedHour, minute: normalizedMinute } = normalizeDuration(
-    values.actualHours
-  )
-
-  const updateActualHours = (nextHour: number, nextMinute: number) => {
-    // UI는 시간/분을 나눠 받지만 mock service에는 시간 단위 number로 전달합니다.
-    setValues({
-      ...values,
-      actualHours: nextHour + nextMinute / 60,
-    })
-  }
-
   const addAttachmentNames = (names: string[]) => {
     setValues((previous) => ({
       ...previous,
@@ -285,189 +247,199 @@ export function WorklogForm({
         await onSubmit(values)
       }}
     >
-      <div className="grid gap-5 xl:grid-cols-[minmax(0,2.1fr)_minmax(420px,0.72fr)]">
+      <div className="grid gap-5 xl:grid-cols-[minmax(0,1.55fr)_minmax(440px,0.9fr)]">
         <FormPanel
-          eyebrow="WORK SUMMARY & WORKFLOW"
-          title="핵심 정보 및 작업 설정"
-          icon={<Settings2 className="size-4" />}
-          className="min-h-[820px]"
+          eyebrow="WORK SUMMARY"
+          title="핵심 정보"
+          icon={<FileText className="size-4" />}
+          className="min-h-[720px]"
         >
-          <div className="space-y-10">
-            <div className="space-y-4">
-              <p className="text-xs uppercase tracking-[0.2em] text-muted-foreground">
-                핵심 정보
-              </p>
-              <Field label="제목">
-                <Input
-                  className={controlClassName}
-                  value={values.title}
-                  onChange={(event) =>
-                    setValues({ ...values, title: event.target.value })
-                  }
-                  placeholder="업무의 제목을 간결하게 작성하세요."
-                />
-              </Field>
+          <div className="space-y-4">
+            <p className="text-xs uppercase tracking-[0.2em] text-muted-foreground">
+              핵심 정보
+            </p>
+            <Field label="제목">
+              <Input
+                className={controlClassName}
+                value={values.title}
+                onChange={(event) =>
+                  setValues({ ...values, title: event.target.value })
+                }
+                placeholder="업무의 제목을 간결하게 작성하세요."
+              />
+            </Field>
 
-              <Field label="요청/지시 내용">
-                <Textarea
-                  value={values.requestContent}
-                  onChange={(event) =>
-                    setValues({ ...values, requestContent: event.target.value })
-                  }
-                  className={`min-h-[220px] ${textareaClassName}`}
-                  placeholder="이 업무를 수행해야 하는 목적과 배경을 작성합니다."
-                />
-              </Field>
+            <Field label="요청/지시 내용">
+              <Textarea
+                value={values.requestContent}
+                onChange={(event) =>
+                  setValues({ ...values, requestContent: event.target.value })
+                }
+                className={`h-[220px] ${textareaClassName}`}
+                placeholder="이 업무를 수행해야 하는 목적과 배경을 작성합니다."
+              />
+            </Field>
 
-              <Field label="업무 내용">
-                <Textarea
-                  value={values.workContent}
-                  onChange={(event) =>
-                    setValues({ ...values, workContent: event.target.value })
-                  }
-                  className={`min-h-[300px] ${textareaClassName}`}
-                  placeholder="실제로 수행할 업무의 상세 내용을 작성합니다."
-                />
-              </Field>
+            <Field label="업무 내용">
+              <Textarea
+                value={values.workContent}
+                onChange={(event) =>
+                  setValues({ ...values, workContent: event.target.value })
+                }
+                className={`h-[300px] ${textareaClassName}`}
+                placeholder="실제로 수행할 업무의 상세 내용을 작성합니다."
+              />
+            </Field>
 
-              {isEditMode ? (
-                <Field label="AI 요약">
-                  <div className="space-y-3">
-                    <Textarea
-                      value={values.aiSummary ?? ""}
-                      onChange={(event) =>
+            {isEditMode ? (
+              <Field label="AI 요약">
+                <div className="space-y-3">
+                  <Textarea
+                    value={values.aiSummary ?? ""}
+                    onChange={(event) =>
+                      setValues({
+                        ...values,
+                        aiSummary: event.target.value,
+                        aiSummaryEdited: true,
+                        aiRegenerateRequested: false,
+                      })
+                    }
+                    className={`h-[132px] ${textareaClassName}`}
+                    placeholder="AI가 생성한 요약을 확인하고 필요하면 직접 수정하세요."
+                  />
+                  <div className="flex flex-wrap items-center justify-between gap-3">
+                    <p className="text-xs text-muted-foreground">
+                      {values.aiRegenerateRequested
+                        ? "저장하면 AI 요약 재생성 요청이 비동기로 시작됩니다."
+                        : values.aiSummaryEdited
+                          ? "직접 수정한 요약으로 저장됩니다."
+                          : "현재 완료된 AI 요약입니다."}
+                    </p>
+                    <Button
+                      type="button"
+                      variant="secondary"
+                      className="h-10 rounded-2xl px-4 text-sm"
+                      disabled={values.aiRegenerateRequested}
+                      onClick={() =>
                         setValues({
                           ...values,
-                          aiSummary: event.target.value,
-                          aiSummaryEdited: true,
-                          aiRegenerateRequested: false,
+                          aiRegenerateRequested: true,
+                          aiSummaryEdited: false,
                         })
                       }
-                      className={`min-h-[132px] ${textareaClassName}`}
-                      placeholder="AI가 생성한 요약을 확인하고 필요하면 직접 수정하세요."
-                    />
-                    <div className="flex flex-wrap items-center justify-between gap-3">
-                      <p className="text-xs text-muted-foreground">
-                        {values.aiRegenerateRequested
-                          ? "저장하면 AI 요약 재생성 요청이 비동기로 시작됩니다."
-                          : values.aiSummaryEdited
-                            ? "직접 수정한 요약으로 저장됩니다."
-                            : "현재 완료된 AI 요약입니다."}
-                      </p>
-                      <Button
-                        type="button"
-                        variant="secondary"
-                        className="h-10 rounded-2xl px-4 text-sm"
-                        disabled={values.aiRegenerateRequested}
-                        onClick={() =>
-                          setValues({
-                            ...values,
-                            aiRegenerateRequested: true,
-                            aiSummaryEdited: false,
-                          })
-                        }
-                      >
-                        <RefreshCw className="size-4" />
-                        {values.aiRegenerateRequested ? "재생성 요청됨" : "AI 요약 재생성 요청"}
-                      </Button>
-                    </div>
+                    >
+                      <RefreshCw className="size-4" />
+                      {values.aiRegenerateRequested ? "재생성 요청됨" : "AI 요약 재생성 요청"}
+                    </Button>
                   </div>
-                </Field>
-              ) : null}
-            </div>
+                </div>
+              </Field>
+            ) : null}
+          </div>
+        </FormPanel>
 
-            <div className="flex flex-col gap-5 border-t border-border/70 pt-6">
-              <p className="text-xs uppercase tracking-[0.2em] text-muted-foreground">
-                작업 설정
-              </p>
-              <div className="grid gap-5">
-                <Field label="상태 및 중요도">
-                  <div className="grid gap-4 sm:grid-cols-2">
-                    <Select
-                      className={controlClassName}
-                      value={values.status}
-                      options={statusOptions}
-                      onChange={(event) =>
-                        setValues({
-                          ...values,
-                          status: event.target.value as WorklogFormValues["status"],
-                        })
-                      }
-                    />
-                    <Select
-                      className={controlClassName}
-                      value={values.importance}
-                      options={[
-                        { label: getImportanceLabel("URGENT"), value: "URGENT" },
-                        { label: getImportanceLabel("HIGH"), value: "HIGH" },
-                        { label: getImportanceLabel("NORMAL"), value: "NORMAL" },
-                        { label: getImportanceLabel("LOW"), value: "LOW" },
-                      ]}
-                      onChange={(event) =>
-                        setValues({
-                          ...values,
-                          importance: event.target.value as WorklogFormValues["importance"],
-                        })
-                      }
-                    />
-                  </div>
-                </Field>
+        <div className="space-y-5">
+          <FormPanel
+            eyebrow="WORK SETTINGS"
+            title="작업 설정"
+            icon={<Settings2 className="size-4" />}
+          >
+            <div className="grid gap-5">
+              <Field label="상태 및 중요도">
+                <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-1 2xl:grid-cols-2">
+                  <Select
+                    className={controlClassName}
+                    value={values.status}
+                    options={statusOptions}
+                    onChange={(event) =>
+                      setValues({
+                        ...values,
+                        status: event.target.value as WorklogFormValues["status"],
+                      })
+                    }
+                  />
+                  <Select
+                    className={controlClassName}
+                    value={values.importance}
+                    options={[
+                      { label: getImportanceLabel("URGENT"), value: "URGENT" },
+                      { label: getImportanceLabel("HIGH"), value: "HIGH" },
+                      { label: getImportanceLabel("NORMAL"), value: "NORMAL" },
+                      { label: getImportanceLabel("LOW"), value: "LOW" },
+                    ]}
+                    onChange={(event) =>
+                      setValues({
+                        ...values,
+                        importance: event.target.value as WorklogFormValues["importance"],
+                      })
+                    }
+                  />
+                </div>
+              </Field>
 
-                <Field label="담당자">
-                  <div className="grid gap-4 sm:grid-cols-2">
-                    <Select
-                      className={controlClassName}
-                      value={String(values.teamId)}
-                      options={teamOptions}
-                      onChange={(event) =>
-                        setValues({ ...values, teamId: Number(event.target.value) })
-                      }
-                    />
-                    <Select
-                      className={controlClassName}
-                      value={String(values.authorId)}
-                      options={authorOptions}
-                      onChange={(event) =>
-                        setValues({ ...values, authorId: Number(event.target.value) })
-                      }
-                    />
-                  </div>
-                </Field>
+              <Field label="담당자">
+                <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-1 2xl:grid-cols-2">
+                  <Select
+                    className={controlClassName}
+                    value={String(values.teamId)}
+                    options={teamOptions}
+                    onChange={(event) =>
+                      setValues({ ...values, teamId: Number(event.target.value) })
+                    }
+                  />
+                  <Select
+                    className={controlClassName}
+                    value={String(values.authorId)}
+                    options={authorOptions}
+                    onChange={(event) =>
+                      setValues({ ...values, authorId: Number(event.target.value) })
+                    }
+                  />
+                </div>
+              </Field>
 
-                <Field label="시간">
-                  <div className="grid gap-4 sm:grid-cols-2">
-                    <Select
-                      className={controlClassName}
-                      value={String(normalizedHour)}
-                      options={hourOptions}
-                      onChange={(event) =>
-                        updateActualHours(Number(event.target.value), normalizedMinute)
-                      }
-                    />
-                    <Select
-                      className={controlClassName}
-                      value={String(normalizedMinute)}
-                      options={minuteOptions}
-                      onChange={(event) =>
-                        updateActualHours(normalizedHour, Number(event.target.value))
-                      }
-                    />
-                  </div>
-                </Field>
+              <Field label="시간">
+                <div className="space-y-2">
+                  <Input
+                    className={controlClassName}
+                    type="number"
+                    min="0"
+                    step="0.5"
+                    value={values.actualHours}
+                    onChange={(event) =>
+                      setValues({
+                        ...values,
+                        actualHours: Number(event.target.value),
+                      })
+                    }
+                    placeholder="예: 1.5"
+                  />
+                  <p className="text-xs leading-5 text-muted-foreground">
+                    소수 입력이 가능합니다. 예: 1.5 = 1시간 30분
+                  </p>
+                </div>
+              </Field>
 
-                <Field label="진행 일정">
-                  <div className="grid gap-4 sm:grid-cols-[1fr_auto_1fr] sm:items-center">
+              <Field label="진행 일정">
+                <div className="grid gap-3 sm:grid-cols-[1fr_auto_1fr] sm:items-center xl:grid-cols-1 2xl:grid-cols-[1fr_auto_1fr]">
+                  <div className="relative">
+                    <Calendar className="pointer-events-none absolute left-4 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
                     <Input
-                      className={controlClassName}
+                      className={cn(controlClassName, "worklog-date-input pl-11 pr-4")}
                       type="date"
                       value={values.instructionDate}
                       onChange={(event) =>
                         setValues({ ...values, instructionDate: event.target.value })
                       }
                     />
-                    <span className="text-sm text-muted-foreground">~</span>
+                  </div>
+                  <span className="hidden text-center text-sm text-muted-foreground sm:block xl:hidden 2xl:block">
+                    ~
+                  </span>
+                  <div className="relative">
+                    <Calendar className="pointer-events-none absolute left-4 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
                     <Input
-                      className={controlClassName}
+                      className={cn(controlClassName, "worklog-date-input pl-11 pr-4")}
                       type="date"
                       value={values.dueDate}
                       onChange={(event) =>
@@ -475,23 +447,11 @@ export function WorklogForm({
                       }
                     />
                   </div>
-                </Field>
-              </div>
-
-              <div className="flex justify-end pt-1">
-                <Button
-                  type="submit"
-                  size="lg"
-                  className="h-12 min-w-[168px] rounded-2xl px-7 font-semibold shadow-lg shadow-primary/15"
-                >
-                  {submitLabel}
-                </Button>
-              </div>
+                </div>
+              </Field>
             </div>
-          </div>
-        </FormPanel>
+          </FormPanel>
 
-        <div className="space-y-5">
           <FormPanel
             eyebrow="DEPENDENCIES"
             title="선행 업무"
@@ -702,6 +662,16 @@ export function WorklogForm({
             </div>
           </FormPanel>
         </div>
+      </div>
+
+      <div className="flex justify-end border-t border-border/70 pt-6">
+        <Button
+          type="submit"
+          size="lg"
+          className="h-12 min-w-[180px] rounded-2xl px-7 font-semibold shadow-[0_14px_40px_-20px_rgba(59,130,246,0.8)]"
+        >
+          {submitLabel}
+        </Button>
       </div>
 
       <input

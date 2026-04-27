@@ -1,23 +1,26 @@
 import type { ReactNode } from "react";
 
 interface PageHeaderProps {
-  title: string;
+  title: ReactNode;
   description?: string;
   actions?: ReactNode;
 }
 
 export default function PageHeader({ title, description, actions }: PageHeaderProps) {
+  if (!description && !actions) {
+    return <h1 className="sr-only">{title}</h1>;
+  }
+
   return (
     // 페이지 공통 타이틀, 설명, 우측 액션 영역의 배치를 한 곳에서 맞춥니다.
-    <div className="flex flex-col gap-4 md:flex-row md:items-end md:justify-between">
+    <div className="mb-2 flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
       <div className="space-y-2">
-        <p className="workspace-kicker">route ready</p>
-        <div>
-          <h1 className="text-3xl font-semibold tracking-tight">{title}</h1>
-          {description ? <p className="mt-2 text-sm text-muted-foreground">{description}</p> : null}
-        </div>
+        <h1 className="sr-only">{title}</h1>
+        {description ? (
+          <p className="max-w-3xl text-[15px] leading-7 text-muted-foreground">{description}</p>
+        ) : null}
       </div>
-      {actions ? <div className="flex items-center gap-3">{actions}</div> : null}
+      {actions ? <div className="flex flex-wrap items-center gap-2 md:justify-end">{actions}</div> : null}
     </div>
   );
 }

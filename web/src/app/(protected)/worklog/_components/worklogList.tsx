@@ -31,7 +31,7 @@ export function WorklogList({
     <>
       <div className="grid gap-3">
         {worklogs.length === 0 ? (
-          <div className="rounded-xl border border-dashed border-border/70 bg-muted/30 px-6 py-10 text-center text-sm text-muted-foreground">
+          <div className="workspace-empty rounded-xl px-6 py-10 text-center text-sm">
             조건에 맞는 업무가 없습니다.
           </div>
         ) : (
