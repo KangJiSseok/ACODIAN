@@ -1,6 +1,12 @@
 "use client"
 
-import { useMemo, useState, type ReactNode } from "react"
+import {
+  useMemo,
+  useState,
+  type FocusEvent,
+  type KeyboardEvent,
+  type ReactNode,
+} from "react"
 import {
   Calendar,
   FileText,
@@ -217,6 +223,25 @@ export function WorklogForm({
     }))
   }
 
+  const handleDependencySearchBlur = (event: FocusEvent<HTMLDivElement>) => {
+    const nextTarget = event.relatedTarget
+
+    if (!(nextTarget instanceof Node) || !event.currentTarget.contains(nextTarget)) {
+      setDependencySearchOpen(false)
+    }
+  }
+
+  const handleDependencySearchKeyDown = (event: KeyboardEvent<HTMLInputElement>) => {
+    if (event.key !== "Enter") return
+
+    event.preventDefault()
+
+    const firstCandidate = filteredDependencyCandidates[0]
+    if (firstCandidate) {
+      addDependency(firstCandidate.id)
+    }
+  }
+
   const addAttachmentNames = (names: string[]) => {
     setValues((previous) => ({
       ...previous,
@@ -247,6 +272,25 @@ export function WorklogForm({
       ...previous,
       tagIds: previous.tagIds.filter((item) => item !== tagId),
     }))
+  }
+
+  const handleTagSearchBlur = (event: FocusEvent<HTMLDivElement>) => {
+    const nextTarget = event.relatedTarget
+
+    if (!(nextTarget instanceof Node) || !event.currentTarget.contains(nextTarget)) {
+      setTagSearchOpen(false)
+    }
+  }
+
+  const handleTagSearchKeyDown = (event: KeyboardEvent<HTMLInputElement>) => {
+    if (event.key !== "Enter") return
+
+    event.preventDefault()
+
+    const firstCandidate = filteredTagCandidates[0]
+    if (firstCandidate) {
+      addTag(firstCandidate.id)
+    }
   }
 
   return (
@@ -359,16 +403,6 @@ export function WorklogForm({
                 onAddAttachmentNames={addAttachmentNames}
                 onRemoveAttachmentName={removeAttachmentName}
               />
-            </div>
-
-            <div className="flex justify-end border-t border-border/70 pt-6">
-              <Button
-                type="submit"
-                size="lg"
-                className="h-12 min-w-[180px] rounded-2xl px-7 font-semibold shadow-[0_14px_40px_-20px_rgba(59,130,246,0.8)]"
-              >
-                {submitLabel}
-              </Button>
             </div>
           </div>
         </FormPanel>
@@ -492,16 +526,14 @@ export function WorklogForm({
             title="선행 업무"
             icon={<GitBranchPlus className="size-4" />}
           >
-            <div className="space-y-2">
+            <div className="space-y-2" onBlur={handleDependencySearchBlur}>
               <div className="relative">
                 <Search className="pointer-events-none absolute left-4 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
                 <Input
                   className={searchControlClassName}
                   value={dependencyKeywordInput}
                   onFocus={() => setDependencySearchOpen(true)}
-                  onBlur={() => {
-                    window.setTimeout(() => setDependencySearchOpen(false), 120)
-                  }}
+                  onKeyDown={handleDependencySearchKeyDown}
                   onChange={(event) => {
                     setDependencyKeywordInput(event.target.value)
                     setDependencySearchOpen(true)
@@ -597,16 +629,14 @@ export function WorklogForm({
             title="태그 등록"
             icon={<Tag className="size-4" />}
           >
-            <div className="space-y-2">
+            <div className="space-y-2" onBlur={handleTagSearchBlur}>
               <div className="relative">
                 <Search className="pointer-events-none absolute left-4 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
                 <Input
                   className={searchControlClassName}
                   value={tagKeywordInput}
                   onFocus={() => setTagSearchOpen(true)}
-                  onBlur={() => {
-                    window.setTimeout(() => setTagSearchOpen(false), 120)
-                  }}
+                  onKeyDown={handleTagSearchKeyDown}
                   onChange={(event) => {
                     setTagKeywordInput(event.target.value)
                     setTagSearchOpen(true)
@@ -685,6 +715,16 @@ export function WorklogForm({
 
           </FormPanel>
         </div>
+      </div>
+
+      <div className="flex justify-end border-t border-border/70 pt-6">
+        <Button
+          type="submit"
+          size="lg"
+          className="h-12 min-w-[180px] rounded-2xl px-7 font-semibold shadow-[0_14px_40px_-20px_rgba(59,130,246,0.8)]"
+        >
+          {submitLabel}
+        </Button>
       </div>
 
       {submitError ? (
