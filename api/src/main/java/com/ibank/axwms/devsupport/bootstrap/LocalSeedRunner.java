@@ -42,32 +42,34 @@ public class LocalSeedRunner implements ApplicationRunner {
     private static final String DEV_PASSWORD = "password1!";
     private static final LocalDate DEFAULT_JOIN_DATE = LocalDate.of(2024, 1, 1);
     private static final List<DepartmentSeedSpec> DEPARTMENT_SEEDS = List.of(
-            new DepartmentSeedSpec("개발본부", "전사 물류 시스템 개발과 아키텍처를 담당하는 본부", DepartmentStatus.ACTIVE, "dept@ibank.com", List.of()),
-            new DepartmentSeedSpec("운영지원본부", "운영 지원과 정산을 담당하는 본부", DepartmentStatus.ACTIVE, "ops.head@ibank.com", List.of("영업본부")),
-            new DepartmentSeedSpec("휴면본부", "삭제 no-op 검증을 위한 비활성 부서", DepartmentStatus.INACTIVE, "dormant.head@ibank.com", List.of()),
-            new DepartmentSeedSpec("비상대응본부", "팀이 없는 활성 부서 시나리오 검증용 본부", DepartmentStatus.ACTIVE, null, List.of())
+            new DepartmentSeedSpec("솔루션개발사업부", "전사 물류 시스템 개발과 아키텍처를 담당하는 사업부", DepartmentStatus.ACTIVE, "dept@ibank.com"),
+            new DepartmentSeedSpec("솔루션사업부", "솔루션 운영 지원과 정산을 담당하는 사업부", DepartmentStatus.ACTIVE, "ops.head@ibank.com"),
+            new DepartmentSeedSpec("데이터컨설팅사업부", "삭제 no-op 검증을 위한 비활성 사업부", DepartmentStatus.INACTIVE, "dormant.head@ibank.com")
     );
     private static final List<UserSeedSpec> USER_SEEDS = List.of(
-            new UserSeedSpec("director@ibank.com", "개발본부", UserRole.DIRECTOR, "김이사", "이사", "본부장", EmploymentStatus.ACTIVE),
-            new UserSeedSpec("dept@ibank.com", "개발본부", UserRole.DEPT_HEAD, "박본부", "부장", "본부장", EmploymentStatus.ACTIVE),
-            new UserSeedSpec("ops.head@ibank.com", "운영지원본부", UserRole.DEPT_HEAD, "오운영", "부장", "본부장", EmploymentStatus.ACTIVE),
-            new UserSeedSpec("dormant.head@ibank.com", "휴면본부", UserRole.DEPT_HEAD, "한휴면", "부장", "본부장", EmploymentStatus.ACTIVE),
-            new UserSeedSpec("candidate.head@ibank.com", "비상대응본부", UserRole.DEPT_HEAD, "윤후보", "차장", "부서장 후보", EmploymentStatus.ACTIVE),
-            new UserSeedSpec("member@ibank.com", "운영지원본부", UserRole.MEMBER, "이사원", "사원", "팀원", EmploymentStatus.ACTIVE)
+            new UserSeedSpec("director@ibank.com", "솔루션개발사업부", UserRole.DIRECTOR, "김이사", "이사", "본부장", EmploymentStatus.ACTIVE),
+            new UserSeedSpec("dept@ibank.com", "솔루션개발사업부", UserRole.DEPT_HEAD, "박본부", "부장", "본부장", EmploymentStatus.ACTIVE),
+            new UserSeedSpec("ops.head@ibank.com", "솔루션사업부", UserRole.DEPT_HEAD, "오운영", "부장", "본부장", EmploymentStatus.ACTIVE),
+            new UserSeedSpec("dormant.head@ibank.com", "데이터컨설팅사업부", UserRole.DEPT_HEAD, "한휴면", "부장", "본부장", EmploymentStatus.ACTIVE),
+            new UserSeedSpec("lead@ibank.com", "솔루션개발사업부", UserRole.TEAM_LEAD, "홍팀장", "과장", "팀장", EmploymentStatus.ACTIVE),
+            new UserSeedSpec("member@ibank.com", "솔루션사업부", UserRole.MEMBER, "이사원", "사원", "팀원", EmploymentStatus.ACTIVE)
     );
     private static final List<TeamSeedSpec> TEAM_SEEDS = List.of(
-            new TeamSeedSpec("개발본부", "플랫폼개발팀", TeamStatus.ACTIVE, "로컬 검증용 개발본부 팀", List.of()),
-            new TeamSeedSpec("개발본부", "아키텍처TF", TeamStatus.ACTIVE, "로컬 검증용 개발본부 추가 팀", List.of()),
-            new TeamSeedSpec("운영지원본부", "운영지원팀", TeamStatus.INACTIVE, "로컬 검증용 운영지원본부 팀", List.of("영업운영팀")),
-            new TeamSeedSpec("운영지원본부", "운영정산TF", TeamStatus.INACTIVE, "로컬 검증용 운영지원본부 추가 팀", List.of("영업전략TF"))
+            new TeamSeedSpec("솔루션개발사업부", "플랫폼개발팀", TeamStatus.ACTIVE, "로컬 검증용 솔루션개발사업부 팀", List.of()),
+            new TeamSeedSpec("솔루션개발사업부", "아키텍처TF", TeamStatus.ACTIVE, "로컬 검증용 솔루션개발사업부 추가 팀", List.of()),
+            new TeamSeedSpec("솔루션개발사업부", "플랫폼운영TF", TeamStatus.ACTIVE, "로컬 TEAM_LEAD 권한 검증용 팀", List.of()),
+            new TeamSeedSpec("솔루션사업부", "운영지원팀", TeamStatus.INACTIVE, "로컬 검증용 솔루션사업부 팀", List.of("영업운영팀")),
+            new TeamSeedSpec("솔루션사업부", "운영정산TF", TeamStatus.INACTIVE, "로컬 검증용 솔루션사업부 추가 팀", List.of("영업전략TF"))
     );
     private static final List<UserTeamSeedSpec> USER_TEAM_SEEDS = List.of(
-            new UserTeamSeedSpec("director@ibank.com", "개발본부", "플랫폼개발팀", true, "플랫폼 총괄", "주담당", true, UserTeamStatus.ACTIVE),
-            new UserTeamSeedSpec("director@ibank.com", "개발본부", "아키텍처TF", false, "아키텍처 자문", "겸임", false, UserTeamStatus.ACTIVE),
-            new UserTeamSeedSpec("dept@ibank.com", "개발본부", "플랫폼개발팀", false, "플랫폼 운영", "주담당", true, UserTeamStatus.ACTIVE),
-            new UserTeamSeedSpec("dept@ibank.com", "개발본부", "아키텍처TF", true, "아키텍처 리드", "겸임", false, UserTeamStatus.ACTIVE),
-            new UserTeamSeedSpec("member@ibank.com", "운영지원본부", "운영지원팀", false, "운영 지원", "주담당", true, UserTeamStatus.ACTIVE),
-            new UserTeamSeedSpec("member@ibank.com", "운영지원본부", "운영정산TF", false, "정산 지원", "겸임", false, UserTeamStatus.ACTIVE)
+            new UserTeamSeedSpec("director@ibank.com", "솔루션개발사업부", "플랫폼개발팀", true, "플랫폼 총괄", "주담당", true, UserTeamStatus.ACTIVE),
+            new UserTeamSeedSpec("director@ibank.com", "솔루션개발사업부", "아키텍처TF", false, "아키텍처 자문", "겸임", false, UserTeamStatus.ACTIVE),
+            new UserTeamSeedSpec("dept@ibank.com", "솔루션개발사업부", "플랫폼개발팀", false, "플랫폼 운영", "주담당", true, UserTeamStatus.ACTIVE),
+            new UserTeamSeedSpec("dept@ibank.com", "솔루션개발사업부", "아키텍처TF", true, "아키텍처 리드", "겸임", false, UserTeamStatus.ACTIVE),
+            new UserTeamSeedSpec("lead@ibank.com", "솔루션개발사업부", "플랫폼운영TF", true, "플랫폼 운영 총괄", "주담당", true, UserTeamStatus.ACTIVE),
+            new UserTeamSeedSpec("ops.head@ibank.com", "솔루션개발사업부", "플랫폼개발팀", false, "운영 협업", "겸임", false, UserTeamStatus.ACTIVE),
+            new UserTeamSeedSpec("member@ibank.com", "솔루션사업부", "운영지원팀", false, "운영 지원", "주담당", true, UserTeamStatus.ACTIVE),
+            new UserTeamSeedSpec("member@ibank.com", "솔루션사업부", "운영정산TF", false, "정산 지원", "겸임", false, UserTeamStatus.ACTIVE)
     );
 
     private final DepartmentRepository departmentRepository;
@@ -92,7 +94,6 @@ public class LocalSeedRunner implements ApplicationRunner {
 
     /**
      * 사용자 FK 확보 전 단계에서 부서 row 를 미리 확보한다.
-     * 과거 로컬 시드의 legacy 부서명이 남아 있으면 같은 row 를 재사용해 이후 동기화 단계에서 목표 이름으로 수렴시킨다.
      */
     private Map<String, Long> seedDepartmentShells(List<DepartmentSeedSpec> specs) {
         Map<String, Long> departmentIdsByName = new LinkedHashMap<>();
@@ -104,7 +105,6 @@ public class LocalSeedRunner implements ApplicationRunner {
 
     /**
      * 사용자를 먼저 만든 뒤 부서장 FK 와 상태를 최종 목표값으로 맞춘다.
-     * 부서명 변경까지 함께 반영해 legacy 시드를 현재 스펙 이름으로 수렴시킨다.
      */
     private void synchronizeDepartments(List<DepartmentSeedSpec> specs,
                                         Map<String, Long> departmentIdsByName,
@@ -125,11 +125,11 @@ public class LocalSeedRunner implements ApplicationRunner {
     }
 
     /**
-     * 주어진 이름 또는 legacy 이름의 부서가 없으면 새로 저장하고, 있으면 기존 id 를 반환한다.
+     * 주어진 이름의 부서가 없으면 새로 저장하고, 있으면 기존 id 를 반환한다.
      * department_name UNIQUE 제약이 있어 같은 스펙을 재기동해도 동일 row 를 재사용한다.
      */
     private Long ensureDepartmentShell(DepartmentSeedSpec spec) {
-        return findDepartmentByNames(spec.departmentName(), spec.legacyDepartmentNames())
+        return departmentRepository.findByDepartmentName(spec.departmentName())
                 .map(Department::getId)
                 .orElseGet(() -> {
                     Department saved = departmentRepository.save(Department.create(spec.departmentName(), spec.description()));
@@ -278,23 +278,6 @@ public class LocalSeedRunner implements ApplicationRunner {
     }
 
     /**
-     * 현재 스펙 이름을 우선하고, 없으면 legacy 이름 순서로 이미 존재하는 부서를 찾는다.
-     */
-    private java.util.Optional<Department> findDepartmentByNames(String currentName, List<String> legacyNames) {
-        java.util.Optional<Department> current = departmentRepository.findByDepartmentName(currentName);
-        if (current.isPresent()) {
-            return current;
-        }
-        for (String legacyName : legacyNames) {
-            java.util.Optional<Department> legacy = departmentRepository.findByDepartmentName(legacyName);
-            if (legacy.isPresent()) {
-                return legacy;
-            }
-        }
-        return java.util.Optional.empty();
-    }
-
-    /**
      * 현재 스펙 이름을 우선하고, 없으면 legacy 이름 순서로 이미 존재하는 팀 row 를 찾는다.
      * soft-delete 된 팀도 복구 후보에 포함해 로컬 시드 재실행이 멱등하게 유지되도록 한다.
      */
@@ -320,8 +303,7 @@ public class LocalSeedRunner implements ApplicationRunner {
     private record DepartmentSeedSpec(String departmentName,
                                       String description,
                                       DepartmentStatus statusCode,
-                                      String headUserEmail,
-                                      List<String> legacyDepartmentNames) {
+                                      String headUserEmail) {
     }
 
     private record UserSeedSpec(String email,
