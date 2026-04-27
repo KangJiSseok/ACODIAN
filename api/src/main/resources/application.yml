@@ -30,6 +30,7 @@ server:
   port: ${SERVER_PORT:8100}
   servlet:
     context-path: ${SERVER_CONTEXT_PATH:/api}
+  forward-headers-strategy: framework
 
 springdoc:
   use-fqn: true
