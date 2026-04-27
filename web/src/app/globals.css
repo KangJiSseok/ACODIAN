@@ -98,6 +98,9 @@
   --chart-3: #93c5fd;
   --chart-4: #2563eb;
   --chart-5: #1d4ed8;
+  --shadow-panel: 0 24px 70px -36px rgba(34, 17, 42, 0.4);
+  --shadow-panel-strong: 0 30px 80px -38px rgba(15, 6, 19, 0.48);
+  --shadow-inset: inset 0 1px 0 rgba(255, 255, 255, 0.08);
 }
 
 * {
@@ -173,55 +176,35 @@ pre {
     linear-gradient(180deg, rgba(255, 255, 255, 0.01), transparent 30%);
 }
 
-.workspace-shell:has(.worklog-light-root) .workspace-main {
-  --worklog-page-background: #f4f6fc;
-  --worklog-page-card: rgba(255, 255, 255, 0.9);
+.workspace-main:has(.worklog-root) {
   background:
     linear-gradient(
       180deg,
-      color-mix(in srgb, var(--worklog-page-card) 70%, transparent) 0%,
-      var(--worklog-page-background) 18rem
+      color-mix(in srgb, var(--card) 70%, transparent) 0%,
+      var(--background) 18rem
     ),
-    var(--worklog-page-background);
+    var(--background);
 }
 
-.worklog-light-root {
-  color-scheme: light;
-  --background: #f4f6fc;
-  --foreground: #0f172a;
-  --card: rgba(255, 255, 255, 0.9);
-  --card-foreground: #0f172a;
-  --popover: rgba(255, 255, 255, 0.96);
-  --popover-foreground: #0f172a;
-  --primary: #1e3a8a;
-  --primary-foreground: #ffffff;
-  --secondary: rgba(30, 58, 138, 0.08);
-  --secondary-foreground: #1e293b;
-  --muted: rgba(30, 58, 138, 0.06);
-  --muted-foreground: #64748b;
-  --accent: rgba(30, 58, 138, 0.12);
-  --accent-foreground: #0f172a;
-  --border: rgba(30, 58, 138, 0.15);
-  --input: rgba(255, 255, 255, 0.9);
-  --ring: #3b82f6;
+.worklog-root {
   color: var(--foreground);
 }
 
-.worklog-light-root [data-slot="button"][data-variant="default"] {
+.worklog-root [data-slot="button"][data-variant="default"] {
   color: var(--primary-foreground);
 }
 
-.worklog-light-root [data-slot="button"][data-variant="outline"] {
+.worklog-root [data-slot="button"][data-variant="outline"] {
   border-color: var(--border);
   background: var(--background);
   color: var(--foreground);
 }
 
-.worklog-light-root [data-slot="button"][data-variant="ghost"] {
+.worklog-root [data-slot="button"][data-variant="ghost"] {
   color: var(--foreground);
 }
 
-.worklog-light-root [data-slot="button"][data-variant="destructive"] {
+.worklog-root [data-slot="button"][data-variant="destructive"] {
   background: color-mix(in srgb, var(--destructive) 10%, transparent);
   color: var(--destructive);
 }
@@ -241,6 +224,12 @@ pre {
   box-shadow: 0 8px 24px -14px rgba(15, 23, 42, 0.35);
   backdrop-filter: blur(10px);
   -webkit-backdrop-filter: blur(10px);
+}
+
+.workspace-panel-inset {
+  border: 1px solid color-mix(in srgb, var(--border) 78%, transparent);
+  background: color-mix(in srgb, var(--muted) 58%, transparent);
+  box-shadow: none;
 }
 
 .workspace-topbar {
@@ -281,6 +270,51 @@ pre {
   box-shadow: 0 6px 18px -14px rgba(15, 23, 42, 0.32);
 }
 
+.registration-surface input[type="date"]::-webkit-calendar-picker-indicator {
+  cursor: pointer;
+  opacity: 0;
+}
+
+.dark .registration-surface input[type="date"]::-webkit-calendar-picker-indicator {
+  filter: brightness(0) invert(1);
+  opacity: 0;
+}
+
+.registration-surface .worklog-date-input::-webkit-calendar-picker-indicator {
+  position: absolute;
+  left: 1rem;
+  width: 1rem;
+  height: 100%;
+}
+
+.registration-surface .registration-card,
+.registration-surface .registration-panel {
+  border-color: color-mix(in srgb, var(--border) 84%, transparent);
+  background: color-mix(in srgb, var(--muted) 34%, transparent);
+}
+
+.workspace-empty {
+  border: 1px dashed color-mix(in srgb, var(--border) 82%, transparent);
+  background: color-mix(in srgb, var(--muted) 35%, transparent);
+  color: var(--muted-foreground);
+}
+
+.worklog-divider-top {
+  border-top: 2px solid rgba(0, 0, 0, 0.82) !important;
+}
+
+.worklog-divider-item {
+  border-bottom: 2px solid rgba(0, 0, 0, 0.82) !important;
+}
+
+.dark .worklog-divider-top {
+  border-top-color: rgba(255, 255, 255, 0.82) !important;
+}
+
+.dark .worklog-divider-item {
+  border-bottom-color: rgba(255, 255, 255, 0.82) !important;
+}
+
 /* 다크 모드는 같은 의미의 토큰만 교체하고 구조 클래스는 그대로 재사용합니다. */
 .dark {
   --background: #020617;
@@ -298,6 +332,8 @@ pre {
   --accent: rgba(59, 130, 246, 0.18);
   --accent-foreground: #eff6ff;
   --destructive: #ef4444;
+  --warning: #f59e0b;
+  --success: #10b981;
   --border: rgba(59, 130, 246, 0.15);
   --input: rgba(255, 255, 255, 0.06);
   --ring: #60a5fa;
@@ -314,6 +350,9 @@ pre {
   --sidebar-accent-foreground: #ffffff;
   --sidebar-border: rgba(255, 255, 255, 0.08);
   --sidebar-ring: #60a5fa;
+  --shadow-panel: 0 32px 90px -52px rgba(0, 0, 0, 0.78);
+  --shadow-panel-strong: 0 40px 110px -60px rgba(0, 0, 0, 0.92);
+  --shadow-inset: inset 0 1px 0 rgba(255, 255, 255, 0.04);
 }
 
 @layer base {

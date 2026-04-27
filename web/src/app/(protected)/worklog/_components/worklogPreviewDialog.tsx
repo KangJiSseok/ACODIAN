@@ -34,7 +34,7 @@ export function WorklogPreviewDialog({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="worklog-light-root max-w-2xl rounded-[28px] p-0">
+      <DialogContent className="worklog-root max-w-2xl rounded-[28px] p-0">
         {!worklog ? (
           <div className="p-6 text-sm text-muted-foreground">
             미리보기할 업무를 찾을 수 없습니다.
