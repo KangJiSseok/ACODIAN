@@ -561,6 +561,23 @@ sudo visudo -c
 
 `ubuntu` 외 다른 deploy 계정이라면 모든 줄의 첫 단어를 그 계정으로 바꾼다. 권한 최소화 원칙(OPS-018)에 따라 `ALL=(ALL) NOPASSWD: ALL` 같은 광역 부여는 사용하지 않는다.
 
+### 13-3a. sites-enabled symlink (1회)
+
+Debian/Ubuntu 의 nginx 는 `/etc/nginx/nginx.conf` 가 `/etc/nginx/sites-enabled/*` 를 include 한다. 저장소 conf 는 deploy job 이 `/etc/nginx/sites-available/axwms.conf` 로 install 하므로, **nginx 가 그 파일을 실제로 로드하려면 `sites-enabled` 에서 그 파일을 가리키는 symlink 가 한 번 만들어져 있어야 한다**.
+
+```bash
+sudo ln -sf /etc/nginx/sites-available/axwms.conf /etc/nginx/sites-enabled/axwms.conf
+sudo rm -f /etc/nginx/sites-enabled/default        # 기본 server 블록(80 포트) 충돌 방지
+sudo nginx -t
+sudo systemctl reload nginx
+```
+
+- `-sf` 의 `-f` 는 이미 symlink 가 있어도 덮어쓴다(idempotent).
+- `default` site 를 제거하지 않으면 우리 production 의 80 server 와 listen 포트가 겹쳐 어느 한쪽이 무시되거나 `nginx -t` 가 충돌 경고를 띄운다.
+- 본 절차는 **새 EC2 1회**만 필요. 그 이후 conf 변경은 deploy job 이 install 단계에서 원본을 갱신하고 reload 해주므로 추가 symlink 작업은 없다.
+
+> **주의 — silent failure**: symlink 누락 시 deploy job 의 `nginx -t` 는 (sites-enabled 의 다른 파일만 검증하기 때문에) 그대로 통과하고 reload 도 성공한다. job 로그는 녹색인데 외부 동작은 변함 없는 가장 헷갈리는 사고 패턴이다. 새 EC2 작업 시 본 절차를 빼먹지 말 것.
+
 ### 13-4. nginx conf 자동 동기화 흐름
 
 `deploy_dev` / `deploy_prod` 가 다음 한 묶음을 SSH 한 번으로 실행한다(`.gitlab-ci.yml` 의 deploy job script 끝).
@@ -624,7 +641,7 @@ sudo chmod +x /etc/letsencrypt/renewal-hooks/deploy/reload-nginx.sh
 4. 각 환경 `.env` 작성 (600, 배포 계정 소유) — `WEB_HOST_PORT` / `API_HOST_PORT` / `POSTGRES_HOST_PORT` / `REDIS_HOST_PORT` 모두 OPS-009 의 +1 오프셋 규칙대로, `DB_PASSWORD` 는 staging/production 각각 강한 무작위 값 (OPS-011)
 5. CI 전용 SSH 키페어 생성 및 EC2 `authorized_keys` 등록
 6. GitLab Variables 등록 + `master` / `dev` Protected Branch 설정
-7. Nginx 설치 + deploy user sudoers 등록(섹션 13-3) — 이후 conf 본체는 `deploy_dev` / `deploy_prod` 가 자동 동기화하므로 EC2 에서 직접 작성하지 않는다
+7. Nginx 설치 + sites-enabled symlink 생성(섹션 13-3a) + deploy user sudoers 등록(섹션 13-3) — 이후 conf 본체는 `deploy_dev` / `deploy_prod` 가 자동 동기화하므로 EC2 에서 직접 작성하지 않는다
 8. `sudo certbot --nginx -d k14s209.p.ssafy.io` 로 인증서 초기 발급 + renewal hook 등록 (섹션 13-5)
 9. 작업 브랜치 -> `dev` MR 생성
 10. merge 후 staging 배포 로그 확인

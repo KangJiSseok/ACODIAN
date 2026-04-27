@@ -522,7 +522,12 @@
        staging/production 이 같은 EC2 에서 같은 conf 를 공유하므로 두 deploy 가 모두 reload 해도 결과 동일(멱등).
        어느 환경 배포 시점에도 conf 가 최신으로 동기화 보장.
 
-    5. 권한 모델 — deploy user 의 sudoers 에 다음 명령만 NOPASSWD 로 등록한다.
+    5. 새 EC2 1회 사전 절차 — sites-enabled symlink 와 sudoers
+       (1) `sudo ln -sf /etc/nginx/sites-available/axwms.conf /etc/nginx/sites-enabled/axwms.conf` + `sudo rm -f /etc/nginx/sites-enabled/default`.
+           Debian/Ubuntu nginx 는 `/etc/nginx/sites-enabled/*` 만 include 하므로 symlink 가 없으면 deploy 가 install 한 파일을 nginx 가 로드하지 않는다.
+           이 누락은 silent failure 다 — deploy 의 `nginx -t` 는 sites-enabled 의 다른 파일만 검증하므로 그대로 통과하고 reload 도 성공한다.
+           job 로그가 녹색인데 외부 동작이 변하지 않는 가장 헷갈리는 사고 패턴이라, 본 ADR 의 운영자 사전 절차에 명시 박아둔다.
+       (2) deploy user 의 sudoers 에 다음 명령만 NOPASSWD 로 등록한다.
          /usr/bin/install -o root -g root -m 0644 /tmp/axwms.conf /etc/nginx/sites-available/axwms.conf
          /usr/bin/install -o root -g root -m 0644 /tmp/proxy-headers.conf /etc/nginx/snippets/proxy-headers.conf
          /usr/bin/mkdir -p /etc/nginx/snippets
@@ -546,8 +551,10 @@
       - nginx conf 변경이 `.deploy_changes` 의 `infra/**` 안에 들어가 인프라-only 변경 시에도 deploy 가 돈다.
         한 push 가 deploy_dev + deploy_prod 양쪽에서 reload 를 일으킴. 멱등이라 결과는 동일하지만 reload 횟수가 두 배.
         완화: pending-decisions #2 의 changes 세분화에서 `infra_runtime` 으로 좁힐 때 함께 정리.
-      - sudoers 등록이 운영자 1회 수동 작업. 미등록 시 deploy job 이 비밀번호 요청 후 timeout 으로 실패.
-        완화: 가이드 섹션 13 의 sudoers 절에 등록 명령을 정확히 명시. 본 ADR 의 5번 결정과 동일 SSOT.
+      - sudoers 등록과 sites-enabled symlink 생성이 운영자 1회 수동 작업. 둘 다 누락 시 운영 영향 다름:
+        sudoers 미등록 → deploy job 이 비밀번호 요청 후 timeout 으로 즉시 실패(눈에 띄는 빨간 신호).
+        symlink 미생성 → deploy job 은 녹색이지만 nginx 가 conf 를 로드하지 않음(silent failure).
+        완화: 가이드 섹션 13-3 / 13-3a 가 두 절차 모두 SSOT 다. 본 ADR 의 5번 결정과 동일.
       - `nginx -t` 가 실패하면 reload 가 일어나지 않아 batch 가 중단되지만, 그 시점까지 scp 한 `/tmp/*.conf` 가 남는다.
         완화: ssh 한 줄에 `&&` 로 묶여 있어 install + mkdir + install 까지는 적용되어 있을 수 있다.
         실패 분석은 deploy job 의 ssh 출력 + EC2 의 `journalctl -u nginx` 로 충분.
