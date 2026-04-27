@@ -7,11 +7,13 @@ import static com.ibank.axwms.global.jooq.Tables.TB_USER_TEAM;
 import static com.ibank.axwms.global.jooq.Tables.TB_WORKLOG;
 import static org.jooq.impl.DSL.coalesce;
 import static org.jooq.impl.DSL.countDistinct;
+import static org.jooq.impl.DSL.exists;
 import static org.jooq.impl.DSL.inline;
-import static org.jooq.impl.DSL.upper;
+import static org.jooq.impl.DSL.trueCondition;
 import static org.jooq.impl.DSL.when;
 
 import com.ibank.axwms.domain.organization.team.TeamStatus;
+import com.ibank.axwms.domain.organization.team.UserTeamStatus;
 import com.ibank.axwms.domain.organization.team.repository.jooq.projection.TeamDetailProjection;
 import com.ibank.axwms.domain.organization.team.repository.jooq.projection.TeamListProjection;
 import com.ibank.axwms.domain.organization.team.repository.jooq.projection.TeamSummaryProjection;
@@ -56,17 +58,23 @@ public class TeamJooqRepositoryImpl implements TeamJooqRepository {
     public Page<TeamListProjection> findTeamPage(TeamPageQuery query) {
         TbDepartment department = TB_DEPARTMENT.as("department");
         TbUser departmentHead = TB_USER.as("department_head");
-        TbUserTeam leaderMembership = TB_USER_TEAM.as("leader_membership");
         TbUser leaderUser = TB_USER.as("leader_user");
-        TbUserTeam activeMembership = TB_USER_TEAM.as("active_membership");
-        TbUserTeam selfMembership = TB_USER_TEAM.as("self_membership");
+        TbUserTeam leaderMembership = TB_USER_TEAM.as("leader_membership"); // 리더확인용
+        TbUserTeam activeMembership = TB_USER_TEAM.as("active_membership"); //활성화멤버확인용
+        TbUserTeam selfMembership = TB_USER_TEAM.as("self_membership"); // 자기자신조회용
 
+        //팀의 활성된 멤버 수
         Field<Integer> memberCount = countDistinct(activeMembership.USER_ID).cast(Integer.class).as("member_count");
+        //이 팀의 팀장인지
         Field<Boolean> myTeamLeader = coalesce(selfMembership.TEAM_LEADER, inline(false)).as("my_team_leader");
+        //이 팀의 주담당/겸임 인지
         Field<String> myAllocation = selfMembership.ALLOCATION.as("my_allocation");
+        //주 소속인지
         Field<Boolean> myPrimary = coalesce(selfMembership.IS_PRIMARY, inline(false)).as("my_primary");
 
-        Condition scopeCondition = teamScopeCondition(TB_TEAM, query.departmentId(), query.visibleTeamId());
+        //조회 가능한 범위의 필터 조건식
+        Condition scopeCondition = teamScopeCondition(TB_TEAM, query);
+
         long totalCount = dsl.selectCount()
                 .from(TB_TEAM)
                 .where(scopeCondition)
@@ -96,15 +104,16 @@ public class TeamJooqRepositoryImpl implements TeamJooqRepository {
                 .join(department).on(TB_TEAM.DEPARTMENT_ID.eq(department.DEPARTMENT_ID))
                 .leftJoin(departmentHead).on(department.DEPARTMENT_HEAD_USER_ID.eq(departmentHead.USER_ID))
                 .leftJoin(leaderMembership).on(leaderMembership.TEAM_ID.eq(TB_TEAM.TEAM_ID)
-                        .and(teamMembershipConditionSupport.activeMembership(leaderMembership.STATUS_CODE))
+                        .and(leaderMembership.STATUS_CODE.eq(UserTeamStatus.ACTIVE.name()))
                         .and(leaderMembership.TEAM_LEADER.isTrue()))
                 .leftJoin(leaderUser).on(leaderMembership.USER_ID.eq(leaderUser.USER_ID))
                 .leftJoin(activeMembership).on(activeMembership.TEAM_ID.eq(TB_TEAM.TEAM_ID)
-                        .and(teamMembershipConditionSupport.activeMembership(activeMembership.STATUS_CODE)))
+                        .and(activeMembership.STATUS_CODE.eq(UserTeamStatus.ACTIVE.name())))
                 .leftJoin(selfMembership).on(selfMembership.TEAM_ID.eq(TB_TEAM.TEAM_ID)
-                        .and(selfMembership.USER_ID.eq(query.principalUserId()))
-                        .and(teamMembershipConditionSupport.activeMembership(selfMembership.STATUS_CODE)))
+                        .and(selfMembership.STATUS_CODE.eq(UserTeamStatus.ACTIVE.name()))
+                        .and(selfMembership.USER_ID.eq(query.principalUserId())))
                 .where(scopeCondition)
+                //groupBy : memberCount(집계) 때문에 사용해야함.
                 .groupBy(
                         TB_TEAM.TEAM_ID,
                         TB_TEAM.TEAM_NAME,
@@ -126,7 +135,6 @@ public class TeamJooqRepositoryImpl implements TeamJooqRepository {
                 .orderBy(
                         TB_TEAM.STATUS_CODE.eq(ACTIVE_TEAM_STATUS).desc(),
                         coalesce(selfMembership.TEAM_LEADER, inline(false)).desc(),
-                        allocationPriority(selfMembership.ALLOCATION).desc(),
                         coalesce(selfMembership.IS_PRIMARY, inline(false)).desc(),
                         TB_TEAM.TEAM_ID.asc()
                 )
@@ -323,21 +331,51 @@ public class TeamJooqRepositoryImpl implements TeamJooqRepository {
 
     /** soft-delete 와 visibility 규칙을 함께 반영한 공통 팀 범위 조건을 만든다. */
     private Condition teamScopeCondition(TbTeam team, Long departmentId, Long visibleTeamId) {
-        Condition condition = teamMembershipConditionSupport.activeTeam(team.DELETED_AT);
+
+        //삭제되지 않은 team들만 가져오는 조건식 추가
+        Condition condition = team.DELETED_AT.isNull();
+
+        // null이 아니면 특정 부서만 필터
         if (departmentId != null) {
             condition = condition.and(team.DEPARTMENT_ID.eq(departmentId));
         }
+
+        // null이 아니면 특정 팀만 필터
         if (visibleTeamId != null) {
             condition = condition.and(team.TEAM_ID.eq(visibleTeamId));
         }
         return condition;
     }
 
-    /** 목록 정렬에서 PRIMARY/MAIN/LEAD 계열 allocation 을 우선순위 1로 승격한다. */
-    private Field<Integer> allocationPriority(Field<String> allocationField) {
-        return when(upper(coalesce(allocationField, inline(""))).in("PRIMARY", "MAIN", "LEAD"), inline(1))
-                .otherwise(inline(0));
+    /** GET /api/teams visible scope 는 역할별 기본 범위 + optional department 필터의 교집합으로 계산한다. */
+    private Condition teamScopeCondition(TbTeam team, TeamPageQuery query) {
+        return teamScopeCondition(team, query.departmentId(), null)
+                .and(visibleScopeCondition(team, query));
     }
+
+    /** 역할별 목록 조회 scope 를 DISTINCT team 기준 EXISTS 조건으로 정규화한다. */
+    private Condition visibleScopeCondition(TbTeam team, TeamPageQuery query) {
+        return switch (query.principalRole()) {
+            case DIRECTOR -> trueCondition();
+            case DEPT_HEAD -> team.DEPARTMENT_ID.eq(query.principalDepartmentId())
+                    .or(activeMembershipExists(team, query.principalUserId()));
+            case TEAM_LEAD, MEMBER -> activeMembershipExists(team, query.principalUserId());
+            default -> throw new IllegalArgumentException("지원하지 않는 팀 목록 조회 역할입니다: " + query.principalRole());
+        };
+    }
+
+    /** 현재 사용자의 ACTIVE membership 존재 여부를 team 단위 scope 판정에 재사용한다. */
+    private Condition activeMembershipExists(TbTeam team, Long principalUserId) {
+        TbUserTeam visibleMembership = TB_USER_TEAM.as("visible_membership");
+        return exists(
+                dsl.selectOne()
+                        .from(visibleMembership)
+                        .where(visibleMembership.TEAM_ID.eq(team.TEAM_ID))
+                        .and(visibleMembership.USER_ID.eq(principalUserId))
+                        .and(teamMembershipConditionSupport.activeMembership(visibleMembership.STATUS_CODE))
+        );
+    }
+
 
     /** 업무일지 목록의 spec 고정 상태 우선순위를 정수 값으로 변환한다. */
     private Field<Integer> worklogStatusPriority(Field<String> statusCodeField) {

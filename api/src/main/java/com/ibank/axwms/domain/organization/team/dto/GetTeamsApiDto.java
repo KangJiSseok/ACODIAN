@@ -73,11 +73,11 @@ public final class GetTeamsApiDto {
                 Integer memberCount,
                 @Schema(description = "호출자가 해당 팀 팀장인지 여부", example = "true")
                 Boolean myTeamLeader,
-                @Schema(description = "호출자의 팀 역할", example = "플랫폼 총괄")
+                @Schema(description = "호출자의 팀 역할", example = "프론트/웹")
                 String teamRole,
-                @Schema(description = "호출자의 배치 성격", example = "PRIMARY")
+                @Schema(description = "호출자의 배치 성격", example = "주담당")
                 String allocation,
-                @Schema(description = "호출자의 대표 소속 여부", example = "true")
+                @Schema(description = "호출자의 주 소속 팀 여부", example = "true")
                 Boolean isPrimary,
                 @Schema(description = "팀 시작일", example = "2026-04-01")
                 LocalDate startDate,
