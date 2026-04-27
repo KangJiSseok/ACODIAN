@@ -8,7 +8,7 @@ services:
     volumes:
       - postgres-data:/var/lib/postgresql/data
     ports:
-      - "${POSTGRES_HOST_PORT:-8300}:5432"
+      - "${POSTGRES_HOST_PORT:?POSTGRES_HOST_PORT required (env-specific offset, e.g. 8300/8301)}:5432"
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U ${DB_USERNAME:-postgres} -d ${DB_NAME:-postgres}"]
       interval: 5s
@@ -19,7 +19,7 @@ services:
   redis:
     image: redis:7-alpine
     ports:
-      - "${REDIS_HOST_PORT:-8400}:6379"
+      - "${REDIS_HOST_PORT:?REDIS_HOST_PORT required (env-specific offset, e.g. 8400/8401)}:6379"
     healthcheck:
       test: ["CMD-SHELL", "redis-cli ping | grep PONG"]
       interval: 5s
@@ -47,7 +47,7 @@ services:
       JWT_ACCESS_EXPIRATION: ${JWT_ACCESS_EXPIRATION:-3600000}
       JWT_REFRESH_EXPIRATION: ${JWT_REFRESH_EXPIRATION:-1209600000}
     ports:
-      - "127.0.0.1:${API_HOST_PORT:-8100}:8100"
+      - "127.0.0.1:${API_HOST_PORT:?API_HOST_PORT required (env-specific offset, e.g. 8100/8101)}:8100"
     restart: unless-stopped
 
   web:
@@ -57,7 +57,7 @@ services:
       PORT: 8000
       HOSTNAME: 0.0.0.0
     ports:
-      - "127.0.0.1:${WEB_HOST_PORT:-8000}:8000"
+      - "127.0.0.1:${WEB_HOST_PORT:?WEB_HOST_PORT required (env-specific offset, e.g. 8000/8001)}:8000"
     restart: unless-stopped
 
 volumes:
