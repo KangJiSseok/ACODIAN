@@ -1,0 +1,31 @@
+# 모노레포 루트를 컨텍스트로 쓰는 빌드(현재 web/Dockerfile)에서 적용된다.
+# api 빌드는 컨텍스트가 api/ 이므로 api/.dockerignore 가 우선이고 이 파일은 영향 없다.
+
+.git
+.gitlab/
+.idea/
+.vscode/
+
+**/node_modules
+**/.next
+**/dist
+**/build
+
+api/.gradle
+api/bin
+ai/__pycache__
+ai/.venv
+
+.cache
+.pnpm-store
+
+.claude
+.omc
+docs
+runbooks
+
+**/.env
+**/.env.*
+!**/.env.example
+
+*.log
