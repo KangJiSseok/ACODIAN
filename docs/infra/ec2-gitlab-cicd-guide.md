@@ -7,7 +7,7 @@
 - 연계 문서: [`runbooks/infra/ci-auth-troubleshoot.md`](../../runbooks/infra/ci-auth-troubleshoot.md) (CI 인증 자격증명 장애 대응), [`docs/api/jooq-codegen-policy.md`](../api/jooq-codegen-policy.md) (`api_ci` 의 DinD 의존 배경).
 
 이 문서는 **AX-WMS 인프라를 처음 보는 사람도 그대로 따라갈 수 있게** 작성한 1차 운영 가이드다.
-현재 범위는 **api / web / postgres / redis 자동배포**이며, `ai`, `nginx conf 저장소 편입` 은 후속 작업으로 남겨둔다(ADR-014, pending-decisions #3 / #5 참조).
+현재 범위는 **api / web / postgres / redis 자동배포 + nginx conf 저장소 동기화**이며, `ai` 자동배포 편입만 후속 작업으로 남겨둔다(ADR-014/ADR-015, pending-decisions #5 참조).
 
 ---
 
@@ -97,9 +97,10 @@ MR merge -> master push
 | `infra/compose.deploy.yml` | EC2에서 실제로 사용하는 compose 파일 |
 | `infra/.env.example` | compose 렌더용 기본값 파일 (ADR-009) |
 | `infra/scripts/remote-deploy.sh` | 서버에서 api/web 컨테이너를 멱등 배포하는 스크립트 (OPS-016) |
+| `infra/nginx/sites-available/axwms.conf` | EC2 systemd nginx 의 단일 진입점 conf SSOT (ADR-015 / OPS-017) |
+| `infra/nginx/snippets/proxy-headers.conf` | 모든 location 의 공통 proxy header 묶음 |
 | `docs/infra/adr.yaml` | 인프라 의사결정 기록 |
 | `docs/infra/code-convention.yaml` | 인프라 문서/설정 변경 시 지켜야 할 규칙 |
-| `docs/infra/web-deploy-rationale.md` | ADR-014 결정의 대안 비교·기각 근거 + 코드 리딩 가이드 |
 
 ---
 
@@ -471,9 +472,11 @@ Nginx 를 EC2 systemd 로 운영해 **모든 외부 요청의 단일 진입점**
 └──────────────────────────────────────────────┘
 ```
 
-### 13-2. Nginx 예시 설정
+### 13-2. Nginx 설정의 SSOT
 
-실제 conf 저장소 편입은 후속 MR 예정이며(아래 섹션 17 참고), 현재는 EC2 의 `/etc/nginx/sites-available/axwms.conf` 에 아래 골격을 유지한다.
+저장소의 `infra/nginx/sites-available/axwms.conf` 와 `infra/nginx/snippets/proxy-headers.conf` 가 SSOT 다(OPS-017). EC2 의 `/etc/nginx/sites-available/axwms.conf` 는 deploy job 이 매 배포마다 저장소 conf 로 덮어쓴다 — SSH 로 EC2 에 접속해서 직접 수정하지 말 것. 변경은 PR 리뷰 후 dev/master push pipeline 의 `deploy_dev` / `deploy_prod` 가 자동 동기화한다.
+
+본문 골격은 아래와 같다(저장소 conf 와 1:1 일치).
 
 ```nginx
 upstream axwms_web_prod      { server 127.0.0.1:8000; }
@@ -538,7 +541,66 @@ proxy_set_header X-Forwarded-For   $proxy_add_x_forwarded_for;
 proxy_set_header X-Forwarded-Proto $scheme;
 ```
 
-### 13-3. TLS 인증서 (Let's Encrypt + certbot)
+### 13-3. deploy user 의 sudoers 등록 (1회)
+
+deploy job 이 EC2 의 nginx conf 를 덮어쓰고 reload 하려면 deploy user(보통 `ubuntu`)가 비밀번호 없이 sudo 로 5개 명령을 실행할 수 있어야 한다(OPS-018). EC2 에서 1회 등록한다.
+
+```bash
+sudo tee /etc/sudoers.d/axwms-deploy <<'EOF'
+ubuntu ALL=(root) NOPASSWD: /usr/bin/install -o root -g root -m 0644 /tmp/axwms.conf /etc/nginx/sites-available/axwms.conf
+ubuntu ALL=(root) NOPASSWD: /usr/bin/install -o root -g root -m 0644 /tmp/proxy-headers.conf /etc/nginx/snippets/proxy-headers.conf
+ubuntu ALL=(root) NOPASSWD: /usr/bin/mkdir -p /etc/nginx/snippets
+ubuntu ALL=(root) NOPASSWD: /usr/sbin/nginx -t
+ubuntu ALL=(root) NOPASSWD: /usr/bin/systemctl reload nginx
+EOF
+sudo chmod 440 /etc/sudoers.d/axwms-deploy
+sudo visudo -c
+```
+
+`visudo -c` 가 `/etc/sudoers: parsed OK` 와 `/etc/sudoers.d/axwms-deploy: parsed OK` 를 모두 표시해야 한다. 한 줄이라도 문법 오류면 sudo 자체가 잠겨 EC2 작업이 막힐 위험 — 등록 직후 새 SSH 세션에서 `sudo -n nginx -t` 가 비밀번호 없이 통과하는지 한 번 확인한다.
+
+`ubuntu` 외 다른 deploy 계정이라면 모든 줄의 첫 단어를 그 계정으로 바꾼다. 권한 최소화 원칙(OPS-018)에 따라 `ALL=(ALL) NOPASSWD: ALL` 같은 광역 부여는 사용하지 않는다.
+
+### 13-3a. sites-enabled symlink (1회)
+
+Debian/Ubuntu 의 nginx 는 `/etc/nginx/nginx.conf` 가 `/etc/nginx/sites-enabled/*` 를 include 한다. 저장소 conf 는 deploy job 이 `/etc/nginx/sites-available/axwms.conf` 로 install 하므로, **nginx 가 그 파일을 실제로 로드하려면 `sites-enabled` 에서 그 파일을 가리키는 symlink 가 한 번 만들어져 있어야 한다**.
+
+```bash
+sudo ln -sf /etc/nginx/sites-available/axwms.conf /etc/nginx/sites-enabled/axwms.conf
+sudo rm -f /etc/nginx/sites-enabled/default        # 기본 server 블록(80 포트) 충돌 방지
+sudo nginx -t
+sudo systemctl reload nginx
+```
+
+- `-sf` 의 `-f` 는 이미 symlink 가 있어도 덮어쓴다(idempotent).
+- `default` site 를 제거하지 않으면 우리 production 의 80 server 와 listen 포트가 겹쳐 어느 한쪽이 무시되거나 `nginx -t` 가 충돌 경고를 띄운다.
+- 본 절차는 **새 EC2 1회**만 필요. 그 이후 conf 변경은 deploy job 이 install 단계에서 원본을 갱신하고 reload 해주므로 추가 symlink 작업은 없다.
+
+> **주의 — silent failure**: symlink 누락 시 deploy job 의 `nginx -t` 는 (sites-enabled 의 다른 파일만 검증하기 때문에) 그대로 통과하고 reload 도 성공한다. job 로그는 녹색인데 외부 동작은 변함 없는 가장 헷갈리는 사고 패턴이다. 새 EC2 작업 시 본 절차를 빼먹지 말 것.
+
+### 13-4. nginx conf 자동 동기화 흐름
+
+`deploy_dev` / `deploy_prod` 가 다음 한 묶음을 SSH 한 번으로 실행한다(`.gitlab-ci.yml` 의 deploy job script 끝).
+
+```bash
+scp infra/nginx/sites-available/axwms.conf  $DEPLOY_USER@$TARGET_HOST:/tmp/axwms.conf
+scp infra/nginx/snippets/proxy-headers.conf $DEPLOY_USER@$TARGET_HOST:/tmp/proxy-headers.conf
+ssh $DEPLOY_USER@$TARGET_HOST '
+  sudo install -o root -g root -m 0644 /tmp/axwms.conf /etc/nginx/sites-available/axwms.conf &&
+  sudo mkdir -p /etc/nginx/snippets &&
+  sudo install -o root -g root -m 0644 /tmp/proxy-headers.conf /etc/nginx/snippets/proxy-headers.conf &&
+  sudo nginx -t &&
+  sudo systemctl reload nginx &&
+  rm -f /tmp/axwms.conf /tmp/proxy-headers.conf
+'
+```
+
+핵심 포인트:
+- `&&` 로 묶여 있어 `nginx -t` 가 실패하면 `systemctl reload nginx` 는 실행되지 않는다 — 깨진 conf 가 운영에 반영될 가능성을 차단한다.
+- staging 과 production 은 **같은 EC2 의 같은 nginx** 를 공유하므로 두 deploy 가 모두 reload 해도 결과는 동일(멱등). 인프라 변경 시 한 push 에서 reload 가 두 번 일어날 수 있지만 기능에는 문제 없음.
+- conf 가 PR 단계에서 검증되지 않은 채 deploy 까지 흘러가면 nginx-t 실패로 운영이 잠시 멈출 수 있다. PR 리뷰에서 `nginx -t` 사고 패턴(중괄호 짝, listen 포트 충돌, certificate 경로 오타) 을 확인한다.
+
+### 13-5. TLS 인증서 (Let's Encrypt + certbot)
 
 ADR-012 에 따라 certbot 으로 발급·갱신한다.
 
@@ -561,7 +623,7 @@ sudo chmod +x /etc/letsencrypt/renewal-hooks/deploy/reload-nginx.sh
 
 주의: 80 포트는 ACME HTTP-01 challenge 를 위해 Nginx 가 항상 listen 해야 한다. production 이 443 만 쓰더라도 80 은 redirect + challenge 용도로 남긴다.
 
-### 13-4. 꼭 같이 확인할 것
+### 13-6. 꼭 같이 확인할 것
 
 1. SSAFY 보안그룹에 `80`, `443`, `8080`, `8443`, `8300/8301`(postgres), `8400/8401`(redis) 인바운드가 열려 있는지
 2. 서버 내부 방화벽(`ufw`) 사용 시 같은 포트 허용 여부
@@ -579,8 +641,8 @@ sudo chmod +x /etc/letsencrypt/renewal-hooks/deploy/reload-nginx.sh
 4. 각 환경 `.env` 작성 (600, 배포 계정 소유) — `WEB_HOST_PORT` / `API_HOST_PORT` / `POSTGRES_HOST_PORT` / `REDIS_HOST_PORT` 모두 OPS-009 의 +1 오프셋 규칙대로, `DB_PASSWORD` 는 staging/production 각각 강한 무작위 값 (OPS-011)
 5. CI 전용 SSH 키페어 생성 및 EC2 `authorized_keys` 등록
 6. GitLab Variables 등록 + `master` / `dev` Protected Branch 설정
-7. Nginx 설치 + `/etc/nginx/sites-available/axwms.conf` 적용 + `sudo nginx -t` + reload (섹션 13-2)
-8. `sudo certbot --nginx -d k14s209.p.ssafy.io` 로 인증서 초기 발급 + renewal hook 등록 (섹션 13-3)
+7. Nginx 설치 + sites-enabled symlink 생성(섹션 13-3a) + deploy user sudoers 등록(섹션 13-3) — 이후 conf 본체는 `deploy_dev` / `deploy_prod` 가 자동 동기화하므로 EC2 에서 직접 작성하지 않는다
+8. `sudo certbot --nginx -d k14s209.p.ssafy.io` 로 인증서 초기 발급 + renewal hook 등록 (섹션 13-5)
 9. 작업 브랜치 -> `dev` MR 생성
 10. merge 후 staging 배포 로그 확인
 11. staging 확인 후 `master` 반영
@@ -630,9 +692,8 @@ sudo chmod +x /etc/letsencrypt/renewal-hooks/deploy/reload-nginx.sh
 
 - 과거 임시 검증 절차 재사용
 - EC2에서 소스 직접 빌드
-- ai 운영 자동배포 (web 은 ADR-014 로 처리됨)
+- ai 운영 자동배포 (web 은 ADR-014, nginx conf 동기화는 ADR-015 로 처리됨)
 - 전체 스택 단일 compose 통합
-- Nginx conf 저장소 편입 (서버 작업 1회 발급과 동기화가 필요, `docs/infra/pending-decisions.md` #3 참고)
 
 이유는 지금은 **배포 경로를 단순하게 만들고, api 자동배포를 먼저 안정화하는 것**이 우선이기 때문이다.
 TLS 자동 갱신은 ADR-012 로 범위에 포함되었다.
@@ -641,11 +702,11 @@ TLS 자동 갱신은 ADR-012 로 범위에 포함되었다.
 
 ## 17. 다음 단계 후보
 
-api/web 자동배포가 안정화되면 다음 순서로 확장하면 된다.
+api/web 자동배포 + nginx conf 동기화가 안정화되면 다음 순서로 확장하면 된다.
 
 1. `deploy_prod`를 manual 승인형으로 변경할지 결정
 2. ai Dockerfile 추가 + 자동배포 편입 (pending-decisions #5 의 ai 잔여 항목)
-3. Nginx 설정 파일을 저장소 기준으로 통합 관리 + reload 자동화 (pending-decisions #3)
+3. nginx keep-alive 풀 도입 — `upstream { keepalive N; }` + `proxy_set_header Connection ""` 짝꿍 한 번에 추가 (ADR-015 의 6번 "본 ADR 범위 밖" 항목)
 4. 파이프라인 `changes` 세분화 (pending-decisions #2) — 문서-only MR 이 배포까지 도는 비용을 줄이는 후행 정리
 
 ---

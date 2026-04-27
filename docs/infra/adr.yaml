@@ -476,3 +476,91 @@
       - web 이 server actions / RSC 외부 의존성, 사이드카(예: Redis-backed cache, BFF) 등을 추가해 단일 컨테이너 모델이 깨지는 경우.
       - ADR-007 의 ghcr.io organization 이 바뀌는 경우(`WEB_IMAGE_BASE` 동반 갱신 필요).
       - SSafy GitLab 이 Container Registry 를 다시 열어 ADR-007 의 기반 전제가 흔들리는 경우.
+
+- id: ADR-015
+  title: "Nginx conf 저장소 편입 + path-based 라우팅 + deploy 동기화"
+  status: adopted
+  date: 2026-04-27
+  stacks: [infra, nginx, ec2, gitlab, security]
+  context: |
+    ADR-010 으로 EC2 systemd nginx 가 단일 진입점으로 결정됐고, ADR-012 로 Let's Encrypt 인증서가 발급됐으며,
+    ADR-014 로 web 컨테이너가 자동배포 흐름에 편입됐다.
+    그러나 nginx conf 자체는 EC2 의 `/etc/nginx/sites-available/axwms.conf` 에만 존재하고 저장소 SSOT 가 없었다.
+    그 결과:
+      - ADR-014 로 web 컨테이너가 떠 있어도 nginx 가 web upstream 으로 라우팅하지 않아 외부에서 web 접근이 막혀 있었다.
+      - conf 변경이 PR 리뷰 / CI 검증 경로 밖에서 일어나 drift 가 즉시 발생할 수 있었다.
+      - pending-decisions #3 의 다음 트리거(인증서 발급 완료 + conf 안정화) 가 ADR-014 시점에 충족됐다.
+
+    추가로 점검한 제약:
+      - 한 EC2 에 staging/production 이 공존하고 nginx conf 한 파일이 양쪽 server 블록을 모두 가진다.
+      - 도메인은 `k14s209.p.ssafy.io` 하나뿐. 와일드카드 인증서나 별 도메인 발급은 SSAFY DNS 의존이라 외부 차단.
+      - deploy user 는 ubuntu 계정이며 nginx reload 에 sudo 가 필요하다.
+  decision: |
+    ADR-014 의 "Nginx conf 의 path-based 라우팅 실 반영은 pending-decisions #3 과 동시 진행" 결정 중
+    Nginx 측 부분을 본 ADR 이 회수한다. pending-decisions #3 은 본 ADR 로 종결.
+
+    1. 저장소 위치 — `infra/nginx/sites-available/axwms.conf` + `infra/nginx/snippets/proxy-headers.conf`
+       대안과 기각 사유:
+         - 루트 `nginx/` 디렉터리: 인프라 자산은 `infra/` 하위가 SSOT (CMP-001 정합) 라서 분리할 이유 없음.
+
+    2. 환경 분리 — 1:1 커밋 (production server 블록 + staging server 블록 둘 다 글자 그대로)
+       대안과 기각 사유:
+         - 템플릿화(`axwms.conf.tpl` + `envsubst` 류): 도메인 단일이라 치환할 변수가 사실상 listen 포트뿐.
+           도구 의존 + 변수 누락 위험 + EC2 안에서만 `nginx -t` 검증 가능 — 이득 대비 부담 큼.
+         - Ansible / 별 배포 도구: 운영 표면 확장 부담, 본 ADR 범위 초과.
+
+    3. 라우팅 모델 — path-based (`/api/` → api, `/ai/` → ai, `/` → web). 더 구체적인 prefix 가 location 블록에서 위로.
+       대안과 기각 사유:
+         - subdomain (api.k14s209.p.ssafy.io 등): 와일드카드 인증서 또는 도메인 추가 발급 필요.
+           SSAFY 가 `k14s209.p.ssafy.io` 한 줄만 매핑해줘서 외부 의존 추가. ADR-012 의 단일 인증서 모델과도 충돌.
+
+    4. 배포 경로 — `deploy_dev`/`deploy_prod` 의 script 끝에 nginx 단계 추가.
+       흐름: `scp` 로 `/tmp` 에 두 파일 → `ssh` 한 번에 `sudo install + mkdir + install + nginx -t + systemctl reload + rm` 묶어 처리.
+       대안과 기각 사유:
+         - 별 `deploy_nginx` job: 같은 SSH key 설정 중복 + 두 deploy 사이 race 가능성.
+         - 별 인벤토리 도구(Ansible 등): 운영 표면 확장.
+       staging/production 이 같은 EC2 에서 같은 conf 를 공유하므로 두 deploy 가 모두 reload 해도 결과 동일(멱등).
+       어느 환경 배포 시점에도 conf 가 최신으로 동기화 보장.
+
+    5. 새 EC2 1회 사전 절차 — sites-enabled symlink 와 sudoers
+       (1) `sudo ln -sf /etc/nginx/sites-available/axwms.conf /etc/nginx/sites-enabled/axwms.conf` + `sudo rm -f /etc/nginx/sites-enabled/default`.
+           Debian/Ubuntu nginx 는 `/etc/nginx/sites-enabled/*` 만 include 하므로 symlink 가 없으면 deploy 가 install 한 파일을 nginx 가 로드하지 않는다.
+           이 누락은 silent failure 다 — deploy 의 `nginx -t` 는 sites-enabled 의 다른 파일만 검증하므로 그대로 통과하고 reload 도 성공한다.
+           job 로그가 녹색인데 외부 동작이 변하지 않는 가장 헷갈리는 사고 패턴이라, 본 ADR 의 운영자 사전 절차에 명시 박아둔다.
+       (2) deploy user 의 sudoers 에 다음 명령만 NOPASSWD 로 등록한다.
+         /usr/bin/install -o root -g root -m 0644 /tmp/axwms.conf /etc/nginx/sites-available/axwms.conf
+         /usr/bin/install -o root -g root -m 0644 /tmp/proxy-headers.conf /etc/nginx/snippets/proxy-headers.conf
+         /usr/bin/mkdir -p /etc/nginx/snippets
+         /usr/sbin/nginx -t
+         /usr/bin/systemctl reload nginx
+       대안과 기각 사유:
+         - deploy user 에게 `/etc/nginx/sites-available/` 직접 쓰기 권한 부여: nginx 의 보안 표준(시스템 conf 는 root) 깨짐.
+         - sudoers 에 `ALL=(ALL) NOPASSWD: ALL`: 권한 최소화 원칙 위배. 감사 시 즉시 지적 대상.
+
+    6. 본 ADR 범위 밖 (별 MR 로 분리)
+       - keep-alive 풀(`upstream { keepalive N; }` + `proxy_set_header Connection ""` 짝꿍): 두 짝이 같이 들어가야 동작하므로 본 conf 에선 `keepalive` 자체를 두지 않는다. 단일 진입점 안정화 후 한 MR 로 두 짝 동시 추가.
+       - 보안 헤더 확장(CSP, Permissions-Policy 등): 현재는 HSTS + X-Content-Type-Options 만.
+       - gzip / brotli, rate limit, fail2ban, WAF: 운영 부하 관측 후 결정.
+  consequence: |
+    긍정적 영향:
+      - web 외부 접근이 처음으로 활성화된다(`https://k14s209.p.ssafy.io/` → web 컨테이너).
+      - nginx conf 변경 이력이 git log 에 남고 PR 리뷰가 강제된다. drift 0 보장.
+      - api/ai 도 같은 단일 진입점에서 라우팅되어 사용자 입장의 URL 일관성 확보(`/api/`, `/ai/`).
+
+    부정적 영향과 완화:
+      - nginx conf 변경이 `.deploy_changes` 의 `infra/**` 안에 들어가 인프라-only 변경 시에도 deploy 가 돈다.
+        한 push 가 deploy_dev + deploy_prod 양쪽에서 reload 를 일으킴. 멱등이라 결과는 동일하지만 reload 횟수가 두 배.
+        완화: pending-decisions #2 의 changes 세분화에서 `infra_runtime` 으로 좁힐 때 함께 정리.
+      - sudoers 등록과 sites-enabled symlink 생성이 운영자 1회 수동 작업. 둘 다 누락 시 운영 영향 다름:
+        sudoers 미등록 → deploy job 이 비밀번호 요청 후 timeout 으로 즉시 실패(눈에 띄는 빨간 신호).
+        symlink 미생성 → deploy job 은 녹색이지만 nginx 가 conf 를 로드하지 않음(silent failure).
+        완화: 가이드 섹션 13-3 / 13-3a 가 두 절차 모두 SSOT 다. 본 ADR 의 5번 결정과 동일.
+      - `nginx -t` 가 실패하면 reload 가 일어나지 않아 batch 가 중단되지만, 그 시점까지 scp 한 `/tmp/*.conf` 가 남는다.
+        완화: ssh 한 줄에 `&&` 로 묶여 있어 install + mkdir + install 까지는 적용되어 있을 수 있다.
+        실패 분석은 deploy job 의 ssh 출력 + EC2 의 `journalctl -u nginx` 로 충분.
+
+    재검토 트리거:
+      - ADR-012 의 인증서 출처 변경 시 conf 의 `ssl_certificate*` 경로 동반 갱신.
+      - 도메인 추가(예: `api.axwms.example.com` 도입) 시 본 ADR 의 path-based 결정 재검토 → subdomain 모델 재고려.
+      - rate limit / WAF / CDN 도입 시 단일 진입점 모델 재검토.
+      - SSAFY 보안그룹이 80/443/8080/8443 외 추가 포트를 차단/제한하는 경우.

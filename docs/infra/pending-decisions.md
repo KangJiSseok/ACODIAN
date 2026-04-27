@@ -59,25 +59,18 @@
 
 ---
 
-## 3. Nginx conf 저장소 편입
+## 3. Nginx conf 저장소 편입 — **처리됨 (2026-04-27, ADR-015)**
 
-### 맥락
-- ADR-010 으로 Nginx 를 EC2 systemd 로 전면에 두는 구조가 확정됐으나, 현재 저장소에는 `nginx/` 디렉터리도 `*.conf` 파일도 없다.
-- `docs/infra/ec2-gitlab-cicd-guide.md` 섹션 13 에 conf 골격만 기록되어 있다.
-- 가이드 섹션 17 의 후속 과제 5번 "Nginx 설정 파일도 저장소 기준으로 통합 관리" 가 이 항목이다.
+### 맥락 (참고용)
+- ADR-010 으로 Nginx 를 EC2 systemd 로 전면에 두는 구조가 확정됐으나 본 항목 시점까지 저장소에 `nginx/` 디렉터리가 없었다.
+- 가이드 섹션 13 에 conf 골격만 기록되어 있었고 EC2 의 `/etc/nginx/sites-available/axwms.conf` 가 SSOT 였다.
 
-### 대안
-1. **EC2 의 `/etc/nginx/sites-available/axwms.conf` 를 1:1 로 커밋** — 변경이 있을 때 git 기준으로 검토, scp 또는 deploy job 으로 배포.
-2. 템플릿화 — `axwms.conf.tpl` 에 환경 변수 자리만 두고 배포 스크립트에서 렌더.
-3. Ansible / 간단한 rsync 배포 스크립트 추가.
-
-### 유예 이유
-- Nginx conf 초기 세팅은 **EC2 서버 작업과 반드시 동기화** 되어야 한다. 저장소에 커밋된 conf 가 서버에 반영되지 않으면 drift 가 즉시 발생한다.
-- 서버 측 작업 절차와 자동 배포 경로를 먼저 설계하고 나서 편입하는 편이 안전.
-
-### 다음 트리거
-- Let's Encrypt 초기 발급(항목 4) 완료 후, `/etc/nginx/sites-available/axwms.conf` 가 실제로 안정적인 상태가 된 시점.
-- 이후 `nginx/` 디렉터리를 신규 브랜치에서 만들고, 배포 경로(예: `deploy_dev` / `deploy_prod` job 에 nginx conf scp + `sudo nginx -t && systemctl reload nginx`) 를 추가한다.
+### 처리 결과
+- 저장소 SSOT 확립 — `infra/nginx/sites-available/axwms.conf` + `infra/nginx/snippets/proxy-headers.conf` (대안 1:1 커밋 채택. 템플릿화 / Ansible 은 ADR-015 본문에서 기각 사유 명시).
+- 자동 동기화 — `deploy_dev` / `deploy_prod` 의 script 끝에 `scp + sudo install + nginx -t + systemctl reload` 단계 추가. 멱등.
+- 권한 모델 — deploy user sudoers 에 5개 명령 NOPASSWD 등록(OPS-018). 가이드 섹션 13-3 에 등록 명령 명시.
+- 라우팅 — path-based(`/api/`/`/ai/`/`/`). subdomain 대안은 SSAFY DNS 의존 + 인증서 추가 발급 부담으로 기각.
+- 가이드 동반 갱신 — 섹션 13-2 "Nginx 설정의 SSOT", 13-3 sudoers, 13-4 자동 동기화 흐름, 13-5 TLS, 13-6 꼭 같이 확인. 섹션 16/17 의 "Nginx conf 저장소 편입" 항목 제거.
 
 ---
 

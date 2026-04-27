@@ -90,3 +90,9 @@ ops:
   - id: OPS-016
     rule: '배포 스크립트 `infra/scripts/remote-deploy.sh` 는 멱등성을 보장한다. `up -d` 전에 `compose rm -sf api web` 를 실행해 기존 애플리케이션 컨테이너(api/web)의 포트 점유를 선해제하고, `up -d --remove-orphans` 로 프로젝트에 속하지 않은 잔존 컨테이너를 정리한다. 배포 전·후 `compose ps` 스냅샷을 job log 에 남겨 실패 시 추적성을 확보한다. 2차 이후 배포에서 구 컨테이너가 `restart: unless-stopped` 로 포트를 쥔 채 새 컨테이너 bind 실패 → 컨테이너 네트워크 고립 → 무한 재시작 루프에 빠지는 사고를 방지하기 위함이다. 향후 ai 편입 시 동일 패턴으로 `pull` / `rm -sf` / `up -d` 인자 목록을 일괄 확장한다(ADR-014 에서 web 편입 시 적용된 일반화 규약).'
     stacks: [compose, gitlab, ec2]
+  - id: OPS-017
+    rule: 'Nginx conf 의 SSOT 는 저장소의 `infra/nginx/sites-available/axwms.conf` 와 `infra/nginx/snippets/proxy-headers.conf` 다. EC2 의 `/etc/nginx/sites-available/axwms.conf` 또는 `/etc/nginx/snippets/proxy-headers.conf` 를 SSH 로 직접 수정하지 않는다. 변경은 PR 리뷰 후 `deploy_dev` / `deploy_prod` job 이 `scp + sudo install + nginx -t + systemctl reload` 한 줄로 자동 동기화한다. drift 가 발견되면 저장소 conf 가 우선이며 EC2 측을 덮어쓴다. 근거는 ADR-015.'
+    stacks: [nginx, ec2, gitlab]
+  - id: OPS-018
+    rule: 'Nginx 배포의 sudoers 권한은 deploy user 의 `/etc/sudoers.d/axwms-deploy` 에 NOPASSWD 로 다음 5개 명령만 등록한다 — `/usr/bin/install -o root -g root -m 0644 /tmp/axwms.conf /etc/nginx/sites-available/axwms.conf`, `/usr/bin/install -o root -g root -m 0644 /tmp/proxy-headers.conf /etc/nginx/snippets/proxy-headers.conf`, `/usr/bin/mkdir -p /etc/nginx/snippets`, `/usr/sbin/nginx -t`, `/usr/bin/systemctl reload nginx`. `ALL=(ALL) NOPASSWD: ALL` 같은 광역 부여를 사용하지 않는다(권한 최소화). 등록 후 `sudo visudo -c` 로 문법 검증을 수행한 증거를 운영 기록에 남긴다. 근거는 ADR-015.'
+    stacks: [nginx, ec2, security]
