@@ -404,6 +404,16 @@ export function WorklogForm({
                 onRemoveAttachmentName={removeAttachmentName}
               />
             </div>
+
+            <div className="flex justify-end border-t border-border/70 pt-6">
+              <Button
+                type="submit"
+                size="lg"
+                className="h-12 min-w-[180px] rounded-2xl px-7 font-semibold shadow-[0_14px_40px_-20px_rgba(59,130,246,0.8)]"
+              >
+                {submitLabel}
+              </Button>
+            </div>
           </div>
         </FormPanel>
 
@@ -715,16 +725,6 @@ export function WorklogForm({
 
           </FormPanel>
         </div>
-      </div>
-
-      <div className="flex justify-end border-t border-border/70 pt-6">
-        <Button
-          type="submit"
-          size="lg"
-          className="h-12 min-w-[180px] rounded-2xl px-7 font-semibold shadow-[0_14px_40px_-20px_rgba(59,130,246,0.8)]"
-        >
-          {submitLabel}
-        </Button>
       </div>
 
       {submitError ? (
