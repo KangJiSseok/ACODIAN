@@ -410,3 +410,69 @@
     간접 probe 패턴이 표준화되어 장애 진단 시간이 예측 가능해지고, OPS-006 의 "Protected 등록" 원칙이 실제 검증 가능한 절차로 보강된다.
     변수 추가마다 probe 커밋/제거 쌍이 발생할 수 있으나 동일 MR 안에서 정리하거나 후속 cleanup MR 로 분리한다.
     MR 리뷰에서 probe 로그 발췌(예: `GHCR_USER set?=yes len=8`) 를 검증 증거로 요구한다.
+
+- id: ADR-014
+  title: "EC2 자동배포 범위 확장 — web 편입(1차 추가)"
+  status: adopted
+  date: 2026-04-27
+  stacks: [docker, compose, ec2, gitlab, nextjs]
+  context: |
+    ADR-001 은 EC2 1차 자동배포 범위를 api/postgres/redis 로 좁히고 web/ai 의 운영 자동배포는 후속 단계로 분리해 두었다.
+    이후 ADR-010 이 web 내부 listen 8000, OPS-009 의 staging +1 오프셋, OPS-010 의 127.0.0.1 바인딩까지 합의했지만,
+    실제 web 컨테이너 이미지·compose 편성·CI 파이프라인 자산은 본 ADR 시점까지 0 이었다.
+    pending-decisions #5 의 트리거("자동배포 범위가 web/ai 로 확장되는 시점") 가 이번 단계에서 web 부분에 한해 도래했다.
+
+    추가로 점검한 제약:
+      - 모노레포 구조: pnpm-workspace.yaml 의 packages 가 `web` 단일이지만 lockfile 은 루트에 있어 web Dockerfile 의 빌드 컨텍스트는 모노레포 루트가 자연스럽다.
+      - api/Dockerfile 은 외부 빌드 산출물(JAR) 만 복사하는 단순 구조(DO-001) 이지만 web 은 Node 빌드 자체를 컨테이너 안에서 수행해야 하므로 multi-stage 가 필요하다.
+      - Next.js 16 의 standalone output 은 `outputFileTracingRoot` 가 모노레포 루트로 잡혔을 때 `<root>/web/.next/standalone/{web,node_modules}` 형태로 hoisted 의존성을 함께 트레이스해 runner 이미지에 그대로 옮길 수 있다.
+  decision: |
+    ADR-001 의 "web 의 운영 자동배포는 후속 단계로 분리" 결정 중 web 부분을 본 ADR 이 회수한다(ai 는 별개 ADR 로 후속 분리 유지).
+    각 결정의 대안 비교·기각 근거는 `docs/infra/web-deploy-rationale.md` 가 SSOT 다.
+
+    1. 컨테이너 패키징 — `web/Dockerfile` 신규
+       - 빌드 컨텍스트: 모노레포 루트(`.`). 사유: pnpm workspace lockfile 무결성과 hoisted 의존성 추적.
+       - multi-stage 분리: `deps`(pnpm install --frozen-lockfile) → `builder`(`pnpm --filter ./web build`) → `runner`(standalone 산출물 + `.next/static` 만 복사).
+       - 런타임 이미지: `node:22-alpine`, non-root user, `WORKDIR /app/web`, `CMD ["node","server.js"]`.
+       - `web/next.config.ts` 에 `output: "standalone"`, `outputFileTracingRoot: path.join(__dirname, "..")` 명시.
+
+    2. 컨테이너 내부 listen 포트 — 8000 (ADR-010 합의 그대로)
+       - production 호스트: `127.0.0.1:8000:8000`
+       - staging 호스트:    `127.0.0.1:8001:8000` (OPS-009 +1 오프셋)
+       - `package.json` 의 `start` 도 `next start -p 8000` 으로 맞춰 로컬·컨테이너 동작 일치.
+
+    3. 이미지 레지스트리 네임스페이스 — `ghcr.io/axwms-s209/axwms-web`
+       - ADR-007 의 organization(`axwms-s209`) 그대로 사용. 자격증명도 동일(`GHCR_USER`/`GHCR_TOKEN`).
+       - 태그 정책은 api 와 동일: `:<CI_COMMIT_SHA>` + `:<CI_COMMIT_REF_SLUG>` 두 개 push.
+
+    4. 배포 스크립트 일반화 — `infra/scripts/remote-deploy-api.sh` → `infra/scripts/remote-deploy.sh`
+       - `API_IMAGE` 와 `WEB_IMAGE` 모두 `require_var`.
+       - `compose pull api web` / `compose rm -sf api web` / `compose up -d --remove-orphans postgres redis api web` 로 두 컨테이너를 같은 멱등 흐름(OPS-016) 안에서 처리.
+
+    5. `.gitlab-ci.yml` 확장
+       - `WEB_IMAGE_BASE` 변수 추가, `web_image` job 신규(컨텍스트 루트, `-f web/Dockerfile`).
+       - `.web_deploy_changes` anchor 추가(web/** + 모노레포 root manifest + infra/** + docs/infra/** + .gitlab-ci.yml). web_image 트리거.
+       - deploy_dev/deploy_prod 의 changes 트리거를 `.api_deploy_changes` → `.deploy_changes` 합집합으로 일반화. API_IMAGE/WEB_IMAGE 동시 주입.
+       - `infra_validate` 의 ci 더미 변수에 `WEB_IMAGE`/`WEB_HOST_PORT` 추가, 기존 `API_HOST_PORT=8081` 잔재를 ADR-010 스킴(8101) 으로 갱신.
+
+    6. 본 ADR 범위 밖
+       - ai 컨테이너화 / 자동배포 편입.
+       - Nginx conf 의 path-based 라우팅(/, /api, /ai) 실 반영 — pending-decisions #3 의 Nginx conf 저장소 편입과 동시 진행이 자연스럽다.
+       - EC2 `/opt/axwms/{staging,production}/.env` 의 `WEB_HOST_PORT` 추가는 코드 변경이 아니라 서버 sudo 작업이므로 본 MR 외 운영 절차로 분리. 가이드 섹션 8/14 갱신만으로 안내한다.
+  consequence: |
+    긍정적 영향:
+      - web 도 동일 파이프라인 모델(CI 선빌드 + ghcr push + EC2 SSH compose 실행) 에 편입되어 ADR-002/005/007 의 패턴이 영역 무관하게 일관된다.
+      - api 의 DinD/jOOQ 의존(ADR-008) 이 web 빌드에는 없으므로 web_image job 은 단순 docker build/push 로 끝나 Runner 부하 증가가 미미하다.
+      - OPS-004/009/010 의 web 관련 조항이 "예정값" 이 아니라 실제 적용된 구성이 된다. pending-decisions #5 의 web 부분이 종결.
+
+    부정적 영향과 완화:
+      - deploy 시 ghcr 에 web 이미지가 없으면 실패한다. `.web_deploy_changes` 가 인프라 변경도 포함하므로 본 MR 의 인프라 변경이 web_image 첫 빌드를 보장한다. 이후 인프라-only 변경에서도 동일 보장.
+      - pending-decisions #3 가 후행이라 nginx 가 web upstream 으로 라우팅하기 전까지 컨테이너는 떠 있고 외부 접근만 막힌다 — 의도된 단계 분리. 후속 MR 에서 nginx conf 저장소 편입 + reload 자동화.
+      - 모노레포 루트 컨텍스트 빌드를 위해 `.dockerignore` 가 루트에 신설된다. api 빌드는 컨텍스트가 `api/` 이므로 api/.dockerignore 가 우선이고 본 파일의 영향은 없다.
+      - web/Dockerfile 의 builder stage 가 `pnpm install --frozen-lockfile` 을 매번 수행한다. CI 캐시는 `.web_changes` 의 lockfile 키 기반 cache 가 web_ci 에서 따로 동작하지만 web_image 자체에는 캐시가 없어 첫 빌드 시간이 더 길다(허용 범위로 판단, 추후 BuildKit `--cache-from` 도입은 별 MR).
+
+    재검토 트리거:
+      - 패키지 매니저가 pnpm 외 다른 워크스페이스 모델로 바뀌는 경우(빌드 컨텍스트 전제 변동).
+      - web 이 server actions / RSC 외부 의존성, 사이드카(예: Redis-backed cache, BFF) 등을 추가해 단일 컨테이너 모델이 깨지는 경우.
+      - ADR-007 의 ghcr.io organization 이 바뀌는 경우(`WEB_IMAGE_BASE` 동반 갱신 필요).
+      - SSafy GitLab 이 Container Registry 를 다시 열어 ADR-007 의 기반 전제가 흔들리는 경우.
