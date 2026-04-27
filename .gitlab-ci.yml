@@ -19,6 +19,7 @@ variables:
   DEPLOY_ROOT: /opt/axwms
   PIP_CACHE_DIR: "$CI_PROJECT_DIR/.cache/pip"
   API_IMAGE_BASE: ghcr.io/axwms-s209/axwms-api
+  WEB_IMAGE_BASE: ghcr.io/axwms-s209/axwms-web
 
 .web_changes: &web_changes
   - web/**/*
@@ -43,12 +44,31 @@ variables:
   - docs/infra/**/*
   - .gitlab-ci.yml
 
+.web_deploy_changes: &web_deploy_changes
+  - web/**/*
+  - package.json
+  - pnpm-lock.yaml
+  - pnpm-workspace.yaml
+  - infra/**/*
+  - docs/infra/**/*
+  - .gitlab-ci.yml
+
+.deploy_changes: &deploy_changes
+  - api/**/*
+  - web/**/*
+  - package.json
+  - pnpm-lock.yaml
+  - pnpm-workspace.yaml
+  - infra/**/*
+  - docs/infra/**/*
+  - .gitlab-ci.yml
+
 infra_validate:
   stage: validate
   image: docker:27.5.1-cli
   before_script:
     - cp infra/.env.example infra/.env.validate
-    - printf '\nAPP_ENV=ci\nAPI_IMAGE=registry.example.com/ax-wms/api:ci\nAPI_HOST_PORT=8081\n' >> infra/.env.validate
+    - printf '\nAPP_ENV=ci\nAPI_IMAGE=registry.example.com/ax-wms/api:ci\nAPI_HOST_PORT=8101\nWEB_IMAGE=registry.example.com/ax-wms/web:ci\nWEB_HOST_PORT=8001\n' >> infra/.env.validate
   script:
     - docker compose --env-file infra/.env.validate -f infra/compose.deploy.yml config > /tmp/compose.deploy.rendered.yml
   after_script:
@@ -168,6 +188,25 @@ api_image:
     - if: '$CI_PIPELINE_SOURCE == "push" && ($CI_COMMIT_BRANCH == "dev" || $CI_COMMIT_BRANCH == "master")'
       changes: *api_deploy_changes
 
+web_image:
+  stage: image
+  image: docker:27.5.1-cli
+  services:
+    - name: docker:27.5.1-dind
+      command: ["--tls=false"]
+  variables:
+    DOCKER_HOST: tcp://docker:2375
+    DOCKER_TLS_CERTDIR: ""
+  before_script:
+    - echo "$GHCR_TOKEN" | docker login ghcr.io -u "$GHCR_USER" --password-stdin
+  script:
+    - docker build -t "$WEB_IMAGE_BASE:$CI_COMMIT_SHA" -t "$WEB_IMAGE_BASE:$CI_COMMIT_REF_SLUG" -f web/Dockerfile .
+    - docker push "$WEB_IMAGE_BASE:$CI_COMMIT_SHA"
+    - docker push "$WEB_IMAGE_BASE:$CI_COMMIT_REF_SLUG"
+  rules:
+    - if: '$CI_PIPELINE_SOURCE == "push" && ($CI_COMMIT_BRANCH == "dev" || $CI_COMMIT_BRANCH == "master")'
+      changes: *web_deploy_changes
+
 .deploy_base:
   image: alpine:3.20
   before_script:
@@ -191,12 +230,12 @@ deploy_dev:
     - export REMOTE_DIR="${DEPLOY_ROOT%/}/$APP_ENV"
     - ssh "$DEPLOY_USER@$TARGET_HOST" "mkdir -p '$REMOTE_DIR'"
     - scp infra/compose.deploy.yml "$DEPLOY_USER@$TARGET_HOST:$REMOTE_DIR/compose.deploy.yml"
-    - scp infra/scripts/remote-deploy-api.sh "$DEPLOY_USER@$TARGET_HOST:$REMOTE_DIR/remote-deploy-api.sh"
-    - ssh "$DEPLOY_USER@$TARGET_HOST" "chmod +x '$REMOTE_DIR/remote-deploy-api.sh'"
-    - ssh "$DEPLOY_USER@$TARGET_HOST" "APP_ENV='$APP_ENV' DEPLOY_ROOT='$DEPLOY_ROOT' API_IMAGE='$API_IMAGE_BASE:$CI_COMMIT_REF_SLUG' GHCR_USER='$GHCR_USER' GHCR_TOKEN='$GHCR_TOKEN' sh '$REMOTE_DIR/remote-deploy-api.sh'"
+    - scp infra/scripts/remote-deploy.sh "$DEPLOY_USER@$TARGET_HOST:$REMOTE_DIR/remote-deploy.sh"
+    - ssh "$DEPLOY_USER@$TARGET_HOST" "chmod +x '$REMOTE_DIR/remote-deploy.sh'"
+    - ssh "$DEPLOY_USER@$TARGET_HOST" "APP_ENV='$APP_ENV' DEPLOY_ROOT='$DEPLOY_ROOT' API_IMAGE='$API_IMAGE_BASE:$CI_COMMIT_REF_SLUG' WEB_IMAGE='$WEB_IMAGE_BASE:$CI_COMMIT_REF_SLUG' GHCR_USER='$GHCR_USER' GHCR_TOKEN='$GHCR_TOKEN' sh '$REMOTE_DIR/remote-deploy.sh'"
   rules:
     - if: '$CI_PIPELINE_SOURCE == "push" && $CI_COMMIT_BRANCH == "dev"'
-      changes: *api_deploy_changes
+      changes: *deploy_changes
 
 deploy_prod:
   extends: .deploy_base
@@ -210,9 +249,9 @@ deploy_prod:
     - export REMOTE_DIR="${DEPLOY_ROOT%/}/$APP_ENV"
     - ssh "$DEPLOY_USER@$TARGET_HOST" "mkdir -p '$REMOTE_DIR'"
     - scp infra/compose.deploy.yml "$DEPLOY_USER@$TARGET_HOST:$REMOTE_DIR/compose.deploy.yml"
-    - scp infra/scripts/remote-deploy-api.sh "$DEPLOY_USER@$TARGET_HOST:$REMOTE_DIR/remote-deploy-api.sh"
-    - ssh "$DEPLOY_USER@$TARGET_HOST" "chmod +x '$REMOTE_DIR/remote-deploy-api.sh'"
-    - ssh "$DEPLOY_USER@$TARGET_HOST" "APP_ENV='$APP_ENV' DEPLOY_ROOT='$DEPLOY_ROOT' API_IMAGE='$API_IMAGE_BASE:$CI_COMMIT_REF_SLUG' GHCR_USER='$GHCR_USER' GHCR_TOKEN='$GHCR_TOKEN' sh '$REMOTE_DIR/remote-deploy-api.sh'"
+    - scp infra/scripts/remote-deploy.sh "$DEPLOY_USER@$TARGET_HOST:$REMOTE_DIR/remote-deploy.sh"
+    - ssh "$DEPLOY_USER@$TARGET_HOST" "chmod +x '$REMOTE_DIR/remote-deploy.sh'"
+    - ssh "$DEPLOY_USER@$TARGET_HOST" "APP_ENV='$APP_ENV' DEPLOY_ROOT='$DEPLOY_ROOT' API_IMAGE='$API_IMAGE_BASE:$CI_COMMIT_REF_SLUG' WEB_IMAGE='$WEB_IMAGE_BASE:$CI_COMMIT_REF_SLUG' GHCR_USER='$GHCR_USER' GHCR_TOKEN='$GHCR_TOKEN' sh '$REMOTE_DIR/remote-deploy.sh'"
   rules:
     - if: '$CI_PIPELINE_SOURCE == "push" && $CI_COMMIT_BRANCH == "master"'
-      changes: *api_deploy_changes
+      changes: *deploy_changes

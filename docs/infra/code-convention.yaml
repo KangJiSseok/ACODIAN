@@ -20,6 +20,12 @@ docker:
   - id: DO-002
     rule: '`api/.dockerignore`는 실행에 필요한 JAR만 허용하는 화이트리스트 방식으로 유지한다. 소스코드, .git, 로컬 설정 파일을 이미지 빌드 컨텍스트에 포함하지 않는다.'
     stacks: [docker]
+  - id: DO-003
+    rule: '웹(Next.js) 컨테이너 이미지는 `web/Dockerfile` 을 사용하고 빌드 컨텍스트는 모노레포 루트로 둔다. pnpm workspace 의 lockfile 무결성과 hoisted 의존성 추적을 위해 `pnpm-lock.yaml`, `pnpm-workspace.yaml`, 루트 `package.json` 이 컨텍스트에 포함되어야 한다. 빌드는 `deps`(pnpm install --frozen-lockfile) → `builder`(`pnpm --filter ./web build`) → `runner`(Next.js standalone 산출물 + `.next/static` 만 복사) 의 multi-stage 로 분리한다. runner stage 는 non-root user 로 동작한다. 근거는 ADR-014.'
+    stacks: [docker, nextjs, pnpm]
+  - id: DO-004
+    rule: '모노레포 루트 `.dockerignore` 는 web/Dockerfile 빌드 컨텍스트(=모노레포 루트) 에서만 적용된다. api 빌드는 컨텍스트가 `api/` 이므로 `api/.dockerignore` 가 우선이며 본 파일과 분리된 SSOT 다. 두 파일을 동기화하지 말고 영역별로 독립 관리한다. 근거는 ADR-014.'
+    stacks: [docker]
 
 compose:
   - id: CMP-001
@@ -82,5 +88,5 @@ ops:
     rule: 'CI 디버그용 probe 는 값 자체를 어떤 형태(echo · log · 파일) 로도 노출하지 않고 길이(`${#VAR}`) · 정의 여부(`${VAR+yes}`) · 이름 목록(`env | awk /^PREFIX/`) 만 사용한다. 진단이 끝난 probe 라인은 동일 MR 또는 후속 MR 로 반드시 제거하고, MR 설명에 probe 실행 결과 발췌를 남겨 OPS-012 의 검증 증거로 사용한다.'
     stacks: [gitlab, ci, security]
   - id: OPS-016
-    rule: '배포 스크립트 `infra/scripts/remote-deploy-api.sh` 는 멱등성을 보장한다. `up -d` 전에 `compose rm -sf api` 를 실행해 기존 api 컨테이너의 포트 점유를 선해제하고, `up -d --remove-orphans` 로 프로젝트에 속하지 않은 잔존 컨테이너를 정리한다. 배포 전·후 `compose ps` 스냅샷을 job log 에 남겨 실패 시 추적성을 확보한다. 2차 이후 배포에서 구 api 컨테이너가 `restart: unless-stopped` 로 포트를 쥔 채 새 컨테이너 bind 실패 → 컨테이너 네트워크 고립 → 무한 재시작 루프에 빠지는 사고를 방지하기 위함이다.'
+    rule: '배포 스크립트 `infra/scripts/remote-deploy.sh` 는 멱등성을 보장한다. `up -d` 전에 `compose rm -sf api web` 를 실행해 기존 애플리케이션 컨테이너(api/web)의 포트 점유를 선해제하고, `up -d --remove-orphans` 로 프로젝트에 속하지 않은 잔존 컨테이너를 정리한다. 배포 전·후 `compose ps` 스냅샷을 job log 에 남겨 실패 시 추적성을 확보한다. 2차 이후 배포에서 구 컨테이너가 `restart: unless-stopped` 로 포트를 쥔 채 새 컨테이너 bind 실패 → 컨테이너 네트워크 고립 → 무한 재시작 루프에 빠지는 사고를 방지하기 위함이다. 향후 ai 편입 시 동일 패턴으로 `pull` / `rm -sf` / `up -d` 인자 목록을 일괄 확장한다(ADR-014 에서 web 편입 시 적용된 일반화 규약).'
     stacks: [compose, gitlab, ec2]

@@ -2,12 +2,12 @@
 
 - 기준 문서: [`docs/infra/adr.yaml`](adr.yaml), [`docs/infra/code-convention.yaml`](code-convention.yaml)
 - 목적: AX-WMS 인프라를 처음 보는 사람도 EC2 + GitLab CI/CD 자동배포를 그대로 재현할 수 있도록 1차 운영 절차를 제공한다.
-- 범위: api/postgres/redis 자동배포, GitLab Runner 운영, 브랜치별 파이프라인 동작, 서버 `.env` 와 GitLab CI/CD Variables 운영, Nginx 진입 예시.
+- 범위: api/web/postgres/redis 자동배포, GitLab Runner 운영, 브랜치별 파이프라인 동작, 서버 `.env` 와 GitLab CI/CD Variables 운영, Nginx 진입 예시.
 - 전제: EC2 호스트, SSafy GitLab 사용, ghcr.io 이미지 레지스트리(ADR-007), 외부 도메인/HTTPS 사전 준비.
 - 연계 문서: [`runbooks/infra/ci-auth-troubleshoot.md`](../../runbooks/infra/ci-auth-troubleshoot.md) (CI 인증 자격증명 장애 대응), [`docs/api/jooq-codegen-policy.md`](../api/jooq-codegen-policy.md) (`api_ci` 의 DinD 의존 배경).
 
 이 문서는 **AX-WMS 인프라를 처음 보는 사람도 그대로 따라갈 수 있게** 작성한 1차 운영 가이드다.
-현재 범위는 **api / postgres / redis 자동배포**이며, `web`, `ai`, `nginx` 전체 자동화는 후속 작업으로 남겨둔다.
+현재 범위는 **api / web / postgres / redis 자동배포**이며, `ai`, `nginx conf 저장소 편입` 은 후속 작업으로 남겨둔다(ADR-014, pending-decisions #3 / #5 참조).
 
 ---
 
@@ -19,7 +19,7 @@
 - 소스 저장소: **GitLab**
 - 배포 방식: **GitLab CI/CD가 이미지를 빌드해서 Registry에 push → EC2가 pull 받아 compose로 기동**
 - 외부 도메인/HTTPS: **이미 준비됨**
-- 현재 자동배포 대상: **api + postgres + redis**
+- 현재 자동배포 대상: **api + web + postgres + redis** (ai 는 후속, ADR-014 / pending-decisions #5)
 
 즉, 이 문서는 “EC2에 어떻게 올리고, GitLab을 어떻게 연결하고, 브랜치별로 언제 배포되는가”를 설명한다.
 
@@ -71,17 +71,17 @@
 
 MR merge -> dev push
   -> GitLab CI
-  -> api Docker image build
-  -> GitLab Container Registry push
+  -> api / web Docker image build (변경 영역에 해당하는 것만)
+  -> ghcr.io push
   -> SSH로 EC2 staging 접속
-  -> docker compose pull / up -d
+  -> docker compose pull api web / up -d
 
 MR merge -> master push
   -> GitLab CI
-  -> api Docker image build
-  -> GitLab Container Registry push
+  -> api / web Docker image build (변경 영역에 해당하는 것만)
+  -> ghcr.io push
   -> SSH로 EC2 production 접속
-  -> docker compose pull / up -d
+  -> docker compose pull api web / up -d
 ```
 
 ---
@@ -91,12 +91,15 @@ MR merge -> master push
 | 파일 | 역할 |
 |---|---|
 | `.gitlab-ci.yml` | GitLab 파이프라인 규칙과 job 정의 |
-| `api/Dockerfile` | api 이미지를 만드는 Dockerfile |
+| `api/Dockerfile` | api 이미지를 만드는 Dockerfile (api 단일 컨텍스트) |
+| `web/Dockerfile` | web 이미지를 만드는 Dockerfile (모노레포 루트 컨텍스트, multi-stage, ADR-014) |
+| `.dockerignore` (루트) | web 빌드 시 모노레포 루트 컨텍스트에서 제외할 파일 (DO-004) |
 | `infra/compose.deploy.yml` | EC2에서 실제로 사용하는 compose 파일 |
-| `infra/.env.example` | 서버 `.env` 샘플 |
-| `infra/scripts/remote-deploy-api.sh` | 서버에서 실제 배포를 수행하는 스크립트 |
+| `infra/.env.example` | compose 렌더용 기본값 파일 (ADR-009) |
+| `infra/scripts/remote-deploy.sh` | 서버에서 api/web 컨테이너를 멱등 배포하는 스크립트 (OPS-016) |
 | `docs/infra/adr.yaml` | 인프라 의사결정 기록 |
 | `docs/infra/code-convention.yaml` | 인프라 문서/설정 변경 시 지켜야 할 규칙 |
+| `docs/infra/web-deploy-rationale.md` | ADR-014 결정의 대안 비교·기각 근거 + 코드 리딩 가이드 |
 
 ---
 
@@ -141,11 +144,11 @@ EC2에서는:
 ├── staging/
 │   ├── .env
 │   ├── compose.deploy.yml
-│   └── remote-deploy-api.sh
+│   └── remote-deploy.sh
 └── production/
     ├── .env
     ├── compose.deploy.yml
-    └── remote-deploy-api.sh
+    └── remote-deploy.sh
 ```
 
 ### 왜 staging/production을 나누는가?
@@ -259,6 +262,7 @@ sudo systemctl restart gitlab-runner
 ```dotenv
 APP_ENV=staging
 API_HOST_PORT=8101
+WEB_HOST_PORT=8001
 POSTGRES_HOST_PORT=8301
 REDIS_HOST_PORT=8401
 DB_NAME=postgres
@@ -275,6 +279,7 @@ JWT_REFRESH_EXPIRATION=1209600000
 ```dotenv
 APP_ENV=production
 API_HOST_PORT=8100
+WEB_HOST_PORT=8000
 POSTGRES_HOST_PORT=8300
 REDIS_HOST_PORT=8400
 DB_NAME=postgres
@@ -284,6 +289,8 @@ JWT_SECRET=<production 전용 최소 32바이트 무작위 값, staging 과 반�
 JWT_ACCESS_EXPIRATION=3600000
 JWT_REFRESH_EXPIRATION=1209600000
 ```
+
+> `WEB_IMAGE` / `API_IMAGE` 는 `.env` 에 두지 않는다. CI 가 `deploy_dev` / `deploy_prod` 단계에서 `WEB_IMAGE='ghcr.io/...:<ref-slug>'` / `API_IMAGE='...'` 형태로 SSH 호출 환경변수로 직접 주입한다 (ADR-003 의 "환경별 값은 서버 `.env` 또는 GitLab Variables" 원칙 + ADR-007 의 ghcr 네임스페이스).
 
 OPS-011 에 따라 `DB_PASSWORD` 는 staging/production 서로 다른 강한 무작위 값으로 유지한다. DB 가 외부 개방된 구조(ADR-011) 에서 비밀번호가 1차 방어선이 된다.
 
@@ -318,7 +325,7 @@ GitLab 경로:
 ### Registry 자격증명 — ghcr.io 기준
 
 이미지 레지스트리는 GitHub Container Registry(`ghcr.io`) 를 사용한다 (ADR-007).
-이미지 네임스페이스는 `ghcr.io/axwms-s209/axwms-api` 로 고정한다.
+이미지 네임스페이스는 영역별로 분리한다 — api 는 `ghcr.io/axwms-s209/axwms-api`, web 은 `ghcr.io/axwms-s209/axwms-web` (ADR-014).
 
 - `GHCR_USER` — PAT 을 발급한 **GitHub 개인 계정 username** (Organization 이름 아님 ⚠)
 - `GHCR_TOKEN` — GitHub classic PAT (scopes: `write:packages`, `read:packages`, `repo`)
@@ -387,12 +394,17 @@ probe 라인은 원인 확정 후 동일 MR 또는 후속 MR 로 반드시 제�
 - `api_ci`: api test + bootJar
 - `infra_validate`: compose 렌더링 검증
 
-### 10-3. 배포 job
+### 10-3. 이미지 빌드 job
+
+- `api_image`: `api/Dockerfile` (컨텍스트 `api/`) 빌드 후 ghcr push, 트리거는 `.api_deploy_changes` (api 코드 + 인프라 변경 시).
+- `web_image`: `web/Dockerfile` (컨텍스트 모노레포 루트, `-f web/Dockerfile`) 빌드 후 ghcr push, 트리거는 `.web_deploy_changes` (web 코드 + 모노레포 manifest + 인프라 변경 시). ADR-014.
+
+### 10-4. 배포 job
 
 - `deploy_dev`: `dev` push 시 staging 배포
 - `deploy_prod`: `master` push 시 production 배포
 
-현재는 **api 관련 변경이 있을 때만** 이미지 빌드와 배포가 일어나도록 `changes:`가 걸려 있다.
+배포 트리거(`.deploy_changes`) 는 **api/web/모노레포 manifest/infra/docs/infra/.gitlab-ci.yml 중 하나라도 변경**되면 작동한다. 변경 영역에 해당하는 이미지 job 이 함께 돌고, deploy job 은 `API_IMAGE`/`WEB_IMAGE` 두 변수를 SSH 환경변수로 같이 주입한다. 인프라-only 변경에서도 기존 `:<ref-slug>` 태그 이미지로 재배포된다.
 
 ---
 
@@ -414,17 +426,23 @@ probe 라인은 원인 확정 후 동일 MR 또는 후속 MR 로 반드시 제�
 - 즉, CI가 미리 만든 이미지를 서버가 pull 받아 실행
 - postgres/redis가 healthy 상태가 될 때까지 기다림
 
+### web
+- `image: ${WEB_IMAGE}` (CMP-004), `build:` 사용 안 함
+- 컨테이너 내부 listen 8000, 호스트 바인딩 `127.0.0.1:${WEB_HOST_PORT:-8000}:8000` (production 8000:8000 / staging 8001:8000)
+- `depends_on` 없음 — api/redis 가 미준비 상태여도 정적 자산 + 클라이언트 라우팅은 떠 있어야 한다는 판단(ADR-014). API 호출 실패는 web 단에서 처리.
+- 환경변수: `NODE_ENV=production`, `PORT=8000`, `HOSTNAME=0.0.0.0` (Next.js standalone server.js 가 인식)
+
 ---
 
 ## 12. 실제 배포가 어떻게 진행되는가
 
 ### `dev` merge 후
 
-1. GitLab이 `api` 이미지 빌드
-2. Registry에 `api:dev`, `api:<sha>` push
+1. GitLab이 변경 영역의 이미지를 빌드 (api 변경이면 `api_image`, web 변경이면 `web_image`, 인프라-only 면 둘 다 스킵)
+2. ghcr.io 에 `axwms-api:dev`, `axwms-web:dev` 등 `:<ref-slug>` + `:<sha>` 두 태그로 push
 3. CI가 staging 서버에 SSH 접속
-4. `compose.deploy.yml`, `remote-deploy-api.sh`를 서버에 복사
-5. 서버에서 `docker compose pull` / `up -d`
+4. `compose.deploy.yml`, `remote-deploy.sh` 를 서버에 복사
+5. 서버에서 `docker compose pull api web` / `up -d --remove-orphans postgres redis api web` (OPS-016 의 멱등 흐름)
 
 ### `master` merge 후
 같은 흐름으로 production 에 반영된다.
@@ -558,7 +576,7 @@ sudo chmod +x /etc/letsencrypt/renewal-hooks/deploy/reload-nginx.sh
 1. EC2에 Docker 설치
 2. `/opt/axwms/staging`, `/opt/axwms/production` 생성
 3. GitLab Runner 설치 및 프로젝트 register (privileged 포함)
-4. 각 환경 `.env` 작성 (600, 배포 계정 소유) — `DB_PASSWORD` 는 staging/production 각각 강한 무작위 값 (OPS-011)
+4. 각 환경 `.env` 작성 (600, 배포 계정 소유) — `WEB_HOST_PORT` / `API_HOST_PORT` / `POSTGRES_HOST_PORT` / `REDIS_HOST_PORT` 모두 OPS-009 의 +1 오프셋 규칙대로, `DB_PASSWORD` 는 staging/production 각각 강한 무작위 값 (OPS-011)
 5. CI 전용 SSH 키페어 생성 및 EC2 `authorized_keys` 등록
 6. GitLab Variables 등록 + `master` / `dev` Protected Branch 설정
 7. Nginx 설치 + `/etc/nginx/sites-available/axwms.conf` 적용 + `sudo nginx -t` + reload (섹션 13-2)
@@ -612,9 +630,9 @@ sudo chmod +x /etc/letsencrypt/renewal-hooks/deploy/reload-nginx.sh
 
 - 과거 임시 검증 절차 재사용
 - EC2에서 소스 직접 빌드
-- web/ai 운영 자동배포
+- ai 운영 자동배포 (web 은 ADR-014 로 처리됨)
 - 전체 스택 단일 compose 통합
-- Nginx conf 저장소 편입 (서버 작업 1회 발급과 동기화가 필요, `docs/infra/pending-decisions.md` 참고)
+- Nginx conf 저장소 편입 (서버 작업 1회 발급과 동기화가 필요, `docs/infra/pending-decisions.md` #3 참고)
 
 이유는 지금은 **배포 경로를 단순하게 만들고, api 자동배포를 먼저 안정화하는 것**이 우선이기 때문이다.
 TLS 자동 갱신은 ADR-012 로 범위에 포함되었다.
@@ -623,13 +641,12 @@ TLS 자동 갱신은 ADR-012 로 범위에 포함되었다.
 
 ## 17. 다음 단계 후보
 
-api 자동배포가 안정화되면 다음 순서로 확장하면 된다.
+api/web 자동배포가 안정화되면 다음 순서로 확장하면 된다.
 
 1. `deploy_prod`를 manual 승인형으로 변경할지 결정
-2. web Dockerfile 추가
-3. ai Dockerfile 추가
-4. web/api/ai 전체 운영 compose 정리
-5. Nginx 설정 파일도 저장소 기준으로 통합 관리
+2. ai Dockerfile 추가 + 자동배포 편입 (pending-decisions #5 의 ai 잔여 항목)
+3. Nginx 설정 파일을 저장소 기준으로 통합 관리 + reload 자동화 (pending-decisions #3)
+4. 파이프라인 `changes` 세분화 (pending-decisions #2) — 문서-only MR 이 배포까지 도는 비용을 줄이는 후행 정리
 
 ---
 

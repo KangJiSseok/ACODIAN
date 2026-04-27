@@ -104,18 +104,23 @@
 
 ### 맥락
 - ADR-010 으로 web(Next.js) 은 8000, ai(FastAPI) 는 8200 을 컨테이너 내부 listen 포트로 쓰기로 결정.
-- 그러나 ADR-001 의 자동배포 범위는 "api + postgres + redis" 로 한정되어 있어 web/ai 는 아직 운영 compose 에 포함되지 않는다.
-- 따라서 이번 MR 에서는 포트 규칙만 ADR/OPS 로 기록하고 실제 `next start -p 8000` / `uvicorn --port 8200` 설정 반영은 하지 않았다.
+- ADR-001 의 자동배포 범위는 1차 시점에 "api + postgres + redis" 로 한정되어 있었다.
 
-### 유예 이유
-- web/ai 의 Dockerfile·자동배포 경로를 먼저 만든 뒤 포트 설정을 함께 반영하는 편이 리팩토링 비용이 작다.
-- 지금 반영하면 "운영 자동배포 범위 밖" 에 설정만 선행되어 로컬 개발자가 혼동할 수 있다 (Next 기본 3000 과 달라짐).
+### 진행 현황
+- **web — 처리됨 (2026-04-27, ADR-014)**
+  - `web/next.config.ts` 에 `output: "standalone"` + `outputFileTracingRoot` 추가, `web/package.json` 의 `start` 를 `next start -p 8000` 으로 갱신, `web/Dockerfile` 신규(monorepo 루트 컨텍스트, multi-stage, 8000 EXPOSE), `infra/compose.deploy.yml` 에 web 서비스 추가(production `127.0.0.1:8000:8000` / staging `127.0.0.1:8001:8000`).
+  - `infra/scripts/remote-deploy-api.sh` 를 `remote-deploy.sh` 로 일반화하고 `WEB_IMAGE` `require_var`, `.gitlab-ci.yml` 에 `web_image` job 신규.
+  - 운영 가이드(섹션 4/6/8/10/11/12/14/16/17) 와 code-convention(DO-003/DO-004, OPS-016) 동반 갱신.
+- **ai — 잔존**
+  - 컨테이너 자산 0(`ai/Dockerfile` 없음), `ai/main.py` 에서 uvicorn 실행 포트 미지정.
+  - `ai/requirements.txt` 에 celery 의존성이 박혀 있으나 `ai/app/` 안에 `@task`/`Celery(...)` 사용 0건이라 본 시점엔 worker 컨테이너 없이 FastAPI 단독으로 1차 편입 가능.
 
 ### 다음 트리거
-- ADR-001 의 자동배포 범위가 web/ai 로 확장되는 시점 (가이드 섹션 17 의 후속 과제 2, 3, 4).
-- 그 MR 에서 동시에:
-  - web: `package.json` 의 `start` 스크립트 또는 Dockerfile CMD 에 `-p 8000` 추가, compose 에 `127.0.0.1:8000:8000` / `127.0.0.1:8001:8000` 매핑
-  - ai: uvicorn 명령 또는 FastAPI 실행 포트 8200 으로 변경, compose 매핑 동일 패턴
+- ai 차례:
+  - `ai/Dockerfile` 신규(python:3.12-slim 단일 stage, `pip install -r requirements.txt`, `uvicorn app.main:app --host 0.0.0.0 --port 8200`).
+  - `infra/compose.deploy.yml` 에 ai 서비스 추가(production `127.0.0.1:8200:8200` / staging `127.0.0.1:8201:8200`).
+  - `remote-deploy.sh` / `.gitlab-ci.yml` 에 ai 도 일괄 확장(`pull api web ai`, `rm -sf api web ai`, `up -d ... ai`, `ai_image` job).
+  - 후속 ADR(잠정 ADR-015) 로 `ai_change_detect` 정책과 함께 결정 기록.
 
 ---
 
