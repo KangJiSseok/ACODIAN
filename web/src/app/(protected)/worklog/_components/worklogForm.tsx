@@ -20,7 +20,6 @@ import type { WorklogFormValues, WorklogStatus } from "../_types/worklog.types"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { CardSpotlight } from "@/components/ui/card-spotlight"
-import { Checkbox } from "@/components/ui/checkbox"
 import { Input } from "@/components/ui/input"
 import { Select } from "@/components/ui/select"
 import { Textarea } from "@/components/ui/textarea"
@@ -102,9 +101,9 @@ export function WorklogForm({
   )
   const [submitError, setSubmitError] = useState("")
   const [dependencyKeywordInput, setDependencyKeywordInput] = useState("")
-  const [dependencyKeyword, setDependencyKeyword] = useState("")
+  const [dependencySearchOpen, setDependencySearchOpen] = useState(false)
   const [tagKeywordInput, setTagKeywordInput] = useState("")
-  const [tagKeyword, setTagKeyword] = useState("")
+  const [tagSearchOpen, setTagSearchOpen] = useState(false)
 
   const teamOptions = useMemo(
     () => teams.map((team) => ({ label: team.name, value: String(team.id) })),
@@ -137,10 +136,12 @@ export function WorklogForm({
     [currentWorklogId],
   )
   const filteredDependencyCandidates = useMemo(() => {
-    const normalizedKeyword = dependencyKeyword.trim().toLowerCase()
-    if (!normalizedKeyword) return dependencyCandidates
+    const normalizedKeyword = dependencyKeywordInput.trim().toLowerCase()
+    if (!normalizedKeyword) return []
 
     return dependencyCandidates.filter((dependency) => {
+      if (values.dependencyIds.includes(dependency.id)) return false
+
       const teamName =
         teams.find((team) => team.id === dependency.teamId)?.name ?? ""
       const authorName =
@@ -159,18 +160,25 @@ export function WorklogForm({
         .toLowerCase()
 
       return searchableText.includes(normalizedKeyword)
-    })
-  }, [dependencyCandidates, dependencyKeyword])
+    }).slice(0, 6)
+  }, [dependencyCandidates, dependencyKeywordInput, values.dependencyIds])
+  const selectedDependencies = useMemo(
+    () =>
+      dependencyCandidates.filter((dependency) =>
+        values.dependencyIds.includes(dependency.id),
+      ),
+    [dependencyCandidates, values.dependencyIds],
+  )
   const selectedTags = useMemo(
     () => tags.filter((tag) => values.tagIds.includes(tag.id)),
     [values.tagIds],
   )
   const filteredTagCandidates = useMemo(() => {
-    const normalizedKeyword = tagKeyword.trim().toLowerCase()
+    const normalizedKeyword = tagKeywordInput.trim().toLowerCase()
+    if (!normalizedKeyword) return []
 
     return tags.filter((tag) => {
       if (values.tagIds.includes(tag.id)) return false
-      if (!normalizedKeyword) return true
 
       const searchableText = [
         tag.name,
@@ -182,8 +190,8 @@ export function WorklogForm({
         .toLowerCase()
 
       return searchableText.includes(normalizedKeyword)
-    })
-  }, [tagKeyword, values.tagIds])
+    }).slice(0, 8)
+  }, [tagKeywordInput, values.tagIds])
 
   const incompleteDependencies = dependencyCandidates.filter(
     (worklog) =>
@@ -193,12 +201,20 @@ export function WorklogForm({
     currentWorklogId !== undefined &&
     hasCircularDependency(currentWorklogId, values.dependencyIds, worklogs)
 
-  const toggleDependency = (dependencyId: number, checked: boolean) => {
-    const nextDependencyIds = checked
-      ? Array.from(new Set([...values.dependencyIds, dependencyId]))
-      : values.dependencyIds.filter((item) => item !== dependencyId)
+  const addDependency = (dependencyId: number) => {
+    setValues((previous) => ({
+      ...previous,
+      dependencyIds: Array.from(new Set([...previous.dependencyIds, dependencyId])),
+    }))
+    setDependencyKeywordInput("")
+    setDependencySearchOpen(false)
+  }
 
-    setValues({ ...values, dependencyIds: nextDependencyIds })
+  const removeDependency = (dependencyId: number) => {
+    setValues((previous) => ({
+      ...previous,
+      dependencyIds: previous.dependencyIds.filter((item) => item !== dependencyId),
+    }))
   }
 
   const addAttachmentNames = (names: string[]) => {
@@ -222,6 +238,8 @@ export function WorklogForm({
       ...previous,
       tagIds: Array.from(new Set([...previous.tagIds, tagId])),
     }))
+    setTagKeywordInput("")
+    setTagSearchOpen(false)
   }
 
   const removeTag = (tagId: number) => {
@@ -474,68 +492,88 @@ export function WorklogForm({
             title="선행 업무"
             icon={<GitBranchPlus className="size-4" />}
           >
-            <div className="flex gap-3">
-              <div className="relative flex-1">
+            <div className="space-y-2">
+              <div className="relative">
                 <Search className="pointer-events-none absolute left-4 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
                 <Input
                   className={searchControlClassName}
                   value={dependencyKeywordInput}
-                  onChange={(event) => setDependencyKeywordInput(event.target.value)}
-                  onKeyDown={(event) => {
-                    if (event.key === "Enter") {
-                      event.preventDefault()
-                      setDependencyKeyword(dependencyKeywordInput.trim())
-                    }
+                  onFocus={() => setDependencySearchOpen(true)}
+                  onBlur={() => {
+                    window.setTimeout(() => setDependencySearchOpen(false), 120)
+                  }}
+                  onChange={(event) => {
+                    setDependencyKeywordInput(event.target.value)
+                    setDependencySearchOpen(true)
                   }}
                   placeholder="제목, 요약, 담당자, 팀으로 검색"
                 />
               </div>
-              <Button
-                type="button"
-                variant="secondary"
-                className="h-11 rounded-2xl px-5 text-sm"
-                onClick={() => setDependencyKeyword(dependencyKeywordInput.trim())}
-              >
-                검색
-              </Button>
+
+              {dependencySearchOpen && dependencyKeywordInput.trim() ? (
+                <div className="overflow-hidden rounded-2xl border border-border bg-popover p-2 shadow-[0_18px_48px_-28px_rgba(15,23,42,0.65)]">
+                  <div className="dashboard-scrollbar max-h-[260px] overflow-y-auto [scrollbar-gutter:stable]">
+                    {filteredDependencyCandidates.length === 0 ? (
+                      <p className="px-3 py-3 text-sm text-muted-foreground">
+                        조건에 맞는 선행 업무가 없습니다.
+                      </p>
+                    ) : (
+                      filteredDependencyCandidates.map((dependency) => {
+                        const teamName =
+                          teams.find((team) => team.id === dependency.teamId)?.name ??
+                          "팀 미지정"
+
+                        return (
+                          <button
+                            key={dependency.id}
+                            type="button"
+                            className="block w-full rounded-xl px-3 py-2.5 text-left transition-colors hover:bg-muted"
+                            onMouseDown={(event) => event.preventDefault()}
+                            onClick={() => addDependency(dependency.id)}
+                          >
+                            <span className="block text-sm font-semibold text-popover-foreground">
+                              {dependency.title}
+                            </span>
+                            <span className="mt-1 block text-xs text-muted-foreground">
+                              {teamName} / {getWorklogStatusLabel(dependency.status)}
+                            </span>
+                          </button>
+                        )
+                      })
+                    )}
+                  </div>
+                </div>
+              ) : null}
             </div>
 
-            <div className="grid gap-2 rounded-2xl border border-border/70 bg-muted/25 p-4">
-              {filteredDependencyCandidates.length === 0 ? (
-                <p className="text-sm text-muted-foreground">
-                  조건에 맞는 선행 업무가 없습니다.
+            <div className="space-y-2">
+              {selectedDependencies.length === 0 ? (
+                <p className="rounded-2xl border border-dashed border-border/70 px-4 py-3 text-sm text-muted-foreground">
+                  선택한 선행 업무가 없습니다.
                 </p>
               ) : (
-                filteredDependencyCandidates.map((dependency) => (
-                  <button
+                selectedDependencies.map((dependency) => (
+                  <div
                     key={dependency.id}
-                    type="button"
-                    onClick={() =>
-                      toggleDependency(
-                        dependency.id,
-                        !values.dependencyIds.includes(dependency.id),
-                      )
-                    }
-                    className={cn(
-                      "flex w-full items-start gap-3 rounded-2xl border px-3 py-3 text-left text-sm shadow-sm transition-colors",
-                      "border-border/70 bg-muted/35 text-foreground hover:border-primary/30 hover:bg-primary/6",
-                      values.dependencyIds.includes(dependency.id)
-                        ? "border-primary/35 bg-primary/8 ring-1 ring-primary/20"
-                        : "",
-                    )}
+                    className="flex items-start justify-between gap-3 rounded-2xl border border-border/70 bg-muted/25 px-4 py-3 text-sm"
                   >
-                    <Checkbox
-                      checked={values.dependencyIds.includes(dependency.id)}
-                      readOnly
-                      className="pointer-events-none"
-                    />
-                    <span className="space-y-1">
-                      <span className="block font-medium">{dependency.title}</span>
-                      <span className="block text-xs text-muted-foreground">
+                    <div className="min-w-0">
+                      <p className="truncate font-medium text-foreground">
+                        {dependency.title}
+                      </p>
+                      <p className="mt-1 text-xs text-muted-foreground">
                         현재 상태: {getWorklogStatusLabel(dependency.status)}
-                      </span>
-                    </span>
-                  </button>
+                      </p>
+                    </div>
+                    <button
+                      type="button"
+                      className="flex size-7 shrink-0 items-center justify-center rounded-lg text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+                      aria-label={`${dependency.title} 선행 업무 제거`}
+                      onClick={() => removeDependency(dependency.id)}
+                    >
+                      <X className="size-4" />
+                    </button>
+                  </div>
                 ))
               )}
             </div>
@@ -559,30 +597,52 @@ export function WorklogForm({
             title="태그 등록"
             icon={<Tag className="size-4" />}
           >
-            <div className="flex gap-3">
-              <div className="relative flex-1">
+            <div className="space-y-2">
+              <div className="relative">
                 <Search className="pointer-events-none absolute left-4 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
                 <Input
                   className={searchControlClassName}
                   value={tagKeywordInput}
-                  onChange={(event) => setTagKeywordInput(event.target.value)}
-                  onKeyDown={(event) => {
-                    if (event.key === "Enter") {
-                      event.preventDefault()
-                      setTagKeyword(tagKeywordInput.trim())
-                    }
+                  onFocus={() => setTagSearchOpen(true)}
+                  onBlur={() => {
+                    window.setTimeout(() => setTagSearchOpen(false), 120)
+                  }}
+                  onChange={(event) => {
+                    setTagKeywordInput(event.target.value)
+                    setTagSearchOpen(true)
                   }}
                   placeholder="태그명, 분류, 힌트로 검색"
                 />
               </div>
-              <Button
-                type="button"
-                variant="secondary"
-                className="h-11 rounded-2xl px-5 text-sm"
-                onClick={() => setTagKeyword(tagKeywordInput.trim())}
-              >
-                검색
-              </Button>
+
+              {tagSearchOpen && tagKeywordInput.trim() ? (
+                <div className="overflow-hidden rounded-2xl border border-border bg-popover p-2 shadow-[0_18px_48px_-28px_rgba(15,23,42,0.65)]">
+                  <div className="dashboard-scrollbar max-h-[260px] overflow-y-auto [scrollbar-gutter:stable]">
+                    {filteredTagCandidates.length === 0 ? (
+                      <p className="px-3 py-3 text-sm text-muted-foreground">
+                        조건에 맞는 태그가 없습니다.
+                      </p>
+                    ) : (
+                      filteredTagCandidates.map((tag) => (
+                        <button
+                          key={tag.id}
+                          type="button"
+                          className="block w-full rounded-xl px-3 py-2.5 text-left transition-colors hover:bg-muted"
+                          onMouseDown={(event) => event.preventDefault()}
+                          onClick={() => addTag(tag.id)}
+                        >
+                          <span className="block text-sm font-semibold text-popover-foreground">
+                            #{tag.name}
+                          </span>
+                          <span className="mt-1 block text-xs text-muted-foreground">
+                            {tag.category} / {tag.usageCount}회 사용
+                          </span>
+                        </button>
+                      ))
+                    )}
+                  </div>
+                </div>
+              ) : null}
             </div>
 
             <div className="space-y-2">
@@ -623,27 +683,6 @@ export function WorklogForm({
               )}
             </div>
 
-            <div className="grid max-h-[220px] gap-2 overflow-auto pr-1">
-              {filteredTagCandidates.length === 0 ? (
-                <p className="rounded-2xl border border-dashed border-border/70 px-4 py-3 text-sm text-muted-foreground">
-                  조건에 맞는 태그가 없습니다.
-                </p>
-              ) : (
-                filteredTagCandidates.map((tag) => (
-                  <button
-                    key={tag.id}
-                    type="button"
-                    className="rounded-2xl border border-border/70 bg-muted/25 px-4 py-3 text-left text-sm transition-colors hover:border-primary/45 hover:bg-primary/8"
-                    onClick={() => addTag(tag.id)}
-                  >
-                    <span className="block font-semibold text-foreground">#{tag.name}</span>
-                    <span className="mt-1 block text-xs text-muted-foreground">
-                      {tag.category} / {tag.usageCount}회 사용
-                    </span>
-                  </button>
-                ))
-              )}
-            </div>
           </FormPanel>
         </div>
       </div>
