@@ -248,12 +248,11 @@ export function WorklogForm({
         await onSubmit(values)
       }}
     >
-      <div className="grid gap-5 xl:grid-cols-[minmax(0,1.55fr)_minmax(440px,0.9fr)]">
+      <div className="grid items-start gap-5 xl:grid-cols-[minmax(0,1.55fr)_minmax(440px,0.9fr)]">
         <FormPanel
           eyebrow="WORK SUMMARY"
           title="핵심 정보"
           icon={<FileText className="size-4" />}
-          className="min-h-[720px]"
         >
           <div className="space-y-4">
             <p className="text-xs uppercase tracking-[0.2em] text-muted-foreground">
@@ -354,7 +353,7 @@ export function WorklogForm({
               </Button>
             </div>
           </div>
-          </FormPanel>
+        </FormPanel>
 
         <div className="space-y-5">
           <FormPanel
@@ -553,122 +552,6 @@ export function WorklogForm({
                 않습니다.
               </p>
             ) : null}
-          </FormPanel>
-
-          <FormPanel
-            eyebrow="WORK SETTINGS"
-            title="작업 설정"
-            icon={<Settings2 className="size-4" />}
-          >
-            <div className="grid gap-5">
-              <Field label="상태 및 중요도">
-                <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-1 2xl:grid-cols-2">
-                  <Select
-                    className={controlClassName}
-                    value={values.status}
-                    options={statusOptions}
-                    onChange={(event) =>
-                      setValues({
-                        ...values,
-                        status: event.target.value as WorklogFormValues["status"],
-                      })
-                    }
-                  />
-                  <Select
-                    className={controlClassName}
-                    value={values.importance}
-                    options={[
-                      { label: getImportanceLabel("URGENT"), value: "URGENT" },
-                      { label: getImportanceLabel("HIGH"), value: "HIGH" },
-                      { label: getImportanceLabel("NORMAL"), value: "NORMAL" },
-                      { label: getImportanceLabel("LOW"), value: "LOW" },
-                    ]}
-                    onChange={(event) =>
-                      setValues({
-                        ...values,
-                        importance: event.target.value as WorklogFormValues["importance"],
-                      })
-                    }
-                  />
-                </div>
-              </Field>
-
-              <Field label="담당자">
-                <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-1 2xl:grid-cols-2">
-                  <Select
-                    className={controlClassName}
-                    value={String(values.teamId)}
-                    options={teamOptions}
-                    onChange={(event) =>
-                      setValues({ ...values, teamId: Number(event.target.value) })
-                    }
-                  />
-                  <Select
-                    className={controlClassName}
-                    value={String(values.authorId)}
-                    options={authorOptions}
-                    onChange={(event) =>
-                      setValues({ ...values, authorId: Number(event.target.value) })
-                    }
-                  />
-                </div>
-              </Field>
-
-              <Field label="시간">
-                <div className="space-y-2">
-                  <div className="relative">
-                    <Input
-                      className={controlClassName}
-                      type="number"
-                      min="0"
-                      step="0.5"
-                      value={values.actualHours}
-                      onChange={(event) =>
-                        setValues({
-                          ...values,
-                          actualHours: Number(event.target.value),
-                        })
-                      }
-                      placeholder="예: 1.5"
-                    />
-                  </div>
-                  <p className="text-xs leading-5 text-muted-foreground">
-                    소수 입력이 가능합니다. 예: 1.5 = 1시간 30분
-                  </p>
-                </div>
-              </Field>
-
-              <Field label="진행 일정">
-                <div className="grid gap-3 sm:grid-cols-[1fr_auto_1fr] sm:items-center xl:grid-cols-1 2xl:grid-cols-[1fr_auto_1fr]">
-                  <div className="relative">
-                    <Calendar className="pointer-events-none absolute left-4 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
-                    <Input
-                      className={cn(controlClassName, "worklog-date-input pl-11 pr-4")}
-                      type="date"
-                      value={values.instructionDate}
-                      onChange={(event) =>
-                        setValues({ ...values, instructionDate: event.target.value })
-                      }
-                    />
-                  </div>
-                  <span className="hidden text-center text-sm text-muted-foreground sm:block xl:hidden 2xl:block">
-                    ~
-                  </span>
-                  <div className="relative">
-                    <Calendar className="pointer-events-none absolute left-4 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
-                    <Input
-                      className={cn(controlClassName, "worklog-date-input pl-11 pr-4")}
-                      type="date"
-                      value={values.dueDate}
-                      onChange={(event) =>
-                        setValues({ ...values, dueDate: event.target.value })
-                      }
-                    />
-                  </div>
-                </div>
-              </Field>
-
-            </div>
           </FormPanel>
 
           <FormPanel
