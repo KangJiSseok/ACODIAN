@@ -74,7 +74,7 @@ class TeamServiceTest {
     void DEPT_HEAD_팀_목록_조회는_최신_spec_query_를_repository_query_로_정규화한다() {
         CustomUserPrincipal principal = new CustomUserPrincipal(101L, "head@ibank.com", "DEPT_HEAD");
         GetTeamsApiDto.Request request = new GetTeamsApiDto.Request(1, 20, null);
-        TeamPageQuery query = new TeamPageQuery(1, 20, 10L, null, 101L);
+        TeamPageQuery query = new TeamPageQuery(1, 20, null, 10L, 101L, UserRole.DEPT_HEAD);
         given(userRepository.findById(101L)).willReturn(Optional.of(createUser(101L, 10L, UserRole.DEPT_HEAD)));
         given(teamRepository.findTeamPage(query)).willReturn(new PageImpl<>(
                 List.of(new TeamListProjection(
@@ -108,6 +108,47 @@ class TeamServiceTest {
             assertThat(item.teamLeaderName()).isEqualTo("홍길동");
             assertThat(item.myTeamLeader()).isTrue();
             assertThat(item.teamRole()).isEqualTo("플랫폼 총괄");
+        });
+    }
+
+    @Test
+    @DisplayName("TEAM_LEAD 팀 목록 조회는 departmentId 필터와 principal 문맥을 repository query 로 정규화한다")
+    void TEAM_LEAD_팀_목록_조회는_departmentId_필터와_principal_문맥을_repository_query_로_정규화한다() {
+        CustomUserPrincipal principal = new CustomUserPrincipal(101L, "lead@ibank.com", "TEAM_LEAD");
+        GetTeamsApiDto.Request request = new GetTeamsApiDto.Request(2, 10, 20L);
+        TeamPageQuery query = new TeamPageQuery(2, 10, 20L, null, 101L, UserRole.TEAM_LEAD);
+        given(teamRepository.findTeamPage(query)).willReturn(new PageImpl<>(
+                List.of(new TeamListProjection(
+                        22L,
+                        "타부서TF",
+                        TeamStatus.ACTIVE,
+                        20L,
+                        "운영본부",
+                        "외부 협업",
+                        1002L,
+                        "윤본부",
+                        202L,
+                        "타부서",
+                        3,
+                        false,
+                        "협업",
+                        "SECONDARY",
+                        false,
+                        LocalDate.of(2026, 4, 1),
+                        null
+                )),
+                PageRequest.of(1, 10),
+                1
+        ));
+
+        PageResponse<GetTeamsApiDto.Response.Item> response = teamService.getTeams(principal, request);
+
+        assertThat(response.items()).singleElement().satisfies(item -> {
+            assertThat(item.teamId()).isEqualTo(22L);
+            assertThat(item.departmentId()).isEqualTo(20L);
+            assertThat(item.teamLeaderName()).isEqualTo("타부서");
+            assertThat(item.myTeamLeader()).isFalse();
+            assertThat(item.teamRole()).isEqualTo("협업");
         });
     }
 
