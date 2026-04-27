@@ -121,15 +121,10 @@ export default function WorklogPage() {
     <div className="flex flex-col gap-6">
       <PageHeader title="업무 검색" />
       <div className="space-y-4">
-        <div className="flex items-center justify-between">
+        <div>
           <h2 className="text-[20px] font-semibold tracking-[-0.04em] text-foreground">
             업무 탐색
           </h2>
-          {canCreate ? (
-            <Button asChild variant="default" className="h-10 min-w-32 px-6 text-sm font-semibold">
-              <Link href="/worklog/create">업무 등록</Link>
-            </Button>
-          ) : null}
         </div>
         <div className="flex flex-col gap-4">
           <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
@@ -142,10 +137,10 @@ export default function WorklogPage() {
                 placeholder="업무 제목, 요약, 작성자, 팀, 상태로 검색하세요"
               />
             </div>
-            <div className="flex items-center gap-2">
+            <div className="flex w-full items-center gap-2 sm:w-auto">
               <Button
                 variant="outline"
-                className="h-10"
+                className="h-10 justify-center"
                 onClick={() => setShowFilters((prev) => !prev)}
               >
                 <SlidersHorizontal className="size-4" />
@@ -325,7 +320,7 @@ export default function WorklogPage() {
           </div>
         </div>
         <div className="pt-2">
-          <div className="pb-4">
+          <div className="flex flex-col gap-3 pb-4 sm:flex-row sm:items-center sm:justify-between">
             <div className="flex items-center gap-2">
               <p className="text-sm text-muted-foreground">
                 표시 중인 업무{" "}
@@ -352,6 +347,15 @@ export default function WorklogPage() {
                 className="h-8 w-8"
               />
             </div>
+            {canCreate ? (
+              <Button
+                asChild
+                variant="default"
+                className="h-10 min-w-32 px-6 text-sm font-semibold"
+              >
+                <Link href="/worklog/create">업무 등록</Link>
+              </Button>
+            ) : null}
           </div>
           <WorklogList worklogs={worklogPagination.items} />
           <div className="pt-6">
