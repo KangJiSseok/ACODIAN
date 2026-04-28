@@ -22,6 +22,8 @@ public enum ErrorCode {
     RESPONSE_TEST_ERROR(HttpStatus.BAD_REQUEST, "응답 테스트용 예외가 발생했습니다."),
     /** 이메일 또는 비밀번호가 일치하지 않는 경우 사용한다. */
     AUTH_INVALID_CREDENTIALS(HttpStatus.UNAUTHORIZED, "이메일 또는 비밀번호가 올바르지 않습니다."),
+    /** 회원가입 프로필 이미지 업로드를 스토리지 장애로 처리할 수 없을 때 사용한다. */
+    AUTH_SIGNUP_PROFILE_IMAGE_UPLOAD_FAILED(HttpStatus.SERVICE_UNAVAILABLE, "프로필 이미지 업로드를 처리할 수 없습니다. 잠시 후 다시 시도해 주세요."),
     /** 비활성 계정 등 로그인 불가 상태에 사용한다. */
     AUTH_LOGIN_NOT_ALLOWED(HttpStatus.FORBIDDEN, "현재 계정 상태로는 로그인할 수 없습니다."),
     /** 요청한 팀 ID 에 해당하는 팀이 없는 경우 사용한다. */
