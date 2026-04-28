@@ -26,6 +26,9 @@ docker:
   - id: DO-004
     rule: '모노레포 루트 `.dockerignore` 는 web/Dockerfile 빌드 컨텍스트(=모노레포 루트) 에서만 적용된다. api 빌드는 컨텍스트가 `api/` 이므로 `api/.dockerignore` 가 우선이며 본 파일과 분리된 SSOT 다. 두 파일을 동기화하지 말고 영역별로 독립 관리한다. 근거는 ADR-014.'
     stacks: [docker]
+  - id: DO-005
+    rule: 'AI(FastAPI) 컨테이너 이미지는 `ai/Dockerfile` 을 사용하고 빌드 컨텍스트는 `ai/` 단독이다. `python:3.12-slim` 단일 stage, non-root user(`app`), EXPOSE 8200, CMD `uvicorn app.main:app --host 0.0.0.0 --port 8200` 으로 고정한다. 근거는 ADR-016.'
+    stacks: [docker, fastapi, python]
 
 compose:
   - id: CMP-001
@@ -88,7 +91,7 @@ ops:
     rule: 'CI 디버그용 probe 는 값 자체를 어떤 형태(echo · log · 파일) 로도 노출하지 않고 길이(`${#VAR}`) · 정의 여부(`${VAR+yes}`) · 이름 목록(`env | awk /^PREFIX/`) 만 사용한다. 진단이 끝난 probe 라인은 동일 MR 또는 후속 MR 로 반드시 제거하고, MR 설명에 probe 실행 결과 발췌를 남겨 OPS-012 의 검증 증거로 사용한다.'
     stacks: [gitlab, ci, security]
   - id: OPS-016
-    rule: '배포 스크립트 `infra/scripts/remote-deploy.sh` 는 멱등성을 보장한다. `up -d` 전에 `compose rm -sf api web` 를 실행해 기존 애플리케이션 컨테이너(api/web)의 포트 점유를 선해제하고, `up -d --remove-orphans` 로 프로젝트에 속하지 않은 잔존 컨테이너를 정리한다. 배포 전·후 `compose ps` 스냅샷을 job log 에 남겨 실패 시 추적성을 확보한다. 2차 이후 배포에서 구 컨테이너가 `restart: unless-stopped` 로 포트를 쥔 채 새 컨테이너 bind 실패 → 컨테이너 네트워크 고립 → 무한 재시작 루프에 빠지는 사고를 방지하기 위함이다. 향후 ai 편입 시 동일 패턴으로 `pull` / `rm -sf` / `up -d` 인자 목록을 일괄 확장한다(ADR-014 에서 web 편입 시 적용된 일반화 규약).'
+    rule: '배포 스크립트 `infra/scripts/remote-deploy.sh` 는 멱등성을 보장한다. `up -d` 전에 `compose rm -sf api web ai` 를 실행해 기존 애플리케이션 컨테이너(api/web/ai) 의 포트 점유를 선해제하고, `up -d --remove-orphans` 로 프로젝트에 속하지 않은 잔존 컨테이너를 정리한다. 배포 전·후 `compose ps` 스냅샷을 job log 에 남겨 실패 시 추적성을 확보한다. 2차 이후 배포에서 구 컨테이너가 `restart: unless-stopped` 로 포트를 쥔 채 새 컨테이너 bind 실패 → 컨테이너 네트워크 고립 → 무한 재시작 루프에 빠지는 사고를 방지하기 위함이다. 신규 애플리케이션 컨테이너 편입 시 동일 패턴으로 `pull` / `rm -sf` / `up -d` 인자 목록을 일괄 확장한다(ADR-014 에서 web, ADR-016 에서 ai 편입 시 적용된 일반화 규약).'
     stacks: [compose, gitlab, ec2]
   - id: OPS-017
     rule: 'Nginx conf 의 SSOT 는 저장소의 `infra/nginx/sites-available/axwms.conf` 와 `infra/nginx/snippets/proxy-headers.conf` 다. EC2 의 `/etc/nginx/sites-available/axwms.conf` 또는 `/etc/nginx/snippets/proxy-headers.conf` 를 SSH 로 직접 수정하지 않는다. 변경은 PR 리뷰 후 `deploy_dev` / `deploy_prod` job 이 `scp + sudo install + nginx -t + systemctl reload` 한 줄로 자동 동기화한다. drift 가 발견되면 저장소 conf 가 우선이며 EC2 측을 덮어쓴다. 근거는 ADR-015.'

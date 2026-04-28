@@ -60,6 +60,38 @@ services:
       - "127.0.0.1:${WEB_HOST_PORT:?WEB_HOST_PORT required (env-specific offset, e.g. 8000/8001)}:8000"
     restart: unless-stopped
 
+  ai:
+    image: ${AI_IMAGE}
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    environment:
+      ENVIRONMENT: ${APP_ENV:-deploy}
+      API_PREFIX: /ai
+      HOST: 0.0.0.0
+      PORT: 8200
+      LOG_LEVEL: ${AI_LOG_LEVEL:-INFO}
+      # 같은 compose network 의 postgres/redis 로 붙는다. ADR-010 의 127.0.0.1 바인딩은 외부 노출 정책이고
+      # 서비스 간 통신은 컨테이너 네트워크 hostname 을 그대로 사용한다.
+      PGVECTOR_DSN: postgresql://${DB_USERNAME:-postgres}:${DB_PASSWORD:-postgres}@postgres:5432/${DB_NAME:-postgres}
+      REDIS_URL: redis://redis:6379/0
+      API_BASE_URL: http://api:8100
+      # ai 가 api 를 호출할 때 쓰는 JWT 검증 키. api 와 동일 시크릿이어야 한다.
+      JWT_SECRET: ${JWT_SECRET}
+      # Gemini — 실제 키는 서버 .env / GitLab Variables 로만 주입한다 (ADR-003 / GEN-002).
+      GEMINI_API_KEY: ${GEMINI_API_KEY}
+      GEMINI_MODEL: ${GEMINI_MODEL:-gemini-2.5-flash}
+      GEMINI_REQUEST_TIMEOUT_SECONDS: ${GEMINI_REQUEST_TIMEOUT_SECONDS:-30}
+      GEMINI_MAX_RETRIES: ${GEMINI_MAX_RETRIES:-3}
+      EMBEDDING_MODEL: ${EMBEDDING_MODEL:-text-embedding-004}
+      EMBEDDING_DIM: ${EMBEDDING_DIM:-768}
+      CHUNK_THRESHOLD_CHARS: ${CHUNK_THRESHOLD_CHARS:-3000}
+    ports:
+      - "127.0.0.1:${AI_HOST_PORT:?AI_HOST_PORT required (env-specific offset, e.g. 8200/8201)}:8200"
+    restart: unless-stopped
+
 volumes:
   postgres-data:
     name: axwms-${APP_ENV:-deploy}-postgres-data

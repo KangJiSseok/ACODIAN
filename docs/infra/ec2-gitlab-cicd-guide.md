@@ -272,6 +272,8 @@ DB_PASSWORD=<staging 전용 강한 무작위 값, 최소 24자>
 JWT_SECRET=<staging 전용 최소 32바이트 무작위 값>
 JWT_ACCESS_EXPIRATION=3600000
 JWT_REFRESH_EXPIRATION=1209600000
+AI_HOST_PORT=8201
+GEMINI_API_KEY=<staging 전용 실키>
 ```
 
 ### production 예시
@@ -289,6 +291,8 @@ DB_PASSWORD=<production 전용 강한 무작위 값, staging 과 반드시 다�
 JWT_SECRET=<production 전용 최소 32바이트 무작위 값, staging 과 반드시 다른 값>
 JWT_ACCESS_EXPIRATION=3600000
 JWT_REFRESH_EXPIRATION=1209600000
+AI_HOST_PORT=8200
+GEMINI_API_KEY=<production 전용 실키>
 ```
 
 > `WEB_IMAGE` / `API_IMAGE` 는 `.env` 에 두지 않는다. CI 가 `deploy_dev` / `deploy_prod` 단계에서 `WEB_IMAGE='ghcr.io/...:<ref-slug>'` / `API_IMAGE='...'` 형태로 SSH 호출 환경변수로 직접 주입한다 (ADR-003 의 "환경별 값은 서버 `.env` 또는 GitLab Variables" 원칙 + ADR-007 의 ghcr 네임스페이스).
