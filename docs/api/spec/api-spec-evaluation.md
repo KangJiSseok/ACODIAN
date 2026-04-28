@@ -26,10 +26,14 @@
 ### GET /api/users/{id}/evaluations
 - 목적: 특정 사용자의 평가 이력을 조회한다.
 - 상태: `Documented`
-- 권한/접근 주체: 본인, 평가 권한이 있는 리더, 상위 조직 관리자 조회를 허용한다. [추론]
+- 권한/접근 주체: DIRECTOR, DEPT_HEAD 조회를 허용한다.
+- DIRECTOR는 모든 부서 전체 다 볼 수 있다.
+- DEPT_HEAD는 같은 부서의 사람들만 볼 수 있다.
+- DEPT_HEAD는 같은 부서라도 `DIRECTOR` 권한 사용자의 평가 이력은 볼 수 없다.
+- DEPT_HEAD는 자기 자신에 대한 평가 이력은 볼 수 없다.
 - 요청
   - Path: `id`
-  - Query: `page`, `pageSize`, `sortBy`, `sortDirection` [추론]
+  - Query: `page`, `pageSize`, `sortDirection`
 - 응답 (`data` 기준)
   - `PageResponse<EvaluationSummary>`
   - `items[*]`: `evaluationId`, `evaluateeUserId`, `evaluateeUserName`, `evaluatorUserId`, `evaluatorUserName`, `content`, `createdAt`
@@ -56,7 +60,7 @@
         "evaluateeUserId": 101,
         "evaluateeUserName": "홍길동",
         "evaluatorUserId": 301,
-        "evaluatorUserName": "김리더",
+        "evaluatorUserName": "김본부장",
         "content": "프로젝트 리딩이 안정적입니다.",
         "createdAt": "2026-04-20T09:00:00Z"
       }
@@ -87,11 +91,11 @@
 ### POST /api/users/{id}/evaluations
 - 목적: 특정 사용자에 대한 평가를 등록한다.
 - 상태: `Documented`
-- 권한/접근 주체: `TEAM_LEAD` 이상 또는 정해진 평가 권한 사용자만 호출한다. [추론]
+- 권한/접근 주체: `DIRECTOR`, `DEPT_HEAD`만 호출한다.
+- `TEAM_LEAD`, `MEMBER`는 평가를 등록할 수 없다.
 - 요청
   - Path: `id`
   - Body: `content`
-  - 선택 Body: `period`, `worklogId` [추론]
 - 응답 (`data` 기준)
   - 빈 객체 (`ApiResponse.empty()`)
 - 요청 JSON 예시
@@ -101,9 +105,7 @@
     "id": 101
   },
   "body": {
-    "content": "프로세스 정리와 리스크 대응이 우수합니다.",
-    "period": "2026-Q2",
-    "worklogId": 9001
+    "content": "프로세스 정리와 리스크 대응이 우수합니다."
   }
 }
 ```
@@ -116,10 +118,10 @@
 }
 ```
 - 상태/에러
-  - 성공: `201 Created` [추론]
-  - 대표 오류: `USER_NOT_FOUND` [추론]
-  - 대표 오류: `EVALUATION_SELF_WRITE_FORBIDDEN` [추론]
-  - 대표 오류: `EVALUATION_ACCESS_DENIED` [추론]
+  - 성공: `201 Created`
+  - 대표 오류: `USER_NOT_FOUND`
+  - 대표 오류: `EVALUATION_SELF_WRITE_FORBIDDEN`
+  - 대표 오류: `EVALUATION_ACCESS_DENIED`
 - ERD 연관
   - `tb_user_evaluation`
 - 근거
@@ -128,4 +130,3 @@
 
 ## 6. 추론 메모
 - inventory matrix 는 legacy 단수형 inventory path 를 유지하지만, 본문은 normalized `/api/users/{id}/evaluations` 를 canonical 로 사용한다.
-

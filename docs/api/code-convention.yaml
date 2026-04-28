@@ -45,6 +45,14 @@ springboot:
   - id: SB-009
     rule: 권한 체크는 @PreAuthorize("hasRole('ROLE_NAME')")로 Controller 메서드에 선언한다. 데이터 소유권 체크(부서 소속 등)는 Service에서 CustomUserPrincipal로 처리한다.
     stacks: [springboot]
+  - id: SB-009A
+    rule: |
+      `@AuthenticationPrincipal CustomUserPrincipal` 을 받는 protected Controller 경유 public Service 는
+      Controller/Security 체인이 principal 존재와 role claim 유효성을 이미 보장한다고 가정한다.
+      따라서 같은 Service 안에서 principal null 검사나 role string 파싱 try-catch 를 중복 작성하지 않는다.
+      Service 는 `principal.userId()` 를 바로 사용해 도메인 사용자 조회와 ownership 판단에 집중한다.
+      이 전제를 깨는 비 HTTP/internal 호출 경로가 실제로 생길 때만 별도 guard 또는 adapter 를 추가한다.
+    stacks: [springboot]
   - id: SB-010
     rule: DB 마이그레이션은 Flyway로 관리한다. 수동 SQL 직접 실행 금지. 마이그레이션 파일(V{version}__{description}.sql)은 반드시 커밋한다.
     stacks: [springboot]
@@ -106,6 +114,9 @@ springboot:
       Repository 조회 전용 read shape 는 API DTO 와 구분하며 `dto` 로 부르지 않는다. Repository read shape 의 상세 규칙과 패키지 배치는 SB-016 JOOQ projection 규칙을 따른다.
       Entity 생성/수정은 Service 또는 Domain의 책임으로 둔다.
       필드 복사 로직이 필요하더라도 우선 명시적 코드로 작성하고, 실제 중복 문제가 확인될 때만 별도 추상화를 검토한다.
+      Service 내부에서 id 기반 존재성 검증 helper 가 필요하면 `get{Entity}OrThrow` 네이밍을 사용한다.
+      예: `getUserOrThrow`, `getTeamOrThrow`, `getDepartmentOrThrow`.
+      `getRequiredUser` 같은 표현보다 `*OrThrow` suffix 를 우선해 예외 발생 계약을 이름에 드러낸다.
     stacks: [springboot]
   - id: SB-016
     rule: |
@@ -118,6 +129,9 @@ springboot:
       projection 은 read-only 조회 결과 타입이며 Entity, API DTO 와 구분한다.
       projection 기본 위치는 domain/{module}/repository/jooq/projection/ 하위 패키지다.
       projection 은 재사용 가능한 top-level 타입으로 선언하는 것을 기본으로 하며, 특정 JOOQ repository 내부 nested record 로 숨기지 않는다.
+      projection 생성 책임을 projection 타입 옆에 두는 편이 더 읽기 쉬우면 top-level projection 안에
+      `from(Record, GeneratedTable...)` 형태의 jOOQ 전용 static factory 를 둘 수 있다.
+      단, query 조립(where/order/group/limit/offset) 책임은 repository 에 둔다.
       Service 가 repository 조회 입력을 별도로 정규화해야 하면 입력 vocabulary 는 `domain/{module}/repository/jooq/query/*Query` top-level 타입으로 둔다.
       repository 는 `Get*ApiDto.Request` 같은 controller Request DTO 를 직접 받지 않고, service 가 기본값/정렬/visibility 를 반영한 query 를 받는다.
       `query/*Query` 는 public API DTO 가 아니라 service -> repository 내부 계약이다.
