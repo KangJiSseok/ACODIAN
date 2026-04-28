@@ -1,6 +1,7 @@
 aiohappyeyeballs==2.6.1
 aiohttp==3.13.5
 aiosignal==1.4.0
+alembic==1.18.4
 amqp==5.3.1
 annotated-doc==0.0.4
 annotated-types==0.7.0
@@ -52,6 +53,7 @@ numpy==2.4.4
 orjson==3.11.8
 ormsgpack==1.12.2
 packaging==26.1
+pgvector==0.4.2
 prompt_toolkit==3.0.52
 propcache==0.4.1
 psycopg==3.3.3
