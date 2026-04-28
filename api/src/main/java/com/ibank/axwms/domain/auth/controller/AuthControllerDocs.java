@@ -1,9 +1,9 @@
 package com.ibank.axwms.domain.auth.controller;
 
 import com.ibank.axwms.domain.auth.dto.LoginApiDto;
+import com.ibank.axwms.domain.auth.dto.SignupApiDto;
 import com.ibank.axwms.global.response.EmptyResponse;
 import io.swagger.v3.oas.annotations.Operation;
-import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.headers.Header;
 import io.swagger.v3.oas.annotations.media.Content;
 import io.swagger.v3.oas.annotations.media.Schema;
@@ -13,6 +13,7 @@ import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.multipart.MultipartFile;
 
 @Tag(name = "Auth", description = "인증/인가 API")
 public interface AuthControllerDocs {
@@ -47,6 +48,26 @@ public interface AuthControllerDocs {
     EmptyResponse login(
             LoginApiDto.Request request,
             HttpServletResponse response
+    );
+
+    @Operation(
+            summary = "회원가입",
+            description = "비인증 사용자가 multipart/form-data 로 계정을 생성한다. "
+                    + "요청 JSON part(`request`)에는 부서/사용자/직책/재직 등 상태 정보를 담고, "
+                    + "선택 file part(`profile_image`)가 있으면 프로필 이미지를 함께 업로드한다. "
+                    + "signup 성공 시 토큰 헤더/쿠키는 발급하지 않는다."
+    )
+    @ApiResponses({
+            @ApiResponse(responseCode = "201", description = "회원가입에 성공한다."),
+            @ApiResponse(responseCode = "400", description = "요청 값 검증에 실패했거나 지원하지 않는 title_name 이다.", content = @Content),
+            @ApiResponse(responseCode = "404", description = "활성 부서를 찾을 수 없다.", content = @Content),
+            @ApiResponse(responseCode = "409", description = "이미 사용 중인 이메일이다.", content = @Content),
+            @ApiResponse(responseCode = "503", description = "프로필 이미지 업로드를 처리할 수 없다. 잠시 후 다시 시도해야 한다.", content = @Content)
+    })
+    @PostMapping("/signup")
+    EmptyResponse signup(
+            SignupApiDto.Request request,
+            MultipartFile profileImage
     );
 
     @Operation(

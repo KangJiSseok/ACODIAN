@@ -2,24 +2,36 @@ package com.ibank.axwms.domain.auth.service;
 
 import com.ibank.axwms.domain.auth.dto.LoginApiDto;
 import com.ibank.axwms.domain.auth.dto.RefreshAccessTokenApiDto;
+import com.ibank.axwms.domain.auth.dto.SignupApiDto;
+import com.ibank.axwms.domain.organization.user.service.ProfileImageStorageService;
+import com.ibank.axwms.domain.organization.department.DepartmentStatus;
+import com.ibank.axwms.domain.organization.department.repository.DepartmentRepository;
+import com.ibank.axwms.domain.organization.user.event.ProfileImageCommittedEvent;
+import com.ibank.axwms.domain.organization.user.service.ProfileImageStorageService.TempUploadResult;
 import com.ibank.axwms.domain.organization.user.EmploymentStatus;
+import com.ibank.axwms.domain.organization.user.UserRole;
 import com.ibank.axwms.domain.organization.user.entity.User;
 import com.ibank.axwms.domain.organization.user.repository.UserRepository;
 import com.ibank.axwms.global.error.BusinessException;
 import com.ibank.axwms.global.error.ErrorCode;
 import lombok.RequiredArgsConstructor;
+import org.springframework.context.ApplicationEventPublisher;
+import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
-import org.springframework.security.crypto.password.PasswordEncoder;
+import org.springframework.web.multipart.MultipartFile;
 
 @Service
 @RequiredArgsConstructor
 @Transactional(readOnly = true)
 public class AuthService {
 
+    private final DepartmentRepository departmentRepository;
     private final UserRepository userRepository;
     private final PasswordEncoder passwordEncoder;
     private final TokenService tokenService;
+    private final ProfileImageStorageService profileImageStorageService;
+    private final ApplicationEventPublisher eventPublisher;
 
     /**
      * 이메일과 비밀번호를 검증하고 발급된 access/refresh 토큰 쌍을 반환한다.
@@ -32,6 +44,40 @@ public class AuthService {
 
         TokenService.IssuedTokens tokens = tokenService.issueLoginTokens(user);
         return new LoginApiDto.Result(tokens.accessToken(), tokens.refreshToken());
+    }
+
+    /**
+     * 공개 회원가입 요청을 처리한다.
+     * auth 가 공개 진입점을 소유하되, 사용자 role/title 규칙과 엔티티 생성 불변식은 user 도메인 타입을 재사용한다.
+     */
+    @Transactional
+    public void signup(SignupApiDto.Request request, MultipartFile profileImage) {
+        validateDuplicateEmail(request.email());
+        validateActiveDepartment(request.departmentId());
+
+        UserRole roleCode = UserRole.findByTitleName(request.titleName())
+                .orElseThrow(() -> new BusinessException(ErrorCode.AUTH_SIGNUP_INVALID_TITLE_NAME));
+        String passwordHash = passwordEncoder.encode(request.password());
+        TempUploadResult tempUpload = profileImageStorageService.uploadTemp(profileImage);
+        String profileImageUrl = tempUpload != null ? tempUpload.finalUrl() : null;
+
+        userRepository.save(User.create(
+                request.departmentId(),
+                request.userName(),
+                request.email(),
+                passwordHash,
+                roleCode,
+                request.employmentStatus(),
+                request.positionName(),
+                request.titleName(),
+                request.joinDate(),
+                request.phone(),
+                profileImageUrl
+        ));
+
+        if (tempUpload != null) {
+            eventPublisher.publishEvent(new ProfileImageCommittedEvent(tempUpload.tempKey(), tempUpload.finalKey()));
+        }
     }
 
     /**
@@ -81,6 +127,25 @@ public class AuthService {
     private User findRefreshUser(Long userId) {
         return userRepository.findById(userId)
                 .orElseThrow(() -> new BusinessException(ErrorCode.AUTH_INVALID_REFRESH_TOKEN));
+    }
+
+    /**
+     * 이미 가입된 이메일이면 회원가입을 거부한다.
+     * 로그인과 달리 signup 은 이메일 중복 여부를 명시적으로 알려도 되는 계약이라 별도 에러 코드로 선제 차단한다.
+     */
+    private void validateDuplicateEmail(String email) {
+        if (userRepository.existsByEmail(email)) {
+            throw new BusinessException(ErrorCode.AUTH_SIGNUP_DUPLICATE_EMAIL);
+        }
+    }
+
+    /**
+     * 활성 상태의 부서만 회원가입 대상으로 허용한다.
+     * 존재하지 않거나 비활성인 부서는 모두 가입 불가로 처리해, 휴면 조직 하위로 사용자가 생성되는 것을 막는다.
+     */
+    private void validateActiveDepartment(Long departmentId) {
+        departmentRepository.findByIdAndStatusCode(departmentId, DepartmentStatus.ACTIVE)
+                .orElseThrow(() -> new BusinessException(ErrorCode.DEPARTMENT_NOT_FOUND));
     }
 
     /**
