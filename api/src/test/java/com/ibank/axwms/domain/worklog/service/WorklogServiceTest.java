@@ -216,8 +216,7 @@ class WorklogServiceTest {
                 USER_ID,
                 "홍길동",
                 INSTRUCTION_DATE,
-                DUE_DATE,
-                1
+                DUE_DATE
         );
     }
 
