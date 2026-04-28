@@ -15,6 +15,9 @@ export default function LoginPage() {
   // 이메일 입력값
   const [email, setEmail] = useState("");
 
+  // 이메일 검증 정규식
+  const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+
   // 비밀번호 입력값
   const [password, setPassword] = useState("");
 
@@ -29,11 +32,23 @@ export default function LoginPage() {
     event.preventDefault();
     // form 기본 새로고침 동작 방지
 
+    const normalizedEmail = email.trim().toLowerCase();
+
+    if (!normalizedEmail) {
+      setErrorMessage("이메일을 입력해주세요.");
+      return;
+    }
+
+    if (!EMAIL_REGEX.test(normalizedEmail)) {
+      setErrorMessage("올바른 이메일 형식으로 입력해주세요.");
+      return;
+    }
+
     setErrorMessage(null);
     setIsSubmitting(true);
 
     try {
-      await login({ email, password });
+      await login({ email: normalizedEmail, password });
       // auth.ts의 login은 토큰 저장 + /users/me 조회 + 전역 상태 설정까지 해줌
 
       router.replace("/");
