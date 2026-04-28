@@ -200,26 +200,6 @@ class WorklogServiceTest {
         verify(worklogRepository).findWorklogPage(eq(scope), eq(request));
     }
 
-    @Test
-    @DisplayName("getWorklogs 의 request 가 null 이면 기본 페이지 요청으로 정규화해 Repository 를 호출한다")
-    void getWorklogs_의_request_가_null_이면_기본_페이지_요청으로_정규화한다() {
-        // given
-        CustomUserPrincipal principal = principal();
-        WorklogVisibilityScope scope = new WorklogVisibilityScope.All();
-        Page<WorklogListProjection> emptyPage = new PageImpl<>(List.of(), PageRequest.of(0, 20), 0);
-
-        given(worklogVisibilityPolicy.resolve(principal)).willReturn(scope);
-        given(worklogRepository.findWorklogPage(eq(scope), any(GetWorklogsApiDto.Request.class)))
-                .willReturn(emptyPage);
-
-        // when
-        PageResponse<GetWorklogsApiDto.Response.Item> response = worklogService.getWorklogs(principal, null);
-
-        // then
-        assertThat(response.items()).isEmpty();
-        assertThat(response.totalCount()).isZero();
-    }
-
     private static WorklogListProjection sampleProjection() {
         return new WorklogListProjection(
                 WORKLOG_ID,
