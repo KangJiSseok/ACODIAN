@@ -57,6 +57,11 @@ services:
       AWS_S3_PUBLIC_BASE_URL: ${AWS_S3_PUBLIC_BASE_URL}
       AWS_ACCESS_KEY_ID: ${AWS_ACCESS_KEY_ID}
       AWS_SECRET_ACCESS_KEY: ${AWS_SECRET_ACCESS_KEY}
+      # 프로필 이미지 임시객체 정리 cron. 컨테이너 TZ 를 Asia/Seoul 로 두면 application.yml 기본값(0 20 22 * * *) 이 KST 22:20.
+      TZ: ${API_TZ:-Asia/Seoul}
+      PROFILE_IMAGE_CLEANUP_CRON: ${PROFILE_IMAGE_CLEANUP_CRON:-0 20 22 * * *}
+      PROFILE_IMAGE_TEMP_PREFIX: ${PROFILE_IMAGE_TEMP_PREFIX:-temp/}
+      PROFILE_IMAGE_RETENTION_DAYS: ${PROFILE_IMAGE_RETENTION_DAYS:-1}
     ports:
       - "127.0.0.1:${API_HOST_PORT:?API_HOST_PORT required (env-specific offset, e.g. 8100/8101)}:8100"
     restart: unless-stopped

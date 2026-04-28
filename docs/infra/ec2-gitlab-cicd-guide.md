@@ -280,6 +280,9 @@ AWS_S3_BASE_PREFIX=<예: staging>
 AWS_S3_PUBLIC_BASE_URL=<CDN 미사용 시 S3 기본 URL 또는 CloudFront URL>
 AWS_ACCESS_KEY_ID=<staging 전용 IAM access key id>
 AWS_SECRET_ACCESS_KEY=<staging 전용 IAM secret access key>
+PROFILE_IMAGE_CLEANUP_CRON=0 20 22 * * *
+PROFILE_IMAGE_TEMP_PREFIX=temp/
+PROFILE_IMAGE_RETENTION_DAYS=1
 ```
 
 ### production 예시
@@ -305,7 +308,12 @@ AWS_S3_BASE_PREFIX=<예: production>
 AWS_S3_PUBLIC_BASE_URL=<CDN 미사용 시 S3 기본 URL 또는 CloudFront URL>
 AWS_ACCESS_KEY_ID=<production 전용 IAM access key id>
 AWS_SECRET_ACCESS_KEY=<production 전용 IAM secret access key>
+PROFILE_IMAGE_CLEANUP_CRON=0 20 22 * * *
+PROFILE_IMAGE_TEMP_PREFIX=temp/
+PROFILE_IMAGE_RETENTION_DAYS=1
 ```
+
+> `PROFILE_IMAGE_CLEANUP_CRON` 의 cron 식은 컨테이너 TZ 기준이다. compose 가 api 서비스에 `TZ=Asia/Seoul` 을 기본 주입하므로 위 값은 **KST 22:20** 으로 해석된다. UTC 운영이 필요하면 `.env` 에 `API_TZ=UTC` 를 추가하거나 cron 식 자체를 UTC 기준으로 다시 쓴다.
 
 > `WEB_IMAGE` / `API_IMAGE` 는 `.env` 에 두지 않는다. CI 가 `deploy_dev` / `deploy_prod` 단계에서 `WEB_IMAGE='ghcr.io/...:<ref-slug>'` / `API_IMAGE='...'` 형태로 SSH 호출 환경변수로 직접 주입한다 (ADR-003 의 "환경별 값은 서버 `.env` 또는 GitLab Variables" 원칙 + ADR-007 의 ghcr 네임스페이스).
 
