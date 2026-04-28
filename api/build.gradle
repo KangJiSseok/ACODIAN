@@ -44,8 +44,6 @@ dependencies {
     // --- Lombok ---
     compileOnly 'org.projectlombok:lombok'
 
-    // --- DevTools ---
-    developmentOnly 'org.springframework.boot:spring-boot-devtools'
 
     // --- Database Driver ---
     runtimeOnly 'org.postgresql:postgresql'

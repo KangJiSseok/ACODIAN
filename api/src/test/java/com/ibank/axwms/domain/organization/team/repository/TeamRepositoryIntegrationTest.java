@@ -54,7 +54,10 @@ class TeamRepositoryIntegrationTest extends IntegrationTestSupport {
     private DSLContext dsl;
 
     private Long logisticsDepartmentId;
+    private Long operationsDepartmentId;
+    private Long supportDepartmentId;
     private Long principalUserId;
+    private Long deptHeadUserId;
     private Long activeLeadTeamId;
 
     @BeforeEach
@@ -66,7 +69,7 @@ class TeamRepositoryIntegrationTest extends IntegrationTestSupport {
     @Test
     @DisplayName("팀 목록 조회는 최신 spec 필드와 정렬 우선순위를 반영한다")
     void 팀_목록_조회는_최신_spec_필드와_정렬_우선순위를_반영한다() {
-        Page<TeamListProjection> page = teamRepository.findTeamPage(new TeamPageQuery(1, 20, logisticsDepartmentId, null, principalUserId));
+        Page<TeamListProjection> page = teamRepository.findTeamPage(new TeamPageQuery(1, 20, null, null, principalUserId, UserRole.TEAM_LEAD));
 
         assertThat(page.getContent())
                 .extracting(
@@ -81,8 +84,30 @@ class TeamRepositoryIntegrationTest extends IntegrationTestSupport {
                 .containsExactly(
                         Tuple.tuple("물류혁신TF", "홍길동", 2, true, "플랫폼 총괄", "PRIMARY", true),
                         Tuple.tuple("운영지원TF", "김서포트", 2, false, "협업", "SECONDARY", false),
-                        Tuple.tuple("휴면TF", "이휴면", 2, false, null, null, false)
+                        Tuple.tuple("타부서TF", "타부서", 3, false, "외부 협업", "SECONDARY", false)
                 );
+    }
+
+    @Test
+    @DisplayName("DEPT_HEAD 팀 목록 조회는 본인 부서와 ACTIVE membership 팀의 합집합만 노출한다")
+    void DEPT_HEAD_팀_목록_조회는_본인_부서와_ACTIVE_membership_팀의_합집합만_노출한다() {
+        Page<TeamListProjection> visiblePage = teamRepository.findTeamPage(new TeamPageQuery(1, 20, null, logisticsDepartmentId, deptHeadUserId, UserRole.DEPT_HEAD));
+        Page<TeamListProjection> outsideDepartmentPage = teamRepository.findTeamPage(new TeamPageQuery(1, 20, supportDepartmentId, logisticsDepartmentId, deptHeadUserId, UserRole.DEPT_HEAD));
+
+        assertThat(visiblePage.getContent())
+                .extracting(TeamListProjection::teamName)
+                .containsExactly("물류혁신TF", "운영지원TF", "타부서TF", "휴면TF");
+        assertThat(outsideDepartmentPage.getContent()).isEmpty();
+    }
+
+    @Test
+    @DisplayName("팀 목록 조회는 visible scope 안에서만 departmentId 필터를 적용한다")
+    void 팀_목록_조회는_visible_scope_안에서만_departmentId_필터를_적용한다() {
+        Page<TeamListProjection> page = teamRepository.findTeamPage(new TeamPageQuery(1, 20, operationsDepartmentId, null, principalUserId, UserRole.TEAM_LEAD));
+
+        assertThat(page.getContent())
+                .extracting(TeamListProjection::teamName)
+                .containsExactly("타부서TF");
     }
 
     @Test
@@ -166,18 +191,22 @@ class TeamRepositoryIntegrationTest extends IntegrationTestSupport {
     private void seedTeams() {
         Department logisticsDepartment = departmentRepository.save(createDepartment("물류본부", DepartmentStatus.ACTIVE));
         Department operationsDepartment = departmentRepository.save(createDepartment("운영본부", DepartmentStatus.ACTIVE));
+        Department supportDepartment = departmentRepository.save(createDepartment("지원본부", DepartmentStatus.ACTIVE));
         logisticsDepartmentId = logisticsDepartment.getId();
+        operationsDepartmentId = operationsDepartment.getId();
+        supportDepartmentId = supportDepartment.getId();
 
         User logisticsHead = userRepository.save(createUser(logisticsDepartmentId, "박본부", "dept-head@ibank.com", EmploymentStatus.ACTIVE, UserRole.DIRECTOR));
         logisticsDepartment.assignHeadUserId(logisticsHead.getId());
         departmentRepository.save(logisticsDepartment);
 
+        User departmentHead = userRepository.save(createUser(logisticsDepartmentId, "최부장", "logistics-head@ibank.com", EmploymentStatus.ACTIVE, UserRole.DEPT_HEAD));
+        deptHeadUserId = departmentHead.getId();
         User teamLeader = userRepository.save(createUser(logisticsDepartmentId, "홍길동", "leader@ibank.com", EmploymentStatus.ACTIVE, UserRole.TEAM_LEAD));
         User activeMember = userRepository.save(createUser(logisticsDepartmentId, "김영희", "member@ibank.com", EmploymentStatus.ACTIVE, UserRole.MEMBER));
         User inactiveTeamMember = userRepository.save(createUser(logisticsDepartmentId, "이휴면", "inactive-team@ibank.com", EmploymentStatus.ACTIVE, UserRole.MEMBER));
         User secondaryTeamLeader = userRepository.save(createUser(logisticsDepartmentId, "김서포트", "support@ibank.com", EmploymentStatus.ACTIVE, UserRole.MEMBER));
         User leaveUser = userRepository.save(createUser(logisticsDepartmentId, "정휴직", "leave@ibank.com", EmploymentStatus.LEAVE, UserRole.MEMBER));
-        Long operationsDepartmentId = operationsDepartment.getId();
         User otherDeptUser = userRepository.save(createUser(operationsDepartmentId, "타부서", "other-dept@ibank.com", EmploymentStatus.ACTIVE, UserRole.MEMBER));
         principalUserId = teamLeader.getId();
 
@@ -185,17 +214,20 @@ class TeamRepositoryIntegrationTest extends IntegrationTestSupport {
         Team activeSecondaryTeam = teamRepository.save(createTeam(logisticsDepartmentId, "운영지원TF", TeamStatus.ACTIVE));
         Team inactiveTeam = teamRepository.save(createTeam(logisticsDepartmentId, "휴면TF", TeamStatus.INACTIVE));
         Team otherDepartmentTeam = teamRepository.save(createTeam(operationsDepartmentId, "타부서TF", TeamStatus.ACTIVE));
+        Team outsideVisibleTeam = teamRepository.save(createTeam(supportDepartmentId, "비가시지원TF", TeamStatus.ACTIVE));
         activeLeadTeamId = activeLeadTeam.getId();
         Long activeSecondaryTeamId = activeSecondaryTeam.getId();
         Long inactiveTeamId = inactiveTeam.getId();
 
+        userTeamRepository.save(UserTeam.create(departmentHead.getId(), otherDepartmentTeam.getId(), false, "부서간 협업", "SECONDARY", false, UserTeamStatus.ACTIVE));
         userTeamRepository.save(UserTeam.create(teamLeader.getId(), activeLeadTeamId, true, "플랫폼 총괄", "PRIMARY", true, UserTeamStatus.ACTIVE));
         userTeamRepository.save(UserTeam.create(activeMember.getId(), activeLeadTeamId, false, "WMS 운영", "SECONDARY", false, UserTeamStatus.ACTIVE));
         userTeamRepository.save(UserTeam.create(teamLeader.getId(), activeSecondaryTeamId, false, "협업", "SECONDARY", false, UserTeamStatus.ACTIVE));
+        userTeamRepository.save(UserTeam.create(teamLeader.getId(), otherDepartmentTeam.getId(), false, "외부 협업", "SECONDARY", false, UserTeamStatus.ACTIVE));
         userTeamRepository.save(UserTeam.create(secondaryTeamLeader.getId(), activeSecondaryTeamId, true, "운영 지원", "PRIMARY", true, UserTeamStatus.ACTIVE));
         userTeamRepository.save(UserTeam.create(inactiveTeamMember.getId(), inactiveTeamId, true, "휴면 담당", "PRIMARY", true, UserTeamStatus.ACTIVE));
         userTeamRepository.save(UserTeam.create(leaveUser.getId(), inactiveTeamId, false, "휴직 담당", "SECONDARY", false, UserTeamStatus.ACTIVE));
-        userTeamRepository.save(UserTeam.create(otherDeptUser.getId(), otherDepartmentTeam.getId(), false, "타부서 담당", "PRIMARY", true, UserTeamStatus.ACTIVE));
+        userTeamRepository.save(UserTeam.create(otherDeptUser.getId(), otherDepartmentTeam.getId(), true, "타부서 담당", "PRIMARY", true, UserTeamStatus.ACTIVE));
         userTeamRepository.save(UserTeam.create(otherDeptUser.getId(), activeLeadTeamId, false, "과거 소속", "SECONDARY", false, UserTeamStatus.LEFT));
 
         insertWorklog(teamLeader.getId(), activeLeadTeamId, "완료 업무", "완료 요청", "완료 본문", WorklogStatus.COMPLETED, WorklogImportance.URGENT, "완료 요약", false);

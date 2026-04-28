@@ -1,10 +1,5 @@
 package com.ibank.axwms.domain.organization.team.service;
 
-import com.ibank.axwms.domain.organization.team.entity.Team;
-import com.ibank.axwms.domain.organization.team.repository.TeamRepository;
-import com.ibank.axwms.domain.organization.team.repository.UserTeamRepository;
-import com.ibank.axwms.global.error.BusinessException;
-import com.ibank.axwms.global.error.ErrorCode;
 import com.ibank.axwms.domain.organization.team.UserTeamStatus;
 import com.ibank.axwms.domain.organization.team.dto.BulkUpsertTeamUsersApiDto;
 import com.ibank.axwms.domain.organization.team.dto.CreateTeamApiDto;
@@ -46,9 +41,8 @@ public class TeamService {
     private final TeamRepository teamRepository;
     private final UserTeamRepository userTeamRepository;
 
-    /** 최신 team spec 기준으로 조회 query 를 정규화한 뒤 repository projection 을 API 응답으로 조립한다. */
+    /** 조회 query 를 정규화한 뒤 repository projection 을 API 응답으로 조립한다. */
     public PageResponse<GetTeamsApiDto.Response.Item> getTeams(CustomUserPrincipal principal, GetTeamsApiDto.Request request) {
-        teamAccessPolicy.assertReadable(principal);
         return GetTeamsApiDto.Response.fromPage(teamRepository.findTeamPage(normalizeTeamPageQuery(principal, request)));
     }
 
@@ -202,28 +196,26 @@ public class TeamService {
         return userTeamRepository.existsByUserIdAndTeamId(userId, teamId);
     }
 
+    /**  role에 따라 repository에 넘길 query DTO를 각 각 다르게 채움. */
     private TeamPageQuery normalizeTeamPageQuery(CustomUserPrincipal principal, GetTeamsApiDto.Request request) {
         GetTeamsApiDto.Request normalizedRequest = request == null
                 ? new GetTeamsApiDto.Request(null, null, null)
                 : request;
         UserRole role = getRequiredRole(principal);
-        Long requestedDepartmentId = normalizedRequest.departmentId();
-        if (role == UserRole.DEPT_HEAD) {
-            User principalUser = getRequiredPrincipalUser(principal);
-            Long effectiveDepartmentId = requestedDepartmentId == null ? principalUser.getDepartmentId() : requestedDepartmentId;
-            teamAccessPolicy.assertDepartmentOwnership(principal, principalUser.getDepartmentId(), effectiveDepartmentId);
-            return new TeamPageQuery(normalizedRequest.pageOrDefault(), normalizedRequest.pageSizeOrDefault(), effectiveDepartmentId, null, principal.userId());
-        }
-        if (role == UserRole.TEAM_LEAD || role == UserRole.MEMBER) {
-            return new TeamPageQuery(
-                    normalizedRequest.pageOrDefault(),
-                    normalizedRequest.pageSizeOrDefault(),
-                    requestedDepartmentId,
-                    getRequiredPrincipalTeamId(principal.userId()),
-                    principal.userId()
-            );
-        }
-        return new TeamPageQuery(normalizedRequest.pageOrDefault(), normalizedRequest.pageSizeOrDefault(), requestedDepartmentId, null, principal.userId());
+
+        //
+        Long principalDepartmentId = role == UserRole.DEPT_HEAD
+                ? getRequiredPrincipalUser(principal).getDepartmentId()
+                : null;
+
+        return new TeamPageQuery(
+                normalizedRequest.pageOrDefault(),
+                normalizedRequest.pageSizeOrDefault(),
+                normalizedRequest.departmentId(),
+                principalDepartmentId,
+                principal.userId(),
+                role
+        );
     }
 
     private TeamSummaryQuery normalizeTeamSummaryQuery(CustomUserPrincipal principal, GetTeamsSummaryApiDto.Request request) {
