@@ -14,17 +14,20 @@ import org.springframework.stereotype.Component;
 public class TempImageCleanupScheduler {
 
     private final ObjectStoragePort objectStoragePort;
+    private final ProfileImageCleanupProperties cleanupProperties;
 
     public TempImageCleanupScheduler(
-            @Qualifier("profileImageS3ObjectStorageAdapter") ObjectStoragePort objectStoragePort
+            @Qualifier("profileImageS3ObjectStorageAdapter") ObjectStoragePort objectStoragePort,
+            ProfileImageCleanupProperties cleanupProperties
     ) {
         this.objectStoragePort = objectStoragePort;
+        this.cleanupProperties = cleanupProperties;
     }
 
-    @Scheduled(cron = "0 20 22 * * *")
+    @Scheduled(cron = "${storage.profile-image.cleanup.cron}")
     public void deleteOrphanedTempImages() {
-        String prefix = "temp/";
-        Instant cutoff = Instant.now().minus(0, ChronoUnit.DAYS);
+        String prefix = cleanupProperties.tempPrefix();
+        Instant cutoff = Instant.now().minus(cleanupProperties.retentionDays(), ChronoUnit.DAYS);
 
         List<String> keys = objectStoragePort.listKeysUploadedBefore(prefix, cutoff);
         int deleted = 0;

@@ -88,6 +88,11 @@ public class DepartmentService {
         departmentRepository.save(department);
     }
 
+    /**  외부 도메인이 활성 부서 가입 가능 여부를 재사용할 수 있도록 검증 경계를 노출한다. */
+    public void validateActiveDepartment(Long departmentId) {
+        getActiveDepartment(departmentId);
+    }
+
     /** JOOQ projection 을 API 응답용 부서 요약 record 로 변환한다. */
     private GetDepartmentsApiDto.Response.DepartmentSummary toDepartmentSummary(DepartmentListItemProjection department) {
         return new GetDepartmentsApiDto.Response.DepartmentSummary(

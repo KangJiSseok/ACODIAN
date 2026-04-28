@@ -60,6 +60,11 @@ storage:
     public-base-url: ${AWS_S3_PUBLIC_BASE_URL}
     access-key-id: ${AWS_ACCESS_KEY_ID}
     secret-access-key: ${AWS_SECRET_ACCESS_KEY}
+  profile-image:
+    cleanup:
+      cron: ${PROFILE_IMAGE_CLEANUP_CRON:0 20 22 * * *}
+      temp-prefix: ${PROFILE_IMAGE_TEMP_PREFIX:temp/}
+      retention-days: ${PROFILE_IMAGE_RETENTION_DAYS:1}
 
 auth:
   refresh-cookie:

@@ -1,6 +1,7 @@
 package com.ibank.axwms.global.config;
 
 import com.ibank.axwms.domain.file.external.S3StorageProperties;
+import com.ibank.axwms.domain.organization.user.scheduler.ProfileImageCleanupProperties;
 import org.springframework.boot.context.properties.EnableConfigurationProperties;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
@@ -10,7 +11,10 @@ import software.amazon.awssdk.regions.Region;
 import software.amazon.awssdk.services.s3.S3Client;
 
 @Configuration(proxyBeanMethods = false)
-@EnableConfigurationProperties(S3StorageProperties.class)
+@EnableConfigurationProperties({
+        S3StorageProperties.class,
+        ProfileImageCleanupProperties.class
+})
 public class StorageConfig {
 
     @Bean

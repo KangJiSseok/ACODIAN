@@ -4,6 +4,7 @@ import com.ibank.axwms.domain.auth.dto.LoginApiDto;
 import com.ibank.axwms.domain.auth.dto.SignupApiDto;
 import com.ibank.axwms.global.response.EmptyResponse;
 import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.headers.Header;
 import io.swagger.v3.oas.annotations.media.Content;
 import io.swagger.v3.oas.annotations.media.Schema;
@@ -13,6 +14,7 @@ import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.RequestPart;
 import org.springframework.web.multipart.MultipartFile;
 
 @Tag(name = "Auth", description = "인증/인가 API")
@@ -60,13 +62,18 @@ public interface AuthControllerDocs {
     @ApiResponses({
             @ApiResponse(responseCode = "201", description = "회원가입에 성공한다."),
             @ApiResponse(responseCode = "400", description = "요청 값 검증에 실패했거나 지원하지 않는 title_name 이다.", content = @Content),
+            @ApiResponse(responseCode = "413", description = "multipart 업로드 크기 제한을 초과했다.", content = @Content),
             @ApiResponse(responseCode = "404", description = "활성 부서를 찾을 수 없다.", content = @Content),
             @ApiResponse(responseCode = "409", description = "이미 사용 중인 이메일이다.", content = @Content),
             @ApiResponse(responseCode = "503", description = "프로필 이미지 업로드를 처리할 수 없다. 잠시 후 다시 시도해야 한다.", content = @Content)
     })
     @PostMapping("/signup")
     EmptyResponse signup(
+            @Parameter(description = "회원가입 필수 JSON part. multipart part name 은 `request` 이다.")
+            @RequestPart("request")
             SignupApiDto.Request request,
+            @Parameter(description = "선택 프로필 이미지 file part. multipart part name 은 `profile_image` 이다.")
+            @RequestPart(value = "profile_image", required = false)
             MultipartFile profileImage
     );
 

@@ -3,15 +3,14 @@ package com.ibank.axwms.domain.auth.service;
 import com.ibank.axwms.domain.auth.dto.LoginApiDto;
 import com.ibank.axwms.domain.auth.dto.RefreshAccessTokenApiDto;
 import com.ibank.axwms.domain.auth.dto.SignupApiDto;
-import com.ibank.axwms.domain.organization.user.service.ProfileImageStorageService;
-import com.ibank.axwms.domain.organization.department.DepartmentStatus;
-import com.ibank.axwms.domain.organization.department.repository.DepartmentRepository;
+import com.ibank.axwms.domain.organization.department.service.DepartmentService;
 import com.ibank.axwms.domain.organization.user.event.ProfileImageCommittedEvent;
 import com.ibank.axwms.domain.organization.user.service.ProfileImageStorageService.TempUploadResult;
 import com.ibank.axwms.domain.organization.user.EmploymentStatus;
 import com.ibank.axwms.domain.organization.user.UserRole;
 import com.ibank.axwms.domain.organization.user.entity.User;
 import com.ibank.axwms.domain.organization.user.repository.UserRepository;
+import com.ibank.axwms.domain.organization.user.service.ProfileImageStorageService;
 import com.ibank.axwms.global.error.BusinessException;
 import com.ibank.axwms.global.error.ErrorCode;
 import lombok.RequiredArgsConstructor;
@@ -26,7 +25,7 @@ import org.springframework.web.multipart.MultipartFile;
 @Transactional(readOnly = true)
 public class AuthService {
 
-    private final DepartmentRepository departmentRepository;
+    private final DepartmentService departmentService;
     private final UserRepository userRepository;
     private final PasswordEncoder passwordEncoder;
     private final TokenService tokenService;
@@ -144,8 +143,7 @@ public class AuthService {
      * 존재하지 않거나 비활성인 부서는 모두 가입 불가로 처리해, 휴면 조직 하위로 사용자가 생성되는 것을 막는다.
      */
     private void validateActiveDepartment(Long departmentId) {
-        departmentRepository.findByIdAndStatusCode(departmentId, DepartmentStatus.ACTIVE)
-                .orElseThrow(() -> new BusinessException(ErrorCode.DEPARTMENT_NOT_FOUND));
+        departmentService.validateActiveDepartment(departmentId);
     }
 
     /**

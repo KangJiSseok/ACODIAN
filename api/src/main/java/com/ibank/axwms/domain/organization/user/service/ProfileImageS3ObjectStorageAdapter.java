@@ -35,7 +35,7 @@ public class ProfileImageS3ObjectStorageAdapter implements ObjectStoragePort {
         this.properties = properties;
     }
 
-    /** 파일을 S3에 업로드하고 공개 접근 URL 을 반환한다. */
+    /** 파일을 S3에 업로드하고 포트 계약대로 상대 storage key 를 반환한다. */
     @Override
     public String upload(MultipartFile file, String key) {
         String qualifiedKey = qualify(key);
@@ -47,7 +47,7 @@ public class ProfileImageS3ObjectStorageAdapter implements ObjectStoragePort {
                 .build();
         try (InputStream inputStream = file.getInputStream()) {
             s3Client.putObject(request, RequestBody.fromInputStream(inputStream, file.getSize()));
-            return buildPublicUrl(qualifiedKey);
+            return key;
         } catch (IOException | RuntimeException exception) {
             log.error("프로필 이미지 S3 업로드 실패 bucket={} key={} name={}",
                     properties.bucket(), qualifiedKey, file.getOriginalFilename(), exception);
