@@ -16,6 +16,7 @@ export type NotificationCenterItem = {
 type NotificationCenterPopoverProps = {
   unreadCount: number;
   notifications: NotificationCenterItem[];
+  onMarkRead: (id: number) => void;
   onMarkAllRead: () => void;
   onClose: () => void;
 };
@@ -23,6 +24,7 @@ type NotificationCenterPopoverProps = {
 export function NotificationCenterPopover({
   unreadCount,
   notifications,
+  onMarkRead,
   onMarkAllRead,
   onClose,
 }: NotificationCenterPopoverProps) {
@@ -55,7 +57,10 @@ export function NotificationCenterPopover({
               <li key={notification.id}>
                 <Link
                   href={notification.href}
-                  onClick={onClose}
+                  onClick={() => {
+                    onMarkRead(notification.id);
+                    onClose();
+                  }}
                   className="block rounded-xl bg-primary/5 p-3 transition hover:bg-muted"
                 >
                   <div className="mb-2 flex items-center gap-2">

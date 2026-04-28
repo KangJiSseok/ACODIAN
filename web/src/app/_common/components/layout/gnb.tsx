@@ -20,7 +20,7 @@ export default function Gnb() {
   const pathname = usePathname();
   const breadcrumbs = resolveBreadcrumbs(pathname);
   const { unreadCount, recentUnreadNotifications } = useNotificationList();
-  const { markAllRead } = useNotificationMutation();
+  const { markAllRead, markRead } = useNotificationMutation();
   const [isNotificationOpen, setIsNotificationOpen] = useState(false);
   const notificationRef = useRef<HTMLDivElement>(null);
   const notificationCenterItems: NotificationCenterItem[] =
@@ -151,6 +151,7 @@ export default function Gnb() {
             <NotificationCenterPopover
               unreadCount={unreadCount}
               notifications={notificationCenterItems}
+              onMarkRead={markRead}
               onMarkAllRead={markAllRead}
               onClose={() => setIsNotificationOpen(false)}
             />
