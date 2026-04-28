@@ -28,12 +28,15 @@ import org.springframework.http.HttpHeaders;
 import org.springframework.http.MediaType;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.test.web.servlet.MvcResult;
+import org.springframework.test.util.ReflectionTestUtils;
 
 class UserMeProfileE2eTest extends E2eTestSupport {
 
     private static final String API_CONTEXT_PATH = "/api";
     private static final String EMAIL = "user-me-e2e@ibank.com";
+    private static final String PHONE = "010-1234-5678";
     private static final String RAW_PASSWORD = "password1!";
+    private static final LocalDate JOIN_DATE = LocalDate.of(2025, 1, 1);
 
     @Autowired
     private DepartmentRepository departmentRepository;
@@ -70,14 +73,16 @@ class UserMeProfileE2eTest extends E2eTestSupport {
                 EmploymentStatus.ACTIVE,
                 "과장",
                 "팀장",
-                LocalDate.of(2025, 1, 1)
+                JOIN_DATE
         ));
+        ReflectionTestUtils.setField(user, "phone", PHONE);
+        userRepository.save(user);
         Team primaryTeam = teamRepository.save(Team.create(
                 department.getId(),
                 "E2E플랫폼팀",
                 TeamStatus.ACTIVE,
                 "현재 사용자 조회 E2E 기본 팀",
-                LocalDate.of(2025, 1, 1),
+                JOIN_DATE,
                 null
         ));
         Team secondaryTeam = teamRepository.save(Team.create(
@@ -85,7 +90,7 @@ class UserMeProfileE2eTest extends E2eTestSupport {
                 "E2ESCM팀",
                 TeamStatus.ACTIVE,
                 "현재 사용자 조회 E2E 추가 팀",
-                LocalDate.of(2025, 1, 1),
+                JOIN_DATE,
                 null
         ));
 
@@ -121,6 +126,10 @@ class UserMeProfileE2eTest extends E2eTestSupport {
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.success", is(true)))
                 .andExpect(jsonPath("$.data.userName", is("E2E 현재 사용자")))
+                .andExpect(jsonPath("$.data.email", is(EMAIL)))
+                .andExpect(jsonPath("$.data.phone", is(PHONE)))
+                .andExpect(jsonPath("$.data.joinDate", is("2025-01-01")))
+                .andExpect(jsonPath("$.data.employmentStatus", is("ACTIVE")))
                 .andExpect(jsonPath("$.data.teams.length()", is(1)))
                 .andExpect(jsonPath("$.data.teams[0].isPrimary", is(true)))
                 .andExpect(jsonPath("$.data.teams[0].teamName", is("E2E플랫폼팀")))

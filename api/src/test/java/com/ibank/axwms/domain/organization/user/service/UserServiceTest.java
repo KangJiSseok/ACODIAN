@@ -55,7 +55,16 @@ class UserServiceTest {
     @DisplayName("현재 사용자와 부서 및 ACTIVE 팀이 존재하면 프로필 문맥을 반환한다")
     void 현재_사용자와_부서_및_ACTIVE_팀이_존재하면_프로필_문맥을_반환한다() {
         CustomUserPrincipal principal = new CustomUserPrincipal(101L, "user@ibank.com", "MEMBER");
-        User user = createUser(101L, 10L, "홍길동", "과장", "팀장", "https://cdn.axwms.com/profile/101.png");
+        User user = createUser(
+                101L,
+                10L,
+                "홍길동",
+                "과장",
+                "팀장",
+                "https://cdn.axwms.com/profile/101.png",
+                "010-1234-5678",
+                LocalDate.of(2025, 1, 1)
+        );
         Department department = createDepartment(10L, "물류본부");
         UserTeam primaryUserTeam = createUserTeam(101L, 21L, true, UserTeamStatus.ACTIVE);
         UserTeam secondaryUserTeam = createUserTeam(101L, 22L, false, UserTeamStatus.ACTIVE);
@@ -72,10 +81,14 @@ class UserServiceTest {
 
         assertThat(result.userId()).isEqualTo(101L);
         assertThat(result.userName()).isEqualTo("홍길동");
+        assertThat(result.email()).isEqualTo("user@ibank.com");
+        assertThat(result.phone()).isEqualTo("010-1234-5678");
         assertThat(result.departmentId()).isEqualTo(10L);
         assertThat(result.departmentName()).isEqualTo("물류본부");
         assertThat(result.positionName()).isEqualTo("과장");
         assertThat(result.titleName()).isEqualTo("팀장");
+        assertThat(result.joinDate()).isEqualTo(LocalDate.of(2025, 1, 1));
+        assertThat(result.employmentStatus()).isEqualTo(EmploymentStatus.ACTIVE);
         assertThat(result.profileImageUrl()).isEqualTo("https://cdn.axwms.com/profile/101.png");
         assertThat(result.teams())
                 .extracting(GetMyProfileApiDto.Response.TeamSummary::isPrimary,
@@ -91,10 +104,31 @@ class UserServiceTest {
     }
 
     @Test
+    @DisplayName("phone 과 joinDate 가 비어 있어도 null 로 그대로 반환한다")
+    void phone_과_joinDate_가_비어_있어도_null_로_그대로_반환한다() {
+        CustomUserPrincipal principal = new CustomUserPrincipal(101L, "user@ibank.com", "MEMBER");
+        User user = createUser(101L, 10L, "홍길동", "과장", "팀장", null, null, null);
+        Department department = createDepartment(10L, "물류본부");
+
+        given(userRepository.findById(101L)).willReturn(Optional.of(user));
+        given(departmentRepository.findById(10L)).willReturn(Optional.of(department));
+        given(userTeamRepository.findAllByUserIdAndStatusCodeOrderByIsPrimaryDesc(101L, UserTeamStatus.ACTIVE))
+                .willReturn(List.of());
+
+        GetMyProfileApiDto.Response result = userService.getMyProfile(principal);
+
+        assertThat(result.email()).isEqualTo("user@ibank.com");
+        assertThat(result.phone()).isNull();
+        assertThat(result.joinDate()).isNull();
+        assertThat(result.employmentStatus()).isEqualTo(EmploymentStatus.ACTIVE);
+        assertThat(result.teams()).isEmpty();
+    }
+
+    @Test
     @DisplayName("LEFT membership 은 현재 사용자 팀 목록에서 제외한다")
     void LEFT_membership_은_현재_사용자_팀_목록에서_제외한다() {
         CustomUserPrincipal principal = new CustomUserPrincipal(101L, "user@ibank.com", "MEMBER");
-        User user = createUser(101L, 10L, "홍길동", "과장", "팀장", null);
+        User user = createUser(101L, 10L, "홍길동", "과장", "팀장", null, null, LocalDate.of(2025, 1, 1));
         Department department = createDepartment(10L, "물류본부");
         UserTeam activeUserTeam = createUserTeam(101L, 21L, true, UserTeamStatus.ACTIVE);
         Team activeTeam = createTeam(21L, 10L, "물류혁신TF", null);
@@ -116,7 +150,7 @@ class UserServiceTest {
     @DisplayName("soft-delete 된 팀은 현재 사용자 팀 목록에서 제외한다")
     void soft_delete_된_팀은_현재_사용자_팀_목록에서_제외한다() {
         CustomUserPrincipal principal = new CustomUserPrincipal(101L, "user@ibank.com", "MEMBER");
-        User user = createUser(101L, 10L, "홍길동", "과장", "팀장", null);
+        User user = createUser(101L, 10L, "홍길동", "과장", "팀장", null, null, LocalDate.of(2025, 1, 1));
         Department department = createDepartment(10L, "물류본부");
         UserTeam userTeam = createUserTeam(101L, 21L, true, UserTeamStatus.ACTIVE);
         Team deletedTeam = createTeam(21L, 10L, "물류혁신TF", LocalDateTime.of(2026, 4, 25, 0, 0));
@@ -157,7 +191,7 @@ class UserServiceTest {
     @DisplayName("사용자 부서가 없으면 USER_NOT_FOUND 예외를 던진다")
     void 사용자_부서가_없으면_USER_NOT_FOUND_예외를_던진다() {
         CustomUserPrincipal principal = new CustomUserPrincipal(101L, "user@ibank.com", "MEMBER");
-        User user = createUser(101L, 10L, "홍길동", "과장", "팀장", null);
+        User user = createUser(101L, 10L, "홍길동", "과장", "팀장", null, null, LocalDate.of(2025, 1, 1));
 
         given(userRepository.findById(101L)).willReturn(Optional.of(user));
         given(departmentRepository.findById(10L)).willReturn(Optional.empty());
@@ -173,7 +207,9 @@ class UserServiceTest {
                             String userName,
                             String positionName,
                             String titleName,
-                            String profileImageUrl) {
+                            String profileImageUrl,
+                            String phone,
+                            LocalDate joinDate) {
         User user = User.create(
                 departmentId,
                 userName,
@@ -183,10 +219,11 @@ class UserServiceTest {
                 EmploymentStatus.ACTIVE,
                 positionName,
                 titleName,
-                LocalDate.of(2025, 1, 1)
+                joinDate
         );
         ReflectionTestUtils.setField(user, "id", id);
         ReflectionTestUtils.setField(user, "profileImageUrl", profileImageUrl);
+        ReflectionTestUtils.setField(user, "phone", phone);
         return user;
     }
 
