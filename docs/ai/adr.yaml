@@ -112,3 +112,65 @@
     프롬프트 수정과 실행 로직 수정을 분리할 수 있다.
     모델 교체나 출력 파서 조정 시 영향 범위를 국소화할 수 있다.
     아직 구현이 얇은 상태에서는 planned 이므로 코드와 문서의 차이를 주기적으로 점검해야 한다.
+
+- id: ADR-007
+  title: 임베딩 저장소 — ai 소유 + 단일 PostgreSQL 공유
+  status: adopted
+  date: 2026-04-28
+  stacks: [fastapi, pgvector, postgresql]
+  context: |
+    아키텍처 가이드 §6 은 tb_worklog_embedding / tb_file_embedding 의 주 소유 서비스를 ai 로 명시한다.
+    한편 운영 단순화를 위해 비즈니스 데이터(api 소유) 와 임베딩(ai 소유) 은 같은 PostgreSQL 인스턴스를 공유한다.
+    pgvector 는 PostgreSQL 확장(extension) 이므로 동일 DB 안에 임베딩 테이블을 두는 형태가 자연스럽다.
+    임베딩 테이블의 FK 는 api 소유 테이블(tb_worklog, tb_user, tb_team, tb_department) 을 참조한다.
+  decision: |
+    임베딩 테이블의 DDL 과 마이그레이션은 ai 가 단독으로 소유한다 (ai/alembic/versions/).
+    물리적으로는 api 와 동일한 PostgreSQL 인스턴스 / 동일 데이터베이스를 공유한다.
+    api 가 소유한 테이블의 마이그레이션은 api 가 책임지며, ai 의 마이그레이션은 그 테이블이 존재함을 전제로만 동작한다 (FK 만 참조, 변경하지 않음).
+    DB 계정 분리(axwms_api / axwms_ai) 는 보안 강화 단계로 별도 후속 PR 에서 다룬다. 이 ADR 시점에서는 단일 계정 공유를 허용한다.
+  consequence: |
+    서비스 경계와 운영 단순성을 동시에 유지할 수 있다.
+    api 와 ai 의 마이그레이션 도구는 분리되지만, 충돌은 각자 소유 테이블 범위로 제한된다.
+    임베딩 스키마 변경 시 ai 단독 PR 로 진행 가능하다.
+    계정 분리가 도입되기 전까지는 ai 가 api 테이블에도 쓰기 권한을 갖는 점을 인지하고 운영한다.
+
+- id: ADR-008
+  title: DB 접근 계층 — SQLAlchemy 2.0 ORM + Alembic 채택
+  status: adopted
+  date: 2026-04-28
+  stacks: [fastapi, sqlalchemy, alembic]
+  context: |
+    ai 모듈은 임베딩 테이블에 대한 INSERT / DELETE / SELECT 와 벡터 유사도 검색을 수행해야 한다.
+    raw SQL 만 쓰면 스키마와 코드가 분리되어 인수인계 시 모델을 따로 외워야 한다.
+    Python 웹 백엔드에서 SQLAlchemy + Alembic 은 사실상 표준이며, pgvector 는 SQLAlchemy 용 Vector 타입을 제공한다.
+    requirements.txt 에 SQLAlchemy 2.0 이 이미 포함되어 있어 추가 의존성 부담이 적다.
+  decision: |
+    ai 모듈의 DB 접근은 SQLAlchemy 2.0 비동기 (asyncpg) ORM 으로 통일한다.
+    스키마 마이그레이션은 Alembic 으로 관리하며, 동기 드라이버(psycopg) 로 실행한다.
+    모델은 app/store/models.py 에 두고, Base 는 app/store/base.py 의 DeclarativeBase 를 단일 진입점으로 사용한다.
+    런타임 세션은 app/store/session.py 의 async_sessionmaker 를 통해서만 생성한다.
+    Vector 컬럼은 pgvector.sqlalchemy.Vector 타입으로 매핑한다.
+  consequence: |
+    스키마와 코드가 동일 모듈 안에서 동기화되어 인수인계가 단순해진다.
+    Alembic autogenerate 로 모델 변경을 마이그레이션에 반영할 수 있다.
+    raw SQL 이 필요한 곳(예: 복잡한 벡터 유사도 + 메타 필터 결합) 에서는 SQLAlchemy text() / 코어 표현식을 사용한다.
+    동기/비동기 드라이버를 분리 운영하므로 DSN 변환 로직(settings.async_database_url / sync_database_url) 을 일원화한다.
+
+- id: ADR-009
+  title: Gemini 클라이언트 단일화
+  status: adopted
+  date: 2026-04-28
+  stacks: [fastapi, gemini]
+  context: |
+    요약/태그/청킹/임베딩 등 여러 기능이 Gemini 를 호출한다.
+    각 기능이 자체 클라이언트를 만들면 인증/타임아웃/재시도 정책이 분산되고, API 키 관리도 흩어진다.
+  decision: |
+    ai 모듈의 모든 Gemini 호출은 app/client/gemini_client.py 의 GeminiClient 를 단일 진입점으로 사용한다.
+    클라이언트는 generate_text(텍스트 생성) 와 embed(임베딩 생성) 두 메서드를 제공한다.
+    모델명은 호출 측에서 override 가능하나 기본값은 settings 를 따른다 (gemini_model / embedding_model).
+    재시도 / 타임아웃 등 공통 정책은 settings 의 공통 키로만 조정한다.
+    클라이언트 메서드 시그니처 변경은 사전 합의 후 단독 PR 로 처리한다.
+  consequence: |
+    인증과 호출 정책이 한 곳에서 관리된다.
+    기능 PR 들이 같은 파일을 동시에 수정할 위험이 줄어든다 (메서드는 기능별로 분리).
+    Gemini SDK 교체나 호출 옵션 추가가 필요할 때 영향 범위를 국소화할 수 있다.

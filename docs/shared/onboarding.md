@@ -56,25 +56,61 @@ npm run dev
 
 ### 4. ai (FastAPI)
 
-<스텁 — 추후 ai 표준가이드(`docs/AX-WMS_FastAPI_표준가이드.docx`) 참고>
-
-- 기준 문서: 루트 `AGENTS.md`
+- 기준 문서: 루트 `AGENTS.md`, **`ai/AGENTS.md`** ("처음 시작하는 분께" 섹션에 셋업/테스트 절차 정리됨)
 - ADR/컨벤션: `docs/ai/adr.yaml`, `docs/ai/code-convention.yaml`
+- 표준 가이드: `docs/AX-WMS_FastAPI_표준가이드.docx` (디렉토리 구조와 prompt/chain 분리의 근거)
+
+**셋업 (uv 기반, sudo 불필요)**
 
 ```bash
-# 예시 (미확정)
+# uv 설치 (한 번만)
+curl -LsSf https://astral.sh/uv/install.sh | sh
+export PATH="$HOME/.local/bin:$PATH"
+
+# Python 3.12 + venv + 의존성
 cd ai
-python -m venv .venv
-source .venv/bin/activate
-pip install -r requirements.txt
-cp .env.example .env
-uvicorn main:app --reload
+uv python install 3.12
+uv venv --python 3.12 .venv
+uv pip install -r requirements.txt pytest
+
+# 환경변수
+cp .env.example .env       # GEMINI_API_KEY 등 채워 넣는다
 ```
 
+**개발 서버 실행**
+
 ```bash
-# 기본 확인 예시
-curl http://localhost:8000/ai/health
+cd ai
+.venv/bin/uvicorn app.main:app --reload --port 8000
 ```
+
+**테스트**
+
+```bash
+cd ai
+.venv/bin/pytest tests -q
+```
+
+**기본 확인**
+
+```bash
+curl http://localhost:8000/ai/health      # {"status":"ok"}
+# 비-운영 환경에서는 다음 문서 페이지도 노출된다:
+#   http://localhost:8000/ai/docs         (Swagger UI)
+#   http://localhost:8000/ai/redoc        (ReDoc)
+#   http://localhost:8000/ai/openapi.json
+```
+
+**Alembic (DB 마이그레이션)**
+
+```bash
+cd ai
+.venv/bin/alembic heads             # 현재 head 리비전 확인
+.venv/bin/alembic upgrade head      # 미적용 마이그레이션 모두 적용
+.venv/bin/alembic revision -m "<설명>"
+```
+
+> CI(`ai_ci` 잡)는 `python:3.12-slim` 이미지에서 같은 명령으로 검증한다.
 
 ### 5. nginx
 
