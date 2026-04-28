@@ -24,11 +24,16 @@ declare module "axios" {
   }
 }
 
-const DEFAULT_API_BASE_URL = "http://localhost:8100/api";
+/* API base URL 설정 */
+const apiBaseUrl = process.env.NEXT_PUBLIC_API_BASE_URL;
 
-// .env.local에 빈 문자열이 들어와도 로컬 API 주소로 안전하게 fallback합니다.
-const apiBaseUrl =
-  process.env.NEXT_PUBLIC_API_BASE_URL?.trim() || DEFAULT_API_BASE_URL;
+/*
+ * NEXT_PUBLIC_API_BASE_URL은 브라우저에서 사용하는 API 서버 주소입니다.
+ * 값이 없으면 잘못된 환경 설정이므로 앱 시작 시 명확하게 에러를 발생시킵니다.
+ */
+if (!apiBaseUrl) {
+  throw new Error("NEXT_PUBLIC_API_BASE_URL 환경변수가 설정되지 않았습니다.");
+}
 
 // 여러 요청이 동시에 401을 받아도 refresh 요청은 하나만 보내도록 공유합니다.
 let refreshPromise: Promise<string | null> | null = null;

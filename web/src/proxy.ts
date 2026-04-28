@@ -21,7 +21,10 @@ function isProtectedPath(pathname: string) {
     return false;
   }
 
-  return pathname === "/" || protectedPrefixes.some((prefix) => pathname.startsWith(prefix));
+  return (
+    pathname === "/" ||
+    protectedPrefixes.some((prefix) => pathname.startsWith(prefix))
+  );
 }
 
 export function proxy(request: NextRequest) {
@@ -29,9 +32,9 @@ export function proxy(request: NextRequest) {
   const { pathname } = request.nextUrl;
 
   // 로그인된 사용자가 로그인 화면에 다시 접근하면 메인 화면으로 보냅니다.
-  if (pathname === "/login" && refreshToken) {
-    return NextResponse.redirect(new URL("/", request.url));
-  }
+  // if (pathname === "/login" && refreshToken) {
+  //   return NextResponse.redirect(new URL("/", request.url));
+  // }
 
   // 보호 라우트는 refreshToken 쿠키가 없으면 로그인 화면으로 보냅니다.
   if (isProtectedPath(pathname) && !refreshToken) {
