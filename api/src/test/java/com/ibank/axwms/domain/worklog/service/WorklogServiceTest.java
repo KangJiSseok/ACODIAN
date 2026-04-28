@@ -6,10 +6,15 @@ import com.ibank.axwms.domain.organization.team.entity.Team;
 import com.ibank.axwms.domain.organization.team.service.TeamService;
 import com.ibank.axwms.domain.worklog.WorklogImportance;
 import com.ibank.axwms.domain.worklog.dto.CreateWorklogApiDto;
+import com.ibank.axwms.domain.worklog.dto.GetWorklogsApiDto;
 import com.ibank.axwms.domain.worklog.entity.Worklog;
+import com.ibank.axwms.domain.worklog.policy.WorklogVisibilityPolicy;
+import com.ibank.axwms.domain.worklog.policy.WorklogVisibilityScope;
 import com.ibank.axwms.domain.worklog.repository.WorklogRepository;
+import com.ibank.axwms.domain.worklog.repository.jooq.projection.WorklogListProjection;
 import com.ibank.axwms.global.error.BusinessException;
 import com.ibank.axwms.global.error.ErrorCode;
+import com.ibank.axwms.global.response.PageResponse;
 import com.ibank.axwms.global.security.CustomUserPrincipal;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -17,6 +22,9 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageImpl;
+import org.springframework.data.domain.PageRequest;
 import org.springframework.mock.web.MockMultipartFile;
 import org.springframework.test.util.ReflectionTestUtils;
 import org.springframework.web.multipart.MultipartFile;
@@ -39,6 +47,7 @@ class WorklogServiceTest {
     @Mock private TeamService teamService;
     @Mock private FileService fileService;
     @Mock private WorklogStatusHistoryService worklogStatusHistoryService;
+    @Mock private WorklogVisibilityPolicy worklogVisibilityPolicy;
 
     @InjectMocks private WorklogService worklogService;
 
@@ -161,6 +170,75 @@ class WorklogServiceTest {
         assertThat(response.worklogId()).isEqualTo(WORKLOG_ID);
         verify(fileService).uploadWorklogFiles(eq(WORKLOG_ID), eq(USER_ID), eq(files));
         verify(worklogStatusHistoryService).createStatusHistory(eq(WORKLOG_ID), eq(USER_ID));
+    }
+
+    @Test
+    @DisplayName("getWorklogs 는 정책이 결정한 Scope 와 Request 를 그대로 Repository 에 위임한다")
+    void getWorklogs_는_정책이_결정한_Scope_와_Request_를_Repository_에_위임한다() {
+        // given
+        CustomUserPrincipal principal = principal();
+        GetWorklogsApiDto.Request request = new GetWorklogsApiDto.Request(1, 20);
+        WorklogVisibilityScope scope = new WorklogVisibilityScope.MyTeams(USER_ID);
+        Page<WorklogListProjection> projectionPage = new PageImpl<>(
+                List.of(sampleProjection()),
+                PageRequest.of(0, 20),
+                1
+        );
+
+        given(worklogVisibilityPolicy.resolve(principal)).willReturn(scope);
+        given(worklogRepository.findWorklogPage(scope, request)).willReturn(projectionPage);
+
+        // when
+        PageResponse<GetWorklogsApiDto.Response.Item> response = worklogService.getWorklogs(principal, request);
+
+        // then
+        assertThat(response.items()).hasSize(1);
+        assertThat(response.items().get(0).worklogId()).isEqualTo(WORKLOG_ID);
+        assertThat(response.items().get(0).teamName()).isEqualTo("물류혁신TF");
+        assertThat(response.totalCount()).isEqualTo(1);
+        assertThat(response.page()).isEqualTo(1);
+        verify(worklogRepository).findWorklogPage(eq(scope), eq(request));
+    }
+
+    @Test
+    @DisplayName("getWorklogs 의 request 가 null 이면 기본 페이지 요청으로 정규화해 Repository 를 호출한다")
+    void getWorklogs_의_request_가_null_이면_기본_페이지_요청으로_정규화한다() {
+        // given
+        CustomUserPrincipal principal = principal();
+        WorklogVisibilityScope scope = new WorklogVisibilityScope.All();
+        Page<WorklogListProjection> emptyPage = new PageImpl<>(List.of(), PageRequest.of(0, 20), 0);
+
+        given(worklogVisibilityPolicy.resolve(principal)).willReturn(scope);
+        given(worklogRepository.findWorklogPage(eq(scope), any(GetWorklogsApiDto.Request.class)))
+                .willReturn(emptyPage);
+
+        // when
+        PageResponse<GetWorklogsApiDto.Response.Item> response = worklogService.getWorklogs(principal, null);
+
+        // then
+        assertThat(response.items()).isEmpty();
+        assertThat(response.totalCount()).isZero();
+    }
+
+    private static WorklogListProjection sampleProjection() {
+        return new WorklogListProjection(
+                WORKLOG_ID,
+                "결산 보고서 작성",
+                "IN_PROGRESS",
+                "수행 내용",
+                new BigDecimal("3.10"),
+                "HIGH",
+                "AI 요약",
+                "COMPLETED",
+                Boolean.FALSE,
+                TEAM_ID,
+                "물류혁신TF",
+                USER_ID,
+                "홍길동",
+                INSTRUCTION_DATE,
+                DUE_DATE,
+                1
+        );
     }
 
     private static CustomUserPrincipal principal() {
