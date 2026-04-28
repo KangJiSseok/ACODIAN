@@ -25,15 +25,13 @@ declare module "axios" {
 }
 
 /* API base URL 설정 */
-const apiBaseUrl = process.env.NEXT_PUBLIC_API_BASE_URL;
-
-/*
- * NEXT_PUBLIC_API_BASE_URL은 브라우저에서 사용하는 API 서버 주소입니다.
- * 값이 없으면 잘못된 환경 설정이므로 앱 시작 시 명확하게 에러를 발생시킵니다.
- */
-if (!apiBaseUrl) {
-  throw new Error("NEXT_PUBLIC_API_BASE_URL 환경변수가 설정되지 않았습니다.");
-}
+// 배포 환경(staging/production)에서는 nginx 가 동일 origin 의 `/api/` 를 각 환경의 API 컨테이너로
+// path-based 라우팅 (infra/nginx/sites-available/axwms.conf) 하므로, 단일 web 이미지가
+// 양쪽 환경에서 그대로 동작하도록 기본값은 상대경로 `/api` 로 둡니다. 로컬 개발에서 다른 호스트의
+// API 를 가리켜야 할 때만 NEXT_PUBLIC_API_BASE_URL 로 절대 URL 을 덮어씁니다.
+const DEFAULT_API_BASE_URL = "/api";
+const apiBaseUrl =
+  process.env.NEXT_PUBLIC_API_BASE_URL?.trim() || DEFAULT_API_BASE_URL;
 
 // 여러 요청이 동시에 401을 받아도 refresh 요청은 하나만 보내도록 공유합니다.
 let refreshPromise: Promise<string | null> | null = null;
