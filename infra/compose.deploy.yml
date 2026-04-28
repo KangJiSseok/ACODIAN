@@ -10,7 +10,11 @@ services:
     ports:
       - "${POSTGRES_HOST_PORT:?POSTGRES_HOST_PORT required (env-specific offset, e.g. 8300/8301)}:5432"
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U ${DB_USERNAME:-postgres} -d ${DB_NAME:-postgres}"]
+      test:
+        [
+          "CMD-SHELL",
+          "pg_isready -U ${DB_USERNAME:-postgres} -d ${DB_NAME:-postgres}",
+        ]
       interval: 5s
       timeout: 5s
       retries: 20
@@ -35,6 +39,7 @@ services:
       redis:
         condition: service_healthy
     environment:
+      APP_ENV: ${APP_ENV:?APP_ENV required (staging | production) — Spring profile selector}
       SERVER_PORT: 8100
       DB_HOST: postgres
       DB_PORT: 5432
@@ -46,6 +51,12 @@ services:
       JWT_SECRET: ${JWT_SECRET}
       JWT_ACCESS_EXPIRATION: ${JWT_ACCESS_EXPIRATION:-3600000}
       JWT_REFRESH_EXPIRATION: ${JWT_REFRESH_EXPIRATION:-1209600000}
+      AWS_S3_BUCKET: ${AWS_S3_BUCKET}
+      AWS_REGION: ${AWS_REGION}
+      AWS_S3_BASE_PREFIX: ${AWS_S3_BASE_PREFIX}
+      AWS_S3_PUBLIC_BASE_URL: ${AWS_S3_PUBLIC_BASE_URL}
+      AWS_ACCESS_KEY_ID: ${AWS_ACCESS_KEY_ID}
+      AWS_SECRET_ACCESS_KEY: ${AWS_SECRET_ACCESS_KEY}
     ports:
       - "127.0.0.1:${API_HOST_PORT:?API_HOST_PORT required (env-specific offset, e.g. 8100/8101)}:8100"
     restart: unless-stopped
