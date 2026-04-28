@@ -219,11 +219,11 @@ class UserServiceTest {
                 EmploymentStatus.ACTIVE,
                 positionName,
                 titleName,
-                joinDate
+                joinDate,
+                phone,
+                profileImageUrl
         );
         ReflectionTestUtils.setField(user, "id", id);
-        ReflectionTestUtils.setField(user, "profileImageUrl", profileImageUrl);
-        ReflectionTestUtils.setField(user, "phone", phone);
         return user;
     }
 

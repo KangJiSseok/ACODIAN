@@ -73,9 +73,10 @@ class UserMeProfileE2eTest extends E2eTestSupport {
                 EmploymentStatus.ACTIVE,
                 "과장",
                 "팀장",
-                JOIN_DATE
+                JOIN_DATE,
+                PHONE,
+                null
         ));
-        ReflectionTestUtils.setField(user, "phone", PHONE);
         userRepository.save(user);
         Team primaryTeam = teamRepository.save(Team.create(
                 department.getId(),

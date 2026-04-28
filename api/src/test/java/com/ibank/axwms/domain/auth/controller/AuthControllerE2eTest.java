@@ -86,7 +86,9 @@ class AuthControllerE2eTest extends E2eTestSupport {
                 EmploymentStatus.ACTIVE,
                 "사원",
                 null,
-                LocalDate.of(2025, 1, 1)
+                LocalDate.of(2025, 1, 1),
+                null,
+                null
         ));
     }
 
@@ -275,7 +277,9 @@ class AuthControllerE2eTest extends E2eTestSupport {
                 employmentStatus,
                 "사원",
                 null,
-                LocalDate.of(2025, 1, 1)
+                LocalDate.of(2025, 1, 1),
+                null,
+                null
         ));
     }
 

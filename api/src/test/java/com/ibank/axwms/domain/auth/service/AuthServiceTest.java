@@ -9,14 +9,21 @@ import static org.mockito.Mockito.verify;
 
 import com.ibank.axwms.domain.auth.dto.LoginApiDto;
 import com.ibank.axwms.domain.auth.dto.RefreshAccessTokenApiDto;
+import com.ibank.axwms.domain.auth.dto.SignupApiDto;
+import com.ibank.axwms.domain.organization.department.service.DepartmentService;
+import com.ibank.axwms.domain.organization.user.event.ProfileImageCommittedEvent;
 import com.ibank.axwms.domain.organization.user.EmploymentStatus;
 import com.ibank.axwms.domain.organization.user.UserRole;
 import com.ibank.axwms.domain.organization.user.entity.User;
 import com.ibank.axwms.domain.organization.user.repository.UserRepository;
+import com.ibank.axwms.domain.organization.user.service.ProfileImageStorageService;
+import com.ibank.axwms.domain.organization.user.service.ProfileImageStorageService.TempUploadResult;
 import com.ibank.axwms.global.error.BusinessException;
 import com.ibank.axwms.global.error.ErrorCode;
 import java.time.LocalDate;
 import java.util.Optional;
+import org.springframework.context.ApplicationEventPublisher;
+import org.springframework.mock.web.MockMultipartFile;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -33,6 +40,9 @@ class AuthServiceTest {
     private static final String HASHED_PASSWORD = "$2a$10$fake-hashed";
 
     @Mock
+    private DepartmentService departmentService;
+
+    @Mock
     private UserRepository userRepository;
 
     @Mock
@@ -40,6 +50,12 @@ class AuthServiceTest {
 
     @Mock
     private TokenService tokenService;
+
+    @Mock
+    private ProfileImageStorageService profileImageStorageService;
+
+    @Mock
+    private ApplicationEventPublisher eventPublisher;
 
     @InjectMocks
     private AuthService authService;
@@ -108,6 +124,75 @@ class AuthServiceTest {
     }
 
     @Test
+    void 회원가입_저장에_실패하면_confirm_이벤트를_발행하지_않는다() {
+        SignupApiDto.Request signupRequest = signupRequest();
+        MockMultipartFile profileImage = new MockMultipartFile(
+                "profile_image",
+                "avatar.png",
+                "image/png",
+                "image-content".getBytes()
+        );
+        given(userRepository.existsByEmail(signupRequest.email())).willReturn(false);
+        given(passwordEncoder.encode(signupRequest.password())).willReturn(HASHED_PASSWORD);
+        given(profileImageStorageService.uploadTemp(profileImage))
+                .willReturn(new TempUploadResult("temp/profile/2026/04/28/avatar.png", "profile/2026/04/28/avatar.png", "https://cdn.axwms.com/profile/2026/04/28/avatar.png"));
+        RuntimeException exception = new RuntimeException("db timeout");
+        given(userRepository.save(any(User.class))).willThrow(exception);
+
+        assertThatThrownBy(() -> authService.signup(signupRequest, profileImage))
+                .isSameAs(exception);
+
+        verify(eventPublisher, never()).publishEvent(any(ProfileImageCommittedEvent.class));
+    }
+
+    @Test
+    void 회원가입이_성공하면_confirm_이벤트를_발행한다() {
+        SignupApiDto.Request signupRequest = signupRequest();
+        MockMultipartFile profileImage = new MockMultipartFile(
+                "profile_image",
+                "avatar.png",
+                "image/png",
+                "image-content".getBytes()
+        );
+        given(userRepository.existsByEmail(signupRequest.email())).willReturn(false);
+        given(passwordEncoder.encode(signupRequest.password())).willReturn(HASHED_PASSWORD);
+        given(profileImageStorageService.uploadTemp(profileImage))
+                .willReturn(new TempUploadResult("temp/profile/2026/04/28/avatar.png", "profile/2026/04/28/avatar.png", "https://cdn.axwms.com/profile/2026/04/28/avatar.png"));
+        given(userRepository.save(any(User.class))).willAnswer(invocation -> invocation.getArgument(0));
+
+        authService.signup(signupRequest, profileImage);
+
+        verify(eventPublisher).publishEvent(any(ProfileImageCommittedEvent.class));
+        verify(userRepository).save(any(User.class));
+    }
+
+    @Test
+    void 프로필_이미지가_없으면_confirm_이벤트를_발행하지_않는다() {
+        SignupApiDto.Request signupRequest = signupRequest();
+        given(userRepository.existsByEmail(signupRequest.email())).willReturn(false);
+        given(passwordEncoder.encode(signupRequest.password())).willReturn(HASHED_PASSWORD);
+        given(profileImageStorageService.uploadTemp(null)).willReturn(null);
+        given(userRepository.save(any(User.class))).willAnswer(invocation -> invocation.getArgument(0));
+
+        authService.signup(signupRequest, null);
+
+        verify(eventPublisher, never()).publishEvent(any(ProfileImageCommittedEvent.class));
+    }
+
+    @Test
+    void 회원가입시_활성_부서_검증을_organization_서비스_경계로_위임한다() {
+        SignupApiDto.Request signupRequest = signupRequest();
+        given(userRepository.existsByEmail(signupRequest.email())).willReturn(false);
+        given(passwordEncoder.encode(signupRequest.password())).willReturn(HASHED_PASSWORD);
+        given(profileImageStorageService.uploadTemp(null)).willReturn(null);
+        given(userRepository.save(any(User.class))).willAnswer(invocation -> invocation.getArgument(0));
+
+        authService.signup(signupRequest, null);
+
+        verify(departmentService).validateActiveDepartment(signupRequest.departmentId());
+    }
+
+    @Test
     void 유효한_refresh_token_이면_새_access_token_과_rotation_결과를_반환한다() {
         User user = activeUser();
         TokenService.ValidatedRefreshToken validatedRefreshToken =
@@ -160,6 +245,20 @@ class AuthServiceTest {
         verify(tokenService).revokeRefreshToken("refresh-token");
     }
 
+    private SignupApiDto.Request signupRequest() {
+        return new SignupApiDto.Request(
+                1L,
+                "신규 사용자",
+                EMAIL,
+                RAW_PASSWORD,
+                "사원",
+                "팀원",
+                LocalDate.of(2025, 1, 1),
+                "010-1234-5678",
+                EmploymentStatus.ACTIVE
+        );
+    }
+
     private User activeUser() {
         return userWithStatus(EmploymentStatus.ACTIVE);
     }
@@ -174,7 +273,9 @@ class AuthServiceTest {
                 status,
                 "대리",
                 "파트장",
-                LocalDate.of(2025, 1, 1)
+                LocalDate.of(2025, 1, 1),
+                null,
+                null
         );
     }
 }
