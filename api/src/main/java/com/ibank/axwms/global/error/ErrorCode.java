@@ -16,6 +16,8 @@ public enum ErrorCode {
     COMMON_INVALID_REQUEST(HttpStatus.BAD_REQUEST, "잘못된 요청입니다."),
     /** Bean Validation 검증 실패에 사용한다. */
     COMMON_VALIDATION_ERROR(HttpStatus.BAD_REQUEST, "요청 값 검증에 실패했습니다."),
+    /** 업로드 파일 또는 multipart 전체 크기가 서버 허용 한도를 넘은 경우 사용한다. */
+    COMMON_FILE_TOO_LARGE(HttpStatus.PAYLOAD_TOO_LARGE, "업로드 가능한 파일 크기를 초과했습니다."),
     /** 공통 응답 래핑 테스트용 예외 코드다. */
     RESPONSE_TEST_ERROR(HttpStatus.BAD_REQUEST, "응답 테스트용 예외가 발생했습니다."),
     /** 이메일 또는 비밀번호가 일치하지 않는 경우 사용한다. */

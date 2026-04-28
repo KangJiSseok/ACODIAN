@@ -35,6 +35,7 @@ public class SecurityConfig {
             PathPatternRequestMatcher.pathPattern("/v3/api-docs/**"),
             PathPatternRequestMatcher.pathPattern("/webjars/**"),
             PathPatternRequestMatcher.pathPattern("/auth/login"),
+            PathPatternRequestMatcher.pathPattern("/auth/signup"),
             PathPatternRequestMatcher.pathPattern("/auth/logout"),
             PathPatternRequestMatcher.pathPattern("/auth/refresh")
     };
