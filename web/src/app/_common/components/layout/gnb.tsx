@@ -17,6 +17,7 @@ export default function Gnb() {
   const notificationRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
+    // 저장된 테마를 최초 렌더 이후 복원해 서버/클라이언트 테마 차이를 줄입니다.
     const root = document.documentElement;
     const storedTheme = window.localStorage.getItem("ax-wms-theme");
 
@@ -38,6 +39,7 @@ export default function Gnb() {
       return;
     }
 
+    // 팝오버가 열린 동안에만 바깥 클릭과 Escape 입력으로 닫히도록 이벤트를 연결합니다.
     const handlePointerDown = (event: PointerEvent) => {
       if (!notificationRef.current?.contains(event.target as Node)) {
         setIsNotificationOpen(false);
