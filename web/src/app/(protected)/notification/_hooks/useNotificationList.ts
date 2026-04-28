@@ -19,11 +19,14 @@ export function useNotificationList() {
 
   const notifications = getVisibleNotifications(user, notificationService.list())
   const unreadCount = notifications.filter((notification) => !notification.isRead).length
+  const recentUnreadNotifications = notifications
+    .filter((notification) => !notification.isRead)
+    .slice(0, 3)
 
   return {
     notifications,
     unreadCount,
     readCount: notifications.length - unreadCount,
-    recentNotifications: notifications.slice(0, 3),
+    recentUnreadNotifications,
   }
 }

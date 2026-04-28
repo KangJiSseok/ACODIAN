@@ -6,15 +6,32 @@ import { Bell, ChevronRight, Moon, Sun } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import { resolveBreadcrumbs } from "@/app/_common/service/breadcrumbs";
-import { useUnreadNotificationCount } from "@/app/_common/hooks/useUnreadNotificationCount";
-import { NotificationCenterPopover } from "@/app/_common/components/layout/notificationCenterPopover";
+import {
+  useNotificationList,
+  useNotificationMutation,
+} from "@/app/(protected)/notification/_hooks";
+import { resolveNotificationDeepLink } from "@/app/(protected)/notification/_utils/resolveNotificationDeepLink";
+import {
+  NotificationCenterPopover,
+  type NotificationCenterItem,
+} from "@/app/_common/components/layout/notificationCenterPopover";
 
 export default function Gnb() {
   const pathname = usePathname();
   const breadcrumbs = resolveBreadcrumbs(pathname);
-  const unreadCount = useUnreadNotificationCount();
+  const { unreadCount, recentUnreadNotifications } = useNotificationList();
+  const { markAllRead } = useNotificationMutation();
   const [isNotificationOpen, setIsNotificationOpen] = useState(false);
   const notificationRef = useRef<HTMLDivElement>(null);
+  const notificationCenterItems: NotificationCenterItem[] =
+    recentUnreadNotifications.map((notification) => ({
+      id: notification.id,
+      typeLabel: notification.type === "WORKLOAD" ? "업무량" : "알림",
+      title: notification.title,
+      content: notification.content,
+      createdAt: notification.createdAt,
+      href: resolveNotificationDeepLink(notification),
+    }));
 
   useEffect(() => {
     // 저장된 테마를 최초 렌더 이후 복원해 서버/클라이언트 테마 차이를 줄입니다.
@@ -132,6 +149,9 @@ export default function Gnb() {
 
           {isNotificationOpen ? (
             <NotificationCenterPopover
+              unreadCount={unreadCount}
+              notifications={notificationCenterItems}
+              onMarkAllRead={markAllRead}
               onClose={() => setIsNotificationOpen(false)}
             />
           ) : null}

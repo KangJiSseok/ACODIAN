@@ -3,25 +3,29 @@
 import Link from "next/link";
 import { CheckCheck, ChevronRight } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import {
-  useNotificationList,
-  useNotificationMutation,
-} from "@/app/(protected)/notification/_hooks";
-import { resolveNotificationDeepLink } from "@/app/(protected)/notification/_utils/resolveNotificationDeepLink";
+
+export type NotificationCenterItem = {
+  id: number;
+  typeLabel: string;
+  title: string;
+  content: string;
+  createdAt: string;
+  href: string;
+};
 
 type NotificationCenterPopoverProps = {
+  unreadCount: number;
+  notifications: NotificationCenterItem[];
+  onMarkAllRead: () => void;
   onClose: () => void;
 };
 
 export function NotificationCenterPopover({
+  unreadCount,
+  notifications,
+  onMarkAllRead,
   onClose,
 }: NotificationCenterPopoverProps) {
-  const { unreadCount, recentNotifications } = useNotificationList();
-  const { markAllRead } = useNotificationMutation();
-  const unreadNotifications = recentNotifications.filter(
-    (notification) => !notification.isRead,
-  );
-
   return (
     <div className="absolute right-0 top-12 z-50 w-[360px] overflow-hidden rounded-2xl border border-border bg-card text-card-foreground shadow-2xl">
       <div className="flex items-start justify-between border-b border-border px-5 py-4">
@@ -37,7 +41,7 @@ export function NotificationCenterPopover({
           variant="ghost"
           size="icon"
           className="h-8 w-8"
-          onClick={markAllRead}
+          onClick={onMarkAllRead}
           aria-label="전체 읽음 처리"
         >
           <CheckCheck className="size-4" />
@@ -45,18 +49,18 @@ export function NotificationCenterPopover({
       </div>
 
       <div className="max-h-[320px] overflow-y-auto px-5 py-4">
-        {unreadNotifications.length > 0 ? (
+        {notifications.length > 0 ? (
           <ul className="space-y-4">
-            {unreadNotifications.slice(0, 3).map((notification) => (
+            {notifications.map((notification) => (
               <li key={notification.id}>
                 <Link
-                  href={resolveNotificationDeepLink(notification)}
+                  href={notification.href}
                   onClick={onClose}
                   className="block rounded-xl bg-primary/5 p-3 transition hover:bg-muted"
                 >
                   <div className="mb-2 flex items-center gap-2">
                     <span className="rounded-full bg-muted px-3 py-1 text-xs font-medium">
-                      {notification.type === "WORKLOAD" ? "업무량" : "알림"}
+                      {notification.typeLabel}
                     </span>
                     <span className="rounded-full bg-muted px-3 py-1 text-xs font-medium">
                       미읽음
