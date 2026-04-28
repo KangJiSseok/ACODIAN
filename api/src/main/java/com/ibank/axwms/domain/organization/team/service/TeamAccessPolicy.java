@@ -18,7 +18,7 @@ public class TeamAccessPolicy {
 
     /** 생성/수정/상태변경/삭제 계열은 부서장 이상만 허용한다. */
     public void assertWritable(CustomUserPrincipal principal) {
-        UserRole role = roleOf(requirePrincipal(principal));
+        UserRole role = roleOf(principal);
         if (role != UserRole.DIRECTOR && role != UserRole.DEPT_HEAD) {
             throw new BusinessException(ErrorCode.AUTH_ACCESS_DENIED);
         }
@@ -28,7 +28,7 @@ public class TeamAccessPolicy {
     public void assertDepartmentOwnership(CustomUserPrincipal principal,
                                           Long principalDepartmentId,
                                           Long targetDepartmentId) {
-        UserRole role = roleOf(requirePrincipal(principal));
+        UserRole role = roleOf(principal);
         if (role == UserRole.DIRECTOR) {
             return;
         }

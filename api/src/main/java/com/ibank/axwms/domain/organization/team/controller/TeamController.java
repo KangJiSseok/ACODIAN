@@ -120,6 +120,7 @@ public class TeamController implements TeamControllerDocs {
     @PreAuthorize("hasAnyRole('DIRECTOR','DEPT_HEAD')")
     public EmptyResponse deleteTeam(@AuthenticationPrincipal CustomUserPrincipal principal,
                                     @PathVariable Long id) {
-        return teamService.deleteTeam(principal, id);
+        teamService.deleteTeam(principal, id);
+        return EmptyResponse.INSTANCE;
     }
 }

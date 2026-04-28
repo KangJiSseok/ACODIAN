@@ -24,6 +24,8 @@ public enum ErrorCode {
     AUTH_LOGIN_NOT_ALLOWED(HttpStatus.FORBIDDEN, "현재 계정 상태로는 로그인할 수 없습니다."),
     /** 요청한 팀 ID 에 해당하는 팀이 없는 경우 사용한다. */
     TEAM_NOT_FOUND(HttpStatus.NOT_FOUND, "팀을 찾을 수 없습니다."),
+    /** 이미 삭제된 팀에 삭제 요청이 들어온 경우 사용한다. */
+    TEAM_ALREADY_DELETED(HttpStatus.CONFLICT, "이미 삭제된 팀입니다."),
     /** 업무 지시 일자와 마감 일자 범위가 올바르지 않은 경우 사용한다. */
     WORKLOG_INVALID_DATE_RANGE(HttpStatus.BAD_REQUEST, "업무 날짜 정보가 유효하지 않습니다."),
     /** 로그인 사용자가 대상 팀 소속이 아니어서 업무를 등록/변경할 수 없는 경우 사용한다. */

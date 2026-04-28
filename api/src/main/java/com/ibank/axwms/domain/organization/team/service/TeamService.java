@@ -1,10 +1,5 @@
 package com.ibank.axwms.domain.organization.team.service;
 
-import com.ibank.axwms.domain.organization.team.entity.Team;
-import com.ibank.axwms.domain.organization.team.repository.TeamRepository;
-import com.ibank.axwms.domain.organization.team.repository.UserTeamRepository;
-import com.ibank.axwms.global.error.BusinessException;
-import com.ibank.axwms.global.error.ErrorCode;
 import com.ibank.axwms.domain.organization.team.UserTeamStatus;
 import com.ibank.axwms.domain.organization.team.dto.BulkUpsertTeamUsersApiDto;
 import com.ibank.axwms.domain.organization.team.dto.CreateTeamApiDto;
@@ -31,6 +26,7 @@ import com.ibank.axwms.global.error.ErrorCode;
 import com.ibank.axwms.global.response.EmptyResponse;
 import com.ibank.axwms.global.response.PageResponse;
 import com.ibank.axwms.global.security.CustomUserPrincipal;
+import java.time.LocalDateTime;
 import java.util.Optional;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
@@ -118,9 +114,21 @@ public class TeamService {
 
     /** 삭제는 hard delete 가 아니라 deletedAt 마킹 계약만 먼저 고정한다. */
     @Transactional
-    public EmptyResponse deleteTeam(CustomUserPrincipal principal, Long teamId) {
-        assertWritableTeamOwnership(principal, teamId);
-        return EmptyResponse.INSTANCE;
+    public void deleteTeam(CustomUserPrincipal principal, Long teamId) {
+        teamAccessPolicy.assertWritable(principal);
+        User user = getUserOrThrow(principal.userId());
+        Team team = getTeamOrThrow(teamId);
+
+        if (team.getDeletedAt() != null) {
+            throw new BusinessException(ErrorCode.TEAM_ALREADY_DELETED);
+        }
+        teamAccessPolicy.assertDepartmentOwnership(principal, user.getDepartmentId(), team.getDepartmentId());
+        team.markDeleted(LocalDateTime.now());
+    }
+
+    public User getUserOrThrow(Long userId) {
+        return userRepository.findById(userId)
+                .orElseThrow(() -> new BusinessException(ErrorCode.USER_NOT_FOUND));
     }
 
     /** 현재 인증 주체의 조직 문맥을 복원해 부서 ownership 검증의 기준값으로 사용한다. */
