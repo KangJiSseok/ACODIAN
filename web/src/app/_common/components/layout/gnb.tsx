@@ -1,18 +1,40 @@
 "use client";
 
-import Link from "next/link";
-import { useEffect } from "react";
+import { useEffect, useRef, useState } from "react";
 import { usePathname } from "next/navigation";
 import { Bell, ChevronRight, Moon, Sun } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import { resolveBreadcrumbs } from "@/app/_common/service/breadcrumbs";
+import {
+  useNotificationList,
+  useNotificationMutation,
+} from "@/app/(protected)/notification/_hooks";
+import { resolveNotificationDeepLink } from "@/app/(protected)/notification/_utils/resolveNotificationDeepLink";
+import {
+  NotificationCenterPopover,
+  type NotificationCenterItem,
+} from "@/app/_common/components/layout/notificationCenterPopover";
 
 export default function Gnb() {
   const pathname = usePathname();
   const breadcrumbs = resolveBreadcrumbs(pathname);
+  const { unreadCount, recentUnreadNotifications } = useNotificationList();
+  const { markAllRead, markRead } = useNotificationMutation();
+  const [isNotificationOpen, setIsNotificationOpen] = useState(false);
+  const notificationRef = useRef<HTMLDivElement>(null);
+  const notificationCenterItems: NotificationCenterItem[] =
+    recentUnreadNotifications.map((notification) => ({
+      id: notification.id,
+      typeLabel: notification.type === "WORKLOAD" ? "업무량" : "알림",
+      title: notification.title,
+      content: notification.content,
+      createdAt: notification.createdAt,
+      href: resolveNotificationDeepLink(notification),
+    }));
 
   useEffect(() => {
+    // 저장된 테마를 최초 렌더 이후 복원해 서버/클라이언트 테마 차이를 줄입니다.
     const root = document.documentElement;
     const storedTheme = window.localStorage.getItem("ax-wms-theme");
 
@@ -28,6 +50,33 @@ export default function Gnb() {
     root.classList.toggle("dark", nextDark);
     window.localStorage.setItem("ax-wms-theme", nextDark ? "dark" : "light");
   };
+
+  useEffect(() => {
+    if (!isNotificationOpen) {
+      return;
+    }
+
+    // 팝오버가 열린 동안에만 바깥 클릭과 Escape 입력으로 닫히도록 이벤트를 연결합니다.
+    const handlePointerDown = (event: PointerEvent) => {
+      if (!notificationRef.current?.contains(event.target as Node)) {
+        setIsNotificationOpen(false);
+      }
+    };
+
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape") {
+        setIsNotificationOpen(false);
+      }
+    };
+
+    document.addEventListener("pointerdown", handlePointerDown);
+    document.addEventListener("keydown", handleKeyDown);
+
+    return () => {
+      document.removeEventListener("pointerdown", handlePointerDown);
+      document.removeEventListener("keydown", handleKeyDown);
+    };
+  }, [isNotificationOpen]);
 
   return (
     <header className="workspace-topbar sticky top-0 z-40 flex w-full items-center gap-4 border-b border-white/10 px-4 py-4 text-white shadow-[0_16px_60px_-32px_rgba(0,0,0,0.55)] md:px-8">
@@ -79,16 +128,35 @@ export default function Gnb() {
           <Moon className="size-4 dark:hidden" />
         </Button>
 
-        <Button
-          asChild
-          variant="outline"
-          className="h-10 border-white/12 bg-black/10 px-3 text-white/80 hover:bg-black/18 hover:text-white"
-        >
-          <Link href="/notification" aria-label="알림">
+        <div ref={notificationRef} className="relative">
+          <Button
+            type="button"
+            variant="outline"
+            className="h-10 border-white/12 bg-black/10 px-3 text-white/80 hover:bg-black/18 hover:text-white"
+            onClick={() => setIsNotificationOpen((prev) => !prev)}
+            aria-expanded={isNotificationOpen}
+            aria-haspopup="dialog"
+            aria-label={`알림 ${unreadCount}개`}
+          >
             <Bell className="size-4" />
             <span className="hidden text-left md:inline">알림 센터</span>
-          </Link>
-        </Button>
+            {unreadCount > 0 ? (
+              <span className="ml-1 inline-flex min-w-5 items-center justify-center rounded-full bg-primary px-1.5 text-[11px] font-semibold text-primary-foreground">
+                {unreadCount > 99 ? "99+" : unreadCount}
+              </span>
+            ) : null}
+          </Button>
+
+          {isNotificationOpen ? (
+            <NotificationCenterPopover
+              unreadCount={unreadCount}
+              notifications={notificationCenterItems}
+              onMarkRead={markRead}
+              onMarkAllRead={markAllRead}
+              onClose={() => setIsNotificationOpen(false)}
+            />
+          ) : null}
+        </div>
       </div>
     </header>
   );

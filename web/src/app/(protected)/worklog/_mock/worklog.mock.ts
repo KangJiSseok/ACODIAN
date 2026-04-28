@@ -465,12 +465,74 @@ export const worklogs: WorklogRecord[] = [
   },
 ]
 
-export const notifications: NotificationRecord[] = []
+export const notifications: NotificationRecord[] = [
+  {
+    id: 3001,
+    userId: 7,
+    type: "URGENT",
+    title: "긴급 업무가 배정되었습니다.",
+    content: "AX-WMS 디자인 시스템 정리 업무의 중요도가 긴급으로 변경되었습니다.",
+    referenceId: 1001,
+    isRead: false,
+    createdAt: "2026-04-21T13:40:00",
+    sourceScope: "PERSONAL",
+    deepLink: "/worklog/detail/1001",
+  },
+  {
+    id: 3002,
+    userId: 7,
+    type: "DEADLINE",
+    title: "마감 예정 업무가 있습니다.",
+    content: "MCP 연동 PoC 업무의 마감일이 가까워지고 있습니다.",
+    referenceId: 1002,
+    isRead: false,
+    createdAt: "2026-04-21T11:20:00",
+    sourceScope: "TEAM",
+    deepLink: "/worklog/detail/1002",
+  },
+  {
+    id: 3003,
+    userId: 7,
+    type: "DEPENDENCY",
+    title: "선행 업무 상태가 변경되었습니다.",
+    content: "업무자동화 태그 정리의 선행 업무가 진행 중 상태로 전환되었습니다.",
+    referenceId: 1003,
+    isRead: true,
+    readAt: "2026-04-21T09:34:00",
+    createdAt: "2026-04-21T09:10:00",
+    sourceScope: "TEAM",
+    deepLink: "/worklog/detail/1003",
+  },
+  {
+    id: 3004,
+    userId: 7,
+    type: "WORKLOAD",
+    title: "이번 주 업무량이 증가했습니다.",
+    content: "팀 평균 대비 배정 업무 시간이 높습니다. 우선순위를 확인해주세요.",
+    isRead: true,
+    readAt: "2026-04-20T16:10:00",
+    createdAt: "2026-04-20T15:45:00",
+    sourceScope: "PERSONAL",
+    deepLink: "/worklog",
+  },
+  {
+    id: 3005,
+    userId: 2,
+    type: "OVERDUE",
+    title: "부서 업무가 지연되었습니다.",
+    content: "데이터 컨설팅 업무 중 지연 항목이 있어 부서장 확인이 필요합니다.",
+    referenceId: 1004,
+    isRead: false,
+    createdAt: "2026-04-21T10:15:00",
+    sourceScope: "DEPARTMENT",
+    deepLink: "/worklog/detail/1004",
+  },
+]
 
 let nextWorklogId = 1005
 let nextFileId = 2003
 let nextStatusHistoryId = 5007
-let nextNotificationId = 3001
+let nextNotificationId = 3006
 
 const MOCK_STORAGE_KEY = "ax-wms-worklog-mock-db"
 
