@@ -86,8 +86,7 @@ public class WorklogJooqRepositoryImpl implements WorklogJooqRepository {
                         record.get(TB_WORKLOG.AUTHOR_ID),
                         record.get(TB_USER.USER_NAME),
                         record.get(TB_WORKLOG.INSTRUCTION_DATE),
-                        record.get(TB_WORKLOG.DUE_DATE),
-                        (Integer) record.get(0)
+                        record.get(TB_WORKLOG.DUE_DATE)
                 ));
 
         return new PageImpl<>(items, pageRequest, total);
@@ -106,6 +105,7 @@ public class WorklogJooqRepositoryImpl implements WorklogJooqRepository {
             case WorklogVisibilityScope.MyTeams myTeams -> TB_WORKLOG.TEAM_ID.in(
                     DSL.select(TB_USER_TEAM.TEAM_ID)
                             .from(TB_USER_TEAM)
+                            .join(TB_TEAM).on(TB_USER_TEAM.TEAM_ID.eq(TB_TEAM.TEAM_ID))
                             .where(TB_USER_TEAM.USER_ID.eq(myTeams.userId()))
                             .and(TB_USER_TEAM.STATUS_CODE.eq(ACTIVE_USER_TEAM_STATUS))
                             .and(TB_TEAM.DELETED_AT.isNull())

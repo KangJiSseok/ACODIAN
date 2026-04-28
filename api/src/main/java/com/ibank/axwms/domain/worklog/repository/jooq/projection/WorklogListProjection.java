@@ -19,7 +19,6 @@ public record WorklogListProjection(
         Long authorId,
         String authorName,
         LocalDate instructionDate,
-        LocalDate dueDate,
-        Integer predecessorCount
+        LocalDate dueDate
 ) {
 }

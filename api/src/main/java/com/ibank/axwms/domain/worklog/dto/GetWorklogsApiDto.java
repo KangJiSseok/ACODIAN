@@ -76,9 +76,7 @@ public final class GetWorklogsApiDto {
                 @Schema(description = "업무 지시 일자", example = "2026-04-22")
                 LocalDate instructionDate,
                 @Schema(description = "업무 마감 일자", example = "2026-04-25")
-                LocalDate dueDate,
-                @Schema(description = "선행 업무 개수", example = "2")
-                Integer predecessorCount
+                LocalDate dueDate
         ) {
 
             public static Item from(WorklogListProjection projection) {
@@ -97,8 +95,7 @@ public final class GetWorklogsApiDto {
                         projection.authorId(),
                         projection.authorName(),
                         projection.instructionDate(),
-                        projection.dueDate(),
-                        projection.predecessorCount()
+                        projection.dueDate()
                 );
             }
         }
