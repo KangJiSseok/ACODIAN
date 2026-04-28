@@ -126,7 +126,7 @@ public class TeamService {
         team.markDeleted(LocalDateTime.now());
     }
 
-    public User getUserOrThrow(Long userId) {
+    private User getUserOrThrow(Long userId) {
         return userRepository.findById(userId)
                 .orElseThrow(() -> new BusinessException(ErrorCode.USER_NOT_FOUND));
     }
