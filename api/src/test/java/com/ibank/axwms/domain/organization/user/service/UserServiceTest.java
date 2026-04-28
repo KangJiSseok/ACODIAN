@@ -145,15 +145,6 @@ class UserServiceTest {
     }
 
     @Test
-    @DisplayName("principal 이 없으면 AUTH_UNAUTHORIZED 예외를 던진다")
-    void principal_이_없으면_AUTH_UNAUTHORIZED_예외를_던진다() {
-        assertThatThrownBy(() -> userService.getMyProfile(null))
-                .isInstanceOf(BusinessException.class)
-                .extracting(e -> ((BusinessException) e).getErrorCode())
-                .isEqualTo(ErrorCode.AUTH_UNAUTHORIZED);
-    }
-
-    @Test
     @DisplayName("사용자 부서가 없으면 USER_NOT_FOUND 예외를 던진다")
     void 사용자_부서가_없으면_USER_NOT_FOUND_예외를_던진다() {
         CustomUserPrincipal principal = new CustomUserPrincipal(101L, "user@ibank.com", "MEMBER");

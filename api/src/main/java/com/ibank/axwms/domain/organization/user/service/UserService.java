@@ -37,11 +37,7 @@ public class UserService {
      * 프론트엔드가 앱 초기화 시 한 번의 호출로 사용자 기본 정보와 팀 컨텍스트를 확보할 수 있도록 필요한 필드를 조립해 반환한다.
      */
     public GetMyProfileApiDto.Response getMyProfile(CustomUserPrincipal principal) {
-        if (principal == null) {
-            throw new BusinessException(ErrorCode.AUTH_UNAUTHORIZED);
-        }
-
-        User user = getRequiredUser(principal.userId());
+        User user = getUserOrThrow(principal.userId());
         Department department = getRequiredDepartment(user.getDepartmentId());
         List<GetMyProfileApiDto.Response.TeamSummary> teams = getTeamSummaries(user.getId());
 
@@ -64,7 +60,7 @@ public class UserService {
      * JWT subject 로 복원한 사용자 id 에 해당하는 User 를 조회한다.
      * access token 은 유효하지만 사용자가 삭제된 비정상 케이스를 404 비즈니스 예외로 정규화한다.
      */
-    private User getRequiredUser(Long userId) {
+    private User getUserOrThrow(Long userId) {
         return userRepository.findById(userId)
                 .orElseThrow(() -> new BusinessException(ErrorCode.USER_NOT_FOUND));
     }
