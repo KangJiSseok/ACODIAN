@@ -5,8 +5,8 @@ import com.ibank.axwms.domain.file.event.WorklogFileUploadedEvent;
 import com.ibank.axwms.domain.file.external.FilePathGenerator;
 import com.ibank.axwms.domain.file.external.ObjectStoragePort;
 import com.ibank.axwms.domain.file.repository.FileRepository;
-import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -17,7 +17,6 @@ import java.util.List;
 
 @Slf4j
 @Service
-@RequiredArgsConstructor
 @Transactional(readOnly = true)
 public class FileService {
 
@@ -25,6 +24,18 @@ public class FileService {
     private final FileRepository fileRepository;
     private final FilePathGenerator filePathGenerator;
     private final ApplicationEventPublisher eventPublisher;
+
+    public FileService(
+            @Qualifier("s3ObjectStorageAdapter") ObjectStoragePort objectStoragePort,
+            FileRepository fileRepository,
+            FilePathGenerator filePathGenerator,
+            ApplicationEventPublisher eventPublisher
+    ) {
+        this.objectStoragePort = objectStoragePort;
+        this.fileRepository = fileRepository;
+        this.filePathGenerator = filePathGenerator;
+        this.eventPublisher = eventPublisher;
+    }
 
     /**
      * 서비스 간 내부 계약용 결과 타입. Controller 경계로 드러나지 않으며

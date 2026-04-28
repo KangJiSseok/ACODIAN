@@ -5,8 +5,6 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Component;
 import org.springframework.web.multipart.MultipartFile;
 
-import java.util.List;
-
 @Slf4j
 @Component
 @RequiredArgsConstructor
@@ -21,5 +19,15 @@ public class S3ObjectStorageAdapter implements ObjectStoragePort {
     @Override
     public void delete(String key) {
         log.info("[S3-STUB] delete key={}", key);
+    }
+
+    @Override
+    public void copy(String sourceKey, String targetKey) {
+        log.info("[S3-STUB] copy source={} target={}", sourceKey, targetKey);
+    }
+
+    @Override
+    public String toPublicUrl(String key) {
+        return key;
     }
 }

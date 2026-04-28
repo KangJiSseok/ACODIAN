@@ -24,4 +24,16 @@ public interface ObjectStoragePort {
      * @param key 삭제할 객체의 스토리지 key
      */
     void delete(String key);
+
+    /**
+     * 소스 key 의 객체를 대상 key 로 복사한다.
+     * 두 key 모두 스토리지 내부 상대 key 형식을 사용한다.
+     */
+    void copy(String sourceKey, String targetKey);
+
+    /**
+     * 주어진 상대 key 에 대한 공개 접근 URL 을 반환한다.
+     * 업로드 없이 key 만으로 URL 을 미리 계산할 때 사용한다.
+     */
+    String toPublicUrl(String key);
 }
