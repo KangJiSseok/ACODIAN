@@ -1,5 +1,7 @@
 package com.ibank.axwms.domain.file.external;
 
+import java.time.Instant;
+import java.util.List;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Component;
@@ -29,5 +31,10 @@ public class S3ObjectStorageAdapter implements ObjectStoragePort {
     @Override
     public String toPublicUrl(String key) {
         return key;
+    }
+
+    @Override
+    public List<String> listKeysUploadedBefore(String prefix, Instant cutoff) {
+        return List.of();
     }
 }

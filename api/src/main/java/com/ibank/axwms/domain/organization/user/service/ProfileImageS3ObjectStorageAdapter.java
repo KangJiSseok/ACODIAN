@@ -2,8 +2,6 @@ package com.ibank.axwms.domain.organization.user.service;
 
 import com.ibank.axwms.domain.file.external.ObjectStoragePort;
 import com.ibank.axwms.domain.file.external.S3StorageProperties;
-import java.io.IOException;
-import java.io.InputStream;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Component;
 import org.springframework.util.StringUtils;
@@ -12,7 +10,14 @@ import software.amazon.awssdk.core.sync.RequestBody;
 import software.amazon.awssdk.services.s3.S3Client;
 import software.amazon.awssdk.services.s3.model.CopyObjectRequest;
 import software.amazon.awssdk.services.s3.model.DeleteObjectRequest;
+import software.amazon.awssdk.services.s3.model.ListObjectsV2Request;
+import software.amazon.awssdk.services.s3.model.ListObjectsV2Response;
 import software.amazon.awssdk.services.s3.model.PutObjectRequest;
+
+import java.io.IOException;
+import java.io.InputStream;
+import java.time.Instant;
+import java.util.List;
 
 /**
  * 프로필 이미지 저장소 전용 S3 어댑터.
@@ -88,6 +93,22 @@ public class ProfileImageS3ObjectStorageAdapter implements ObjectStoragePort {
         return buildPublicUrl(qualify(key));
     }
 
+    /** prefix 하위에서 cutoff 이전에 업로드된 객체의 상대 키 목록을 반환한다. */
+    @Override
+    public List<String> listKeysUploadedBefore(String prefix, Instant cutoff) {
+        String qualifiedPrefix = qualify(prefix);
+        ListObjectsV2Response response = s3Client.listObjectsV2(
+                ListObjectsV2Request.builder()
+                        .bucket(properties.bucket())
+                        .prefix(qualifiedPrefix)
+                        .build()
+        );
+        return response.contents().stream()
+                .filter(obj -> obj.lastModified().isBefore(cutoff))
+                .map(obj -> unqualify(obj.key()))
+                .toList();
+    }
+
     /** basePrefix 를 key 앞에 붙여 개발자별 S3 네임스페이스를 분리한다. */
     private String qualify(String key) {
         String prefix = properties.basePrefix();
@@ -95,6 +116,18 @@ public class ProfileImageS3ObjectStorageAdapter implements ObjectStoragePort {
             return key;
         }
         return prefix + "/" + key;
+    }
+
+    /** qualify() 역연산: absoluteKey 에서 basePrefix/ 접두사를 제거해 상대 키를 반환한다. */
+    private String unqualify(String absoluteKey) {
+        String prefix = properties.basePrefix();
+        if (!StringUtils.hasText(prefix)) {
+            return absoluteKey;
+        }
+        String prefixWithSlash = prefix + "/";
+        return absoluteKey.startsWith(prefixWithSlash)
+                ? absoluteKey.substring(prefixWithSlash.length())
+                : absoluteKey;
     }
 
     /** publicBaseUrl 과 key 를 결합해 공개 접근 URL 을 만든다. */

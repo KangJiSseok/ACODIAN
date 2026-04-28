@@ -1,5 +1,7 @@
 package com.ibank.axwms.domain.file.external;
 
+import java.time.Instant;
+import java.util.List;
 import org.springframework.web.multipart.MultipartFile;
 
 /**
@@ -36,4 +38,13 @@ public interface ObjectStoragePort {
      * 업로드 없이 key 만으로 URL 을 미리 계산할 때 사용한다.
      */
     String toPublicUrl(String key);
+
+    /**
+     * prefix 하위에서 cutoff 이전에 업로드된 객체의 상대 키 목록을 반환한다.
+     * 반환된 키는 delete(key) 에 그대로 전달할 수 있는 상대 키 형식이다.
+     *
+     * @param prefix 조회할 경로 접두사 (예: "temp/")
+     * @param cutoff 이 시각보다 이전에 업로드된 객체만 반환
+     */
+    List<String> listKeysUploadedBefore(String prefix, Instant cutoff);
 }
