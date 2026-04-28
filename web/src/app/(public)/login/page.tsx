@@ -2,8 +2,8 @@
 
 /* import문 */
 import Link from "next/link";
-import { FormEvent, useState } from "react";
-import { useRouter } from "next/navigation";
+import { FormEvent, Suspense, useState } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
 import {
   ArrowRight,
   Eye,
@@ -21,12 +21,7 @@ const TEST_EMAIL = "director@ibank.com";
 const TEST_PASSWORD = "password1!";
 
 /* redirect 경로 검증 */
-function getSafeRedirectPath(): string {
-  // URL에서 redirect query 값을 가져옴
-  const redirectPath = new URLSearchParams(window.location.search).get(
-    "redirect",
-  );
-
+function getSafeRedirectPath(redirectPath: string | null): string {
   // redirect 값이 없으면 홈으로 이동
   if (!redirectPath) {
     return "/";
@@ -42,7 +37,17 @@ function getSafeRedirectPath(): string {
 
 /* 로그인 페이지 */
 export default function LoginPage() {
+  return (
+    <Suspense fallback={null}>
+      <LoginForm />
+    </Suspense>
+  );
+}
+
+/* 로그인 form */
+function LoginForm() {
   const router = useRouter();
+  const searchParams = useSearchParams();
 
   // 이메일 입력값
   const [email, setEmail] = useState(TEST_EMAIL);
@@ -83,7 +88,7 @@ export default function LoginPage() {
       await login({ email: normalizedEmail, password });
       // auth.ts의 login은 토큰 저장 + /users/me 조회 + 전역 상태 설정까지 해줌
 
-      router.replace(getSafeRedirectPath());
+      router.replace(getSafeRedirectPath(searchParams.get("redirect")));
       // 로그인 전 접근하려던 보호 페이지가 있으면 그곳으로 이동
     } catch (error) {
       setErrorMessage(
