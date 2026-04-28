@@ -3,6 +3,7 @@ package com.ibank.axwms.domain.organization.team.service;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.BDDMockito.given;
+import static org.mockito.Mockito.verifyNoInteractions;
 
 import com.ibank.axwms.domain.organization.team.TeamStatus;
 import com.ibank.axwms.domain.organization.team.UserTeamStatus;
@@ -334,6 +335,46 @@ class TeamServiceTest {
         ));
 
         assertThat(response).isSameAs(EmptyResponse.INSTANCE);
+    }
+
+    @Test
+    @DisplayName("DEPT_HEAD 는 자기 부서 팀을 soft-delete 하고 membership 은 건드리지 않는다")
+    void DEPT_HEAD_는_자기_부서_팀을_soft_delete_하고_membership_은_건드리지_않는다() {
+        CustomUserPrincipal principal = new CustomUserPrincipal(101L, "head@ibank.com", "DEPT_HEAD");
+        Team team = createTeam(21L, 10L, null);
+        given(userRepository.findById(101L)).willReturn(Optional.of(createUser(101L, 10L, UserRole.DEPT_HEAD)));
+        given(teamRepository.findById(21L)).willReturn(Optional.of(team));
+
+        teamService.deleteTeam(principal, 21L);
+
+        assertThat(team.getDeletedAt()).isNotNull();
+        verifyNoInteractions(userTeamRepository);
+    }
+
+    @Test
+    @DisplayName("팀 삭제는 이미 soft-delete 된 팀을 TEAM_ALREADY_DELETED 로 거절한다")
+    void 팀_삭제는_이미_soft_delete_된_팀을_TEAM_ALREADY_DELETED_로_거절한다() {
+        CustomUserPrincipal principal = new CustomUserPrincipal(101L, "head@ibank.com", "DEPT_HEAD");
+        given(userRepository.findById(101L)).willReturn(Optional.of(createUser(101L, 10L, UserRole.DEPT_HEAD)));
+        given(teamRepository.findById(21L)).willReturn(Optional.of(createTeam(21L, 10L, LocalDateTime.of(2026, 4, 25, 0, 0))));
+
+        assertThatThrownBy(() -> teamService.deleteTeam(principal, 21L))
+                .isInstanceOf(BusinessException.class)
+                .extracting(error -> ((BusinessException) error).getErrorCode())
+                .isEqualTo(ErrorCode.TEAM_ALREADY_DELETED);
+    }
+
+    @Test
+    @DisplayName("팀 삭제는 존재하지 않는 팀을 TEAM_NOT_FOUND 로 거절한다")
+    void 팀_삭제는_존재하지_않는_팀을_TEAM_NOT_FOUND_로_거절한다() {
+        CustomUserPrincipal principal = new CustomUserPrincipal(101L, "head@ibank.com", "DEPT_HEAD");
+        given(userRepository.findById(101L)).willReturn(Optional.of(createUser(101L, 10L, UserRole.DEPT_HEAD)));
+        given(teamRepository.findById(21L)).willReturn(Optional.empty());
+
+        assertThatThrownBy(() -> teamService.deleteTeam(principal, 21L))
+                .isInstanceOf(BusinessException.class)
+                .extracting(error -> ((BusinessException) error).getErrorCode())
+                .isEqualTo(ErrorCode.TEAM_NOT_FOUND);
     }
 
     @Test
