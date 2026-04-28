@@ -3,16 +3,28 @@
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 
-import { ChevronDown } from "lucide-react";
+import { ChevronDown, LogOut } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 import { type NavItem, navItems } from "./sidebar.config";
 import { getActiveGroupLabel, getNestedCreateSubmenu } from "./sidebar.utils";
+import { useAuth } from "@/app/_common/hooks/useAuth";
 
 export default function Sidebar() {
   const pathname = usePathname();
   const router = useRouter();
   const activeGroupLabel = getActiveGroupLabel(pathname);
+  const { user, logout } = useAuth();
+
+  const displayName = user?.userName ?? "사용자";
+  const displayTitle = user?.titleName ?? user?.positionName ?? "프로필";
+  const profileImageUrl = user?.profileImageUrl;
+  const profileInitial = displayName.slice(0, 1);
+
+  async function handleLogout() {
+    await logout();
+    router.replace("/login");
+  }
 
   return (
     <aside className="dark workspace-sidebar relative z-20 hidden h-full w-full shrink-0 flex-col overflow-hidden border-r border-white/10 text-white md:flex">
@@ -64,17 +76,46 @@ export default function Sidebar() {
           })}
         </div>
 
-        <div className="mt-auto px-2 pb-2 pt-6">
-          {/* TODO(auth): 인증 연동 후 Sidebar 하단에 프로필 이미지, 프로필 이동, 로그아웃 액션을 추가한다. */}
-          <div className="rounded-[1.75rem] border border-white/10 bg-white/[0.03] p-5">
-            <p className="text-[11px] font-semibold uppercase tracking-[0.22em] text-white/62">
-              workspace
-            </p>
-            <p className="mt-3 text-lg font-semibold text-white">AX-WMS</p>
-            <p className="mt-2 text-sm leading-6 text-white/62">
-              프로필 카드와 권한별 메뉴는 인증 기능이 붙으면 이어서 확장하면
-              됩니다.
-            </p>
+        <div className="mt-auto">
+          <div className="flex items-center gap-2">
+            <Link
+              href="/"
+              className="flex h-14 min-w-0 flex-1 items-center gap-3 rounded-xl px-2 text-white transition-colors hover:bg-white/8"
+            >
+              <div
+                className="flex size-10 shrink-0 items-center justify-center overflow-hidden rounded-full bg-white/10 text-sm font-bold text-white"
+                style={
+                  profileImageUrl
+                    ? {
+                        backgroundImage: `url(${profileImageUrl})`,
+                        backgroundPosition: "center",
+                        backgroundSize: "cover",
+                      }
+                    : undefined
+                }
+              >
+                {profileImageUrl ? null : profileInitial}
+              </div>
+
+              <div className="min-w-0">
+                <p className="truncate text-[14px] font-bold leading-tight text-white">
+                  {displayName}
+                </p>
+                <p className="mt-1 truncate text-[12px] font-semibold text-white/55">
+                  {displayTitle}
+                </p>
+              </div>
+            </Link>
+
+            <button
+              type="button"
+              onClick={handleLogout}
+              className="flex size-10 shrink-0 items-center justify-center rounded-xl text-rose-300/80 transition-colors hover:bg-white/8 hover:text-rose-200"
+              aria-label="로그아웃"
+              title="로그아웃"
+            >
+              <LogOut className="size-5" />
+            </button>
           </div>
         </div>
       </div>
