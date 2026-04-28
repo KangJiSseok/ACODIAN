@@ -29,10 +29,7 @@ public class DepartmentJooqRepositoryImpl implements DepartmentJooqRepository {
     private final DSLContext dsl;
     private final TeamMembershipConditionSupport teamMembershipConditionSupport;
 
-    /**
-     * 활성 부서 목록 화면의 상단 집계를 조회한다.
-     * 부서/팀/사용자 카운트 기준이 서로 달라 각 count 를 독립 쿼리로 계산해 의도를 명확히 유지한다.
-     */
+    /** 활성 부서 목록 화면 상단에 필요한 부서/팀/사용자 집계를 조회한다. */
     @Override
     public DepartmentOverviewProjection getActiveDepartmentOverview() {
         return new DepartmentOverviewProjection(
@@ -42,10 +39,7 @@ public class DepartmentJooqRepositoryImpl implements DepartmentJooqRepository {
         );
     }
 
-    /**
-     * 활성 부서 목록과 부서장 표시 이름을 조회한다.
-     * 부서장은 nullable 이므로 head user 는 LEFT JOIN 으로 연결하고, 화면의 안정적인 정렬을 위해 department_id 오름차순을 사용한다.
-     */
+    /** 활성 상태의 부서 목록과 부서장 표시 정보를 조회한다. */
     @Override
     public List<DepartmentListItemProjection> findActiveDepartments() {
         TbUser headUser = TB_USER.as("head_user");
@@ -74,10 +68,7 @@ public class DepartmentJooqRepositoryImpl implements DepartmentJooqRepository {
                 ));
     }
 
-    /**
-     * 현재 부서에 속하고 ACTIVE membership 으로 연결된 사용자 수를 조회한다.
-     * /users/me 와 team skeleton 이 공유하는 membership 조건을 재사용해 soft-delete 팀과 LEFT membership 을 제외한다.
-     */
+    /** 현재 부서에 속하고 ACTIVE membership 으로 연결된 사용자 수를 조회한다. */
     @Override
     public int fetchActiveUserCount(Long departmentId) {
         return dsl.select(countDistinct(TB_USER.USER_ID))
@@ -90,7 +81,7 @@ public class DepartmentJooqRepositoryImpl implements DepartmentJooqRepository {
                 .fetchSingle(0, Integer.class);
     }
 
-    /** ACTIVE 상태인 department row 수를 계산한다. */
+    /** ACTIVE 상태의 department row 수를 계산한다. */
     private long fetchActiveDepartmentCount() {
         return dsl.selectCount()
                 .from(TB_DEPARTMENT)
@@ -110,7 +101,7 @@ public class DepartmentJooqRepositoryImpl implements DepartmentJooqRepository {
                 .longValue();
     }
 
-    /** ACTIVE team 에 최소 1개 소속된 ACTIVE 사용자 수를 DISTINCT 기준으로 계산한다. */
+    /** ACTIVE team 에 최소 1개 이상 소속된 ACTIVE 사용자 수를 DISTINCT 기준으로 계산한다. */
     private long fetchActiveUserCount() {
         return dsl.select(countDistinct(TB_USER.USER_ID))
                 .from(TB_USER)

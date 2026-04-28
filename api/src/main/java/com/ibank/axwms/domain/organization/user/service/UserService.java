@@ -49,6 +49,18 @@ public class UserService {
     }
 
     /**
+     * 사용자 id 에 해당하는 사용자의 소속 부서 id 를 조회한다.
+     * 다른 모듈(worklog 가시 범위 정책 등) 이 organization 모듈을 service 경계로 우회하기 위한 진입점이다.
+     *
+     * @param userId 조회 대상 사용자 id
+     * @return 사용자가 소속된 부서 id
+     * @throws BusinessException USER_NOT_FOUND 사용자가 없거나 access token 문맥이 복원 불가일 때
+     */
+    public Long getDepartmentIdOrThrow(Long userId) {
+        return getRequiredUser(userId).getDepartmentId();
+    }
+
+    /**
      * JWT subject 로 복원한 사용자 id 에 해당하는 User 를 조회한다.
      * access token 은 유효하지만 사용자가 삭제된 비정상 케이스를 404 비즈니스 예외로 정규화한다.
      */
