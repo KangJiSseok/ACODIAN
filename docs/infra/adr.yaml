@@ -564,3 +564,25 @@
       - 도메인 추가(예: `api.axwms.example.com` 도입) 시 본 ADR 의 path-based 결정 재검토 → subdomain 모델 재고려.
       - rate limit / WAF / CDN 도입 시 단일 진입점 모델 재검토.
       - SSAFY 보안그룹이 80/443/8080/8443 외 추가 포트를 차단/제한하는 경우.
+
+- id: ADR-016
+  title: ai 자동배포 편입 — Dockerfile + compose ai 서비스 + ai_image job
+  status: adopted
+  date: 2026-04-28
+  stacks: [docker, compose, ec2, gitlab, fastapi]
+  context: |
+    ADR-014 가 web 자동배포를 회수한 뒤 pending-decisions #5 의 ai 잔존 항목이 본 ADR 의 대상이다.
+    nginx `/ai/` 라우팅(ADR-015), 8x00 포트 스킴(ADR-010), OPS-016 의 멱등 배포 규약은 모두 ai 를 전제로 정렬되어 있다.
+    표준가이드 docx 의 nextjs 3000 / nestjs 4000 / fastapi 5000 스킴은 컨테이너↔nginx localhost 통신이라 SSAFY 외부 노출 정책과 무관하고, nestjs 항목은 본 프로젝트 Spring Boot 스택과 어긋나며, ADR-010/014/015 가 8x00 위에 다섯 서비스 + nginx + sudoers + TLS 를 정합한 비용은 docx 한 줄에 맞추기 위해 회수할 가치가 없다.
+  decision: |
+    `ai/Dockerfile` 신규 — `python:3.12-slim` 단일 stage, non-root, EXPOSE 8200, CMD `uvicorn app.main:app --host 0.0.0.0 --port 8200`. `ai/.dockerignore` 동반.
+    `infra/compose.deploy.yml` 에 `ai` 서비스 추가 — production `127.0.0.1:8200:8200` / staging `127.0.0.1:8201:8200`, depends_on postgres/redis healthy, 내부 통신은 compose hostname.
+    `remote-deploy.sh` 일반화 — `AI_IMAGE` require_var 및 `pull/rm -sf/up -d` 인자에 ai 포함.
+    `.gitlab-ci.yml` 확장 — `AI_IMAGE_BASE` 변수, `ai_image` job(`-f ai/Dockerfile ai`), `.ai_deploy_changes` anchor, `.deploy_changes` 합집합에 ai/** 편입, deploy_dev/prod ssh 한 줄에 `AI_IMAGE` 주입.
+    이미지 네임스페이스: `ghcr.io/axwms-s209/axwms-ai` (ADR-007 organization 그대로). 태그 정책은 api/web 과 동일.
+    docx 의 3000/4000/5000 스킴은 채택하지 않는다. 평가/심사 기준에 docx 포트가 명시적으로 들어간다는 사실이 추후 확인되면 본 결정 재검토.
+    Celery worker / Neo4j / ai → api 호출 인증 흐름은 사용 코드가 0건이라 본 ADR 범위 밖. 사용 시점에 별 ADR.
+  consequence: |
+    pending-decisions #5 의 ai 잔존 항목 종결. ai 도 CI 선빌드 + ghcr push + EC2 SSH compose 흐름에 편입되어 ADR-002/005/007/014 의 패턴이 영역 무관하게 일관된다.
+    Gemini API 키 없이 기동하면 `/ai/` 호출이 외부 호출 단계에서 실패하므로 첫 deploy 전 서버 `.env` 의 `GEMINI_API_KEY` 주입이 필수다.
+    파일 업로드가 붙는 시점에는 API 컨테이너에도 `AWS_S3_BUCKET`, `AWS_REGION`, `AWS_S3_BASE_PREFIX`, `AWS_S3_PUBLIC_BASE_URL`, `AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY` 를 서버 `.env` 또는 GitLab CI/CD Variables 로 주입해야 한다.

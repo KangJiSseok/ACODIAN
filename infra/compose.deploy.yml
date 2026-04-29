@@ -39,6 +39,7 @@ services:
       redis:
         condition: service_healthy
     environment:
+      APP_ENV: ${APP_ENV:?APP_ENV required (staging | production) — Spring profile selector}
       SERVER_PORT: 8100
       DB_HOST: postgres
       DB_PORT: 5432
@@ -50,7 +51,20 @@ services:
       JWT_SECRET: ${JWT_SECRET}
       JWT_ACCESS_EXPIRATION: ${JWT_ACCESS_EXPIRATION:-3600000}
       JWT_REFRESH_EXPIRATION: ${JWT_REFRESH_EXPIRATION:-1209600000}
+      
+      AWS_S3_BUCKET: ${AWS_S3_BUCKET}
+      AWS_REGION: ${AWS_REGION}
+      AWS_S3_BASE_PREFIX: ${AWS_S3_BASE_PREFIX}
+      AWS_S3_PUBLIC_BASE_URL: ${AWS_S3_PUBLIC_BASE_URL}
+      AWS_ACCESS_KEY_ID: ${AWS_ACCESS_KEY_ID}
+      AWS_SECRET_ACCESS_KEY: ${AWS_SECRET_ACCESS_KEY}
+      # 프로필 이미지 임시객체 정리 cron. 컨테이너 TZ 를 Asia/Seoul 로 두면 application.yml 기본값(0 20 22 * * *) 이 KST 22:20.
+      TZ: ${API_TZ:-Asia/Seoul}
+      PROFILE_IMAGE_CLEANUP_CRON: ${PROFILE_IMAGE_CLEANUP_CRON:-0 20 22 * * *}
+      PROFILE_IMAGE_TEMP_PREFIX: ${PROFILE_IMAGE_TEMP_PREFIX:-temp/}
+      PROFILE_IMAGE_RETENTION_DAYS: ${PROFILE_IMAGE_RETENTION_DAYS:-1}
       SPRING_PROFILES_ACTIVE: ${APP_ENV:?APP_ENV required (staging | production) — Spring profile selector}
+
     ports:
       - "127.0.0.1:${API_HOST_PORT:?API_HOST_PORT required (env-specific offset, e.g. 8100/8101)}:8100"
     restart: unless-stopped
@@ -63,6 +77,38 @@ services:
       HOSTNAME: 0.0.0.0
     ports:
       - "127.0.0.1:${WEB_HOST_PORT:?WEB_HOST_PORT required (env-specific offset, e.g. 8000/8001)}:8000"
+    restart: unless-stopped
+
+  ai:
+    image: ${AI_IMAGE}
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    environment:
+      ENVIRONMENT: ${APP_ENV:-deploy}
+      API_PREFIX: /ai
+      HOST: 0.0.0.0
+      PORT: 8200
+      LOG_LEVEL: ${AI_LOG_LEVEL:-INFO}
+      # 같은 compose network 의 postgres/redis 로 붙는다. ADR-010 의 127.0.0.1 바인딩은 외부 노출 정책이고
+      # 서비스 간 통신은 컨테이너 네트워크 hostname 을 그대로 사용한다.
+      PGVECTOR_DSN: postgresql://${DB_USERNAME:-postgres}:${DB_PASSWORD:-postgres}@postgres:5432/${DB_NAME:-postgres}
+      REDIS_URL: redis://redis:6379/0
+      API_BASE_URL: http://api:8100
+      # ai 가 api 를 호출할 때 쓰는 JWT 검증 키. api 와 동일 시크릿이어야 한다.
+      JWT_SECRET: ${JWT_SECRET}
+      # Gemini — 실제 키는 서버 .env / GitLab Variables 로만 주입한다 (ADR-003 / GEN-002).
+      GEMINI_API_KEY: ${GEMINI_API_KEY}
+      GEMINI_MODEL: ${GEMINI_MODEL:-gemini-2.5-flash}
+      GEMINI_REQUEST_TIMEOUT_SECONDS: ${GEMINI_REQUEST_TIMEOUT_SECONDS:-30}
+      GEMINI_MAX_RETRIES: ${GEMINI_MAX_RETRIES:-3}
+      EMBEDDING_MODEL: ${EMBEDDING_MODEL:-text-embedding-004}
+      EMBEDDING_DIM: ${EMBEDDING_DIM:-768}
+      CHUNK_THRESHOLD_CHARS: ${CHUNK_THRESHOLD_CHARS:-3000}
+    ports:
+      - "127.0.0.1:${AI_HOST_PORT:?AI_HOST_PORT required (env-specific offset, e.g. 8200/8201)}:8200"
     restart: unless-stopped
 
 volumes:

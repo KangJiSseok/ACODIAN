@@ -15,6 +15,7 @@ require_var APP_ENV
 require_var DEPLOY_ROOT
 require_var API_IMAGE
 require_var WEB_IMAGE
+require_var AI_IMAGE
 require_var GHCR_USER
 require_var GHCR_TOKEN
 
@@ -38,6 +39,7 @@ echo "$GHCR_TOKEN" | docker login ghcr.io -u "$GHCR_USER" --password-stdin
 export APP_ENV
 export API_IMAGE
 export WEB_IMAGE
+export AI_IMAGE
 
 echo "[remote-deploy] pre-deploy state"
 docker compose \
@@ -50,19 +52,19 @@ docker compose \
   --env-file "$ENV_FILE" \
   -f "$COMPOSE_FILE" \
   -p "$PROJECT_NAME" \
-  pull api web
+  pull api web ai
 
 docker compose \
   --env-file "$ENV_FILE" \
   -f "$COMPOSE_FILE" \
   -p "$PROJECT_NAME" \
-  rm -sf api web || true
+  rm -sf api web ai || true
 
 docker compose \
   --env-file "$ENV_FILE" \
   -f "$COMPOSE_FILE" \
   -p "$PROJECT_NAME" \
-  up -d --remove-orphans postgres redis api web
+  up -d --remove-orphans postgres redis api web ai
 
 echo "[remote-deploy] post-deploy state"
 docker compose \

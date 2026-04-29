@@ -93,27 +93,29 @@
 
 ---
 
-## 5. web / ai 내부 listen 포트 실제 반영
+## 5. web / ai 내부 listen 포트 실제 반영 — **처리됨 (2026-04-28, ADR-016 으로 ai 편입 종결)**
 
-### 맥락
+### 맥락 (참고용)
 - ADR-010 으로 web(Next.js) 은 8000, ai(FastAPI) 는 8200 을 컨테이너 내부 listen 포트로 쓰기로 결정.
 - ADR-001 의 자동배포 범위는 1차 시점에 "api + postgres + redis" 로 한정되어 있었다.
 
-### 진행 현황
+### 처리 결과
 - **web — 처리됨 (2026-04-27, ADR-014)**
   - `web/next.config.ts` 에 `output: "standalone"` + `outputFileTracingRoot` 추가, `web/package.json` 의 `start` 를 `next start -p 8000` 으로 갱신, `web/Dockerfile` 신규(monorepo 루트 컨텍스트, multi-stage, 8000 EXPOSE), `infra/compose.deploy.yml` 에 web 서비스 추가(production `127.0.0.1:8000:8000` / staging `127.0.0.1:8001:8000`).
   - `infra/scripts/remote-deploy-api.sh` 를 `remote-deploy.sh` 로 일반화하고 `WEB_IMAGE` `require_var`, `.gitlab-ci.yml` 에 `web_image` job 신규.
   - 운영 가이드(섹션 4/6/8/10/11/12/14/16/17) 와 code-convention(DO-003/DO-004, OPS-016) 동반 갱신.
-- **ai — 잔존**
-  - 컨테이너 자산 0(`ai/Dockerfile` 없음), `ai/main.py` 에서 uvicorn 실행 포트 미지정.
-  - `ai/requirements.txt` 에 celery 의존성이 박혀 있으나 `ai/app/` 안에 `@task`/`Celery(...)` 사용 0건이라 본 시점엔 worker 컨테이너 없이 FastAPI 단독으로 1차 편입 가능.
+- **ai — 처리됨 (2026-04-28, ADR-016)**
+  - `ai/Dockerfile` 신규(`python:3.12-slim` 단일 stage, `pip install -r requirements.txt` 후 `app/`+`alembic/` 만 복사, non-root, EXPOSE 8200, CMD `uvicorn app.main:app --host 0.0.0.0 --port 8200`) + `ai/.dockerignore` 신규.
+  - `infra/compose.deploy.yml` 에 ai 서비스 추가(production `127.0.0.1:8200:8200` / staging `127.0.0.1:8201:8200`, depends_on postgres/redis healthy, 내부 통신은 compose hostname `postgres`/`redis`/`api` 사용).
+  - `infra/scripts/remote-deploy.sh` 의 `require_var AI_IMAGE` 추가 + `pull api web ai` / `rm -sf api web ai` / `up -d ... ai` 일반화.
+  - `.gitlab-ci.yml` 에 `AI_IMAGE_BASE` 변수 + `ai_image` job 신규, `.ai_deploy_changes` anchor + `.deploy_changes` 합집합 편입, `infra_validate` 에 `AI_IMAGE`/`AI_HOST_PORT` 추가, `deploy_dev`/`deploy_prod` 에 `AI_IMAGE` 주입.
+  - `infra/.env.example` 에 Gemini/embedding 스모크 더미값 추가(실제 키는 서버 `.env` / GitLab Variables).
+  - code-convention(DO-005, OPS-016) 동반 갱신.
+  - Celery worker / Neo4j 는 본 단계 범위 밖(ADR-016 결정 7항). 사용 코드가 생기는 시점에 별 ADR 로 분리.
 
-### 다음 트리거
-- ai 차례:
-  - `ai/Dockerfile` 신규(python:3.12-slim 단일 stage, `pip install -r requirements.txt`, `uvicorn app.main:app --host 0.0.0.0 --port 8200`).
-  - `infra/compose.deploy.yml` 에 ai 서비스 추가(production `127.0.0.1:8200:8200` / staging `127.0.0.1:8201:8200`).
-  - `remote-deploy.sh` / `.gitlab-ci.yml` 에 ai 도 일괄 확장(`pull api web ai`, `rm -sf api web ai`, `up -d ... ai`, `ai_image` job).
-  - 후속 ADR(잠정 ADR-015) 로 `ai_change_detect` 정책과 함께 결정 기록.
+### 운영자 후속 작업 (코드 변경 외)
+- 서버 `/opt/axwms/{staging,production}/.env` 에 `AI_HOST_PORT=8200`(prod) / `8201`(staging), `GEMINI_API_KEY=<실키>` 추가. 가이드 섹션 8/14 갱신은 별 MR 로 분리.
+- 첫 deploy 직후 `/ai/health` 에 nginx 경유로 200 이 떨어지는지 확인.
 
 ---
 

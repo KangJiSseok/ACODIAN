@@ -272,6 +272,17 @@ DB_PASSWORD=<staging 전용 강한 무작위 값, 최소 24자>
 JWT_SECRET=<staging 전용 최소 32바이트 무작위 값>
 JWT_ACCESS_EXPIRATION=3600000
 JWT_REFRESH_EXPIRATION=1209600000
+AI_HOST_PORT=8201
+GEMINI_API_KEY=<staging 전용 실키>
+AWS_S3_BUCKET=<staging/prod 공용 또는 staging 전용 버킷명>
+AWS_REGION=<예: ap-northeast-2>
+AWS_S3_BASE_PREFIX=<예: staging>
+AWS_S3_PUBLIC_BASE_URL=<CDN 미사용 시 S3 기본 URL 또는 CloudFront URL>
+AWS_ACCESS_KEY_ID=<staging 전용 IAM access key id>
+AWS_SECRET_ACCESS_KEY=<staging 전용 IAM secret access key>
+PROFILE_IMAGE_CLEANUP_CRON=0 20 22 * * *
+PROFILE_IMAGE_TEMP_PREFIX=temp/
+PROFILE_IMAGE_RETENTION_DAYS=1
 ```
 
 ### production 예시
@@ -289,7 +300,20 @@ DB_PASSWORD=<production 전용 강한 무작위 값, staging 과 반드시 다�
 JWT_SECRET=<production 전용 최소 32바이트 무작위 값, staging 과 반드시 다른 값>
 JWT_ACCESS_EXPIRATION=3600000
 JWT_REFRESH_EXPIRATION=1209600000
+AI_HOST_PORT=8200
+GEMINI_API_KEY=<production 전용 실키>
+AWS_S3_BUCKET=<production 버킷명>
+AWS_REGION=<예: ap-northeast-2>
+AWS_S3_BASE_PREFIX=<예: production>
+AWS_S3_PUBLIC_BASE_URL=<CDN 미사용 시 S3 기본 URL 또는 CloudFront URL>
+AWS_ACCESS_KEY_ID=<production 전용 IAM access key id>
+AWS_SECRET_ACCESS_KEY=<production 전용 IAM secret access key>
+PROFILE_IMAGE_CLEANUP_CRON=0 20 22 * * *
+PROFILE_IMAGE_TEMP_PREFIX=temp/
+PROFILE_IMAGE_RETENTION_DAYS=1
 ```
+
+> `PROFILE_IMAGE_CLEANUP_CRON` 의 cron 식은 컨테이너 TZ 기준이다. compose 가 api 서비스에 `TZ=Asia/Seoul` 을 기본 주입하므로 위 값은 **KST 22:20** 으로 해석된다. UTC 운영이 필요하면 `.env` 에 `API_TZ=UTC` 를 추가하거나 cron 식 자체를 UTC 기준으로 다시 쓴다.
 
 > `WEB_IMAGE` / `API_IMAGE` 는 `.env` 에 두지 않는다. CI 가 `deploy_dev` / `deploy_prod` 단계에서 `WEB_IMAGE='ghcr.io/...:<ref-slug>'` / `API_IMAGE='...'` 형태로 SSH 호출 환경변수로 직접 주입한다 (ADR-003 의 "환경별 값은 서버 `.env` 또는 GitLab Variables" 원칙 + ADR-007 의 ghcr 네임스페이스).
 
@@ -322,6 +346,25 @@ GitLab 경로:
 ### production 변수
 - `DEPLOY_HOST_PRODUCTION` — 현재는 staging 과 같은 서버여도 된다
 - `PRODUCTION_URL` — 외부 공개 URL (예: `https://k14s209.p.ssafy.io`)
+
+### Storage (S3) 자격증명
+
+API 컨테이너가 파일 업로드/다운로드에 사용하는 AWS S3 자격증명이다.
+운영 모델은 "GitLab CI/CD Variables → 서버 `.env`" 가 아니라 **서버 `.env` 직접 주입** 을 우선한다 (ADR-003 / GEN-002).
+GitLab Variables 에 둘 필요는 일반적으로 없으나, CI 단계에서 S3 접근이 필요해지면(예: 스모크 검증) 그 시점에 아래 정책으로 등록한다.
+
+- `AWS_S3_BUCKET` — staging/production 별 버킷명 (또는 prefix 분리 시 공용 버킷 가능)
+- `AWS_REGION` — 예: `ap-northeast-2`
+- `AWS_S3_BASE_PREFIX` — 환경별 prefix (예: `staging` / `production`). 같은 버킷 공용 시 데이터 격리 1차 방어선
+- `AWS_S3_PUBLIC_BASE_URL` — CDN(CloudFront) 또는 S3 기본 URL
+- `AWS_ACCESS_KEY_ID` — staging/production 분리 IAM access key id
+- `AWS_SECRET_ACCESS_KEY` — staging/production 분리 IAM secret access key
+
+GitLab Variables 등록 시 정책:
+- 6개 모두 Protected.
+- `AWS_ACCESS_KEY_ID` / `AWS_SECRET_ACCESS_KEY` 는 단일 줄 + 8자+ 조건을 만족하므로 **Mask** 적용 (OPS-006 / OPS-012 5단계 검증 대상).
+- 나머지 4개는 비밀값이 아니므로 Mask 미적용. 단, prefix/버킷명이 운영 토폴로지를 노출할 수 있으면 운영 판단으로 Mask 적용.
+- staging/production 별로 IAM key 를 반드시 분리한다 (OPS-011 의 정신을 S3 자격증명에도 적용 — 외부 개방 리소스의 1차 방어선이 키 자체이기 때문).
 
 ### Registry 자격증명 — ghcr.io 기준
 
