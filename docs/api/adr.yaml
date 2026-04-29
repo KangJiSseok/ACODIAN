@@ -154,14 +154,19 @@
   context: |
     개발 환경(dev)과 운영 환경(prod) 모두 S3 기반 저장소를 사용할 예정이다.
     두 환경은 저장 방식은 같지만 bucket, prefix, credentials, endpoint 등 설정값이 다를 수 있다.
-    환경 차이를 설정으로 분리하면서도, 향후 저장소 변경 가능성은 열어둬야 한다.
+    동시에 파일 업로드 유스케이스가 늘어나면서 단순 upload/delete 뿐 아니라
+    key 기반 공개 URL 계산, temp -> final copy, prefix 단위 orphan cleanup 조회 같은 계약도 함께 필요해졌다.
+    환경 차이를 설정으로 분리하면서도, 향후 저장소 변경 가능성과 유스케이스별 어댑터 분리 가능성은 열어둬야 한다.
   decision: |
-    file 모듈에 FileStoragePort 인터페이스를 정의한다.
-    현재 dev/prod 프로파일 모두 S3FileStorageAdapter를 사용한다.
-    프로파일은 구현체를 전환하지 않고 bucket, prefix, credentials, endpoint 등 설정만 분리한다.
-    향후 로컬 파일시스템 또는 다른 Object Storage가 필요해질 경우 새 Adapter를 추가한다.
+    공통 저장소 추상화는 `ObjectStoragePort` 인터페이스로 정의한다.
+    기본 계약은 `upload`, `delete` 뿐 아니라 `copy`, `toPublicUrl`, `listKeysUploadedBefore` 까지 포함한다.
+    현재 dev/prod 프로파일 모두 S3 기반 `ObjectStoragePort` 구현체를 사용한다.
+    프로파일은 구현체를 전환하기보다 bucket, basePrefix, credentials, publicBaseUrl 같은 설정값으로 환경 차이를 분리한다.
+    공통 파일 업로드와 특정 도메인 전용 저장 흐름(예: 프로필 이미지)은 같은 `ObjectStoragePort` 계약 위에서 서로 다른 Adapter/Qualifier로 분리할 수 있다.
+    향후 로컬 파일시스템 또는 다른 Object Storage가 필요해질 경우 같은 포트를 구현하는 새 Adapter를 추가한다.
   consequence: 개발/운영 환경이 동일한 저장 방식(S3 API)을 사용하므로 환경 차이로 인한 문제를 줄일 수 있다.
-    설정만으로 환경 전환이 가능하다. 테스트 대역과 향후 저장소 확장을 위해 Port 추상화는 유지한다.
+    설정만으로 환경 전환이 가능하고, 테스트 대역과 향후 저장소 확장을 위해 Port 추상화는 유지한다.
+    이후 temp upload + AFTER_COMMIT promote 같은 수명주기 패턴은 이 포트 위에서 구현하며, 상세 트랜잭션/정리 정책은 ADR-021에서 다룬다.
 
 - id: ADR-010
   title: 테스트 전략 — 3계층
@@ -407,3 +412,32 @@
     public contract 변경과 repository query 변경 책임이 분리되어 drift 추적이 쉬워진다.
     service 가 default/ownership normalization 의 단일 책임을 가지게 되고, repository 시그니처는 HTTP 바인딩 세부사항에서 분리된다.
     이후 repository read input 을 별도 정규화해야 하는 신규 JOOQ 조회도 같은 `query/*Query` vocabulary 를 따라야 한다.
+
+- id: ADR-021
+  title: Object Storage + DB 트랜잭션 일관성 — temp upload 후 AFTER_COMMIT 승격
+  status: adopted
+  date: 2026-04-29
+  stacks: [springboot]
+  context: |
+    S3 같은 Object Storage 작업은 DB 트랜잭션에 참여하지 않으므로, 파일 업로드와 DB 저장을 한 요청에서 함께 처리하면
+    "파일은 올라갔지만 DB 는 롤백됨", "DB 는 커밋됐지만 최종 파일 위치 승격은 실패함" 같은 비대칭 상태가 생길 수 있다.
+    단순히 Service 안에서 업로드/저장/복사를 순차 호출하면, 어느 지점의 실패를 사용자 요청 전체 실패로 볼지와 orphan 파일을 어떻게 정리할지가 유스케이스마다 흩어진다.
+    특히 공개 회원가입의 프로필 이미지처럼 DB 엔티티 생성과 파일 참조 URL 저장이 함께 일어나지만,
+    최종 파일 위치 승격 실패가 사용자 계정 생성 자체를 되돌려야 할 정도의 치명적 오류는 아닌 경우가 있다.
+    따라서 Object Storage 와 DB 를 함께 다루는 흐름에서, 커밋 전/후 책임과 정리 정책을 재사용 가능한 패턴으로 먼저 고정할 필요가 있다.
+  decision: |
+    DB 트랜잭션과 Object Storage 는 원자적으로 묶으려 하지 않고, temp upload + AFTER_COMMIT promote 패턴으로 일관성을 맞춘다.
+    업로드가 필요한 요청은 ObjectStoragePort 로 temp key 에 먼저 저장하고, DB 엔티티에는 temp key 가 아니라 최종 서빙 기준 key 또는 final public URL 을 저장한다.
+    DB 트랜잭션이 커밋되면 `@TransactionalEventListener(phase = AFTER_COMMIT)` 에서 temp -> final promote(copy/move)를 수행한다.
+    promote 실패는 기본적으로 이미 커밋된 DB 트랜잭션을 롤백하지 않고 log/관측 가능 신호로 남긴다. 필요 시 재시도 job 또는 운영 보정 절차로 후속 처리한다.
+    DB 커밋 전에 실패한 temp 업로드는 비즈니스 요청 실패로 간주해 DB 저장을 진행하지 않는다.
+    temp 로 남은 orphan 객체는 scheduler 또는 별도 cleanup 경로로 정리한다.
+    cleanup 정책(cron, temp prefix, retention days 등)과 storage 환경 차이(bucket, basePrefix, publicBaseUrl 등)는 하드코딩하지 않고 설정 프로퍼티로 관리한다.
+    이 패턴은 ADR-008의 AFTER_COMMIT 이벤트 사용 원칙과 ADR-009의 Object Storage 추상화 위에 구축한다.
+    첫 적용 사례는 `/auth/signup` 의 선택 프로필 이미지 저장 흐름이다.
+  consequence: |
+    Object Storage 와 DB 를 함께 다루는 유스케이스가 temp upload, AFTER_COMMIT promote, orphan cleanup 이라는 공통 수명주기를 공유하게 된다.
+    promote 실패를 DB 롤백으로 연결하지 않으므로 사용자 요청의 핵심 비즈니스 성공과 외부 저장소 후처리를 분리할 수 있다.
+    대신 시스템은 eventual consistency 를 전제로 하며, promote 실패와 orphan 객체를 감지·정리하는 운영 수단이 필요하다.
+    이후 S3 연동이 추가되는 기능은 "commit 이전 실패는 요청 실패, commit 이후 승격 실패는 사후 보정"이라는 기준을 기본값으로 검토해야 한다.
+    단, 파일 승격 실패가 비즈니스적으로 즉시 치명적인 유스케이스라면 이 ADR을 그대로 적용하지 말고 별도 보상/재시도/확정 모델을 설계해야 한다.

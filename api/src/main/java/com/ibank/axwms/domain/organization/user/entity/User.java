@@ -90,7 +90,9 @@ public class User {
                               EmploymentStatus employmentStatus,
                               String positionName,
                               String titleName,
-                              LocalDate joinDate) {
+                              LocalDate joinDate,
+                              String phone,
+                              String profileImageUrl) {
         User user = new User();
         user.departmentId = departmentId;
         user.userName = userName;
@@ -101,6 +103,8 @@ public class User {
         user.positionName = positionName;
         user.titleName = titleName;
         user.joinDate = joinDate;
+        user.phone = phone;
+        user.profileImageUrl = profileImageUrl;
         return user;
     }
 

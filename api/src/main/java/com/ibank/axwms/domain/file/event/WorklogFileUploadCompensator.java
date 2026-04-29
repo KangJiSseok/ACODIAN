@@ -1,8 +1,8 @@
 package com.ibank.axwms.domain.file.event;
 
 import com.ibank.axwms.domain.file.external.ObjectStoragePort;
-import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.event.TransactionPhase;
 import org.springframework.transaction.event.TransactionalEventListener;
@@ -14,10 +14,15 @@ import org.springframework.transaction.event.TransactionalEventListener;
  */
 @Slf4j
 @Component
-@RequiredArgsConstructor
 public class WorklogFileUploadCompensator {
 
     private final ObjectStoragePort objectStoragePort;
+
+    public WorklogFileUploadCompensator(
+            @Qualifier("s3ObjectStorageAdapter") ObjectStoragePort objectStoragePort
+    ) {
+        this.objectStoragePort = objectStoragePort;
+    }
 
     /** AFTER_ROLLBACK 단계에서 호출되어 업로드된 객체를 개별 삭제한다. 삭제 자체 실패는 log 만 남기고 흡수한다. */
     @TransactionalEventListener(phase = TransactionPhase.AFTER_ROLLBACK)

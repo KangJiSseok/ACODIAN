@@ -2,6 +2,7 @@ package com.ibank.axwms.domain.auth.controller;
 
 import com.ibank.axwms.domain.auth.dto.LoginApiDto;
 import com.ibank.axwms.domain.auth.dto.RefreshAccessTokenApiDto;
+import com.ibank.axwms.domain.auth.dto.SignupApiDto;
 import com.ibank.axwms.domain.auth.service.AuthService;
 import com.ibank.axwms.global.response.EmptyResponse;
 import com.ibank.axwms.global.security.AuthTokenResponseWriter;
@@ -11,11 +12,16 @@ import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
+import org.springframework.http.HttpStatus;
+import org.springframework.http.MediaType;
 import org.springframework.util.StringUtils;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestPart;
+import org.springframework.web.bind.annotation.ResponseStatus;
 import org.springframework.web.bind.annotation.RestController;
+import org.springframework.web.multipart.MultipartFile;
 import org.springframework.web.util.WebUtils;
 
 @RestController
@@ -33,6 +39,17 @@ public class AuthController implements AuthControllerDocs {
         LoginApiDto.Result result = authService.login(request);
         authTokenResponseWriter.writeAccessTokenHeader(response, result.accessToken());
         authTokenResponseWriter.writeRefreshCookie(response, result.refreshToken());
+        return EmptyResponse.INSTANCE;
+    }
+
+    @Override
+    @PostMapping(value = "/signup", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
+    @ResponseStatus(HttpStatus.CREATED)
+    public EmptyResponse signup(
+            @Valid @RequestPart("request") SignupApiDto.Request request,
+            @RequestPart(value = "profile_image", required = false) MultipartFile profileImage
+    ) {
+        authService.signup(request, profileImage);
         return EmptyResponse.INSTANCE;
     }
 

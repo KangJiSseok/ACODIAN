@@ -190,7 +190,9 @@ class DepartmentRepositoryIntegrationTest extends IntegrationTestSupport {
                 employmentStatus,
                 "사원",
                 null,
-                LocalDate.of(2025, 1, 1)
+                LocalDate.of(2025, 1, 1),
+                null,
+                null
         );
     }
 }

@@ -11,6 +11,20 @@ jwt:
   access-token-expiration: 3600000
   refresh-token-expiration: 1209600000
 
+storage:
+  s3:
+    bucket: test-bucket
+    region: ap-northeast-2
+    base-prefix: test/base
+    public-base-url: https://cdn.test.local
+    access-key-id: test-access-key
+    secret-access-key: test-secret-key
+  profile-image:
+    cleanup:
+      cron: 0 20 22 * * *
+      temp-prefix: temp/
+      retention-days: 0
+
 auth:
   refresh-cookie:
     name: refreshToken

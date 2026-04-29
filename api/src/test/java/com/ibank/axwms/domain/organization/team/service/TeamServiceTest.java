@@ -400,7 +400,9 @@ class TeamServiceTest {
                 EmploymentStatus.ACTIVE,
                 "과장",
                 "팀장",
-                LocalDate.of(2025, 1, 1)
+                LocalDate.of(2025, 1, 1),
+                null,
+                null
         );
         ReflectionTestUtils.setField(user, "id", id);
         return user;

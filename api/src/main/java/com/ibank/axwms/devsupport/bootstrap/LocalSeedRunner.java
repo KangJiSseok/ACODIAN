@@ -198,7 +198,9 @@ public class LocalSeedRunner implements ApplicationRunner {
                             spec.employmentStatus(),
                             spec.positionName(),
                             spec.titleName(),
-                            DEFAULT_JOIN_DATE
+                            DEFAULT_JOIN_DATE,
+                            null,
+                            null
                     );
                     User saved = userRepository.save(user);
                     log.info("[LocalSeed] 사용자 생성 - email={} role={} departmentId={} titleName={}",

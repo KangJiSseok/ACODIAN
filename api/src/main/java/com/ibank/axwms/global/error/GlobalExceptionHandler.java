@@ -10,6 +10,7 @@ import org.springframework.validation.BindException;
 import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
+import org.springframework.web.multipart.MaxUploadSizeExceededException;
 
 /**
  * 컨트롤러에서 빠져나오는 모든 예외를 클라이언트가 동일한 키로 파싱할 수 있는 ApiResponse 에러 봉투로 변환한다.
@@ -35,6 +36,13 @@ public class GlobalExceptionHandler {
     @ExceptionHandler({MethodArgumentNotValidException.class, BindException.class, ConstraintViolationException.class})
     public ResponseEntity<ApiResponse<EmptyResponse>> handleValidationException(Exception exception) {
         return buildErrorResponse(ErrorCode.COMMON_VALIDATION_ERROR);
+    }
+
+    @ExceptionHandler(MaxUploadSizeExceededException.class)
+    public ResponseEntity<ApiResponse<EmptyResponse>> handleMaxUploadSizeExceededException(
+            MaxUploadSizeExceededException exception
+    ) {
+        return buildErrorResponse(ErrorCode.COMMON_FILE_TOO_LARGE);
     }
 
     @ExceptionHandler(AccessDeniedException.class)
