@@ -46,16 +46,17 @@ public class LocalSeedRunner implements ApplicationRunner {
     private static final List<DepartmentSeedSpec> DEPARTMENT_SEEDS = List.of(
             new DepartmentSeedSpec("솔루션개발사업부", "전사 물류 시스템 개발과 아키텍처를 담당하는 사업부", DepartmentStatus.ACTIVE, "dept@ibank.com"),
             new DepartmentSeedSpec("솔루션사업부", "솔루션 운영 지원과 정산을 담당하는 사업부", DepartmentStatus.ACTIVE, "ops.head@ibank.com"),
-            new DepartmentSeedSpec("데이터컨설팅사업부", "삭제 no-op 검증을 위한 비활성 사업부", DepartmentStatus.INACTIVE, "dormant.head@ibank.com")
+            new DepartmentSeedSpec("데이터컨설팅사업부", "삭제 no-op 검증을 위한 비활성 사업부", DepartmentStatus.INACTIVE, "dormant.head@ibank.com"),
+            new DepartmentSeedSpec("비상대응본부", "부서장 후보 검증을 위한 사업부", DepartmentStatus.ACTIVE, null)
     );
     private static final List<UserSeedSpec> USER_SEEDS = List.of(
-            new UserSeedSpec("director@ibank.com", "개발본부", UserRole.DIRECTOR, "김이사", "이사", "본부장", EmploymentStatus.ACTIVE),
-            new UserSeedSpec("dept@ibank.com", "개발본부", UserRole.DEPT_HEAD, "박본부", "부장", "본부장", EmploymentStatus.ACTIVE),
-            new UserSeedSpec("dev.member@ibank.com", "개발본부", UserRole.MEMBER, "최개발", "대리", "팀원", EmploymentStatus.ACTIVE),
-            new UserSeedSpec("ops.head@ibank.com", "운영지원본부", UserRole.DEPT_HEAD, "오운영", "부장", "본부장", EmploymentStatus.ACTIVE),
-            new UserSeedSpec("dormant.head@ibank.com", "휴면본부", UserRole.DEPT_HEAD, "한휴면", "부장", "본부장", EmploymentStatus.ACTIVE),
+            new UserSeedSpec("director@ibank.com", "솔루션개발사업부", UserRole.DIRECTOR, "김이사", "이사", "본부장", EmploymentStatus.ACTIVE),
+            new UserSeedSpec("dept@ibank.com", "솔루션개발사업부", UserRole.DEPT_HEAD, "박본부", "부장", "본부장", EmploymentStatus.ACTIVE),
+            new UserSeedSpec("dev.member@ibank.com", "솔루션개발사업부", UserRole.MEMBER, "최개발", "대리", "팀원", EmploymentStatus.ACTIVE),
+            new UserSeedSpec("ops.head@ibank.com", "솔루션사업부", UserRole.DEPT_HEAD, "오운영", "부장", "본부장", EmploymentStatus.ACTIVE),
+            new UserSeedSpec("dormant.head@ibank.com", "데이터컨설팅사업부", UserRole.DEPT_HEAD, "한휴면", "부장", "본부장", EmploymentStatus.ACTIVE),
             new UserSeedSpec("candidate.head@ibank.com", "비상대응본부", UserRole.DEPT_HEAD, "윤후보", "차장", "부서장 후보", EmploymentStatus.ACTIVE),
-            new UserSeedSpec("member@ibank.com", "운영지원본부", UserRole.MEMBER, "이사원", "사원", "팀원", EmploymentStatus.ACTIVE)
+            new UserSeedSpec("member@ibank.com", "솔루션사업부", UserRole.MEMBER, "이사원", "사원", "팀원", EmploymentStatus.ACTIVE)
     );
     private static final List<TeamSeedSpec> TEAM_SEEDS = List.of(
             new TeamSeedSpec("솔루션개발사업부", "플랫폼개발팀", TeamStatus.ACTIVE, "로컬 검증용 솔루션개발사업부 팀", List.of()),
@@ -65,13 +66,13 @@ public class LocalSeedRunner implements ApplicationRunner {
             new TeamSeedSpec("솔루션사업부", "운영정산TF", TeamStatus.INACTIVE, "로컬 검증용 솔루션사업부 추가 팀", List.of("영업전략TF"))
     );
     private static final List<UserTeamSeedSpec> USER_TEAM_SEEDS = List.of(
-            new UserTeamSeedSpec("director@ibank.com", "개발본부", "플랫폼개발팀", true, "플랫폼 총괄", "주담당", true, UserTeamStatus.ACTIVE),
-            new UserTeamSeedSpec("director@ibank.com", "개발본부", "아키텍처TF", false, "아키텍처 자문", "겸임", false, UserTeamStatus.ACTIVE),
-            new UserTeamSeedSpec("dept@ibank.com", "개발본부", "플랫폼개발팀", false, "플랫폼 운영", "주담당", true, UserTeamStatus.ACTIVE),
-            new UserTeamSeedSpec("dept@ibank.com", "개발본부", "아키텍처TF", true, "아키텍처 리드", "겸임", false, UserTeamStatus.ACTIVE),
-            new UserTeamSeedSpec("dev.member@ibank.com", "개발본부", "플랫폼개발팀", false, "WMS 개발", "겸임", false, UserTeamStatus.ACTIVE),
-            new UserTeamSeedSpec("member@ibank.com", "운영지원본부", "운영지원팀", false, "운영 지원", "주담당", true, UserTeamStatus.ACTIVE),
-            new UserTeamSeedSpec("member@ibank.com", "운영지원본부", "운영정산TF", false, "정산 지원", "겸임", false, UserTeamStatus.ACTIVE)
+            new UserTeamSeedSpec("director@ibank.com", "솔루션개발사업부", "플랫폼개발팀", true, "플랫폼 총괄", "주담당", true, UserTeamStatus.ACTIVE),
+            new UserTeamSeedSpec("director@ibank.com", "솔루션개발사업부", "아키텍처TF", false, "아키텍처 자문", "겸임", false, UserTeamStatus.ACTIVE),
+            new UserTeamSeedSpec("dept@ibank.com", "솔루션개발사업부", "플랫폼개발팀", false, "플랫폼 운영", "주담당", true, UserTeamStatus.ACTIVE),
+            new UserTeamSeedSpec("dept@ibank.com", "솔루션개발사업부", "아키텍처TF", true, "아키텍처 리드", "겸임", false, UserTeamStatus.ACTIVE),
+            new UserTeamSeedSpec("dev.member@ibank.com", "솔루션개발사업부", "플랫폼개발팀", false, "WMS 개발", "겸임", false, UserTeamStatus.ACTIVE),
+            new UserTeamSeedSpec("member@ibank.com", "솔루션사업부", "운영지원팀", false, "운영 지원", "주담당", true, UserTeamStatus.ACTIVE),
+            new UserTeamSeedSpec("member@ibank.com", "솔루션사업부", "운영정산TF", false, "정산 지원", "겸임", false, UserTeamStatus.ACTIVE)
     );
     private static final List<UserEvaluationSeedSpec> USER_EVALUATION_SEEDS = List.of(
             new UserEvaluationSeedSpec("dev.member@ibank.com", "director@ibank.com", "시스템 품질 개선 기여가 큽니다."),
