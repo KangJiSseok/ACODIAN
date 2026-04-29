@@ -3,6 +3,7 @@ package com.ibank.axwms.domain.organization.department.repository;
 import static org.assertj.core.api.Assertions.assertThat;
 
 import com.ibank.axwms.domain.organization.department.DepartmentStatus;
+import com.ibank.axwms.domain.organization.team.UserTeamAuthority;
 import com.ibank.axwms.domain.organization.team.UserTeamStatus;
 import com.ibank.axwms.domain.organization.department.entity.Department;
 import com.ibank.axwms.domain.organization.department.repository.jooq.projection.DepartmentListItemProjection;
@@ -145,12 +146,12 @@ class DepartmentRepositoryIntegrationTest extends IntegrationTestSupport {
                 UserRole.MEMBER
         ));
 
-        userTeamRepository.save(UserTeam.create(activeMemberOne.getId(), logisticsActiveTeam.getId(), false, "담당", "주담당", true, UserTeamStatus.ACTIVE));
-        userTeamRepository.save(UserTeam.create(activeMemberOne.getId(), emptyHeadActiveTeam.getId(), false, "협업", "겸임", false, UserTeamStatus.ACTIVE));
-        userTeamRepository.save(UserTeam.create(activeMemberTwo.getId(), emptyHeadActiveTeam.getId(), true, "리드", "주담당", true, UserTeamStatus.ACTIVE));
-        userTeamRepository.save(UserTeam.create(leaveMember.getId(), logisticsActiveTeam.getId(), false, "담당", "주담당", true, UserTeamStatus.ACTIVE));
-        userTeamRepository.save(UserTeam.create(inactiveTeamOnlyMember.getId(), logisticsInactiveTeam.getId(), false, "담당", "주담당", true, UserTeamStatus.ACTIVE));
-        userTeamRepository.save(UserTeam.create(inactiveDepartmentTeamMember.getId(), inactiveDepartmentActiveTeam.getId(), false, "담당", "주담당", true, UserTeamStatus.ACTIVE));
+        userTeamRepository.save(UserTeam.create(activeMemberOne.getId(), logisticsActiveTeam.getId(), UserTeamAuthority.MEMBER, "담당", "주담당", true, UserTeamStatus.ACTIVE));
+        userTeamRepository.save(UserTeam.create(activeMemberOne.getId(), emptyHeadActiveTeam.getId(), UserTeamAuthority.MEMBER, "협업", "겸임", false, UserTeamStatus.ACTIVE));
+        userTeamRepository.save(UserTeam.create(activeMemberTwo.getId(), emptyHeadActiveTeam.getId(), UserTeamAuthority.LEADER, "리드", "주담당", true, UserTeamStatus.ACTIVE));
+        userTeamRepository.save(UserTeam.create(leaveMember.getId(), logisticsActiveTeam.getId(), UserTeamAuthority.MEMBER, "담당", "주담당", true, UserTeamStatus.ACTIVE));
+        userTeamRepository.save(UserTeam.create(inactiveTeamOnlyMember.getId(), logisticsInactiveTeam.getId(), UserTeamAuthority.MEMBER, "담당", "주담당", true, UserTeamStatus.ACTIVE));
+        userTeamRepository.save(UserTeam.create(inactiveDepartmentTeamMember.getId(), inactiveDepartmentActiveTeam.getId(), UserTeamAuthority.MEMBER, "담당", "주담당", true, UserTeamStatus.ACTIVE));
     }
 
     /** 테스트용 부서를 상태까지 포함해 생성한다. */

@@ -86,12 +86,22 @@ public class Team {
                                        String description,
                                        LocalDate startDate,
                                        LocalDate expectedEndDate) {
+        updateProfile(departmentId, teamName, statusCode, description, startDate, expectedEndDate);
+        this.deletedAt = null;
+    }
+
+    /** 팀 기본 정보를 최신 요청값으로 갱신한다. */
+    public void updateProfile(Long departmentId,
+                              String teamName,
+                              TeamStatus statusCode,
+                              String description,
+                              LocalDate startDate,
+                              LocalDate expectedEndDate) {
         this.departmentId = departmentId;
         this.teamName = teamName;
         this.description = description;
         this.startDate = startDate;
         this.expectedEndDate = expectedEndDate;
-        this.deletedAt = null;
         changeStatus(statusCode);
     }
 

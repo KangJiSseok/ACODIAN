@@ -2,12 +2,16 @@ package com.ibank.axwms.domain.organization.team.repository.jooq;
 
 import static com.ibank.axwms.global.jooq.Tables.TB_USER;
 import static com.ibank.axwms.global.jooq.Tables.TB_USER_TEAM;
+import static org.jooq.impl.DSL.inline;
+import static org.jooq.impl.DSL.when;
 
+import com.ibank.axwms.domain.organization.team.UserTeamAuthority;
 import com.ibank.axwms.domain.organization.team.repository.jooq.projection.TeamUserProjection;
 import com.ibank.axwms.domain.organization.team.repository.jooq.query.TeamUsersQuery;
 import java.util.List;
 import lombok.RequiredArgsConstructor;
 import org.jooq.DSLContext;
+import org.jooq.Field;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageImpl;
 import org.springframework.data.domain.PageRequest;
@@ -35,7 +39,7 @@ public class UserTeamJooqRepositoryImpl implements UserTeamJooqRepository {
                 .longValue();
 
         List<TeamUserProjection> items = dsl.select(
-                        TB_USER_TEAM.TEAM_LEADER,
+                        TB_USER_TEAM.TEAM_AUTHORITY,
                         TB_USER.USER_ID,
                         TB_USER.USER_NAME,
                         TB_USER.POSITION_NAME,
@@ -46,11 +50,11 @@ public class UserTeamJooqRepositoryImpl implements UserTeamJooqRepository {
                 .from(TB_USER_TEAM)
                 .join(TB_USER).on(TB_USER.USER_ID.eq(TB_USER_TEAM.USER_ID))
                 .where(scopeCondition)
-                .orderBy(TB_USER_TEAM.TEAM_LEADER.desc(), TB_USER.USER_ID.asc())
+                .orderBy(teamAuthorityPriority(TB_USER_TEAM.TEAM_AUTHORITY).asc(), TB_USER.USER_ID.asc())
                 .limit(query.pageSize())
                 .offset((query.page() - 1) * query.pageSize())
                 .fetch(record -> new TeamUserProjection(
-                        record.get(TB_USER_TEAM.TEAM_LEADER),
+                        UserTeamAuthority.valueOf(record.get(TB_USER_TEAM.TEAM_AUTHORITY)),
                         record.get(TB_USER.USER_ID),
                         record.get(TB_USER.USER_NAME),
                         record.get(TB_USER.POSITION_NAME),
@@ -60,5 +64,13 @@ public class UserTeamJooqRepositoryImpl implements UserTeamJooqRepository {
                 ));
 
         return new PageImpl<>(items, PageRequest.of(query.page() - 1, query.pageSize()), totalCount);
+    }
+
+    /** LEADER > MEMBER > ADMIN 순으로 membership 권한 우선순위를 계산한다. */
+    private Field<Integer> teamAuthorityPriority(Field<String> authorityField) {
+        return when(authorityField.eq(UserTeamAuthority.LEADER.name()), inline(0))
+                .when(authorityField.eq(UserTeamAuthority.MEMBER.name()), inline(1))
+                .when(authorityField.eq(UserTeamAuthority.ADMIN.name()), inline(2))
+                .otherwise(inline(3));
     }
 }

@@ -1,5 +1,6 @@
 package com.ibank.axwms.domain.organization.team.repository;
 
+import com.ibank.axwms.domain.organization.team.UserTeamAuthority;
 import com.ibank.axwms.domain.organization.team.UserTeamStatus;
 import com.ibank.axwms.domain.organization.team.entity.UserTeam;
 import com.ibank.axwms.domain.organization.team.repository.jooq.UserTeamJooqRepository;
@@ -26,4 +27,7 @@ public interface UserTeamRepository extends JpaRepository<UserTeam, Long>, UserT
 
     /** 로컬 시드가 같은 사용자-팀 관계를 중복 삽입하지 않도록 단건 탐색한다. */
     Optional<UserTeam> findByUserIdAndTeamId(Long userId, Long teamId);
+
+    /** 팀 단위 대표자 변경 시 현재 ACTIVE 리더 membership 목록을 조회한다. */
+    List<UserTeam> findAllByTeamIdAndStatusCodeAndTeamAuthority(Long teamId, UserTeamStatus statusCode, UserTeamAuthority teamAuthority);
 }

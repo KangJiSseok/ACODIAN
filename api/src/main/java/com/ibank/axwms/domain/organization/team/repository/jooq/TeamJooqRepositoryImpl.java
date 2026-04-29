@@ -13,6 +13,7 @@ import static org.jooq.impl.DSL.trueCondition;
 import static org.jooq.impl.DSL.when;
 
 import com.ibank.axwms.domain.organization.team.TeamStatus;
+import com.ibank.axwms.domain.organization.team.UserTeamAuthority;
 import com.ibank.axwms.domain.organization.team.UserTeamStatus;
 import com.ibank.axwms.domain.organization.team.repository.jooq.projection.TeamDetailProjection;
 import com.ibank.axwms.domain.organization.team.repository.jooq.projection.TeamListProjection;
@@ -23,9 +24,7 @@ import com.ibank.axwms.domain.organization.team.repository.jooq.query.TeamSummar
 import com.ibank.axwms.domain.organization.team.repository.jooq.query.TeamWorklogsQuery;
 import com.ibank.axwms.domain.organization.user.EmploymentStatus;
 import com.ibank.axwms.domain.worklog.WorklogStatus;
-import com.ibank.axwms.global.jooq.tables.TbDepartment;
 import com.ibank.axwms.global.jooq.tables.TbTeam;
-import com.ibank.axwms.global.jooq.tables.TbUser;
 import com.ibank.axwms.global.jooq.tables.TbUserTeam;
 import java.util.List;
 import java.util.Optional;
@@ -56,23 +55,18 @@ public class TeamJooqRepositoryImpl implements TeamJooqRepository {
      */
     @Override
     public Page<TeamListProjection> findTeamPage(TeamPageQuery query) {
-        TbDepartment department = TB_DEPARTMENT.as("department");
-        TbUser departmentHead = TB_USER.as("department_head");
-        TbUser leaderUser = TB_USER.as("leader_user");
-        TbUserTeam leaderMembership = TB_USER_TEAM.as("leader_membership"); // 리더확인용
-        TbUserTeam activeMembership = TB_USER_TEAM.as("active_membership"); //활성화멤버확인용
-        TbUserTeam selfMembership = TB_USER_TEAM.as("self_membership"); // 자기자신조회용
+        var department = TB_DEPARTMENT.as("department");
+        var departmentHead = TB_USER.as("department_head");
+        var leaderUser = TB_USER.as("leader_user");
+        TbUserTeam leaderMembership = TB_USER_TEAM.as("leader_membership");
+        TbUserTeam activeMembership = TB_USER_TEAM.as("active_membership");
+        TbUserTeam selfMembership = TB_USER_TEAM.as("self_membership");
 
-        //팀의 활성된 멤버 수
         Field<Integer> memberCount = countDistinct(activeMembership.USER_ID).cast(Integer.class).as("member_count");
-        //이 팀의 팀장인지
-        Field<Boolean> myTeamLeader = coalesce(selfMembership.TEAM_LEADER, inline(false)).as("my_team_leader");
-        //이 팀의 주담당/겸임 인지
+        Field<String> myTeamAuthority = selfMembership.TEAM_AUTHORITY.as("my_team_authority");
         Field<String> myAllocation = selfMembership.ALLOCATION.as("my_allocation");
-        //주 소속인지
         Field<Boolean> myPrimary = coalesce(selfMembership.IS_PRIMARY, inline(false)).as("my_primary");
 
-        //조회 가능한 범위의 필터 조건식
         Condition scopeCondition = teamScopeCondition(TB_TEAM, query);
 
         long totalCount = dsl.selectCount()
@@ -93,7 +87,7 @@ public class TeamJooqRepositoryImpl implements TeamJooqRepository {
                         leaderUser.USER_ID,
                         leaderUser.USER_NAME,
                         memberCount,
-                        myTeamLeader,
+                        myTeamAuthority,
                         selfMembership.TEAM_ROLE,
                         myAllocation,
                         myPrimary,
@@ -105,7 +99,7 @@ public class TeamJooqRepositoryImpl implements TeamJooqRepository {
                 .leftJoin(departmentHead).on(department.DEPARTMENT_HEAD_USER_ID.eq(departmentHead.USER_ID))
                 .leftJoin(leaderMembership).on(leaderMembership.TEAM_ID.eq(TB_TEAM.TEAM_ID)
                         .and(leaderMembership.STATUS_CODE.eq(UserTeamStatus.ACTIVE.name()))
-                        .and(leaderMembership.TEAM_LEADER.isTrue()))
+                        .and(leaderMembership.TEAM_AUTHORITY.eq(UserTeamAuthority.LEADER.name())))
                 .leftJoin(leaderUser).on(leaderMembership.USER_ID.eq(leaderUser.USER_ID))
                 .leftJoin(activeMembership).on(activeMembership.TEAM_ID.eq(TB_TEAM.TEAM_ID)
                         .and(activeMembership.STATUS_CODE.eq(UserTeamStatus.ACTIVE.name())))
@@ -113,7 +107,6 @@ public class TeamJooqRepositoryImpl implements TeamJooqRepository {
                         .and(selfMembership.STATUS_CODE.eq(UserTeamStatus.ACTIVE.name()))
                         .and(selfMembership.USER_ID.eq(query.principalUserId())))
                 .where(scopeCondition)
-                //groupBy : memberCount(집계) 때문에 사용해야함.
                 .groupBy(
                         TB_TEAM.TEAM_ID,
                         TB_TEAM.TEAM_NAME,
@@ -125,7 +118,7 @@ public class TeamJooqRepositoryImpl implements TeamJooqRepository {
                         departmentHead.USER_NAME,
                         leaderUser.USER_ID,
                         leaderUser.USER_NAME,
-                        selfMembership.TEAM_LEADER,
+                        selfMembership.TEAM_AUTHORITY,
                         selfMembership.TEAM_ROLE,
                         selfMembership.ALLOCATION,
                         selfMembership.IS_PRIMARY,
@@ -134,7 +127,7 @@ public class TeamJooqRepositoryImpl implements TeamJooqRepository {
                 )
                 .orderBy(
                         TB_TEAM.STATUS_CODE.eq(ACTIVE_TEAM_STATUS).desc(),
-                        coalesce(selfMembership.TEAM_LEADER, inline(false)).desc(),
+                        membershipAuthorityPriority(selfMembership.TEAM_AUTHORITY).asc(),
                         coalesce(selfMembership.IS_PRIMARY, inline(false)).desc(),
                         TB_TEAM.TEAM_ID.asc()
                 )
@@ -160,9 +153,9 @@ public class TeamJooqRepositoryImpl implements TeamJooqRepository {
     /** 단일 팀 상세에 필요한 기본 정보와 soft-delete 제외 업무일지 집계를 함께 조회한다. */
     @Override
     public Optional<TeamDetailProjection> findTeamDetail(Long teamId) {
-        TbDepartment department = TB_DEPARTMENT.as("department");
+        var department = TB_DEPARTMENT.as("department");
         TbUserTeam leaderMembership = TB_USER_TEAM.as("leader_membership");
-        TbUser leaderUser = TB_USER.as("leader_user");
+        var leaderUser = TB_USER.as("leader_user");
 
         Field<Integer> totalWorklogCount = dsl.selectCount()
                 .from(TB_WORKLOG)
@@ -194,7 +187,7 @@ public class TeamJooqRepositoryImpl implements TeamJooqRepository {
                 .join(department).on(TB_TEAM.DEPARTMENT_ID.eq(department.DEPARTMENT_ID))
                 .leftJoin(leaderMembership).on(leaderMembership.TEAM_ID.eq(TB_TEAM.TEAM_ID)
                         .and(teamMembershipConditionSupport.activeMembership(leaderMembership.STATUS_CODE))
-                        .and(leaderMembership.TEAM_LEADER.isTrue()))
+                        .and(leaderMembership.TEAM_AUTHORITY.eq(UserTeamAuthority.LEADER.name())))
                 .leftJoin(leaderUser).on(leaderMembership.USER_ID.eq(leaderUser.USER_ID))
                 .where(teamScopeCondition(TB_TEAM, null, teamId))
                 .fetchOptional(record -> new TeamDetailProjection(
@@ -252,7 +245,7 @@ public class TeamJooqRepositoryImpl implements TeamJooqRepository {
     }
 
     /** jOOQ tuple 결과를 team 목록 projection 으로 명시적으로 매핑한다. */
-    private TeamListProjection toTeamListProjection(Record17<Long, String, String, Long, String, String, Long, String, Long, String, Integer, Boolean, String, String, Boolean, java.time.LocalDate, java.time.LocalDate> record) {
+    private TeamListProjection toTeamListProjection(Record17<Long, String, String, Long, String, String, Long, String, Long, String, Integer, String, String, String, Boolean, java.time.LocalDate, java.time.LocalDate> record) {
         return new TeamListProjection(
                 record.value1(),
                 record.value2(),
@@ -265,13 +258,21 @@ public class TeamJooqRepositoryImpl implements TeamJooqRepository {
                 record.value9(),
                 record.value10(),
                 record.value11(),
-                record.value12(),
+                record.value12() == null ? null : UserTeamAuthority.valueOf(record.value12()),
                 record.value13(),
                 record.value14(),
                 record.value15(),
                 record.value16(),
                 record.value17()
         );
+    }
+
+    /** 목록 정렬에서 사용할 membership 권한 우선순위를 계산한다. */
+    private Field<Integer> membershipAuthorityPriority(Field<String> authorityField) {
+        return when(authorityField.eq(UserTeamAuthority.LEADER.name()), inline(0))
+                .when(authorityField.eq(UserTeamAuthority.MEMBER.name()), inline(1))
+                .when(authorityField.eq(UserTeamAuthority.ADMIN.name()), inline(2))
+                .otherwise(inline(3));
     }
 
     /** visible scope 안에서 ACTIVE 상태인 팀 수를 계산한다. */
@@ -331,16 +332,10 @@ public class TeamJooqRepositoryImpl implements TeamJooqRepository {
 
     /** soft-delete 와 visibility 규칙을 함께 반영한 공통 팀 범위 조건을 만든다. */
     private Condition teamScopeCondition(TbTeam team, Long departmentId, Long visibleTeamId) {
-
-        //삭제되지 않은 team들만 가져오는 조건식 추가
         Condition condition = team.DELETED_AT.isNull();
-
-        // null이 아니면 특정 부서만 필터
         if (departmentId != null) {
             condition = condition.and(team.DEPARTMENT_ID.eq(departmentId));
         }
-
-        // null이 아니면 특정 팀만 필터
         if (visibleTeamId != null) {
             condition = condition.and(team.TEAM_ID.eq(visibleTeamId));
         }
@@ -375,7 +370,6 @@ public class TeamJooqRepositoryImpl implements TeamJooqRepository {
                         .and(teamMembershipConditionSupport.activeMembership(visibleMembership.STATUS_CODE))
         );
     }
-
 
     /** 업무일지 목록의 spec 고정 상태 우선순위를 정수 값으로 변환한다. */
     private Field<Integer> worklogStatusPriority(Field<String> statusCodeField) {

@@ -6,6 +6,7 @@ import com.ibank.axwms.domain.organization.department.repository.DepartmentRepos
 import com.ibank.axwms.domain.organization.evaluation.entity.UserEvaluation;
 import com.ibank.axwms.domain.organization.evaluation.repository.UserEvaluationRepository;
 import com.ibank.axwms.domain.organization.team.TeamStatus;
+import com.ibank.axwms.domain.organization.team.UserTeamAuthority;
 import com.ibank.axwms.domain.organization.team.UserTeamStatus;
 import com.ibank.axwms.domain.organization.team.entity.Team;
 import com.ibank.axwms.domain.organization.team.entity.UserTeam;
@@ -56,6 +57,7 @@ public class LocalSeedRunner implements ApplicationRunner {
             new UserSeedSpec("ops.head@ibank.com", "솔루션사업부", UserRole.DEPT_HEAD, "오운영", "부장", "본부장", EmploymentStatus.ACTIVE),
             new UserSeedSpec("dormant.head@ibank.com", "데이터컨설팅사업부", UserRole.DEPT_HEAD, "한휴면", "부장", "본부장", EmploymentStatus.ACTIVE),
             new UserSeedSpec("candidate.head@ibank.com", "비상대응본부", UserRole.DEPT_HEAD, "윤후보", "차장", "부서장 후보", EmploymentStatus.ACTIVE),
+            new UserSeedSpec("lead@ibank.com", "솔루션개발사업부", UserRole.MEMBER, "류팀장", "차장", "팀장", EmploymentStatus.ACTIVE),
             new UserSeedSpec("member@ibank.com", "솔루션사업부", UserRole.MEMBER, "이사원", "사원", "팀원", EmploymentStatus.ACTIVE)
     );
     private static final List<TeamSeedSpec> TEAM_SEEDS = List.of(
@@ -66,13 +68,15 @@ public class LocalSeedRunner implements ApplicationRunner {
             new TeamSeedSpec("솔루션사업부", "운영정산TF", TeamStatus.INACTIVE, "로컬 검증용 솔루션사업부 추가 팀", List.of("영업전략TF"))
     );
     private static final List<UserTeamSeedSpec> USER_TEAM_SEEDS = List.of(
-            new UserTeamSeedSpec("director@ibank.com", "솔루션개발사업부", "플랫폼개발팀", true, "플랫폼 총괄", "주담당", true, UserTeamStatus.ACTIVE),
-            new UserTeamSeedSpec("director@ibank.com", "솔루션개발사업부", "아키텍처TF", false, "아키텍처 자문", "겸임", false, UserTeamStatus.ACTIVE),
-            new UserTeamSeedSpec("dept@ibank.com", "솔루션개발사업부", "플랫폼개발팀", false, "플랫폼 운영", "주담당", true, UserTeamStatus.ACTIVE),
-            new UserTeamSeedSpec("dept@ibank.com", "솔루션개발사업부", "아키텍처TF", true, "아키텍처 리드", "겸임", false, UserTeamStatus.ACTIVE),
-            new UserTeamSeedSpec("dev.member@ibank.com", "솔루션개발사업부", "플랫폼개발팀", false, "WMS 개발", "겸임", false, UserTeamStatus.ACTIVE),
-            new UserTeamSeedSpec("member@ibank.com", "솔루션사업부", "운영지원팀", false, "운영 지원", "주담당", true, UserTeamStatus.ACTIVE),
-            new UserTeamSeedSpec("member@ibank.com", "솔루션사업부", "운영정산TF", false, "정산 지원", "겸임", false, UserTeamStatus.ACTIVE)
+            new UserTeamSeedSpec("director@ibank.com", "솔루션개발사업부", "플랫폼개발팀", UserTeamAuthority.LEADER, "플랫폼 총괄", "주담당", true, UserTeamStatus.ACTIVE),
+            new UserTeamSeedSpec("director@ibank.com", "솔루션개발사업부", "아키텍처TF", UserTeamAuthority.MEMBER, "아키텍처 자문", "겸임", false, UserTeamStatus.ACTIVE),
+            new UserTeamSeedSpec("dept@ibank.com", "솔루션개발사업부", "플랫폼개발팀", UserTeamAuthority.MEMBER, "플랫폼 운영", "주담당", true, UserTeamStatus.ACTIVE),
+            new UserTeamSeedSpec("dept@ibank.com", "솔루션개발사업부", "아키텍처TF", UserTeamAuthority.LEADER, "아키텍처 리드", "겸임", false, UserTeamStatus.ACTIVE),
+            new UserTeamSeedSpec("dev.member@ibank.com", "솔루션개발사업부", "플랫폼개발팀", UserTeamAuthority.MEMBER, "WMS 개발", "겸임", false, UserTeamStatus.ACTIVE),
+            new UserTeamSeedSpec("lead@ibank.com", "솔루션개발사업부", "플랫폼운영TF", UserTeamAuthority.LEADER, "플랫폼 운영 총괄", "주담당", true, UserTeamStatus.ACTIVE),
+            new UserTeamSeedSpec("ops.head@ibank.com", "솔루션개발사업부", "플랫폼개발팀", UserTeamAuthority.MEMBER, "운영 협업", "겸임", false, UserTeamStatus.ACTIVE),
+            new UserTeamSeedSpec("member@ibank.com", "솔루션사업부", "운영지원팀", UserTeamAuthority.MEMBER, "운영 지원", "주담당", true, UserTeamStatus.ACTIVE),
+            new UserTeamSeedSpec("member@ibank.com", "솔루션사업부", "운영정산TF", UserTeamAuthority.MEMBER, "정산 지원", "겸임", false, UserTeamStatus.ACTIVE)
     );
     private static final List<UserEvaluationSeedSpec> USER_EVALUATION_SEEDS = List.of(
             new UserEvaluationSeedSpec("dev.member@ibank.com", "director@ibank.com", "시스템 품질 개선 기여가 큽니다."),
@@ -266,7 +270,7 @@ public class LocalSeedRunner implements ApplicationRunner {
             ensureUserTeam(
                     userIdsByEmail.get(spec.userEmail()),
                     teamIdsByKey.get(teamKey(spec.departmentName(), spec.teamName())),
-                    spec.teamLeader(),
+                    spec.teamAuthority(),
                     spec.teamRole(),
                     spec.allocation(),
                     spec.isPrimary(),
@@ -281,26 +285,24 @@ public class LocalSeedRunner implements ApplicationRunner {
      */
     private void ensureUserTeam(Long userId,
                                 Long teamId,
-                                boolean teamLeader,
+                                UserTeamAuthority teamAuthority,
                                 String teamRole,
                                 String allocation,
                                 boolean isPrimary,
                                 UserTeamStatus statusCode) {
         userTeamRepository.findByUserIdAndTeamId(userId, teamId)
                 .ifPresentOrElse(userTeam -> {
-                    userTeam.synchronizeSeedProfile(teamLeader, teamRole, allocation, isPrimary, statusCode);
-                    log.info("[LocalSeed] 사용자-팀 관계 보정 - userId={} teamId={} leader={} role={} allocation={} primary={} status={}",
-                            userId, teamId, teamLeader, teamRole, allocation, isPrimary, statusCode);
+                    userTeam.synchronizeSeedProfile(teamAuthority, teamRole, allocation, isPrimary, statusCode);
+                    log.info("[LocalSeed] 사용자-팀 관계 보정 - userId={} teamId={} authority={} role={} allocation={} primary={} status={}",
+                            userId, teamId, teamAuthority, teamRole, allocation, isPrimary, statusCode);
                 }, () -> {
-                    userTeamRepository.save(UserTeam.create(userId, teamId, teamLeader, teamRole, allocation, isPrimary, statusCode));
-                    log.info("[LocalSeed] 사용자-팀 관계 생성 - userId={} teamId={} leader={} role={} allocation={} primary={} status={}",
-                            userId, teamId, teamLeader, teamRole, allocation, isPrimary, statusCode);
+                    userTeamRepository.save(UserTeam.create(userId, teamId, teamAuthority, teamRole, allocation, isPrimary, statusCode));
+                    log.info("[LocalSeed] 사용자-팀 관계 생성 - userId={} teamId={} authority={} role={} allocation={} primary={} status={}",
+                            userId, teamId, teamAuthority, teamRole, allocation, isPrimary, statusCode);
                 });
     }
 
     /**
-<<<<<<< HEAD
-=======
      * 평가 조회 manual verification 이 재현 가능하도록 DIRECTOR/DEPT_HEAD/self-view 시나리오 row 를 멱등 보장한다.
      */
     private void seedUserEvaluations(List<UserEvaluationSeedSpec> specs, Map<String, Long> userIdsByEmail) {
@@ -324,24 +326,6 @@ public class LocalSeedRunner implements ApplicationRunner {
     }
 
     /**
-     * 현재 스펙 이름을 우선하고, 없으면 legacy 이름 순서로 이미 존재하는 부서를 찾는다.
-     */
-    private java.util.Optional<Department> findDepartmentByNames(String currentName, List<String> legacyNames) {
-        java.util.Optional<Department> current = departmentRepository.findByDepartmentName(currentName);
-        if (current.isPresent()) {
-            return current;
-        }
-        for (String legacyName : legacyNames) {
-            java.util.Optional<Department> legacy = departmentRepository.findByDepartmentName(legacyName);
-            if (legacy.isPresent()) {
-                return legacy;
-            }
-        }
-        return java.util.Optional.empty();
-    }
-
-    /**
->>>>>>> 00fdf06 (feat(api): 사용자 평가 이력 조회 API 추가)
      * 현재 스펙 이름을 우선하고, 없으면 legacy 이름 순서로 이미 존재하는 팀 row 를 찾는다.
      * soft-delete 된 팀도 복구 후보에 포함해 로컬 시드 재실행이 멱등하게 유지되도록 한다.
      */
@@ -389,7 +373,7 @@ public class LocalSeedRunner implements ApplicationRunner {
     private record UserTeamSeedSpec(String userEmail,
                                     String departmentName,
                                     String teamName,
-                                    boolean teamLeader,
+                                    UserTeamAuthority teamAuthority,
                                     String teamRole,
                                     String allocation,
                                     boolean isPrimary,

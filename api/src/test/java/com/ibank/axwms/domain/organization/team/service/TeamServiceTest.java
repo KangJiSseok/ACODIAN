@@ -2,10 +2,13 @@ package com.ibank.axwms.domain.organization.team.service;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.BDDMockito.given;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
 
 import com.ibank.axwms.domain.organization.team.TeamStatus;
+import com.ibank.axwms.domain.organization.team.UserTeamAuthority;
 import com.ibank.axwms.domain.organization.team.UserTeamStatus;
 import com.ibank.axwms.domain.organization.team.dto.BulkUpsertTeamUsersApiDto;
 import com.ibank.axwms.domain.organization.team.dto.CreateTeamApiDto;
@@ -44,6 +47,7 @@ import java.util.Optional;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.ArgumentCaptor;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.Spy;
@@ -90,7 +94,7 @@ class TeamServiceTest {
                         201L,
                         "홍길동",
                         8,
-                        true,
+                        UserTeamAuthority.LEADER,
                         "플랫폼 총괄",
                         "PRIMARY",
                         true,
@@ -107,7 +111,7 @@ class TeamServiceTest {
             assertThat(item.teamId()).isEqualTo(21L);
             assertThat(item.departmentHeadUserName()).isEqualTo("박본부");
             assertThat(item.teamLeaderName()).isEqualTo("홍길동");
-            assertThat(item.myTeamLeader()).isTrue();
+            assertThat(item.myTeamAuthority()).isEqualTo(UserTeamAuthority.LEADER);
             assertThat(item.teamRole()).isEqualTo("플랫폼 총괄");
         });
     }
@@ -131,7 +135,7 @@ class TeamServiceTest {
                         202L,
                         "타부서",
                         3,
-                        false,
+                        UserTeamAuthority.MEMBER,
                         "협업",
                         "SECONDARY",
                         false,
@@ -148,7 +152,7 @@ class TeamServiceTest {
             assertThat(item.teamId()).isEqualTo(22L);
             assertThat(item.departmentId()).isEqualTo(20L);
             assertThat(item.teamLeaderName()).isEqualTo("타부서");
-            assertThat(item.myTeamLeader()).isFalse();
+            assertThat(item.myTeamAuthority()).isEqualTo(UserTeamAuthority.MEMBER);
             assertThat(item.teamRole()).isEqualTo("협업");
         });
     }
@@ -168,22 +172,34 @@ class TeamServiceTest {
     }
 
     @Test
-    @DisplayName("DEPT_HEAD 는 자기 부서로 팀을 생성할 수 있고 EmptyResponse 를 반환한다")
-    void DEPT_HEAD_는_자기_부서로_팀을_생성할_수_있고_EmptyResponse_를_반환한다() {
+    @DisplayName("DEPT_HEAD 는 자기 부서로 팀을 생성하고 LEADER membership 을 함께 만든다")
+    void DEPT_HEAD_는_자기_부서로_팀을_생성하고_LEADER_membership_을_함께_만든다() {
         CustomUserPrincipal principal = new CustomUserPrincipal(101L, "head@ibank.com", "DEPT_HEAD");
+        Team savedTeam = createTeam(31L, 10L, null);
         given(userRepository.findById(101L)).willReturn(Optional.of(createUser(101L, 10L, UserRole.DEPT_HEAD)));
+        given(userRepository.findById(201L)).willReturn(Optional.of(createUser(201L, 10L, UserRole.MEMBER)));
+        given(teamRepository.save(any(Team.class))).willReturn(savedTeam);
+        given(userTeamRepository.findByUserIdAndTeamId(201L, 31L)).willReturn(Optional.empty());
+        given(userTeamRepository.findAllByTeamIdAndStatusCodeAndTeamAuthority(31L, UserTeamStatus.ACTIVE, UserTeamAuthority.LEADER)).willReturn(List.of());
+        given(userTeamRepository.save(any(UserTeam.class))).willAnswer(invocation -> invocation.getArgument(0));
 
         EmptyResponse response = teamService.createTeam(principal, new CreateTeamApiDto.Request(
                 10L,
                 "물류혁신TF",
                 "설명",
                 201L,
+                new CreateTeamApiDto.LeaderMembership("플랫폼 총괄", "PRIMARY", true),
                 TeamStatus.ACTIVE,
                 LocalDate.of(2025, 1, 1),
                 null
         ));
 
+        ArgumentCaptor<UserTeam> membershipCaptor = ArgumentCaptor.forClass(UserTeam.class);
+        verify(userTeamRepository).save(membershipCaptor.capture());
         assertThat(response).isSameAs(EmptyResponse.INSTANCE);
+        assertThat(membershipCaptor.getValue().getUserId()).isEqualTo(201L);
+        assertThat(membershipCaptor.getValue().getTeamId()).isEqualTo(31L);
+        assertThat(membershipCaptor.getValue().getTeamAuthority()).isEqualTo(UserTeamAuthority.LEADER);
     }
 
     @Test
@@ -197,6 +213,7 @@ class TeamServiceTest {
                 "물류혁신TF",
                 "설명",
                 201L,
+                new CreateTeamApiDto.LeaderMembership("플랫폼 총괄", "PRIMARY", true),
                 TeamStatus.ACTIVE,
                 LocalDate.of(2025, 1, 1),
                 null
@@ -204,6 +221,30 @@ class TeamServiceTest {
                 .isInstanceOf(BusinessException.class)
                 .extracting(error -> ((BusinessException) error).getErrorCode())
                 .isEqualTo(ErrorCode.AUTH_ACCESS_DENIED);
+    }
+
+    @Test
+    @DisplayName("팀 생성은 같은 부서의 활성 팀명 중복을 TEAM_DUPLICATE_NAME 으로 거절한다")
+    void 팀_생성은_같은_부서의_활성_팀명_중복을_TEAM_DUPLICATE_NAME_으로_거절한다() {
+        CustomUserPrincipal principal = new CustomUserPrincipal(101L, "head@ibank.com", "DEPT_HEAD");
+        given(userRepository.findById(101L)).willReturn(Optional.of(createUser(101L, 10L, UserRole.DEPT_HEAD)));
+        given(userRepository.findById(201L)).willReturn(Optional.of(createUser(201L, 10L, UserRole.MEMBER)));
+        given(teamRepository.findByDepartmentIdAndTeamNameAndDeletedAtIsNull(10L, "물류혁신TF"))
+                .willReturn(Optional.of(createTeam(99L, 10L, null)));
+
+        assertThatThrownBy(() -> teamService.createTeam(principal, new CreateTeamApiDto.Request(
+                10L,
+                "물류혁신TF",
+                "설명",
+                201L,
+                new CreateTeamApiDto.LeaderMembership("플랫폼 총괄", "PRIMARY", true),
+                TeamStatus.ACTIVE,
+                LocalDate.of(2025, 1, 1),
+                null
+        )))
+                .isInstanceOf(BusinessException.class)
+                .extracting(error -> ((BusinessException) error).getErrorCode())
+                .isEqualTo(ErrorCode.TEAM_DUPLICATE_NAME);
     }
 
     @Test
@@ -218,6 +259,7 @@ class TeamServiceTest {
                 "타부서팀",
                 "설명",
                 201L,
+                new CreateTeamApiDto.LeaderMembership("플랫폼 총괄", "PRIMARY", true),
                 TeamStatus.ACTIVE,
                 LocalDate.of(2025, 1, 1),
                 null
@@ -228,13 +270,72 @@ class TeamServiceTest {
     }
 
     @Test
+    @DisplayName("팀 수정은 자기 자신을 제외한 활성 팀명 중복을 TEAM_DUPLICATE_NAME 으로 거절한다")
+    void 팀_수정은_자기_자신을_제외한_활성_팀명_중복을_TEAM_DUPLICATE_NAME_으로_거절한다() {
+        CustomUserPrincipal principal = new CustomUserPrincipal(101L, "head@ibank.com", "DEPT_HEAD");
+        Team team = createTeam(21L, 10L, null);
+        Team duplicatedTeam = createTeam(99L, 10L, null);
+        given(userRepository.findById(101L)).willReturn(Optional.of(createUser(101L, 10L, UserRole.DEPT_HEAD)));
+        given(userRepository.findById(202L)).willReturn(Optional.of(createUser(202L, 10L, UserRole.MEMBER)));
+        given(teamRepository.findById(21L)).willReturn(Optional.of(team));
+        given(teamRepository.findByDepartmentIdAndTeamNameAndDeletedAtIsNull(10L, "물류혁신TF-수정"))
+                .willReturn(Optional.of(duplicatedTeam));
+
+        assertThatThrownBy(() -> teamService.updateTeam(principal, 21L, new UpdateTeamApiDto.Request(
+                10L,
+                "물류혁신TF-수정",
+                "설명",
+                202L,
+                new CreateTeamApiDto.LeaderMembership("플랫폼 총괄", "PRIMARY", true),
+                TeamStatus.ACTIVE,
+                LocalDate.of(2025, 1, 1),
+                null
+        )))
+                .isInstanceOf(BusinessException.class)
+                .extracting(error -> ((BusinessException) error).getErrorCode())
+                .isEqualTo(ErrorCode.TEAM_DUPLICATE_NAME);
+    }
+
+    @Test
+    @DisplayName("팀 수정은 기존 LEADER 를 MEMBER 로 강등하고 재활성화된 membership 을 LEADER 로 승격한다")
+    void 팀_수정은_기존_LEADER_를_MEMBER_로_강등하고_재활성화된_membership_을_LEADER_로_승격한다() {
+        CustomUserPrincipal principal = new CustomUserPrincipal(101L, "head@ibank.com", "DEPT_HEAD");
+        Team team = createTeam(21L, 10L, null);
+        UserTeam existingLeader = UserTeam.create(201L, 21L, UserTeamAuthority.LEADER, "기존 리드", "PRIMARY", true, UserTeamStatus.ACTIVE);
+        UserTeam reactivatedMember = UserTeam.create(202L, 21L, UserTeamAuthority.MEMBER, "기존 멤버", "SECONDARY", false, UserTeamStatus.LEFT);
+        given(userRepository.findById(101L)).willReturn(Optional.of(createUser(101L, 10L, UserRole.DEPT_HEAD)));
+        given(userRepository.findById(202L)).willReturn(Optional.of(createUser(202L, 10L, UserRole.MEMBER)));
+        given(teamRepository.findById(21L)).willReturn(Optional.of(team));
+        given(userTeamRepository.findByUserIdAndTeamId(202L, 21L)).willReturn(Optional.of(reactivatedMember));
+        given(userTeamRepository.findAllByTeamIdAndStatusCodeAndTeamAuthority(21L, UserTeamStatus.ACTIVE, UserTeamAuthority.LEADER))
+                .willReturn(List.of(existingLeader, reactivatedMember));
+
+        EmptyResponse response = teamService.updateTeam(principal, 21L, new UpdateTeamApiDto.Request(
+                10L,
+                "물류혁신TF-수정",
+                "수정 설명",
+                202L,
+                new CreateTeamApiDto.LeaderMembership("새 리드", "PRIMARY", true),
+                TeamStatus.ACTIVE,
+                LocalDate.of(2025, 1, 1),
+                LocalDate.of(2025, 12, 31)
+        ));
+
+        assertThat(response).isSameAs(EmptyResponse.INSTANCE);
+        assertThat(team.getTeamName()).isEqualTo("물류혁신TF-수정");
+        assertThat(reactivatedMember.getStatusCode()).isEqualTo(UserTeamStatus.ACTIVE);
+        assertThat(reactivatedMember.getTeamAuthority()).isEqualTo(UserTeamAuthority.LEADER);
+        assertThat(existingLeader.getTeamAuthority()).isEqualTo(UserTeamAuthority.MEMBER);
+    }
+
+    @Test
     @DisplayName("TEAM_LEAD 는 자기 팀 상세 projection 을 최신 API 응답으로 변환한다")
     void TEAM_LEAD_는_자기_팀_상세_projection_을_최신_API_응답으로_변환한다() {
         CustomUserPrincipal principal = new CustomUserPrincipal(101L, "lead@ibank.com", "TEAM_LEAD");
         given(userRepository.findById(101L)).willReturn(Optional.of(createUser(101L, 10L, UserRole.TEAM_LEAD)));
         given(teamRepository.findById(21L)).willReturn(Optional.of(createTeam(21L, 10L, null)));
         given(userTeamRepository.findFirstByUserIdAndStatusCodeOrderByIsPrimaryDesc(101L, UserTeamStatus.ACTIVE))
-                .willReturn(Optional.of(UserTeam.create(101L, 21L, true, "플랫폼 총괄", "주담당", true, UserTeamStatus.ACTIVE)));
+                .willReturn(Optional.of(UserTeam.create(101L, 21L, UserTeamAuthority.LEADER, "플랫폼 총괄", "주담당", true, UserTeamStatus.ACTIVE)));
         given(teamRepository.findTeamDetail(21L)).willReturn(Optional.of(new TeamDetailProjection(
                 21L,
                 "물류혁신TF",
@@ -265,7 +366,7 @@ class TeamServiceTest {
         given(userRepository.findById(101L)).willReturn(Optional.of(createUser(101L, 10L, UserRole.TEAM_LEAD)));
         given(teamRepository.findById(22L)).willReturn(Optional.of(createTeam(22L, 10L, null)));
         given(userTeamRepository.findFirstByUserIdAndStatusCodeOrderByIsPrimaryDesc(101L, UserTeamStatus.ACTIVE))
-                .willReturn(Optional.of(UserTeam.create(101L, 21L, true, "플랫폼 총괄", "주담당", true, UserTeamStatus.ACTIVE)));
+                .willReturn(Optional.of(UserTeam.create(101L, 21L, UserTeamAuthority.LEADER, "플랫폼 총괄", "주담당", true, UserTeamStatus.ACTIVE)));
 
         assertThatThrownBy(() -> teamService.getTeamDetail(principal, 22L))
                 .isInstanceOf(BusinessException.class)
@@ -281,9 +382,9 @@ class TeamServiceTest {
         given(userRepository.findById(101L)).willReturn(Optional.of(createUser(101L, 10L, UserRole.TEAM_LEAD)));
         given(teamRepository.findById(21L)).willReturn(Optional.of(createTeam(21L, 10L, null)));
         given(userTeamRepository.findFirstByUserIdAndStatusCodeOrderByIsPrimaryDesc(101L, UserTeamStatus.ACTIVE))
-                .willReturn(Optional.of(UserTeam.create(101L, 21L, true, "플랫폼 총괄", "주담당", true, UserTeamStatus.ACTIVE)));
+                .willReturn(Optional.of(UserTeam.create(101L, 21L, UserTeamAuthority.LEADER, "플랫폼 총괄", "주담당", true, UserTeamStatus.ACTIVE)));
         given(userTeamRepository.findTeamUserPage(21L, query)).willReturn(new PageImpl<>(
-                List.of(new TeamUserProjection(true, 101L, "홍길동", "과장", "hong@axwms.com", "플랫폼 총괄", "PRIMARY")),
+                List.of(new TeamUserProjection(UserTeamAuthority.LEADER, 101L, "홍길동", "과장", "hong@axwms.com", "플랫폼 총괄", "PRIMARY")),
                 PageRequest.of(0, 20),
                 1
         ));
@@ -293,6 +394,7 @@ class TeamServiceTest {
         assertThat(response.items()).singleElement().satisfies(item -> {
             assertThat(item.userName()).isEqualTo("홍길동");
             assertThat(item.email()).isEqualTo("hong@axwms.com");
+            assertThat(item.teamAuthority()).isEqualTo(UserTeamAuthority.LEADER);
             assertThat(item.teamRole()).isEqualTo("플랫폼 총괄");
         });
     }
@@ -305,7 +407,7 @@ class TeamServiceTest {
         given(userRepository.findById(101L)).willReturn(Optional.of(createUser(101L, 10L, UserRole.TEAM_LEAD)));
         given(teamRepository.findById(21L)).willReturn(Optional.of(createTeam(21L, 10L, null)));
         given(userTeamRepository.findFirstByUserIdAndStatusCodeOrderByIsPrimaryDesc(101L, UserTeamStatus.ACTIVE))
-                .willReturn(Optional.of(UserTeam.create(101L, 21L, true, "플랫폼 총괄", "주담당", true, UserTeamStatus.ACTIVE)));
+                .willReturn(Optional.of(UserTeam.create(101L, 21L, UserTeamAuthority.LEADER, "플랫폼 총괄", "주담당", true, UserTeamStatus.ACTIVE)));
         given(teamRepository.findTeamWorklogPage(21L, query)).willReturn(new PageImpl<>(
                 List.of(new TeamWorklogProjection(301L, "재고 점검", "요청 본문", "작업 본문", "AI 요약", "IN_PROGRESS", "HIGH")),
                 PageRequest.of(0, 20),
@@ -323,19 +425,31 @@ class TeamServiceTest {
     }
 
     @Test
-    @DisplayName("팀 사용자 일괄 반영은 EmptyResponse 를 반환한다")
-    void 팀_사용자_일괄_반영은_EmptyResponse_를_반환한다() {
+    @DisplayName("팀 사용자 일괄 반영은 enum 입력을 저장하고 기존 LEADER 를 MEMBER 로 강등한다")
+    void 팀_사용자_일괄_반영은_enum_입력을_저장하고_기존_LEADER_를_MEMBER_로_강등한다() {
         CustomUserPrincipal principal = new CustomUserPrincipal(101L, "head@ibank.com", "DEPT_HEAD");
+        UserTeam oldLeader = UserTeam.create(201L, 21L, UserTeamAuthority.LEADER, "기존 리드", "PRIMARY", true, UserTeamStatus.ACTIVE);
         given(userRepository.findById(101L)).willReturn(Optional.of(createUser(101L, 10L, UserRole.DEPT_HEAD)));
         given(teamRepository.findById(21L)).willReturn(Optional.of(createTeam(21L, 10L, null)));
+        given(userRepository.findById(202L)).willReturn(Optional.of(createUser(202L, 20L, UserRole.MEMBER)));
+        given(userTeamRepository.findByUserIdAndTeamId(202L, 21L)).willReturn(Optional.empty());
+        given(userTeamRepository.findAllByTeamIdAndStatusCodeAndTeamAuthority(21L, UserTeamStatus.ACTIVE, UserTeamAuthority.LEADER))
+                .willReturn(List.of(oldLeader));
+        given(userTeamRepository.save(any(UserTeam.class))).willAnswer(invocation -> invocation.getArgument(0));
 
         EmptyResponse response = teamService.bulkUpsertTeamUsers(principal, 21L, new BulkUpsertTeamUsersApiDto.Request(
-                List.of(new BulkUpsertTeamUsersApiDto.Request.AddUser(102L, false, "WMS 운영", "SECONDARY", false, LocalDate.of(2026, 4, 10))),
-                List.of(104L)
+                List.of(new BulkUpsertTeamUsersApiDto.Request.AddUser(202L, UserTeamAuthority.LEADER, "WMS 운영", "SECONDARY", false, LocalDate.of(2026, 4, 10))),
+                List.of()
         ));
 
+        ArgumentCaptor<UserTeam> membershipCaptor = ArgumentCaptor.forClass(UserTeam.class);
+        verify(userTeamRepository).save(membershipCaptor.capture());
         assertThat(response).isSameAs(EmptyResponse.INSTANCE);
+        assertThat(membershipCaptor.getValue().getTeamAuthority()).isEqualTo(UserTeamAuthority.LEADER);
+        assertThat(oldLeader.getTeamAuthority()).isEqualTo(UserTeamAuthority.MEMBER);
     }
+
+
 
     @Test
     @DisplayName("DEPT_HEAD 는 자기 부서 팀을 soft-delete 하고 membership 은 건드리지 않는다")

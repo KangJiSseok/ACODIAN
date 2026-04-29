@@ -1,5 +1,6 @@
 package com.ibank.axwms.domain.organization.team.dto;
 
+import com.ibank.axwms.domain.organization.team.UserTeamAuthority;
 import com.ibank.axwms.domain.organization.team.repository.jooq.projection.TeamUserProjection;
 import com.ibank.axwms.global.response.PageResponse;
 import io.swagger.v3.oas.annotations.media.Schema;
@@ -39,7 +40,7 @@ public final class GetTeamUsersApiDto {
 
         @Schema(description = "팀 사용자 목록 항목")
         public record Item(
-                Boolean teamLeader,
+                UserTeamAuthority teamAuthority,
                 Long userId,
                 String userName,
                 String positionName,
@@ -47,10 +48,9 @@ public final class GetTeamUsersApiDto {
                 String teamRole,
                 String allocation
         ) {
-
             public static Item from(TeamUserProjection projection) {
                 return new Item(
-                        projection.teamLeader(),
+                        projection.teamAuthority(),
                         projection.userId(),
                         projection.userName(),
                         projection.positionName(),

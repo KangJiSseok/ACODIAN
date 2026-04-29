@@ -110,7 +110,7 @@ public class UserService {
                 Boolean.TRUE.equals(userTeam.getIsPrimary()),
                 team.getId(),
                 team.getTeamName(),
-                Boolean.TRUE.equals(userTeam.getTeamLeader()),
+                userTeam.getTeamAuthority(),
                 userTeam.getTeamRole(),
                 userTeam.getAllocation()
         );
