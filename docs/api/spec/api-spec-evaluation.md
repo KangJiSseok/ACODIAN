@@ -93,6 +93,8 @@
 - 상태: `Documented`
 - 권한/접근 주체: `DIRECTOR`, `DEPT_HEAD`만 호출한다.
 - `TEAM_LEAD`, `MEMBER`는 평가를 등록할 수 없다.
+- 자기 자신한테는 평가를 할 수 없다.
+- DEPT_HEAD은 자기보다 높은 권한인 DIRECTOR를 평가 할 수 없다.
 - 요청
   - Path: `id`
   - Body: `content`
