@@ -4,10 +4,13 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.BDDMockito.given;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.databind.SerializationFeature;
+import com.ibank.axwms.domain.organization.user.EmploymentStatus;
 import com.ibank.axwms.domain.organization.user.dto.GetMyProfileApiDto;
 import com.ibank.axwms.domain.organization.user.service.UserService;
 import com.ibank.axwms.global.security.CustomUserPrincipal;
 import java.lang.reflect.Method;
+import java.time.LocalDate;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -31,7 +34,9 @@ class UserControllerTest {
 
     @BeforeEach
     void setUp() {
-        objectMapper = new ObjectMapper();
+        objectMapper = new ObjectMapper()
+                .findAndRegisterModules()
+                .disable(SerializationFeature.WRITE_DATES_AS_TIMESTAMPS);
     }
 
     @Test
@@ -60,10 +65,14 @@ class UserControllerTest {
         GetMyProfileApiDto.Response responseFromService = new GetMyProfileApiDto.Response(
                 101L,
                 "홍길동",
+                "user@ibank.com",
+                "010-1234-5678",
                 10L,
                 "물류본부",
                 "과장",
                 "팀장",
+                LocalDate.of(2025, 1, 1),
+                EmploymentStatus.ACTIVE,
                 "https://cdn.axwms.com/profile/101.png",
                 java.util.List.of(new GetMyProfileApiDto.Response.TeamSummary(
                         true,
@@ -80,8 +89,12 @@ class UserControllerTest {
 
         assertThat(response.userId()).isEqualTo(101L);
         assertThat(response.userName()).isEqualTo("홍길동");
+        assertThat(response.email()).isEqualTo("user@ibank.com");
+        assertThat(response.phone()).isEqualTo("010-1234-5678");
         assertThat(response.departmentId()).isEqualTo(10L);
         assertThat(response.departmentName()).isEqualTo("물류본부");
+        assertThat(response.joinDate()).isEqualTo(LocalDate.of(2025, 1, 1));
+        assertThat(response.employmentStatus()).isEqualTo(EmploymentStatus.ACTIVE);
         assertThat(response.teams()).containsExactly(new GetMyProfileApiDto.Response.TeamSummary(
                 true,
                 21L,
@@ -90,6 +103,30 @@ class UserControllerTest {
                 "플랫폼 총괄",
                 "주담당"
         ));
+    }
+
+    @Test
+    @DisplayName("현재 사용자 조회 응답의 joinDate 는 ISO-8601 문자열로 직렬화된다")
+    void 현재_사용자_조회_응답의_joinDate_는_ISO_8601_문자열로_직렬화된다() throws Exception {
+        GetMyProfileApiDto.Response response = new GetMyProfileApiDto.Response(
+                101L,
+                "홍길동",
+                "user@ibank.com",
+                "010-1234-5678",
+                10L,
+                "물류본부",
+                "과장",
+                "팀장",
+                LocalDate.of(2025, 1, 1),
+                EmploymentStatus.ACTIVE,
+                "https://cdn.axwms.com/profile/101.png",
+                java.util.List.of()
+        );
+
+        String json = objectMapper.writeValueAsString(response);
+
+        assertThat(json).contains("\"joinDate\":\"2025-01-01\"");
+        assertThat(json).contains("\"employmentStatus\":\"ACTIVE\"");
     }
 
     @Test

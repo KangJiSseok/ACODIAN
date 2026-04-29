@@ -2,8 +2,10 @@ package com.ibank.axwms.domain.organization.user.dto;
 
 import com.fasterxml.jackson.annotation.JsonPropertyOrder;
 import com.ibank.axwms.domain.organization.department.entity.Department;
+import com.ibank.axwms.domain.organization.user.EmploymentStatus;
 import com.ibank.axwms.domain.organization.user.entity.User;
 import io.swagger.v3.oas.annotations.media.Schema;
+import java.time.LocalDate;
 import java.util.List;
 import lombok.AccessLevel;
 import lombok.NoArgsConstructor;
@@ -18,6 +20,10 @@ public final class GetMyProfileApiDto {
             Long userId,
             @Schema(description = "사용자 이름", example = "홍길동")
             String userName,
+            @Schema(description = "이메일", example = "honggildong@ibank.com")
+            String email,
+            @Schema(description = "전화번호", example = "010-1234-5678")
+            String phone,
             @Schema(description = "부서 ID", example = "10")
             Long departmentId,
             @Schema(description = "부서명", example = "물류본부")
@@ -26,6 +32,10 @@ public final class GetMyProfileApiDto {
             String positionName,
             @Schema(description = "직책명", example = "팀장")
             String titleName,
+            @Schema(description = "입사일", example = "2025-01-01")
+            LocalDate joinDate,
+            @Schema(description = "재직 상태 코드", example = "ACTIVE")
+            EmploymentStatus employmentStatus,
             @Schema(description = "프로필 이미지 URL", example = "https://cdn.axwms.com/profile/101.png")
             String profileImageUrl,
             @Schema(description = "소속 팀 목록")
@@ -37,10 +47,14 @@ public final class GetMyProfileApiDto {
             return new Response(
                     user.getId(),
                     user.getUserName(),
+                    user.getEmail(),
+                    user.getPhone(),
                     department.getId(),
                     department.getDepartmentName(),
                     user.getPositionName(),
                     user.getTitleName(),
+                    user.getJoinDate(),
+                    user.getEmploymentStatus(),
                     user.getProfileImageUrl(),
                     teams
             );

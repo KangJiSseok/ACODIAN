@@ -15,7 +15,7 @@ public interface UserControllerDocs {
 
     @Operation(
             summary = "현재 로그인 사용자 조회",
-            description = "JWT access token 으로 인증된 현재 사용자의 프로필/부서/소속 팀 문맥을 반환한다."
+            description = "JWT access token 으로 인증된 현재 사용자의 프로필/이메일/전화번호/입사일/재직 상태/부서/소속 팀 문맥을 반환한다."
     )
     @SecurityRequirement(name = "bearerAuth")
     @ApiResponses({
