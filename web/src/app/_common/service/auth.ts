@@ -9,7 +9,7 @@ import { api } from "./axios";
 // header를 직접 읽어야 하는 login/refresh/logout 요청에 사용합니다.
 
 import { apiClient } from "./api-client";
-// data unwrap이 필요한 /users/me, /users/signup 요청에 사용합니다.
+// data unwrap이 필요한 /users/me, /auth/signup 요청에 사용합니다.
 
 import { extractAccessToken } from "./auth-token";
 // Authorization header에서 access token 문자열만 꺼낼 때 사용합니다.
@@ -22,14 +22,17 @@ export interface LoginCredentials {
 // 로그인 요청 바디
 
 export interface SignupPayload {
+  departmentId: number;
   userName: string;
   email: string;
   password: string;
+  positionName: string;
+  titleName: string;
   phone: string;
   joinDate: string;
-  profileImageUrl: string;
+  profileImage: File | null;
 }
-// 회원가입 요청 바디
+// 회원가입 요청 데이터
 
 /* 3. 로그인 */
 export async function login(credentials: LoginCredentials) {
@@ -117,11 +120,32 @@ export async function logout() {
 
 /* 6. 회원가입 */
 export async function signup(payload: SignupPayload) {
-  return apiClient.post<EmptyResponse, SignupPayload>(
-    "/users/signup",
-    payload,
-    { skipAuthRefresh: true },
+  const request = {
+    department_id: payload.departmentId,
+    user_name: payload.userName,
+    email: payload.email,
+    password: payload.password,
+    position_name: payload.positionName || null,
+    title_name: payload.titleName,
+    join_date: payload.joinDate,
+    phone: payload.phone || null,
+    employment_status: "ACTIVE",
+  };
+  // 백엔드 /auth/signup은 multipart/form-data로 JSON request part와 선택 이미지 파일을 받습니다.
+
+  const formData = new FormData();
+  formData.append(
+    "request",
+    new Blob([JSON.stringify(request)], { type: "application/json" }),
   );
+
+  if (payload.profileImage) {
+    formData.append("profile_image", payload.profileImage);
+  }
+
+  return apiClient.post<EmptyResponse, FormData>("/auth/signup", formData, {
+    skipAuthRefresh: true,
+  });
   // 회원가입은 응답 헤더를 직접 읽을 필요가 없으므로 apiClient를 사용
   // apiClient는 ApiResponse<T>에서 data만 꺼내 반환합니다.
 }
