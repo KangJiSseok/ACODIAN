@@ -62,9 +62,9 @@ export default function ProtectedLayout({ children }: { children: ReactNode }) {
 
   /* 인증된 화면 */
   return (
-    <div className="grid min-h-screen md:grid-cols-[17.5rem_minmax(0,1fr)]">
+    <div className="flex min-h-screen">
       <Sidebar />
-      <div className="flex min-h-screen min-w-0 flex-col">
+      <div className="flex min-h-screen min-w-0 flex-1 flex-col">
         <Gnb />
         <main className="workspace-main flex-1 px-4 py-6 md:px-8">
           {children}
