@@ -53,7 +53,7 @@ public class UserService {
      * @throws BusinessException USER_NOT_FOUND 사용자가 없거나 access token 문맥이 복원 불가일 때
      */
     public Long getDepartmentIdOrThrow(Long userId) {
-        return getRequiredUser(userId).getDepartmentId();
+        return getUserOrThrow(userId).getDepartmentId();
     }
 
     /**
