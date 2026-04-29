@@ -109,9 +109,11 @@ function LoginForm() {
         loop
         playsInline
         preload="metadata"
-        poster="/videos/login-bg-poster.jpg"
+        poster="/videos/login-bg-poster.webp"
         className="absolute inset-0 h-full w-full object-cover"
       >
+        <source src="/videos/login-bg.av1.webm" type='video/webm; codecs="av01"' />
+        <source src="/videos/login-bg.webm" type="video/webm" />
         <source src="/videos/login-bg.mp4" type="video/mp4" />
       </video>
 
