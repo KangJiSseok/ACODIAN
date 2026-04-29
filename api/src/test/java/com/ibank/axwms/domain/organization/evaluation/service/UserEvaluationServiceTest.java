@@ -3,8 +3,11 @@ package com.ibank.axwms.domain.organization.evaluation.service;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.BDDMockito.given;
+import static org.mockito.BDDMockito.then;
 
+import com.ibank.axwms.domain.organization.evaluation.dto.CreateUserEvaluationApiDto;
 import com.ibank.axwms.domain.organization.evaluation.dto.GetUserEvaluationsApiDto;
+import com.ibank.axwms.domain.organization.evaluation.entity.UserEvaluation;
 import com.ibank.axwms.domain.organization.evaluation.repository.UserEvaluationRepository;
 import com.ibank.axwms.domain.organization.evaluation.repository.jooq.projection.UserEvaluationSummaryProjection;
 import com.ibank.axwms.domain.organization.evaluation.repository.jooq.query.UserEvaluationPageQuery;
@@ -156,6 +159,134 @@ class UserEvaluationServiceTest {
         userEvaluationService.getUserEvaluations(principal, 2L, new GetUserEvaluationsApiDto.Request(null, null, "sideways"));
 
         assertThat(queryCaptor.getValue()).isEqualTo(new UserEvaluationPageQuery(1, 20, 2L, "DESC"));
+    }
+
+    @Test
+    @DisplayName("DIRECTOR 는 타 부서 대상 사용자 평가를 등록할 수 있다")
+    void DIRECTOR_는_타_부서_대상_사용자_평가를_등록할_수_있다() {
+        CustomUserPrincipal principal = new CustomUserPrincipal(1L, "director@ibank.com", "DIRECTOR");
+        User principalUser = createUser(1L, 10L, UserRole.DIRECTOR, "본부장");
+        User targetUser = createUser(2L, 20L, UserRole.MEMBER, "사원");
+        ArgumentCaptor<UserEvaluation> evaluationCaptor = ArgumentCaptor.forClass(UserEvaluation.class);
+        given(userRepository.findById(1L)).willReturn(Optional.of(principalUser));
+        given(userRepository.findById(2L)).willReturn(Optional.of(targetUser));
+
+        userEvaluationService.createUserEvaluation(
+                principal,
+                2L,
+                new CreateUserEvaluationApiDto.Request("평가 등록 내용")
+        );
+
+        then(userEvaluationRepository).should().save(evaluationCaptor.capture());
+        assertThat(evaluationCaptor.getValue()).satisfies(evaluation -> {
+            assertThat(evaluation.getEvaluateeUserId()).isEqualTo(2L);
+            assertThat(evaluation.getEvaluatorUserId()).isEqualTo(1L);
+            assertThat(evaluation.getContent()).isEqualTo("평가 등록 내용");
+        });
+    }
+
+    @Test
+    @DisplayName("DEPT_HEAD 는 같은 부서 비DIRECTOR 사용자 평가를 등록할 수 있다")
+    void DEPT_HEAD_는_같은_부서_비DIRECTOR_사용자_평가를_등록할_수_있다() {
+        CustomUserPrincipal principal = new CustomUserPrincipal(10L, "head@ibank.com", "DEPT_HEAD");
+        User principalUser = createUser(10L, 100L, UserRole.DEPT_HEAD, "부서장");
+        User targetUser = createUser(11L, 100L, UserRole.MEMBER, "사원");
+        ArgumentCaptor<UserEvaluation> evaluationCaptor = ArgumentCaptor.forClass(UserEvaluation.class);
+        given(userRepository.findById(10L)).willReturn(Optional.of(principalUser));
+        given(userRepository.findById(11L)).willReturn(Optional.of(targetUser));
+
+        userEvaluationService.createUserEvaluation(
+                principal,
+                11L,
+                new CreateUserEvaluationApiDto.Request("같은 부서 평가")
+        );
+
+        then(userEvaluationRepository).should().save(evaluationCaptor.capture());
+        assertThat(evaluationCaptor.getValue().getEvaluateeUserId()).isEqualTo(11L);
+    }
+
+    @Test
+    @DisplayName("자기 자신에게 평가를 등록하면 EVALUATION_SELF_WRITE_FORBIDDEN 예외를 던진다")
+    void 자기_자신에게_평가를_등록하면_EVALUATION_SELF_WRITE_FORBIDDEN_예외를_던진다() {
+        CustomUserPrincipal principal = new CustomUserPrincipal(10L, "head@ibank.com", "DEPT_HEAD");
+        User self = createUser(10L, 100L, UserRole.DEPT_HEAD, "부서장");
+        given(userRepository.findById(10L)).willReturn(Optional.of(self));
+
+        assertThatThrownBy(() -> userEvaluationService.createUserEvaluation(
+                principal,
+                10L,
+                new CreateUserEvaluationApiDto.Request("자기 평가")
+        ))
+                .isInstanceOf(BusinessException.class)
+                .extracting(error -> ((BusinessException) error).getErrorCode())
+                .isEqualTo(ErrorCode.EVALUATION_SELF_WRITE_FORBIDDEN);
+    }
+
+    @Test
+    @DisplayName("DEPT_HEAD 가 DIRECTOR 평가를 등록하면 EVALUATION_ACCESS_DENIED 예외를 던진다")
+    void DEPT_HEAD_가_DIRECTOR_평가를_등록하면_EVALUATION_ACCESS_DENIED_예외를_던진다() {
+        CustomUserPrincipal principal = new CustomUserPrincipal(10L, "head@ibank.com", "DEPT_HEAD");
+        given(userRepository.findById(10L)).willReturn(Optional.of(createUser(10L, 100L, UserRole.DEPT_HEAD, "부서장")));
+        given(userRepository.findById(12L)).willReturn(Optional.of(createUser(12L, 100L, UserRole.DIRECTOR, "본부장")));
+
+        assertThatThrownBy(() -> userEvaluationService.createUserEvaluation(
+                principal,
+                12L,
+                new CreateUserEvaluationApiDto.Request("DIRECTOR 평가")
+        ))
+                .isInstanceOf(BusinessException.class)
+                .extracting(error -> ((BusinessException) error).getErrorCode())
+                .isEqualTo(ErrorCode.EVALUATION_ACCESS_DENIED);
+    }
+
+    @Test
+    @DisplayName("DEPT_HEAD 가 타 부서 사용자 평가를 등록하면 EVALUATION_ACCESS_DENIED 예외를 던진다")
+    void DEPT_HEAD_가_타_부서_사용자_평가를_등록하면_EVALUATION_ACCESS_DENIED_예외를_던진다() {
+        CustomUserPrincipal principal = new CustomUserPrincipal(10L, "head@ibank.com", "DEPT_HEAD");
+        given(userRepository.findById(10L)).willReturn(Optional.of(createUser(10L, 100L, UserRole.DEPT_HEAD, "부서장")));
+        given(userRepository.findById(11L)).willReturn(Optional.of(createUser(11L, 200L, UserRole.MEMBER, "사원")));
+
+        assertThatThrownBy(() -> userEvaluationService.createUserEvaluation(
+                principal,
+                11L,
+                new CreateUserEvaluationApiDto.Request("타 부서 평가")
+        ))
+                .isInstanceOf(BusinessException.class)
+                .extracting(error -> ((BusinessException) error).getErrorCode())
+                .isEqualTo(ErrorCode.EVALUATION_ACCESS_DENIED);
+    }
+
+    @Test
+    @DisplayName("평가 등록 대상 사용자가 없으면 USER_NOT_FOUND 예외를 던진다")
+    void 평가_등록_대상_사용자가_없으면_USER_NOT_FOUND_예외를_던진다() {
+        CustomUserPrincipal principal = new CustomUserPrincipal(10L, "head@ibank.com", "DEPT_HEAD");
+        given(userRepository.findById(10L)).willReturn(Optional.of(createUser(10L, 100L, UserRole.DEPT_HEAD, "부서장")));
+        given(userRepository.findById(999L)).willReturn(Optional.empty());
+
+        assertThatThrownBy(() -> userEvaluationService.createUserEvaluation(
+                principal,
+                999L,
+                new CreateUserEvaluationApiDto.Request("없는 사용자 평가")
+        ))
+                .isInstanceOf(BusinessException.class)
+                .extracting(error -> ((BusinessException) error).getErrorCode())
+                .isEqualTo(ErrorCode.USER_NOT_FOUND);
+    }
+
+    @Test
+    @DisplayName("평가 등록 principal 사용자가 없으면 USER_NOT_FOUND 예외를 던진다")
+    void 평가_등록_principal_사용자가_없으면_USER_NOT_FOUND_예외를_던진다() {
+        CustomUserPrincipal principal = new CustomUserPrincipal(10L, "head@ibank.com", "DEPT_HEAD");
+        given(userRepository.findById(10L)).willReturn(Optional.empty());
+
+        assertThatThrownBy(() -> userEvaluationService.createUserEvaluation(
+                principal,
+                11L,
+                new CreateUserEvaluationApiDto.Request("principal 없음")
+        ))
+                .isInstanceOf(BusinessException.class)
+                .extracting(error -> ((BusinessException) error).getErrorCode())
+                .isEqualTo(ErrorCode.USER_NOT_FOUND);
     }
 
     private User createUser(Long id, Long departmentId, UserRole role, String titleName) {

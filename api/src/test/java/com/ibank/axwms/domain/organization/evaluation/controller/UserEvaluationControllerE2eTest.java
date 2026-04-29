@@ -1,6 +1,7 @@
 package com.ibank.axwms.domain.organization.evaluation.controller;
 
 import static org.hamcrest.Matchers.is;
+import static org.assertj.core.api.Assertions.assertThat;
 import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.authentication;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
@@ -21,6 +22,7 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.http.MediaType;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.core.authority.SimpleGrantedAuthority;
 
@@ -135,6 +137,56 @@ class UserEvaluationControllerE2eTest extends E2eTestSupport {
                 .andExpect(status().isNotFound())
                 .andExpect(jsonPath("$.success", is(false)))
                 .andExpect(jsonPath("$.error.code", is("USER_NOT_FOUND")));
+    }
+
+    @Test
+    @DisplayName("DIRECTOR 로그인 후 사용자 평가 등록에 성공한다")
+    void DIRECTOR_로그인_후_사용자_평가_등록에_성공한다() throws Exception {
+        mockMvc.perform(apiPost("/users/" + otherDepartmentTarget.getId() + "/evaluations")
+                        .with(authentication(authenticate(director)))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"content\":\"신규 DIRECTOR 평가\"}"))
+                .andExpect(status().isCreated())
+                .andExpect(jsonPath("$.success", is(true)))
+                .andExpect(jsonPath("$.data").isMap())
+                .andExpect(jsonPath("$.timestamp").exists());
+
+        assertThat(userEvaluationRepository.findByEvaluateeUserIdAndEvaluatorUserIdAndContent(
+                otherDepartmentTarget.getId(),
+                director.getId(),
+                "신규 DIRECTOR 평가"
+        )).isPresent();
+    }
+
+    @Test
+    @DisplayName("blank content 로 사용자 평가 등록을 호출하면 COMMON_VALIDATION_ERROR 응답을 반환한다")
+    void blank_content로_사용자_평가_등록을_호출하면_COMMON_VALIDATION_ERROR_응답을_반환한다() throws Exception {
+        mockMvc.perform(apiPost("/users/" + sameDepartmentTarget.getId() + "/evaluations")
+                        .with(authentication(authenticate(director)))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"content\":\"   \"}"))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.success", is(false)))
+                .andExpect(jsonPath("$.error.code", is("COMMON_VALIDATION_ERROR")));
+    }
+
+    @Test
+    @DisplayName("MEMBER 권한으로 사용자 평가 등록을 호출하면 AUTH_ACCESS_DENIED 응답을 반환한다")
+    void MEMBER_권한으로_사용자_평가_등록을_호출하면_AUTH_ACCESS_DENIED_응답을_반환한다() throws Exception {
+        User member = userRepository.save(createUser(
+                sameDepartmentTarget.getDepartmentId(),
+                "평가등록일반사원",
+                "evaluation-create-member-" + System.nanoTime() + "@ibank.com",
+                UserRole.MEMBER
+        ));
+
+        mockMvc.perform(apiPost("/users/" + sameDepartmentTarget.getId() + "/evaluations")
+                        .with(authentication(authenticate(member)))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"content\":\"권한 없는 평가\"}"))
+                .andExpect(status().isForbidden())
+                .andExpect(jsonPath("$.success", is(false)))
+                .andExpect(jsonPath("$.error.code", is("AUTH_ACCESS_DENIED")));
     }
 
     private void clearDatabase() {

@@ -51,6 +51,8 @@ public enum ErrorCode {
     USER_NOT_FOUND(HttpStatus.NOT_FOUND, "사용자를 찾을 수 없습니다."),
     /** 평가 조회/등록 대상에 대한 역할/부서 접근 범위를 만족하지 못할 때 사용한다. */
     EVALUATION_ACCESS_DENIED(HttpStatus.FORBIDDEN, "해당 평가에 접근할 권한이 없습니다."),
+    /** 현재 로그인 사용자가 자기 자신에게 평가를 작성하려 할 때 사용한다. */
+    EVALUATION_SELF_WRITE_FORBIDDEN(HttpStatus.FORBIDDEN, "자기 자신에게 평가는 작성할 수 없습니다."),
     /** 같은 이름의 부서가 이미 존재해 부서를 생성하거나 수정할 수 없을 때 사용한다. */
     DEPARTMENT_DUPLICATE_NAME(HttpStatus.CONFLICT, "같은 이름의 부서가 이미 존재합니다."),
     /** 이미 다른 부서의 부서장으로 지정된 사용자를 다시 지정하려 할 때 사용한다. */
