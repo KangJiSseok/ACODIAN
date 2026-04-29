@@ -24,7 +24,13 @@
     인증: JwtAuthFilter에서 JWT 서명 검증 + SecurityContext 설정.
     인가: @PreAuthorize("hasRole('...')") + RoleHierarchy Bean.
     데이터 소유권 체크: Service 레이어에서 CustomUserPrincipal로 직접 검증.
+    `@AuthenticationPrincipal CustomUserPrincipal` 을 받는 protected Controller 경유 public Service 는
+    principal null/role claim 유효성을 중복 검증하지 않고 Security 체인이 보장한 principal 을 신뢰한다.
+    Service 내부 id 기반 존재성 조회 helper 는 `get{Entity}OrThrow` 네이밍으로 통일하고,
+    principal 사용자는 `principal.userId()` 를 그대로 넘겨 조회한다.
   consequence: RoleHierarchy 덕분에 hasRole('DEPT_HEAD')는 DIRECTOR도 통과. 부서 소속 확인 등 데이터 권한은 Service에서 처리.
+    인증 보장 경로의 Service 에서 AUTH_UNAUTHORIZED/role 파싱 보일러플레이트를 반복하지 않게 되며,
+    존재성 조회 helper 계약도 `*OrThrow` suffix 로 일관된다.
 
 - id: ADR-003
   title: 에러 처리 계층화 — ErrorCode enum 단일 출처
@@ -370,11 +376,15 @@
     projection 기본 위치는 `domain/{module}/repository/jooq/projection/` 하위 패키지로 둔다.
     controller/service 외부 API 계약 타입은 기존대로 `dto/` 규칙을 유지한다.
     projection 은 repository 내부 nested record 보다 재사용 가능한 top-level 타입을 기본으로 사용한다.
+    projection 생성 책임을 projection 타입 옆에 두는 편이 더 읽기 쉬우면, top-level projection 안에
+    `from(Record, GeneratedTable...)` 같은 jOOQ 전용 static factory 를 둘 수 있다.
+    이 경우에도 query 작성과 where/order/limit 책임은 repository 가 계속 소유한다.
     projection 과 API DTO 는 단순 data carrier 성격의 standalone 테스트를 만들지 않고, Service/Controller/E2E/통합 테스트에서 간접 검증한다.
     이번 변경의 첫 적용 대상으로 department GET 조회용 타입을 nested record 에서 projection 디렉토리의 top-level projection 타입으로 이동한다.
   consequence: |
     Service 는 repository 조회 결과를 projection vocabulary 로 일관되게 소비하고, Entity/API DTO 와의 경계도 문서상 명확해진다.
     JOOQ hand-written query 패키지 아래에 projection 전용 디렉토리가 생겨 조회 타입의 위치를 예측하기 쉬워진다.
+    projection 이 필요 최소한의 jOOQ mapping helper 를 가질 수 있어 매핑 책임의 locality 를 높일 수 있다.
     이후 신규 조회 타입이 `dao` 또는 임의 nested record 로 추가되면 문서 규약 위반으로 간주한다.
 
 - id: ADR-020

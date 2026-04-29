@@ -51,7 +51,7 @@
 
 ## 6. `organization/evaluation` 도메인
 
-- [ ] `GET /api/users/{id}/evaluations`
+- [x] `GET /api/users/{id}/evaluations`
 - [ ] `POST /api/users/{id}/evaluations`
 
 ## 7. `worklog` 도메인

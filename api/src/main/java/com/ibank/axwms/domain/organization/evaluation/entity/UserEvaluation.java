@@ -36,4 +36,16 @@ public class UserEvaluation {
     @CreationTimestamp
     @Column(name = "created_at", nullable = false, updatable = false)
     private LocalDateTime createdAt;
+
+    /**
+     * 신규 사용자 평가를 생성한다.
+     * evaluatee/evaluator 는 모두 유효한 tb_user row 여야 하며, 내용은 비어 있지 않은 문자열이어야 한다.
+     */
+    public static UserEvaluation create(Long evaluateeUserId, Long evaluatorUserId, String content) {
+        UserEvaluation evaluation = new UserEvaluation();
+        evaluation.evaluateeUserId = evaluateeUserId;
+        evaluation.evaluatorUserId = evaluatorUserId;
+        evaluation.content = content;
+        return evaluation;
+    }
 }
