@@ -173,7 +173,9 @@ class UserEvaluationControllerE2eTest extends E2eTestSupport {
                 EmploymentStatus.ACTIVE,
                 "과장",
                 role == UserRole.DIRECTOR ? "본부장" : "팀장",
-                LocalDate.of(2025, 1, 1)
+                LocalDate.of(2025, 1, 1),
+                null,
+                null
         );
     }
 

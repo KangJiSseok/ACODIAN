@@ -168,7 +168,9 @@ class UserEvaluationServiceTest {
                 EmploymentStatus.ACTIVE,
                 "과장",
                 titleName,
-                LocalDate.of(2025, 1, 1)
+                LocalDate.of(2025, 1, 1),
+                null,
+                null
         );
         ReflectionTestUtils.setField(user, "id", id);
         return user;
