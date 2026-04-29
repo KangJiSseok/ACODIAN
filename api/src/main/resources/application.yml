@@ -59,15 +59,6 @@ auth:
     allowed-origins: ${AUTH_CORS_ALLOWED_ORIGINS:}
     allowed-origin-patterns: ${AUTH_CORS_ALLOWED_ORIGIN_PATTERNS:}
 
-storage:
-  s3:
-    bucket: ${AWS_S3_BUCKET:ibank-s209team-s3}
-    region: ${AWS_REGION:ap-northeast-2}
-    base-prefix: ${AWS_S3_BASE_PREFIX:${APP_ENV:local}}
-    public-base-url: ${AWS_S3_PUBLIC_BASE_URL:https://d1sif143wcm5pd.cloudfront.net}
-    access-key-id: ${AWS_ACCESS_KEY_ID:}
-    secret-access-key: ${AWS_SECRET_ACCESS_KEY:}
-
 ---
 spring:
   config:
