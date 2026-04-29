@@ -1,5 +1,6 @@
 package com.ibank.axwms.domain.organization.team.service;
 
+import com.ibank.axwms.domain.organization.team.UserTeamAuthority;
 import com.ibank.axwms.domain.organization.team.UserTeamStatus;
 import com.ibank.axwms.domain.organization.team.dto.BulkUpsertTeamUsersApiDto;
 import com.ibank.axwms.domain.organization.team.dto.CreateTeamApiDto;
@@ -27,7 +28,10 @@ import com.ibank.axwms.global.response.EmptyResponse;
 import com.ibank.axwms.global.response.PageResponse;
 import com.ibank.axwms.global.security.CustomUserPrincipal;
 import java.time.LocalDateTime;
+import java.util.HashSet;
+import java.util.List;
 import java.util.Optional;
+import java.util.Set;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -83,6 +87,20 @@ public class TeamService {
         teamAccessPolicy.assertWritable(principal);
         User principalUser = getRequiredPrincipalUser(principal);
         teamAccessPolicy.assertDepartmentOwnership(principal, principalUser.getDepartmentId(), request.departmentId());
+
+        User leaderUser = getUserOrThrow(request.leaderUserId());
+        assertUserBelongsToDepartment(leaderUser, request.departmentId());
+        ensureTeamNameAvailable(request.departmentId(), request.teamName());
+
+        Team team = teamRepository.save(Team.create(
+                request.departmentId(),
+                request.teamName(),
+                request.statusCode(),
+                request.description(),
+                request.startDate(),
+                request.expectedEndDate()
+        ));
+        assignLeaderMembership(team.getId(), leaderUser.getId(), request.leaderMembership());
         return EmptyResponse.INSTANCE;
     }
 
@@ -90,6 +108,23 @@ public class TeamService {
     @Transactional
     public EmptyResponse updateTeam(CustomUserPrincipal principal, Long teamId, UpdateTeamApiDto.Request request) {
         assertWritableTeamOwnership(principal, teamId);
+        User principalUser = getRequiredPrincipalUser(principal);
+        teamAccessPolicy.assertDepartmentOwnership(principal, principalUser.getDepartmentId(), request.departmentId());
+
+        Team team = getTeamOrThrow(teamId);
+        User leaderUser = getUserOrThrow(request.leaderUserId());
+        assertUserBelongsToDepartment(leaderUser, request.departmentId());
+        ensureTeamNameAvailable(request.departmentId(), request.teamName(), teamId);
+
+        team.updateProfile(
+                request.departmentId(),
+                request.teamName(),
+                request.statusCode(),
+                request.description(),
+                request.startDate(),
+                request.expectedEndDate()
+        );
+        assignLeaderMembership(teamId, leaderUser.getId(), request.leaderMembership());
         return EmptyResponse.INSTANCE;
     }
 
@@ -99,6 +134,8 @@ public class TeamService {
                                           Long teamId,
                                           UpdateTeamStatusApiDto.Request request) {
         assertWritableTeamOwnership(principal, teamId);
+        Team team = getTeamOrThrow(teamId);
+        team.changeStatus(request.statusCode());
         return EmptyResponse.INSTANCE;
     }
 
@@ -108,6 +145,25 @@ public class TeamService {
                                              Long teamId,
                                              BulkUpsertTeamUsersApiDto.Request request) {
         assertWritableTeamOwnership(principal, teamId);
+
+        Set<Long> pendingLeaderUserIds = new HashSet<>();
+        for (BulkUpsertTeamUsersApiDto.Request.AddUser addUser : request.addUsersOrEmpty()) {
+            getUserOrThrow(addUser.userId());
+            UserTeamAuthority authority = addUser.teamAuthority();
+            upsertTeamMembership(teamId, addUser, authority);
+            if (authority == UserTeamAuthority.LEADER) {
+                pendingLeaderUserIds.add(addUser.userId());
+            }
+        }
+        if (pendingLeaderUserIds.size() > 1) {
+            throw new BusinessException(ErrorCode.COMMON_INVALID_REQUEST);
+        }
+        pendingLeaderUserIds.stream().findFirst().ifPresent(leaderUserId -> demoteOtherActiveLeaders(teamId, leaderUserId));
+
+        for (Long removeUserId : request.removeUserIdsOrEmpty()) {
+            userTeamRepository.findByUserIdAndTeamId(removeUserId, teamId)
+                    .ifPresent(userTeam -> userTeam.changeStatus(UserTeamStatus.LEFT));
+        }
         return EmptyResponse.INSTANCE;
     }
 
@@ -209,14 +265,13 @@ public class TeamService {
         return userTeamRepository.existsByUserIdAndTeamId(userId, teamId);
     }
 
-    /**  role에 따라 repository에 넘길 query DTO를 각 각 다르게 채움. */
+    /** role에 따라 repository에 넘길 query DTO를 각 각 다르게 채움. */
     private TeamPageQuery normalizeTeamPageQuery(CustomUserPrincipal principal, GetTeamsApiDto.Request request) {
         GetTeamsApiDto.Request normalizedRequest = request == null
                 ? new GetTeamsApiDto.Request(null, null, null)
                 : request;
         UserRole role = getRequiredRole(principal);
 
-        //
         Long principalDepartmentId = role == UserRole.DEPT_HEAD
                 ? getRequiredPrincipalUser(principal).getDepartmentId()
                 : null;
@@ -261,5 +316,76 @@ public class TeamService {
                 ? new GetTeamWorklogsApiDto.Request(null, null)
                 : request;
         return new TeamWorklogsQuery(normalizedRequest.pageOrDefault(), normalizedRequest.pageSizeOrDefault());
+    }
+
+    /** create/update 전용 leader membership 는 항상 LEADER 로 저장하고 기존 ACTIVE 리더는 MEMBER 로 강등한다. */
+    private void assignLeaderMembership(Long teamId, Long leaderUserId, CreateTeamApiDto.LeaderMembership leaderMembership) {
+        userTeamRepository.findByUserIdAndTeamId(leaderUserId, teamId)
+                .ifPresentOrElse(existing -> existing.promoteToLeader(
+                                leaderMembership.teamRole(),
+                                leaderMembership.allocation(),
+                                leaderMembership.isPrimary()
+                        ), () -> userTeamRepository.save(UserTeam.create(
+                                leaderUserId,
+                                teamId,
+                                UserTeamAuthority.LEADER,
+                                leaderMembership.teamRole(),
+                                leaderMembership.allocation(),
+                                leaderMembership.isPrimary(),
+                                UserTeamStatus.ACTIVE
+                        )));
+        demoteOtherActiveLeaders(teamId, leaderUserId);
+    }
+
+    /** 팀 대표자를 새로 정한 뒤 기존 ACTIVE 리더 membership 은 MEMBER 로 강등한다. */
+    private void demoteOtherActiveLeaders(Long teamId, Long leaderUserId) {
+        userTeamRepository.findAllByTeamIdAndStatusCodeAndTeamAuthority(teamId, UserTeamStatus.ACTIVE, UserTeamAuthority.LEADER)
+                .stream()
+                .filter(userTeam -> !leaderUserId.equals(userTeam.getUserId()))
+                .forEach(UserTeam::demoteToMember);
+    }
+
+    /** bulk upsert 입력으로 membership 을 생성/재활성화/갱신한다. */
+    private void upsertTeamMembership(Long teamId,
+                                      BulkUpsertTeamUsersApiDto.Request.AddUser addUser,
+                                      UserTeamAuthority authority) {
+        userTeamRepository.findByUserIdAndTeamId(addUser.userId(), teamId)
+                .ifPresentOrElse(existing -> {
+                    existing.reactivate(authority, addUser.teamRole(), addUser.allocation(), addUser.isPrimary());
+                    existing.synchronizeJoinedAt(addUser.joinedAt());
+                }, () -> userTeamRepository.save(UserTeam.create(
+                        addUser.userId(),
+                        teamId,
+                        authority,
+                        addUser.teamRole(),
+                        addUser.allocation(),
+                        addUser.isPrimary(),
+                        UserTeamStatus.ACTIVE,
+                        addUser.joinedAt().atStartOfDay()
+                )));
+    }
+
+
+    /** 신규 생성 전에 soft-delete 되지 않은 동일 부서 팀명 중복을 차단한다. */
+    private void ensureTeamNameAvailable(Long departmentId, String teamName) {
+        if (teamRepository.findByDepartmentIdAndTeamNameAndDeletedAtIsNull(departmentId, teamName).isPresent()) {
+            throw new BusinessException(ErrorCode.TEAM_DUPLICATE_NAME);
+        }
+    }
+
+    /** 수정 시 자기 자신을 제외한 soft-delete 되지 않은 동일 부서 팀명 중복을 차단한다. */
+    private void ensureTeamNameAvailable(Long departmentId, String teamName, Long teamId) {
+        teamRepository.findByDepartmentIdAndTeamNameAndDeletedAtIsNull(departmentId, teamName)
+                .filter(existingTeam -> !teamId.equals(existingTeam.getId()))
+                .ifPresent(existingTeam -> {
+                    throw new BusinessException(ErrorCode.TEAM_DUPLICATE_NAME);
+                });
+    }
+
+    /** 리더 후보 사용자는 대상 팀의 소속 부서 사용자여야 한다. */
+    private void assertUserBelongsToDepartment(User user, Long departmentId) {
+        if (!departmentId.equals(user.getDepartmentId())) {
+            throw new BusinessException(ErrorCode.COMMON_INVALID_REQUEST);
+        }
     }
 }

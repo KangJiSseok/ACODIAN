@@ -1,5 +1,6 @@
 package com.ibank.axwms.domain.organization.team.dto;
 
+import com.ibank.axwms.domain.organization.team.UserTeamAuthority;
 import io.swagger.v3.oas.annotations.media.Schema;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.NotBlank;
@@ -27,7 +28,7 @@ public final class BulkUpsertTeamUsersApiDto {
 
         public record AddUser(
                 @NotNull Long userId,
-                @NotNull Boolean teamLeader,
+                @NotNull UserTeamAuthority teamAuthority,
                 @NotBlank String teamRole,
                 String allocation,
                 @NotNull Boolean isPrimary,

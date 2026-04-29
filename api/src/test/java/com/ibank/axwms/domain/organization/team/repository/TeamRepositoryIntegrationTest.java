@@ -7,6 +7,7 @@ import com.ibank.axwms.domain.organization.department.DepartmentStatus;
 import com.ibank.axwms.domain.organization.department.entity.Department;
 import com.ibank.axwms.domain.organization.department.repository.DepartmentRepository;
 import com.ibank.axwms.domain.organization.team.TeamStatus;
+import com.ibank.axwms.domain.organization.team.UserTeamAuthority;
 import com.ibank.axwms.domain.organization.team.UserTeamStatus;
 import com.ibank.axwms.domain.organization.team.entity.Team;
 import com.ibank.axwms.domain.organization.team.entity.UserTeam;
@@ -76,15 +77,15 @@ class TeamRepositoryIntegrationTest extends IntegrationTestSupport {
                         TeamListProjection::teamName,
                         TeamListProjection::teamLeaderName,
                         TeamListProjection::memberCount,
-                        TeamListProjection::myTeamLeader,
+                        TeamListProjection::myTeamAuthority,
                         TeamListProjection::teamRole,
                         TeamListProjection::allocation,
                         TeamListProjection::isPrimary
                 )
                 .containsExactly(
-                        Tuple.tuple("물류혁신TF", "홍길동", 2, true, "플랫폼 총괄", "PRIMARY", true),
-                        Tuple.tuple("운영지원TF", "김서포트", 2, false, "협업", "SECONDARY", false),
-                        Tuple.tuple("타부서TF", "타부서", 3, false, "외부 협업", "SECONDARY", false)
+                        Tuple.tuple("물류혁신TF", "홍길동", 3, UserTeamAuthority.LEADER, "플랫폼 총괄", "PRIMARY", true),
+                        Tuple.tuple("운영지원TF", "김서포트", 2, UserTeamAuthority.MEMBER, "협업", "SECONDARY", false),
+                        Tuple.tuple("타부서TF", "타부서", 3, UserTeamAuthority.MEMBER, "외부 협업", "SECONDARY", false)
                 );
     }
 
@@ -96,7 +97,7 @@ class TeamRepositoryIntegrationTest extends IntegrationTestSupport {
 
         assertThat(visiblePage.getContent())
                 .extracting(TeamListProjection::teamName)
-                .containsExactly("물류혁신TF", "운영지원TF", "타부서TF", "휴면TF");
+                .containsExactly("타부서TF", "물류혁신TF", "운영지원TF", "휴면TF");
         assertThat(outsideDepartmentPage.getContent()).isEmpty();
     }
 
@@ -134,21 +135,22 @@ class TeamRepositoryIntegrationTest extends IntegrationTestSupport {
     }
 
     @Test
-    @DisplayName("팀 사용자 조회는 팀장 우선 정렬과 이메일 필드를 반환한다")
-    void 팀_사용자_조회는_팀장_우선_정렬과_이메일_필드를_반환한다() {
+    @DisplayName("팀 사용자 조회는 teamAuthority 정렬과 이메일 필드를 반환한다")
+    void 팀_사용자_조회는_teamAuthority_정렬과_이메일_필드를_반환한다() {
         Page<TeamUserProjection> page = userTeamRepository.findTeamUserPage(activeLeadTeamId, new TeamUsersQuery(1, 20));
 
         assertThat(page.getContent())
                 .extracting(
-                        TeamUserProjection::teamLeader,
+                        TeamUserProjection::teamAuthority,
                         TeamUserProjection::userName,
                         TeamUserProjection::email,
                         TeamUserProjection::teamRole,
                         TeamUserProjection::allocation
                 )
                 .containsExactly(
-                        Tuple.tuple(true, "홍길동", "leader@ibank.com", "플랫폼 총괄", "PRIMARY"),
-                        Tuple.tuple(false, "김영희", "member@ibank.com", "WMS 운영", "SECONDARY")
+                        Tuple.tuple(UserTeamAuthority.LEADER, "홍길동", "leader@ibank.com", "플랫폼 총괄", "PRIMARY"),
+                        Tuple.tuple(UserTeamAuthority.MEMBER, "김영희", "member@ibank.com", "WMS 운영", "SECONDARY"),
+                        Tuple.tuple(UserTeamAuthority.ADMIN, "김서포트", "support@ibank.com", "운영 지원", "SECONDARY")
                 );
     }
 
@@ -219,16 +221,17 @@ class TeamRepositoryIntegrationTest extends IntegrationTestSupport {
         Long activeSecondaryTeamId = activeSecondaryTeam.getId();
         Long inactiveTeamId = inactiveTeam.getId();
 
-        userTeamRepository.save(UserTeam.create(departmentHead.getId(), otherDepartmentTeam.getId(), false, "부서간 협업", "SECONDARY", false, UserTeamStatus.ACTIVE));
-        userTeamRepository.save(UserTeam.create(teamLeader.getId(), activeLeadTeamId, true, "플랫폼 총괄", "PRIMARY", true, UserTeamStatus.ACTIVE));
-        userTeamRepository.save(UserTeam.create(activeMember.getId(), activeLeadTeamId, false, "WMS 운영", "SECONDARY", false, UserTeamStatus.ACTIVE));
-        userTeamRepository.save(UserTeam.create(teamLeader.getId(), activeSecondaryTeamId, false, "협업", "SECONDARY", false, UserTeamStatus.ACTIVE));
-        userTeamRepository.save(UserTeam.create(teamLeader.getId(), otherDepartmentTeam.getId(), false, "외부 협업", "SECONDARY", false, UserTeamStatus.ACTIVE));
-        userTeamRepository.save(UserTeam.create(secondaryTeamLeader.getId(), activeSecondaryTeamId, true, "운영 지원", "PRIMARY", true, UserTeamStatus.ACTIVE));
-        userTeamRepository.save(UserTeam.create(inactiveTeamMember.getId(), inactiveTeamId, true, "휴면 담당", "PRIMARY", true, UserTeamStatus.ACTIVE));
-        userTeamRepository.save(UserTeam.create(leaveUser.getId(), inactiveTeamId, false, "휴직 담당", "SECONDARY", false, UserTeamStatus.ACTIVE));
-        userTeamRepository.save(UserTeam.create(otherDeptUser.getId(), otherDepartmentTeam.getId(), true, "타부서 담당", "PRIMARY", true, UserTeamStatus.ACTIVE));
-        userTeamRepository.save(UserTeam.create(otherDeptUser.getId(), activeLeadTeamId, false, "과거 소속", "SECONDARY", false, UserTeamStatus.LEFT));
+        userTeamRepository.save(UserTeam.create(departmentHead.getId(), otherDepartmentTeam.getId(), UserTeamAuthority.MEMBER, "부서간 협업", "SECONDARY", false, UserTeamStatus.ACTIVE));
+        userTeamRepository.save(UserTeam.create(teamLeader.getId(), activeLeadTeamId, UserTeamAuthority.LEADER, "플랫폼 총괄", "PRIMARY", true, UserTeamStatus.ACTIVE));
+        userTeamRepository.save(UserTeam.create(activeMember.getId(), activeLeadTeamId, UserTeamAuthority.MEMBER, "WMS 운영", "SECONDARY", false, UserTeamStatus.ACTIVE));
+        userTeamRepository.save(UserTeam.create(secondaryTeamLeader.getId(), activeLeadTeamId, UserTeamAuthority.ADMIN, "운영 지원", "SECONDARY", false, UserTeamStatus.ACTIVE));
+        userTeamRepository.save(UserTeam.create(teamLeader.getId(), activeSecondaryTeamId, UserTeamAuthority.MEMBER, "협업", "SECONDARY", false, UserTeamStatus.ACTIVE));
+        userTeamRepository.save(UserTeam.create(teamLeader.getId(), otherDepartmentTeam.getId(), UserTeamAuthority.MEMBER, "외부 협업", "SECONDARY", false, UserTeamStatus.ACTIVE));
+        userTeamRepository.save(UserTeam.create(secondaryTeamLeader.getId(), activeSecondaryTeamId, UserTeamAuthority.LEADER, "운영 지원", "PRIMARY", true, UserTeamStatus.ACTIVE));
+        userTeamRepository.save(UserTeam.create(inactiveTeamMember.getId(), inactiveTeamId, UserTeamAuthority.LEADER, "휴면 담당", "PRIMARY", true, UserTeamStatus.ACTIVE));
+        userTeamRepository.save(UserTeam.create(leaveUser.getId(), inactiveTeamId, UserTeamAuthority.MEMBER, "휴직 담당", "SECONDARY", false, UserTeamStatus.ACTIVE));
+        userTeamRepository.save(UserTeam.create(otherDeptUser.getId(), otherDepartmentTeam.getId(), UserTeamAuthority.LEADER, "타부서 담당", "PRIMARY", true, UserTeamStatus.ACTIVE));
+        userTeamRepository.save(UserTeam.create(otherDeptUser.getId(), activeLeadTeamId, UserTeamAuthority.MEMBER, "과거 소속", "SECONDARY", false, UserTeamStatus.LEFT));
 
         insertWorklog(teamLeader.getId(), activeLeadTeamId, "완료 업무", "완료 요청", "완료 본문", WorklogStatus.COMPLETED, WorklogImportance.URGENT, "완료 요약", false);
         insertWorklog(teamLeader.getId(), activeLeadTeamId, "진행중 업무", "진행중 요청", "진행중 본문", WorklogStatus.IN_PROGRESS, WorklogImportance.HIGH, "진행중 요약", false);

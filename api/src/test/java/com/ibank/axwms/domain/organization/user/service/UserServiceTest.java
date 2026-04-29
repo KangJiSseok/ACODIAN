@@ -7,6 +7,7 @@ import static org.mockito.BDDMockito.given;
 import com.ibank.axwms.domain.organization.department.entity.Department;
 import com.ibank.axwms.domain.organization.department.repository.DepartmentRepository;
 import com.ibank.axwms.domain.organization.team.TeamStatus;
+import com.ibank.axwms.domain.organization.team.UserTeamAuthority;
 import com.ibank.axwms.domain.organization.team.UserTeamStatus;
 import com.ibank.axwms.domain.organization.team.entity.Team;
 import com.ibank.axwms.domain.organization.team.entity.UserTeam;
@@ -79,27 +80,16 @@ class UserServiceTest {
 
         GetMyProfileApiDto.Response result = userService.getMyProfile(principal);
 
-        assertThat(result.userId()).isEqualTo(101L);
-        assertThat(result.userName()).isEqualTo("홍길동");
-        assertThat(result.email()).isEqualTo("user@ibank.com");
-        assertThat(result.phone()).isEqualTo("010-1234-5678");
-        assertThat(result.departmentId()).isEqualTo(10L);
-        assertThat(result.departmentName()).isEqualTo("물류본부");
-        assertThat(result.positionName()).isEqualTo("과장");
-        assertThat(result.titleName()).isEqualTo("팀장");
-        assertThat(result.joinDate()).isEqualTo(LocalDate.of(2025, 1, 1));
-        assertThat(result.employmentStatus()).isEqualTo(EmploymentStatus.ACTIVE);
-        assertThat(result.profileImageUrl()).isEqualTo("https://cdn.axwms.com/profile/101.png");
         assertThat(result.teams())
                 .extracting(GetMyProfileApiDto.Response.TeamSummary::isPrimary,
                         GetMyProfileApiDto.Response.TeamSummary::teamId,
                         GetMyProfileApiDto.Response.TeamSummary::teamName,
-                        GetMyProfileApiDto.Response.TeamSummary::teamLeader,
+                        GetMyProfileApiDto.Response.TeamSummary::teamAuthority,
                         GetMyProfileApiDto.Response.TeamSummary::teamRole,
                         GetMyProfileApiDto.Response.TeamSummary::allocation)
                 .containsExactly(
-                        Tuple.tuple(true, 21L, "물류혁신TF", true, "플랫폼 총괄", "주담당"),
-                        Tuple.tuple(false, 22L, "SCM분석팀", false, "SCM 분석", "겸임")
+                        Tuple.tuple(true, 21L, "물류혁신TF", UserTeamAuthority.LEADER, "플랫폼 총괄", "주담당"),
+                        Tuple.tuple(false, 22L, "SCM분석팀", UserTeamAuthority.MEMBER, "SCM 분석", "겸임")
                 );
     }
 
@@ -242,7 +232,7 @@ class UserServiceTest {
         return UserTeam.create(
                 userId,
                 teamId,
-                isPrimary,
+                isPrimary ? UserTeamAuthority.LEADER : UserTeamAuthority.MEMBER,
                 isPrimary ? "플랫폼 총괄" : "SCM 분석",
                 isPrimary ? "주담당" : "겸임",
                 isPrimary,

@@ -1,5 +1,6 @@
 package com.ibank.axwms.domain.organization.team.entity;
 
+import com.ibank.axwms.domain.organization.team.UserTeamAuthority;
 import com.ibank.axwms.domain.organization.team.UserTeamStatus;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
@@ -10,6 +11,7 @@ import jakarta.persistence.GenerationType;
 import jakarta.persistence.Id;
 import jakarta.persistence.Table;
 import jakarta.persistence.UniqueConstraint;
+import java.time.LocalDate;
 import java.time.LocalDateTime;
 import lombok.AccessLevel;
 import lombok.Getter;
@@ -36,8 +38,9 @@ public class UserTeam {
     @Column(name = "team_id", nullable = false)
     private Long teamId;
 
-    @Column(name = "team_leader", nullable = false)
-    private Boolean teamLeader;
+    @Enumerated(EnumType.STRING)
+    @Column(name = "team_authority", nullable = false, length = 20)
+    private UserTeamAuthority teamAuthority;
 
     @Column(name = "team_role", nullable = false, length = 50)
     private String teamRole;
@@ -52,7 +55,7 @@ public class UserTeam {
     @Column(name = "status_code", nullable = false, length = 20)
     private UserTeamStatus statusCode;
 
-    @Column(name = "joined_at", nullable = false, insertable = false, updatable = false)
+    @Column(name = "joined_at", nullable = false)
     private LocalDateTime joinedAt;
 
     @CreationTimestamp
@@ -63,35 +66,54 @@ public class UserTeam {
     @Column(name = "updated_at", nullable = false)
     private LocalDateTime updatedAt;
 
-    /**
-     * 사용자-팀 소속 관계를 생성한다.
-     * 탈퇴/재가입은 별도 row 누적이 아니라 statusCode 전환으로 표현한다.
-     */
+    /** 사용자-팀 소속 관계를 생성한다. */
     public static UserTeam create(Long userId,
                                   Long teamId,
-                                  boolean teamLeader,
+                                  UserTeamAuthority teamAuthority,
                                   String teamRole,
                                   String allocation,
                                   boolean isPrimary,
                                   UserTeamStatus statusCode) {
+        return create(userId, teamId, teamAuthority, teamRole, allocation, isPrimary, statusCode, null);
+    }
+
+    /** 신규 membership 생성 시 joinedAt 을 명시적으로 주입할 수 있다. */
+    public static UserTeam create(Long userId,
+                                  Long teamId,
+                                  UserTeamAuthority teamAuthority,
+                                  String teamRole,
+                                  String allocation,
+                                  boolean isPrimary,
+                                  UserTeamStatus statusCode,
+                                  LocalDateTime joinedAt) {
         UserTeam userTeam = new UserTeam();
         userTeam.userId = userId;
         userTeam.teamId = teamId;
-        userTeam.teamLeader = teamLeader;
+        userTeam.teamAuthority = teamAuthority;
         userTeam.teamRole = teamRole;
         userTeam.allocation = allocation;
         userTeam.isPrimary = isPrimary;
         userTeam.statusCode = statusCode;
+        userTeam.joinedAt = joinedAt == null ? LocalDateTime.now() : joinedAt;
         return userTeam;
     }
 
-    /** 로컬 시드 재실행 시 사용자-팀 관계의 역할/주소속/상태를 목표값으로 맞춘다. */
-    public void synchronizeSeedProfile(boolean teamLeader,
+    /** 로컬 시드 재실행 시 사용자-팀 관계의 권한/역할/주소속/상태를 목표값으로 맞춘다. */
+    public void synchronizeSeedProfile(UserTeamAuthority teamAuthority,
                                        String teamRole,
                                        String allocation,
                                        boolean isPrimary,
                                        UserTeamStatus statusCode) {
-        this.teamLeader = teamLeader;
+        synchronizeMembershipProfile(teamAuthority, teamRole, allocation, isPrimary, statusCode);
+    }
+
+    /** membership 권한/역할/상태를 한 번에 최신값으로 맞춘다. */
+    public void synchronizeMembershipProfile(UserTeamAuthority teamAuthority,
+                                             String teamRole,
+                                             String allocation,
+                                             boolean isPrimary,
+                                             UserTeamStatus statusCode) {
+        this.teamAuthority = teamAuthority;
         this.teamRole = teamRole;
         this.allocation = allocation;
         this.isPrimary = isPrimary;
@@ -101,5 +123,27 @@ public class UserTeam {
     /** membership 단일 row 의 현재 상태를 바꾼다. */
     public void changeStatus(UserTeamStatus statusCode) {
         this.statusCode = statusCode;
+    }
+
+    /** create/update leader reassignment 시 현재 membership 을 LEADER 로 승격한다. */
+    public void promoteToLeader(String teamRole, String allocation, boolean isPrimary) {
+        synchronizeMembershipProfile(UserTeamAuthority.LEADER, teamRole, allocation, isPrimary, UserTeamStatus.ACTIVE);
+    }
+
+    /** 같은 팀의 기존 대표자를 일반 멤버로 강등한다. */
+    public void demoteToMember() {
+        this.teamAuthority = UserTeamAuthority.MEMBER;
+    }
+
+    /** LEFT 처리된 membership 을 다시 활성화한다. */
+    public void reactivate(UserTeamAuthority teamAuthority, String teamRole, String allocation, boolean isPrimary) {
+        synchronizeMembershipProfile(teamAuthority, teamRole, allocation, isPrimary, UserTeamStatus.ACTIVE);
+    }
+
+    /** bulk write 에서 joinedAt 을 요청값으로 맞출 필요가 있을 때만 사용한다. */
+    public void synchronizeJoinedAt(LocalDate joinedAt) {
+        if (joinedAt != null) {
+            this.joinedAt = joinedAt.atStartOfDay();
+        }
     }
 }

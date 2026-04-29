@@ -37,8 +37,9 @@
 - `(user_id, team_id)` 당 1행을 유지하는 single-row membership 모델을 사용한다.
 - membership 의 운영 상태는 `ACTIVE`, `LEFT` 두 종류만 사용한다.
 - 재가입은 신규 row 누적이 아니라 동일 row 를 `ACTIVE` 로 되돌리는 방식으로 처리한다.
-- 팀장 여부는 `teamLeader` boolean 으로 표현한다.
-- 팀 내 역할은 `teamRole`, 배치 성격은 `allocation`, 대표 소속 여부는 `isPrimary` 로 표현한다.
+- membership 권한은 `teamAuthority(MEMBER, LEADER, ADMIN)` 로 관리한다.
+- 팀 내 업무 역할은 `teamRole`, 배치 성격은 `allocation`, 대표 소속 여부는 `isPrimary` 로 표현한다.
+- `ACTIVE` membership 기준 팀당 `LEADER` 는 최대 1명이며, `ADMIN` 은 대표자 계산에서 제외한다.
 
 ### 4.3 역할별 조회 범위
 - `DIRECTOR`: 모든 부서/모든 팀 접근 가능
@@ -82,7 +83,7 @@
   - `sortBy`, `sortDirection` 은 공개 query 로 받지 않고 아래 고정 정렬 정책을 사용한다. 
 - 고정 정렬 정책
   1. `statusCode = ACTIVE` 팀 우선
-  2. 호출자가 해당 팀의 `teamLeader = true` 인 팀 우선
+  2. 호출자의 `myTeamAuthority = LEADER` 인 팀 우선
   3. 호출자의 `allocation` 이 주 담당인 팀 우선 (`PRIMARY`, `MAIN`, `LEAD` 등 실제 enum/string 은 구현 SSOT 를 따른다.)
   4. 호출자의 `isPrimary = true` 인 팀 우선
 - `departmentId` 해석
@@ -97,7 +98,7 @@
     - `departmentHeadUserId`, `departmentHeadUserName`
     - `teamLeaderId`, `teamLeaderName`
     - `memberCount`
-    - `myTeamLeader`
+    - `myTeamAuthority`
     - `teamRole`, `allocation`, `isPrimary`
     - `startDate`, `expectedEndDate`
 - 요청 JSON 예시
@@ -128,7 +129,7 @@
         "teamLeaderId": 101,
         "teamLeaderName": "홍길동",
         "memberCount": 6,
-        "myTeamLeader": true,
+        "myTeamAuthority": "LEADER",
         "teamRole": "플랫폼 총괄",
         "allocation": "PRIMARY",
         "isPrimary": true,
@@ -286,12 +287,12 @@
   - Path: `id`
   - Query: `page`, `pageSize`
 - 고정 정렬 정책
-  1. `teamLeader = true` 우선
-  2. 그 외 정렬은 구현 기본 정렬을 따른다.
+  1. `teamAuthority` 가 `LEADER > MEMBER > ADMIN` 순으로 우선한다.
+  2. 동순위에서는 `userId ASC` 로 정렬한다.
 - 응답 (`data` 기준)
   - `PageResponse<TeamUserSummary>`
   - `items[*]`
-    - `teamLeader`
+    - `teamAuthority`
     - `userId`, `userName`
     - `positionName`
     - `email`
@@ -315,7 +316,7 @@
   "data": {
     "items": [
       {
-        "teamLeader": true,
+        "teamAuthority": "LEADER",
         "userId": 101,
         "userName": "홍길동",
         "positionName": "과장",
@@ -324,7 +325,7 @@
         "allocation": "PRIMARY"
       },
       {
-        "teamLeader": false,
+        "teamAuthority": "ADMIN",
         "userId": 102,
         "userName": "김영희",
         "positionName": "대리",
@@ -439,10 +440,11 @@
 - 상태: `Documented`
 - 권한/접근 주체: `DIRECTOR`, `DEPT_HEAD`
 - 요청
-  - Body: `departmentId`, `teamName`, `description`, `leaderUserId`, `statusCode`, `startDate`, `expectedEndDate`
+  - Body: `departmentId`, `teamName`, `description`, `leaderUserId`, `leaderMembership`, `statusCode`, `startDate`, `expectedEndDate`
 - 요청 규칙
-  - request body 에 `teamLeader`, `teamRole`, `allocation`, `isPrimary` 는 받지 않는다.
-  - `leaderUserId` 를 받으면 해당 사용자가 팀장으로 설정된다.
+  - `leaderMembership` 에는 `teamRole`, `allocation`, `isPrimary` 를 nested payload 로 받는다.
+  - create/update 는 `teamAuthority` 를 직접 받지 않으며 `leaderUserId` 대상 membership 을 항상 `LEADER` 로 설정한다.
+  - `leaderMembership.joinedAt` 은 별도 입력으로 받지 않고 생성 시점 기본값을 사용한다.
   - `DEPT_HEAD` 는 본인 부서에 대해서만 생성할 수 있다. 다른 부서 `departmentId` 는 `AUTH_ACCESS_DENIED` 다.
 - 응답 (`data` 기준)
   - 빈 객체 (`ApiResponse.empty()`)
@@ -454,6 +456,11 @@
     "teamName": "물류혁신TF",
     "description": "창고 자동화 개선 전담",
     "leaderUserId": 101,
+    "leaderMembership": {
+      "teamRole": "플랫폼 총괄",
+      "allocation": "PRIMARY",
+      "isPrimary": true
+    },
     "statusCode": "ACTIVE",
     "startDate": "2026-04-01",
     "expectedEndDate": "2026-12-31"
@@ -489,10 +496,11 @@
 - 권한/접근 주체: `DIRECTOR`, `DEPT_HEAD`
 - 요청
   - Path: `id`
-  - Body: `departmentId`, `teamName`, `description`, `leaderUserId`, `statusCode`, `startDate`, `expectedEndDate`
+  - Body: `departmentId`, `teamName`, `description`, `leaderUserId`, `leaderMembership`, `statusCode`, `startDate`, `expectedEndDate`
 - 요청 규칙
-  - request body 에 `teamLeader`, `teamRole`, `allocation`, `isPrimary` 는 받지 않는다.
-  - `leaderUserId` 를 받으면 해당 사용자를 팀장으로 갱신한다.
+  - `leaderMembership` 에는 `teamRole`, `allocation`, `isPrimary` 를 nested payload 로 받는다.
+  - `leaderUserId` 를 받으면 대상 `(user_id, team_id)` membership 을 재활성화/갱신 후 `LEADER` 로 승격한다.
+  - 기존 ACTIVE `LEADER` 는 같은 트랜잭션에서 `MEMBER` 로 강등한다.
   - `DEPT_HEAD` 는 본인 부서 팀만 수정할 수 있다.
 - 응답 (`data` 기준)
   - 빈 객체 (`ApiResponse.empty()`)
@@ -507,6 +515,11 @@
     "teamName": "물류혁신TF",
     "description": "창고 자동화 및 운영 고도화",
     "leaderUserId": 101,
+    "leaderMembership": {
+      "teamRole": "플랫폼 총괄",
+      "allocation": "PRIMARY",
+      "isPrimary": true
+    },
     "statusCode": "ACTIVE",
     "startDate": "2026-04-01",
     "expectedEndDate": "2026-12-31"
@@ -585,11 +598,13 @@
 - 요청
   - Path: `id`
   - Body
-    - `addUsers[*]`: `userId`, `teamLeader`, `teamRole`, `allocation`, `isPrimary`, `joinedAt`
+    - `addUsers[*]`: `userId`, `teamAuthority`, `teamRole`, `allocation`, `isPrimary`, `joinedAt`
     - `removeUserIds[*]`: 제거 대상 `userId`
 - 요청 규칙
   - 기존 legacy path `/api/teams/{id}/members/bulk` 는 사용하지 않는다.
+  - `teamAuthority` 는 필수이며 그대로 사용한다.
   - 추가 대상 사용자가 기존 `LEFT` membership row 를 가지면 복구 처리한다.
+  - bulk upsert 에서만 `ADMIN` 부여를 허용한다.
   - `DEPT_HEAD` 는 본인 부서 팀에 대해서만 수행할 수 있다.
 - 응답 (`data` 기준)
   - 빈 객체 (`ApiResponse.empty()`)
@@ -603,7 +618,7 @@
     "addUsers": [
       {
         "userId": 102,
-        "teamLeader": false,
+        "teamAuthority": "ADMIN",
         "teamRole": "WMS 운영",
         "allocation": "SECONDARY",
         "isPrimary": false,
@@ -611,7 +626,7 @@
       },
       {
         "userId": 103,
-        "teamLeader": true,
+        "teamAuthority": "LEADER",
         "teamRole": "현장 총괄",
         "allocation": "PRIMARY",
         "isPrimary": true,
@@ -690,11 +705,12 @@
 ## 7. 공통 검수 포인트
 - `DIRECTOR`, `DEPT_HEAD`, `TEAM_LEAD`, `MEMBER` 별 조회 범위가 각 endpoint 에 명시되어 있는가
 - `GET /api/teams` 가 순수 `PageResponse<TeamSummary>` 로 설명되어 있는가
+- `GET /api/teams` 가 `myTeamAuthority` 만 노출하고 `myTeamLeader` 를 설명하지 않는가
 - `GET /api/teams/summary` 가 상단 집계를 별도 endpoint 로 설명하는가
 - `GET /api/teams/{id}` 가 soft-delete 되지 않은 업무일지 집계를 포함하는가
-- `GET /api/teams/{id}/users` 가 `teamLeader` 우선 정렬과 `email` 을 포함하는가
+- `GET /api/teams/{id}/users` 가 `teamAuthority` 를 노출하고 `LEADER > MEMBER > ADMIN` 정렬을 설명하는가
 - `GET /api/teams/{id}/worklogs` 가 `requestContent`, `workContent`, `aiSummary`, `importanceCode` 를 포함하는가
-- `POST` / `PUT /api/teams/{id}` request 에 `teamLeader`, `teamRole`, `allocation`, `isPrimary` 가 없는가
+- `POST` / `PUT /api/teams/{id}` request 에 `leaderMembership.teamRole`, `leaderMembership.allocation`, `leaderMembership.isPrimary` 가 nested payload 로 설명되는가
 - `PATCH /api/teams/{id}/status` 가 body 에 `statusCode` 만 받는가
 - `POST /api/teams/{id}/members/bulk` 잔존 없이 `POST /api/teams/{id}/users/bulk` 만 남아 있는가
 - `DELETE /api/teams/{id}` 가 membership 잔존과 무관하게 soft-delete 가능함을 명시하는가

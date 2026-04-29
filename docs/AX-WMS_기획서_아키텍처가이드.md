@@ -169,7 +169,7 @@ AX-WMS는 본부/사업부/팀 단위의 조직 운영과 업무일지 관리를
 아키텍처 관점에서 중요한 사실은 다음과 같다.
 
 - 사용자는 여러 팀에 참여할 수 있다.
-- 팀 리더는 `tb_team.leader_id` 같은 별도 컬럼이 아니라 `tb_user_team.team_leader = true`로 표현한다.
+- 팀 대표자는 `tb_team.leader_id` 같은 별도 컬럼이 아니라 `tb_user_team.team_authority = LEADER` membership 으로 표현하며, `teamAuthority = LEADER`가 대표자 의미를 직접 가진다.
 - 사용자는 자신의 주 소속 부서와 다른 부서의 팀에도 참여할 수 있다.
 - 즉, `tb_user.department_id` 와 `tb_team.department_id` 일치 여부는 강제하지 않으며, 교차 부서 협업은 `tb_user_team` 연결로 표현한다.
 

@@ -2,6 +2,7 @@ package com.ibank.axwms.domain.organization.team.dto;
 
 import com.ibank.axwms.domain.organization.team.TeamStatus;
 import io.swagger.v3.oas.annotations.media.Schema;
+import jakarta.validation.Valid;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
 import java.time.LocalDate;
@@ -17,6 +18,7 @@ public final class UpdateTeamApiDto {
             @NotBlank String teamName,
             String description,
             @NotNull Long leaderUserId,
+            @NotNull @Valid CreateTeamApiDto.LeaderMembership leaderMembership,
             @NotNull TeamStatus statusCode,
             LocalDate startDate,
             LocalDate expectedEndDate

@@ -23,7 +23,15 @@
 | `ACTIVE` | 사용자가 현재 팀에 소속된 상태 |
 | `LEFT` | 사용자가 팀 소속에서 제외된 상태 |
 
-### 1.4 `EmploymentStatus`
+### 1.4 `UserTeamAuthority`
+
+| 값 | 설명 |
+|---|---|
+| `MEMBER` | 일반 팀 구성원 권한 |
+| `LEADER` | 대표자 계산과 leader summary 에 사용되는 팀 리더 권한 |
+| `ADMIN` | 팀 관리용 membership 권한이지만 대표자 계산에는 포함되지 않음 |
+
+### 1.5 `EmploymentStatus`
 
 | 값 | 설명 |
 |---|---|
@@ -31,7 +39,7 @@
 | `LEAVE` | 휴직 상태 |
 | `RETIRED` | 퇴사 상태 |
 
-### 1.5 `UserRole`
+### 1.6 `UserRole`
 
 | 값 | 설명 |
 |---|---|
@@ -40,7 +48,7 @@
 | `TEAM_LEAD` | 팀 리더 권한 |
 | `MEMBER` | 일반 구성원 권한 |
 
-### 1.6 `WorklogImportance`
+### 1.7 `WorklogImportance`
 
 | 값 | 설명 |
 |---|---|
@@ -49,7 +57,7 @@
 | `NORMAL` | 일반 우선순위 업무 |
 | `LOW` | 우선순위가 낮은 업무 |
 
-### 1.7 `WorklogStatus`
+### 1.8 `WorklogStatus`
 
 | 값 | 설명 |
 |---|---|
@@ -59,7 +67,7 @@
 | `ON_HOLD` | 일시적으로 보류된 상태 |
 | `CANCELLED` | 작업이 취소된 상태 |
 
-### 1.8 `AiProcessingStatus`
+### 1.9 `AiProcessingStatus`
 
 | 값 | 설명 |
 |---|---|

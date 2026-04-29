@@ -34,6 +34,8 @@ public enum ErrorCode {
     TEAM_NOT_FOUND(HttpStatus.NOT_FOUND, "팀을 찾을 수 없습니다."),
     /** 이미 삭제된 팀에 삭제 요청이 들어온 경우 사용한다. */
     TEAM_ALREADY_DELETED(HttpStatus.CONFLICT, "이미 삭제된 팀입니다."),
+    /** 같은 부서에서 soft-delete 되지 않은 동일 팀명이 이미 존재할 때 사용한다. */
+    TEAM_DUPLICATE_NAME(HttpStatus.CONFLICT, "같은 이름의 팀이 이미 존재합니다."),
     /** 업무 지시 일자와 마감 일자 범위가 올바르지 않은 경우 사용한다. */
     WORKLOG_INVALID_DATE_RANGE(HttpStatus.BAD_REQUEST, "업무 날짜 정보가 유효하지 않습니다."),
     /** 로그인 사용자가 대상 팀 소속이 아니어서 업무를 등록/변경할 수 없는 경우 사용한다. */

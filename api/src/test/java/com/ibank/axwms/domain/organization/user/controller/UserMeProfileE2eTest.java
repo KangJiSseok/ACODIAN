@@ -9,6 +9,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import com.ibank.axwms.domain.organization.department.entity.Department;
 import com.ibank.axwms.domain.organization.department.repository.DepartmentRepository;
 import com.ibank.axwms.domain.organization.team.TeamStatus;
+import com.ibank.axwms.domain.organization.team.UserTeamAuthority;
 import com.ibank.axwms.domain.organization.team.UserTeamStatus;
 import com.ibank.axwms.domain.organization.team.entity.Team;
 import com.ibank.axwms.domain.organization.team.entity.UserTeam;
@@ -98,7 +99,7 @@ class UserMeProfileE2eTest extends E2eTestSupport {
         userTeamRepository.save(UserTeam.create(
                 user.getId(),
                 primaryTeam.getId(),
-                true,
+                UserTeamAuthority.LEADER,
                 "플랫폼 총괄",
                 "주담당",
                 true,
@@ -107,7 +108,7 @@ class UserMeProfileE2eTest extends E2eTestSupport {
         userTeamRepository.save(UserTeam.create(
                 user.getId(),
                 secondaryTeam.getId(),
-                false,
+                UserTeamAuthority.MEMBER,
                 "SCM 분석",
                 "겸임",
                 false,
@@ -134,7 +135,8 @@ class UserMeProfileE2eTest extends E2eTestSupport {
                 .andExpect(jsonPath("$.data.teams.length()", is(1)))
                 .andExpect(jsonPath("$.data.teams[0].isPrimary", is(true)))
                 .andExpect(jsonPath("$.data.teams[0].teamName", is("E2E플랫폼팀")))
-                .andExpect(jsonPath("$.data.teams[0].teamLeader", is(true)))
+                .andExpect(jsonPath("$.data.teams[0].teamLeader").doesNotExist())
+                .andExpect(jsonPath("$.data.teams[0].teamAuthority", is("LEADER")))
                 .andExpect(jsonPath("$.data.teams[0].teamRole", is("플랫폼 총괄")))
                 .andExpect(jsonPath("$.data.teams[0].allocation", is("주담당")))
                 .andExpect(jsonPath("$.timestamp").exists());
