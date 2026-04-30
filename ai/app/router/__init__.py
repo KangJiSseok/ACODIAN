@@ -15,6 +15,7 @@
 from fastapi import APIRouter
 
 from app.router.health import router as health_router
+from app.router.pipeline import router as pipeline_router
 
 # 자기 라우터 줄의 주석만 해제. 다른 줄은 건드리지 않는다 (AGENTS.md 참고).
 # from app.router.embedding import router as embedding_router  # owner: 임베딩·검색
@@ -23,6 +24,7 @@ from app.router.health import router as health_router
 
 api_router = APIRouter()
 api_router.include_router(health_router)
+api_router.include_router(pipeline_router)
 # api_router.include_router(embedding_router)
 # api_router.include_router(search_router)
 # api_router.include_router(tagging_router)
