@@ -17,7 +17,7 @@ class Settings(BaseSettings):
 
     # ---- Gemini 호출 공통 ----
     gemini_api_key: str = ""                              # 비밀값. .env 또는 환경변수로만 주입한다.
-    gemini_model: str = "gemini-2.0-flash"                # 텍스트 생성 기본 모델 (요약/태그/청킹 등)
+    gemini_model: str = "gemini-2.5-flash"                # 텍스트 생성 기본 모델 (요약/태그/청킹 등)
     gemini_request_timeout_seconds: int = 30              # 단일 호출 타임아웃 (초)
     gemini_max_retries: int = 3                           # 호출 실패 시 재시도 최대 횟수
 
@@ -30,6 +30,9 @@ class Settings(BaseSettings):
     api_base_url: str = "http://localhost:8080"           # api 서비스 호출 기본 URL
     pgvector_dsn: str = "postgresql://postgres:postgres@localhost:5432/axwms"
     redis_url: str = "redis://localhost:6379/0"           # Celery broker / 캐시
+    celery_broker_url: str | None = None                  # 미지정 시 redis_url 사용
+    celery_result_backend: str | None = None              # 미지정 시 redis_url 사용
+    celery_task_always_eager: bool = False                # 테스트용 동기 실행 플래그
     neo4j_uri: str = "bolt://localhost:7687"              # 선택적 그래프 확장 (현재 미사용)
     neo4j_user: str = "neo4j"
     neo4j_password: str = "neo4j"
