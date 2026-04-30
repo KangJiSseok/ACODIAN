@@ -1,5 +1,5 @@
 from app.model.pipeline_model import PipelineAcceptedResponse, WorklogPipelineRequest
-from app.task.worklog_tasks import ping_worklog_pipeline, run_worklog_pipeline
+from app.task.worklog_tasks import run_worklog_pipeline
 
 
 class PipelineService:
@@ -7,7 +7,6 @@ class PipelineService:
         self,
         request: WorklogPipelineRequest,
     ) -> PipelineAcceptedResponse:
-        # task = ping_worklog_pipeline.delay(request.worklog_id)
         task = run_worklog_pipeline.delay(
             request.worklog_id,
             request.request_content,
