@@ -29,7 +29,6 @@ public class InternalWorklogAiCallbackService {
             worklog.failAiSummaryProcessing();
         }
 
-        return ;
     }
 
 }
