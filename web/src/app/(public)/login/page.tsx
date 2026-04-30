@@ -28,9 +28,9 @@ const TEST_EMAIL = "director@ibank.com";
 const TEST_PASSWORD = "password1!";
 
 const departmentOptions = [
-  { departmentId: 1, departmentName: "개발본부" },
-  { departmentId: 2, departmentName: "운영지원본부" },
-  { departmentId: 3, departmentName: "비상대응본부" },
+  { departmentId: 2, departmentName: "솔루션사업부" },
+  { departmentId: 1, departmentName: "솔루션개발사업부" },
+  { departmentId: 3, departmentName: "데이터컨설팅사업부" },
 ];
 
 const positionOptions = ["사원", "대리", "과장", "차장", "부장", "상무", "이사"];
