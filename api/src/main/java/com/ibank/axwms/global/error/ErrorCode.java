@@ -40,6 +40,8 @@ public enum ErrorCode {
     WORKLOG_INVALID_DATE_RANGE(HttpStatus.BAD_REQUEST, "업무 날짜 정보가 유효하지 않습니다."),
     /** 로그인 사용자가 대상 팀 소속이 아니어서 업무를 등록/변경할 수 없는 경우 사용한다. */
     WORKLOG_TEAM_FORBIDDEN(HttpStatus.FORBIDDEN, "해당 팀에 대한 권한이 없습니다."),
+    /** 업무일지가 존재하지 않는 경우 사용한다. */
+    WORKLOG_NOT_FOUND(HttpStatus.NOT_FOUND, "존재하지 않는 업무일지입니다."),
 
     /** access token 이 없거나 SecurityContext 에 현재 사용자 principal 이 없어 인증 문맥을 복원할 수 없을 때 사용한다. */
     AUTH_UNAUTHORIZED(HttpStatus.UNAUTHORIZED, "인증이 필요합니다."),

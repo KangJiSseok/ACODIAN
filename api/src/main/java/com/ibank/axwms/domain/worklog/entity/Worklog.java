@@ -124,4 +124,16 @@ public class Worklog {
         worklog.isDeleted = Boolean.FALSE;
         return worklog;
     }
+
+    public void changeAiSummary(String summary) {
+        this.aiSummary = summary;
+    }
+
+    public void completeAiSummaryProcessing() {
+        this.aiProcessingStatus = AiProcessingStatus.COMPLETED;
+    }
+
+    public void failAiSummaryProcessing() {
+        this.aiProcessingStatus = AiProcessingStatus.FAILED;
+    }
 }
