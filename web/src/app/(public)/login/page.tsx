@@ -33,6 +33,9 @@ const departmentOptions = [
   { departmentId: 3, departmentName: "비상대응본부" },
 ];
 
+const positionOptions = ["사원", "대리", "과장", "차장", "부장", "상무", "이사"];
+const titleOptions = ["본부장", "사업부장", "팀원"];
+
 type AuthMode = "login" | "signup";
 
 interface SignupFormState {
@@ -40,6 +43,7 @@ interface SignupFormState {
   userName: string;
   email: string;
   password: string;
+  passwordConfirm: string;
   positionName: string;
   titleName: string;
   joinDate: string;
@@ -60,6 +64,20 @@ function getSafeRedirectPath(redirectPath: string | null): string {
   }
 
   return redirectPath;
+}
+
+function formatPhoneNumber(value: string): string {
+  const digits = value.replace(/\D/g, "").slice(0, 11);
+
+  if (digits.length <= 3) {
+    return digits;
+  }
+
+  if (digits.length <= 7) {
+    return `${digits.slice(0, 3)}-${digits.slice(3)}`;
+  }
+
+  return `${digits.slice(0, 3)}-${digits.slice(3, 7)}-${digits.slice(7)}`;
 }
 
 /* 로그인 페이지 */
@@ -89,8 +107,9 @@ function AuthEntry() {
     userName: "",
     email: "",
     password: "",
-    positionName: "",
-    titleName: "",
+    passwordConfirm: "",
+    positionName: positionOptions[0],
+    titleName: titleOptions[2],
     joinDate: "",
     phone: "",
     profileImage: null,
@@ -119,7 +138,10 @@ function AuthEntry() {
     key: K,
     value: SignupFormState[K],
   ) {
-    setSignupValues((current) => ({ ...current, [key]: value }));
+    setSignupValues((current) => ({
+      ...current,
+      [key]: key === "phone" ? formatPhoneNumber(String(value)) : value,
+    }));
   }
 
   /* 로그인 submit 핸들러 */
@@ -181,13 +203,13 @@ function AuthEntry() {
       return;
     }
 
-    if (signupValues.password.length < 8) {
-      setErrorMessage("비밀번호는 8자 이상 입력해주세요.");
+    if (!signupValues.password) {
+      setErrorMessage("비밀번호를 입력해주세요.");
       return;
     }
 
-    if (!trimmedTitle) {
-      setErrorMessage("직책을 입력해주세요.");
+    if (signupValues.password !== signupValues.passwordConfirm) {
+      setErrorMessage("비밀번호가 일치하지 않습니다.");
       return;
     }
 
@@ -437,12 +459,9 @@ function SignupPanel({
         >
           <ArrowLeft className="size-5" />
         </button>
-        <div className="text-right">
-          <p className="text-sm font-black text-white">회원가입</p>
-          <p className="mt-0.5 text-xs font-medium text-slate-400">
-            AX-WMS 계정을 요청합니다
-          </p>
-        </div>
+        <p className="absolute left-1/2 -translate-x-1/2 text-sm font-black text-white">
+          회원가입
+        </p>
       </div>
 
       <div className="grid max-h-[66vh] gap-3 overflow-y-auto pr-1">
@@ -494,6 +513,7 @@ function SignupPanel({
 
         <PasswordInput
           id="signup-password"
+          autoComplete="new-password"
           isVisible={isPasswordVisible}
           label="비밀번호"
           placeholder="비밀번호"
@@ -502,21 +522,31 @@ function SignupPanel({
           onVisibleChange={onPasswordVisibleChange}
         />
 
+        <PasswordInput
+          id="signup-password-confirm"
+          autoComplete="new-password"
+          isVisible={isPasswordVisible}
+          label="비밀번호 확인"
+          placeholder="비밀번호 확인"
+          value={values.passwordConfirm}
+          onChange={(value) => onValueChange("passwordConfirm", value)}
+          onVisibleChange={onPasswordVisibleChange}
+        />
+
         <div className="grid grid-cols-2 gap-3">
-          <AuthTextInput
+          <AuthSelectInput
             icon={BriefcaseBusiness}
             id="positionName"
             label="직급"
-            placeholder="직급"
-            required={false}
+            options={positionOptions}
             value={values.positionName}
             onChange={(value) => onValueChange("positionName", value)}
           />
-          <AuthTextInput
+          <AuthSelectInput
             icon={ShieldCheck}
             id="titleName"
             label="직책"
-            placeholder="직책"
+            options={titleOptions}
             value={values.titleName}
             onChange={(value) => onValueChange("titleName", value)}
           />
@@ -536,7 +566,7 @@ function SignupPanel({
             icon={Phone}
             id="phone"
             label="연락처"
-            placeholder="010-0000-0000"
+            placeholder="01000000000"
             type="tel"
             required={false}
             value={values.phone}
@@ -605,6 +635,43 @@ function AuthTextInput({
   );
 }
 
+function AuthSelectInput({
+  icon: Icon,
+  id,
+  label,
+  options,
+  value,
+  onChange,
+}: {
+  icon: typeof UserRound;
+  id: string;
+  label: string;
+  options: string[];
+  value: string;
+  onChange: (value: string) => void;
+}) {
+  return (
+    <div className="relative">
+      <label htmlFor={id} className="sr-only">
+        {label}
+      </label>
+      <Icon className="pointer-events-none absolute left-4 top-1/2 size-5 -translate-y-1/2 text-black/80" />
+      <select
+        id={id}
+        value={value}
+        onChange={(event) => onChange(event.target.value)}
+        className="h-12 w-full appearance-none rounded-2xl border border-white/10 bg-white/[0.08] pl-11 pr-4 text-sm font-semibold text-white outline-none transition focus:border-cyan-300/60 focus:bg-white/[0.12]"
+      >
+        {options.map((option) => (
+          <option key={option} className="bg-slate-950 text-white" value={option}>
+            {option}
+          </option>
+        ))}
+      </select>
+    </div>
+  );
+}
+
 function ProfileImageInput({
   fileName,
   onChange,
@@ -639,6 +706,7 @@ function ProfileImageInput({
 }
 
 function PasswordInput({
+  autoComplete = "current-password",
   id,
   isVisible,
   label,
@@ -647,6 +715,7 @@ function PasswordInput({
   onChange,
   onVisibleChange,
 }: {
+  autoComplete?: string;
   id: string;
   isVisible: boolean;
   label: string;
@@ -666,7 +735,7 @@ function PasswordInput({
         type={isVisible ? "text" : "password"}
         value={value}
         placeholder={placeholder}
-        autoComplete="current-password"
+        autoComplete={autoComplete}
         onChange={(event) => onChange(event.target.value)}
         required
         className="h-12 w-full rounded-2xl border border-white/10 bg-white/[0.08] pl-11 pr-12 text-sm font-semibold text-white outline-none transition placeholder:text-slate-400 focus:border-cyan-300/60 focus:bg-white/[0.12]"
