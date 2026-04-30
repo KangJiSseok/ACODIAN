@@ -10,7 +10,7 @@ import com.ibank.axwms.domain.organization.department.DepartmentStatus;
 import com.ibank.axwms.domain.organization.department.repository.jooq.projection.DepartmentListItemProjection;
 import com.ibank.axwms.domain.organization.department.repository.jooq.projection.DepartmentOverviewProjection;
 import com.ibank.axwms.domain.organization.team.TeamStatus;
-import com.ibank.axwms.domain.organization.team.repository.jooq.TeamMembershipConditionSupport;
+import com.ibank.axwms.domain.organization.team.UserTeamStatus;
 import com.ibank.axwms.domain.organization.user.EmploymentStatus;
 import com.ibank.axwms.global.jooq.tables.TbUser;
 import java.util.List;
@@ -24,10 +24,10 @@ public class DepartmentJooqRepositoryImpl implements DepartmentJooqRepository {
 
     private static final String ACTIVE_DEPARTMENT_STATUS = DepartmentStatus.ACTIVE.name();
     private static final String ACTIVE_TEAM_STATUS = TeamStatus.ACTIVE.name();
+    private static final String ACTIVE_USER_TEAM_STATUS = UserTeamStatus.ACTIVE.name();
     private static final String ACTIVE_EMPLOYMENT_STATUS = EmploymentStatus.ACTIVE.name();
 
     private final DSLContext dsl;
-    private final TeamMembershipConditionSupport teamMembershipConditionSupport;
 
     /** 활성 부서 목록 화면 상단에 필요한 부서/팀/사용자 집계를 조회한다. */
     @Override
@@ -76,8 +76,8 @@ public class DepartmentJooqRepositoryImpl implements DepartmentJooqRepository {
                 .join(TB_USER_TEAM).on(TB_USER.USER_ID.eq(TB_USER_TEAM.USER_ID))
                 .join(TB_TEAM).on(TB_USER_TEAM.TEAM_ID.eq(TB_TEAM.TEAM_ID))
                 .where(TB_USER.DEPARTMENT_ID.eq(departmentId))
-                .and(teamMembershipConditionSupport.activeMembership(TB_USER_TEAM.STATUS_CODE))
-                .and(teamMembershipConditionSupport.activeTeam(TB_TEAM.DELETED_AT))
+                .and(TB_USER_TEAM.STATUS_CODE.eq(ACTIVE_USER_TEAM_STATUS))
+                .and(TB_TEAM.DELETED_AT.isNull())
                 .fetchSingle(0, Integer.class);
     }
 
