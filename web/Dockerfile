@@ -27,6 +27,7 @@ ENV NODE_ENV=production \
 RUN addgroup -S app && adduser -S app -G app
 COPY --from=builder --chown=app:app /workspace/web/.next/standalone ./
 COPY --from=builder --chown=app:app /workspace/web/.next/static ./web/.next/static
+COPY --from=builder --chown=app:app /workspace/web/public ./web/public
 USER app
 EXPOSE 8000
 WORKDIR /app/web
