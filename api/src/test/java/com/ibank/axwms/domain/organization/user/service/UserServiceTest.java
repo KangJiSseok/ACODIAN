@@ -215,7 +215,6 @@ class UserServiceTest {
 
     private Team createTeam(Long id, Long departmentId, String teamName, LocalDateTime deletedAt) {
         Team team = Team.create(
-                departmentId,
                 teamName,
                 TeamStatus.ACTIVE,
                 "테스트 팀",

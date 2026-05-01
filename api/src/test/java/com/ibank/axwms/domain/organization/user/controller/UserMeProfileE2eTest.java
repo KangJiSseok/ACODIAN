@@ -79,7 +79,6 @@ class UserMeProfileE2eTest extends E2eTestSupport {
         ));
         userRepository.save(user);
         Team primaryTeam = teamRepository.save(Team.create(
-                department.getId(),
                 "E2E플랫폼팀",
                 TeamStatus.ACTIVE,
                 "현재 사용자 조회 E2E 기본 팀",
@@ -87,7 +86,6 @@ class UserMeProfileE2eTest extends E2eTestSupport {
                 null
         ));
         Team secondaryTeam = teamRepository.save(Team.create(
-                department.getId(),
                 "E2ESCM팀",
                 TeamStatus.ACTIVE,
                 "현재 사용자 조회 E2E 추가 팀",

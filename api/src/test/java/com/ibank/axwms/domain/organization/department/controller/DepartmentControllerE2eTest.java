@@ -99,12 +99,15 @@ class DepartmentControllerE2eTest extends E2eTestSupport {
     }
 
     @Test
-    @DisplayName("활성 팀이 남아 있으면 DEPARTMENT_HAS_ACTIVE_TEAMS 응답을 반환한다")
-    void 활성_팀이_남아_있으면_department_has_active_teams_응답을_반환한다() throws Exception {
+    @DisplayName("팀은 부서에 직접 귀속되지 않으므로 활성 팀 존재 여부와 무관하게 부서를 INACTIVE 로 변경한다")
+    void 팀은_부서에_직접_귀속되지_않으므로_활성_팀_존재_여부와_무관하게_부서를_inactive로_변경한다() throws Exception {
         mockMvc.perform(apiDelete("/departments/" + logisticsDepartmentId)
                         .with(user("director@ibank.com").roles("DIRECTOR")))
-                .andExpect(status().isConflict())
-                .andExpect(jsonPath("$.error.code", is("DEPARTMENT_HAS_ACTIVE_TEAMS")));
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.success", is(true)));
+
+        Department updated = departmentRepository.findById(logisticsDepartmentId).orElseThrow();
+        assertThat(updated.getStatusCode()).isEqualTo(DepartmentStatus.INACTIVE);
     }
 
     @Test
@@ -675,9 +678,7 @@ class DepartmentControllerE2eTest extends E2eTestSupport {
         ));
 
         userTeamRepository.save(UserTeam.create(activeMemberOne.getId(), logisticsActiveTeam.getId(), false, "담당", "주담당", true, UserTeamStatus.ACTIVE));
-        userTeamRepository.save(UserTeam.create(activeMemberOne.getId(), logisticsSecondActiveTeam.getId(), false, "협업", "겸임", false, UserTeamStatus.ACTIVE));
         userTeamRepository.save(UserTeam.create(activeMemberTwo.getId(), operationsInactiveTeam.getId(), true, "리드", "주담당", true, UserTeamStatus.ACTIVE));
-        userTeamRepository.save(UserTeam.create(inactiveTeamOnlyMember.getId(), operationsSecondInactiveTeam.getId(), false, "담당", "겸임", false, UserTeamStatus.ACTIVE));
     }
 
     /** 테스트용 부서 엔티티를 상태까지 포함해 생성한다. */
@@ -693,7 +694,6 @@ class DepartmentControllerE2eTest extends E2eTestSupport {
     /** 테스트용 팀 엔티티를 부서와 상태 기준으로 생성한다. */
     private Team createTeam(Long departmentId, String teamName, TeamStatus status) {
         return Team.create(
-                departmentId,
                 teamName,
                 status,
                 teamName + " 설명",

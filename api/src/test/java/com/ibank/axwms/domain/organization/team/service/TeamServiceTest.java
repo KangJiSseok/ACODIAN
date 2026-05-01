@@ -68,7 +68,6 @@ class TeamServiceTest {
 
     private Team createTeam(Long id) {
         Team team = Team.create(
-                10L,
                 "물류혁신TF",
                 TeamStatus.ACTIVE,
                 "테스트 팀",
