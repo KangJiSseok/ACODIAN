@@ -2,7 +2,6 @@ package com.ibank.axwms.domain.organization.user.dto;
 
 import com.fasterxml.jackson.annotation.JsonPropertyOrder;
 import com.ibank.axwms.domain.organization.department.entity.Department;
-import com.ibank.axwms.domain.organization.team.UserTeamAuthority;
 import com.ibank.axwms.domain.organization.user.EmploymentStatus;
 import com.ibank.axwms.domain.organization.user.entity.User;
 import io.swagger.v3.oas.annotations.media.Schema;
@@ -47,12 +46,12 @@ public final class GetMyProfileApiDto {
         }
 
         @Schema(description = "사용자 소속 팀 요약")
-        @JsonPropertyOrder({"isPrimary", "teamId", "teamName", "teamAuthority", "teamRole", "allocation"})
+        @JsonPropertyOrder({"isPrimary", "teamId", "teamName", "isLeader", "teamRole", "allocation"})
         public record TeamSummary(
                 boolean isPrimary,
                 Long teamId,
                 String teamName,
-                UserTeamAuthority teamAuthority,
+                boolean isLeader,
                 String teamRole,
                 String allocation
         ) {
