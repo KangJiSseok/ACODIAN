@@ -13,6 +13,7 @@
 ## 2. 주요 ERD 연관
 - `tb_team`
 - `tb_user_team`
+- `tb_team_admin`
 - `tb_department`
 - `tb_user`
 - `tb_worklog`
@@ -37,17 +38,24 @@
 - `(user_id, team_id)` 당 1행을 유지하는 single-row membership 모델을 사용한다.
 - membership 의 운영 상태는 `ACTIVE`, `LEFT` 두 종류만 사용한다.
 - 재가입은 신규 row 누적이 아니라 동일 row 를 `ACTIVE` 로 되돌리는 방식으로 처리한다.
-- membership 권한은 `teamAuthority(MEMBER, LEADER, ADMIN)` 로 관리한다.
+- membership 리더 여부는 업무 소속 의미의 `isLeader` boolean 으로 표현한다.
 - 팀 내 업무 역할은 `teamRole`, 배치 성격은 `allocation`, 대표 소속 여부는 `isPrimary` 로 표현한다.
-- `ACTIVE` membership 기준 팀당 `LEADER` 는 최대 1명이며, `ADMIN` 은 대표자 계산에서 제외한다.
+- `ACTIVE` membership 기준 팀당 `LEADER` 는 최대 1명이다.
 
-### 4.3 역할별 조회 범위
+### 4.3 `tb_team_admin`
+- 팀 관리 권한은 업무 소속 membership 과 분리된 `tb_team_admin` grant 로 모델링한다.
+- `tb_team_admin` 은 `(user_id, team_id)` 당 1행을 유지하며, 동일 사용자가 같은 팀에 대해 관리 권한과 업무 소속 membership을 동시에 가질 수 있다.
+- `grantedAt` 은 관리 권한을 부여한 시점을 나타낸다.
+- 본 문서는 persistence 모델 방향을 먼저 고정한다. 실제 Flyway migration, JPA managed entity 활성화, 생성/조회/변경 endpoint 에서 `tb_team_admin` 을 읽고 쓰는 Controller/Service/Repository/JOOQ 구현은 후속 작업이다.
+
+### 4.4 역할별 조회 범위
 - `DIRECTOR`: 모든 부서/모든 팀 접근 가능
 - `DEPT_HEAD`: 기본 visible scope 는 본인 소속 부서의 전체 팀 + 본인이 현재 소속된 전체 팀의 합집합이다. `departmentId = null` 인 목록/요약 조회에서는 이 합집합을 사용하고, 중복 팀은 DISTINCT 처리한다.
 - `TEAM_LEAD`, `MEMBER`: 기본 visible scope 는 본인이 현재 소속된 전체 팀이다. `departmentId = null` 이면 이 전체 visible scope 를 조회하고, 값이 있으면 visible scope 내 추가 필터로만 해석한다.
+- `tb_team_admin` grant 를 보유한 사용자는 후속 구현에서 해당 팀을 visible scope 에 포함한다.
 - controller 는 역할 확인을 수행하고, service 는 실제 부서/팀 ownership 을 검증한다.
 
-### 4.4 집계/정렬 공통 해석
+### 4.5 집계/정렬 공통 해석
 - 별도 언급이 없으면 team 목록의 `memberCount` 는 해당 팀의 `ACTIVE` membership 수다.
 - visible scope 가 부서 ownership + membership 합집합으로 계산되는 경우 팀 집합은 먼저 **DISTINCT team** 기준으로 정규화한다.
 - 목록 pagination 의 `items`, `totalCount`, `totalPages` 는 정규화된 visible scope 기준으로 계산한다.
@@ -83,7 +91,7 @@
   - `sortBy`, `sortDirection` 은 공개 query 로 받지 않고 아래 고정 정렬 정책을 사용한다. 
 - 고정 정렬 정책
   1. `statusCode = ACTIVE` 팀 우선
-  2. 호출자의 `myTeamAuthority = LEADER` 인 팀 우선
+  2. 호출자의 `myIsLeader = true` 인 팀 우선
   3. 호출자의 `allocation` 이 주 담당인 팀 우선 (`PRIMARY`, `MAIN`, `LEAD` 등 실제 enum/string 은 구현 SSOT 를 따른다.)
   4. 호출자의 `isPrimary = true` 인 팀 우선
 - `departmentId` 해석
@@ -98,7 +106,7 @@
     - `departmentHeadUserId`, `departmentHeadUserName`
     - `teamLeaderId`, `teamLeaderName`
     - `memberCount`
-    - `myTeamAuthority`
+    - `myIsLeader`
     - `teamRole`, `allocation`, `isPrimary`
     - `startDate`, `expectedEndDate`
 - 요청 JSON 예시
@@ -129,7 +137,7 @@
         "teamLeaderId": 101,
         "teamLeaderName": "홍길동",
         "memberCount": 6,
-        "myTeamAuthority": "LEADER",
+        "myIsLeader": true,
         "teamRole": "플랫폼 총괄",
         "allocation": "PRIMARY",
         "isPrimary": true,
@@ -287,12 +295,15 @@
   - Path: `id`
   - Query: `page`, `pageSize`
 - 고정 정렬 정책
-  1. `teamAuthority` 가 `LEADER > MEMBER > ADMIN` 순으로 우선한다.
-  2. 동순위에서는 `userId ASC` 로 정렬한다.
+  1. 응답 대상은 `tb_user_team` 의 업무 소속 membership 사용자다.
+  2. `tb_team_admin` grant 만 가진 ADMIN-only 사용자는 사용자 목록에서 제외한다.
+  3. 동일 사용자가 `tb_team_admin` grant 와 업무 소속 membership 을 함께 가지면 membership 의 `isLeader` 값으로 반환한다.
+  4. `isLeader = true` 인 사용자를 우선한다.
+  5. 동순위에서는 `userId ASC` 로 정렬한다.
 - 응답 (`data` 기준)
   - `PageResponse<TeamUserSummary>`
   - `items[*]`
-    - `teamAuthority`
+    - `isLeader`
     - `userId`, `userName`
     - `positionName`
     - `email`
@@ -316,27 +327,18 @@
   "data": {
     "items": [
       {
-        "teamAuthority": "LEADER",
+        "isLeader": true,
         "userId": 101,
         "userName": "홍길동",
         "positionName": "과장",
         "email": "hong@axwms.com",
         "teamRole": "플랫폼 총괄",
         "allocation": "PRIMARY"
-      },
-      {
-        "teamAuthority": "ADMIN",
-        "userId": 102,
-        "userName": "김영희",
-        "positionName": "대리",
-        "email": "kim@axwms.com",
-        "teamRole": "WMS 운영",
-        "allocation": "SECONDARY"
       }
     ],
     "page": 1,
     "pageSize": 20,
-    "totalCount": 2,
+    "totalCount": 1,
     "totalPages": 1,
     "isFirst": true,
     "isLast": true,
@@ -352,6 +354,7 @@
   - 대표 오류: `AUTH_ACCESS_DENIED`
 - ERD 연관
   - `tb_user_team`
+  - `tb_team_admin`
   - `tb_user`
   - `tb_team`
 - 근거
@@ -443,7 +446,9 @@
   - Body: `departmentId`, `teamName`, `description`, `leaderUserId`, `leaderMembership`, `statusCode`, `startDate`, `expectedEndDate`
 - 요청 규칙
   - `leaderMembership` 에는 `teamRole`, `allocation`, `isPrimary` 를 nested payload 로 받는다.
-  - create/update 는 `teamAuthority` 를 직접 받지 않으며 `leaderUserId` 대상 membership 을 항상 `LEADER` 로 설정한다.
+  - create/update 는 `isLeader` 를 직접 받지 않으며 `leaderUserId` 대상 membership 을 항상 `isLeader = true` 로 설정한다.
+  - 팀 생성자의 관리 권한은 후속 구현에서 `tb_team_admin` grant 로 부여한다.
+  - `DIRECTOR` 생성 시 생성자 본인에게, `DEPT_HEAD` 생성 시 생성자와 상위 `DIRECTOR` 범위에 대한 관리 grant 부여 정책은 Service/Repository 구현 단계에서 확정한다.
   - `leaderMembership.joinedAt` 은 별도 입력으로 받지 않고 생성 시점 기본값을 사용한다.
   - `DEPT_HEAD` 는 본인 부서에 대해서만 생성할 수 있다. 다른 부서 `departmentId` 는 `AUTH_ACCESS_DENIED` 다.
 - 응답 (`data` 기준)
@@ -482,6 +487,7 @@
   - 대표 오류: `AUTH_ACCESS_DENIED`
 - ERD 연관
   - `tb_team`
+  - `tb_team_admin`
   - `tb_department`
   - `tb_user`
   - `tb_user_team`
@@ -499,8 +505,8 @@
   - Body: `departmentId`, `teamName`, `description`, `leaderUserId`, `leaderMembership`, `statusCode`, `startDate`, `expectedEndDate`
 - 요청 규칙
   - `leaderMembership` 에는 `teamRole`, `allocation`, `isPrimary` 를 nested payload 로 받는다.
-  - `leaderUserId` 를 받으면 대상 `(user_id, team_id)` membership 을 재활성화/갱신 후 `LEADER` 로 승격한다.
-  - 기존 ACTIVE `LEADER` 는 같은 트랜잭션에서 `MEMBER` 로 강등한다.
+  - `leaderUserId` 를 받으면 대상 `(user_id, team_id)` membership 을 재활성화/갱신 후 `isLeader = true` 로 승격한다.
+  - 기존 ACTIVE leader membership 은 같은 트랜잭션에서 `isLeader = false` 로 강등한다.
   - `DEPT_HEAD` 는 본인 부서 팀만 수정할 수 있다.
 - 응답 (`data` 기준)
   - 빈 객체 (`ApiResponse.empty()`)
@@ -598,13 +604,13 @@
 - 요청
   - Path: `id`
   - Body
-    - `addUsers[*]`: `userId`, `teamAuthority`, `teamRole`, `allocation`, `isPrimary`, `joinedAt`
+    - `addUsers[*]`: `userId`, `isLeader`, `teamRole`, `allocation`, `isPrimary`, `joinedAt`
     - `removeUserIds[*]`: 제거 대상 `userId`
 - 요청 규칙
   - 기존 legacy path `/api/teams/{id}/members/bulk` 는 사용하지 않는다.
-  - `teamAuthority` 는 필수이며 그대로 사용한다.
+  - `isLeader` 는 필수이며 팀 대표 여부로 사용한다.
   - 추가 대상 사용자가 기존 `LEFT` membership row 를 가지면 복구 처리한다.
-  - bulk upsert 에서만 `ADMIN` 부여를 허용한다.
+  - 팀 관리 권한 부여/회수는 `tb_user_team` membership 이 아니라 `tb_team_admin` grant 를 사용하는 별도 후속 유스케이스로 구현한다.
   - `DEPT_HEAD` 는 본인 부서 팀에 대해서만 수행할 수 있다.
 - 응답 (`data` 기준)
   - 빈 객체 (`ApiResponse.empty()`)
@@ -618,7 +624,7 @@
     "addUsers": [
       {
         "userId": 102,
-        "teamAuthority": "ADMIN",
+        "isLeader": false,
         "teamRole": "WMS 운영",
         "allocation": "SECONDARY",
         "isPrimary": false,
@@ -626,7 +632,7 @@
       },
       {
         "userId": 103,
-        "teamAuthority": "LEADER",
+        "isLeader": true,
         "teamRole": "현장 총괄",
         "allocation": "PRIMARY",
         "isPrimary": true,
@@ -705,10 +711,10 @@
 ## 7. 공통 검수 포인트
 - `DIRECTOR`, `DEPT_HEAD`, `TEAM_LEAD`, `MEMBER` 별 조회 범위가 각 endpoint 에 명시되어 있는가
 - `GET /api/teams` 가 순수 `PageResponse<TeamSummary>` 로 설명되어 있는가
-- `GET /api/teams` 가 `myTeamAuthority` 만 노출하고 `myTeamLeader` 를 설명하지 않는가
+- `GET /api/teams` 가 `myIsLeader` 를 노출하고 기존 권한 문자열 필드를 설명하지 않는가
 - `GET /api/teams/summary` 가 상단 집계를 별도 endpoint 로 설명하는가
 - `GET /api/teams/{id}` 가 soft-delete 되지 않은 업무일지 집계를 포함하는가
-- `GET /api/teams/{id}/users` 가 `teamAuthority` 를 노출하고 `LEADER > MEMBER > ADMIN` 정렬을 설명하는가
+- `GET /api/teams/{id}/users` 가 ADMIN-only grant 사용자를 제외하고 `isLeader = true` 우선 정렬을 설명하는가
 - `GET /api/teams/{id}/worklogs` 가 `requestContent`, `workContent`, `aiSummary`, `importanceCode` 를 포함하는가
 - `POST` / `PUT /api/teams/{id}` request 에 `leaderMembership.teamRole`, `leaderMembership.allocation`, `leaderMembership.isPrimary` 가 nested payload 로 설명되는가
 - `PATCH /api/teams/{id}/status` 가 body 에 `statusCode` 만 받는가
