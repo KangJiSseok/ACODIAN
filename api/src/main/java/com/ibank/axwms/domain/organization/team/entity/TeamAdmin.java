@@ -1,8 +1,12 @@
 package com.ibank.axwms.domain.organization.team.entity;
 
 import jakarta.persistence.Column;
+import jakarta.persistence.Entity;
+import jakarta.persistence.GeneratedValue;
+import jakarta.persistence.GenerationType;
 import jakarta.persistence.Id;
-import jakarta.persistence.MappedSuperclass;
+import jakarta.persistence.Table;
+import jakarta.persistence.UniqueConstraint;
 import java.time.LocalDateTime;
 import java.util.Objects;
 import lombok.AccessLevel;
@@ -13,14 +17,17 @@ import org.hibernate.annotations.UpdateTimestamp;
 
 /**
  * 팀 관리 권한 grant 의 entity-side 모델이다.
- * 실제 테이블 migration 이 추가되기 전까지는 JPA managed entity 로 활성화하지 않는다.
  */
-@MappedSuperclass
+@Entity
+@Table(name = "tb_team_admin", uniqueConstraints = {
+        @UniqueConstraint(columnNames = {"user_id", "team_id"})
+})
 @Getter
 @NoArgsConstructor(access = AccessLevel.PROTECTED)
 public class TeamAdmin {
 
     @Id
+    @GeneratedValue(strategy = GenerationType.IDENTITY)
     @Column(name = "team_admin_id")
     private Long id;
 

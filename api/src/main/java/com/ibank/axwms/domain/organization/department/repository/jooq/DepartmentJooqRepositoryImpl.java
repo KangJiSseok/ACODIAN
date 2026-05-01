@@ -90,13 +90,11 @@ public class DepartmentJooqRepositoryImpl implements DepartmentJooqRepository {
                 .longValue();
     }
 
-    /** ACTIVE department 에 속한 ACTIVE team 수를 계산한다. */
+    /** ACTIVE team 수를 계산한다. 팀은 더 이상 부서에 직접 귀속되지 않는다. */
     private long fetchActiveTeamCount() {
         return dsl.selectCount()
                 .from(TB_TEAM)
-                .join(TB_DEPARTMENT).on(TB_TEAM.DEPARTMENT_ID.eq(TB_DEPARTMENT.DEPARTMENT_ID))
-                .where(TB_TEAM.STATUS_CODE.eq(ACTIVE_TEAM_STATUS)
-                        .and(TB_DEPARTMENT.STATUS_CODE.eq(ACTIVE_DEPARTMENT_STATUS)))
+                .where(TB_TEAM.STATUS_CODE.eq(ACTIVE_TEAM_STATUS))
                 .fetchSingle(0, Integer.class)
                 .longValue();
     }
@@ -107,10 +105,13 @@ public class DepartmentJooqRepositoryImpl implements DepartmentJooqRepository {
                 .from(TB_USER)
                 .join(TB_USER_TEAM).on(TB_USER.USER_ID.eq(TB_USER_TEAM.USER_ID))
                 .join(TB_TEAM).on(TB_USER_TEAM.TEAM_ID.eq(TB_TEAM.TEAM_ID))
-                .join(TB_DEPARTMENT).on(TB_TEAM.DEPARTMENT_ID.eq(TB_DEPARTMENT.DEPARTMENT_ID))
                 .where(TB_USER.EMPLOYMENT_STATUS.eq(ACTIVE_EMPLOYMENT_STATUS)
                         .and(TB_TEAM.STATUS_CODE.eq(ACTIVE_TEAM_STATUS))
-                        .and(TB_DEPARTMENT.STATUS_CODE.eq(ACTIVE_DEPARTMENT_STATUS)))
+                        .and(TB_USER.DEPARTMENT_ID.in(
+                                dsl.select(TB_DEPARTMENT.DEPARTMENT_ID)
+                                        .from(TB_DEPARTMENT)
+                                        .where(TB_DEPARTMENT.STATUS_CODE.eq(ACTIVE_DEPARTMENT_STATUS))
+                        )))
                 .fetchSingle(0, Integer.class)
                 .longValue();
     }

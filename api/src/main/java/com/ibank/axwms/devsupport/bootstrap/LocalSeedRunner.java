@@ -91,7 +91,7 @@ public class LocalSeedRunner implements ApplicationRunner {
         Map<String, Long> departmentIdsByName = seedDepartmentShells(DEPARTMENT_SEEDS);
         Map<String, Long> userIdsByEmail = seedUsers(USER_SEEDS, departmentIdsByName);
         synchronizeDepartments(DEPARTMENT_SEEDS, departmentIdsByName, userIdsByEmail);
-        Map<String, Long> teamIdsByKey = seedTeams(TEAM_SEEDS, departmentIdsByName);
+        Map<String, Long> teamIdsByKey = seedTeams(TEAM_SEEDS);
         seedUserTeams(USER_TEAM_SEEDS, userIdsByEmail, teamIdsByKey);
     }
 
@@ -197,45 +197,42 @@ public class LocalSeedRunner implements ApplicationRunner {
     /**
      * 팀 시드 목록을 순회하며 ACTIVE/INACTIVE 상태와 legacy 이름 치환을 함께 보장한다.
      */
-    private Map<String, Long> seedTeams(List<TeamSeedSpec> specs, Map<String, Long> departmentIdsByName) {
+    private Map<String, Long> seedTeams(List<TeamSeedSpec> specs) {
         Map<String, Long> teamIdsByKey = new LinkedHashMap<>();
         for (TeamSeedSpec spec : specs) {
-            Long departmentId = departmentIdsByName.get(spec.departmentName());
-            teamIdsByKey.put(teamKey(spec.departmentName(), spec.teamName()), ensureTeam(spec, departmentId));
+            teamIdsByKey.put(teamKey(spec.departmentName(), spec.teamName()), ensureTeam(spec));
         }
         return teamIdsByKey;
     }
 
     /**
-     * 부서 안의 로컬 검증용 팀이 없으면 생성하고, 있으면 이름/상태/설명을 목표값으로 보정한다.
+     * 로컬 검증용 팀이 없으면 생성하고, 있으면 이름/상태/설명을 목표값으로 보정한다.
      * legacy 팀명이 남아 있으면 같은 row 를 재사용해 현재 스펙 이름으로 수렴시킨다.
      */
-    private Long ensureTeam(TeamSeedSpec spec, Long departmentId) {
-        return findTeamByNames(departmentId, spec.teamName(), spec.legacyTeamNames())
+    private Long ensureTeam(TeamSeedSpec spec) {
+        return findTeamByNames(spec.teamName(), spec.legacyTeamNames())
                 .map(team -> {
                     team.synchronizeSeedProfile(
-                            departmentId,
                             spec.teamName(),
                             spec.statusCode(),
                             spec.description(),
                             DEFAULT_JOIN_DATE,
                             null
                     );
-                    log.info("[LocalSeed] 팀 보정 - departmentId={} teamName={} status={}",
-                            departmentId, spec.teamName(), spec.statusCode());
+                    log.info("[LocalSeed] 팀 보정 - teamName={} status={}",
+                            spec.teamName(), spec.statusCode());
                     return team.getId();
                 })
                 .orElseGet(() -> {
                     Team saved = teamRepository.save(Team.create(
-                            departmentId,
                             spec.teamName(),
                             spec.statusCode(),
                             spec.description(),
                             DEFAULT_JOIN_DATE,
                             null
                     ));
-                    log.info("[LocalSeed] 팀 생성 - departmentId={} teamName={} teamId={} status={}",
-                            departmentId, spec.teamName(), saved.getId(), spec.statusCode());
+                    log.info("[LocalSeed] 팀 생성 - teamName={} teamId={} status={}",
+                            spec.teamName(), saved.getId(), spec.statusCode());
                     return saved.getId();
                 });
     }
@@ -286,13 +283,13 @@ public class LocalSeedRunner implements ApplicationRunner {
      * 현재 스펙 이름을 우선하고, 없으면 legacy 이름 순서로 이미 존재하는 팀 row 를 찾는다.
      * soft-delete 된 팀도 복구 후보에 포함해 로컬 시드 재실행이 멱등하게 유지되도록 한다.
      */
-    private java.util.Optional<Team> findTeamByNames(Long departmentId, String currentName, List<String> legacyNames) {
-        java.util.Optional<Team> current = teamRepository.findFirstByDepartmentIdAndTeamNameOrderByDeletedAtDesc(departmentId, currentName);
+    private java.util.Optional<Team> findTeamByNames(String currentName, List<String> legacyNames) {
+        java.util.Optional<Team> current = teamRepository.findFirstByTeamNameOrderByDeletedAtDesc(currentName);
         if (current.isPresent()) {
             return current;
         }
         for (String legacyName : legacyNames) {
-            java.util.Optional<Team> legacy = teamRepository.findFirstByDepartmentIdAndTeamNameOrderByDeletedAtDesc(departmentId, legacyName);
+            java.util.Optional<Team> legacy = teamRepository.findFirstByTeamNameOrderByDeletedAtDesc(legacyName);
             if (legacy.isPresent()) {
                 return legacy;
             }
