@@ -46,7 +46,7 @@
 | `department` | `PUT` | `/api/departments/{id}`           | `Documented` | checklist → class mapping → ERD/ADR | [api-spec-department.md](./api-spec-department.md) |
 | `department` | `DELETE` | `/api/departments/{id}`           | `Documented` | checklist → class mapping → ERD/ADR | [api-spec-department.md](./api-spec-department.md) |
 | `team` | `GET` | `/api/teams`                      | `Documented` | checklist → class mapping → ERD/ADR | [api-spec-team.md](./api-spec-team.md) |
-| `team` | `GET` | `/api/teams/summary`              | `Documented` | checklist → class mapping → ERD/ADR | [api-spec-team.md](./api-spec-team.md) |
+| `team` | `GET` | `/api/teams/summary`              | `Proposed-risk-closure` | checklist → class mapping → ERD/ADR | [api-spec-team.md](./api-spec-team.md) |
 | `team` | `GET` | `/api/teams/{id}`                 | `Documented` | checklist → class mapping → ERD/ADR | [api-spec-team.md](./api-spec-team.md) |
 | `team` | `GET` | `/api/teams/{id}/users`           | `Documented` | checklist → class mapping → ERD/ADR | [api-spec-team.md](./api-spec-team.md) |
 | `team` | `GET` | `/api/teams/{id}/worklogs`        | `Documented` | checklist → class mapping → ERD/ADR | [api-spec-team.md](./api-spec-team.md) |
