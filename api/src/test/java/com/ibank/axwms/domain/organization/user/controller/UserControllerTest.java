@@ -5,7 +5,6 @@ import static org.mockito.BDDMockito.given;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.SerializationFeature;
-import com.ibank.axwms.domain.organization.team.UserTeamAuthority;
 import com.ibank.axwms.domain.organization.user.EmploymentStatus;
 import com.ibank.axwms.domain.organization.user.dto.GetMyProfileApiDto;
 import com.ibank.axwms.domain.organization.user.service.UserService;
@@ -79,7 +78,7 @@ class UserControllerTest {
                         true,
                         21L,
                         "물류혁신TF",
-                        UserTeamAuthority.LEADER,
+                        true,
                         "플랫폼 총괄",
                         "주담당"
                 ))
@@ -92,7 +91,7 @@ class UserControllerTest {
                 true,
                 21L,
                 "물류혁신TF",
-                UserTeamAuthority.LEADER,
+                true,
                 "플랫폼 총괄",
                 "주담당"
         ));
@@ -123,19 +122,19 @@ class UserControllerTest {
     }
 
     @Test
-    @DisplayName("팀 요약 응답은 teamAuthority 를 포함한 고정 순서로 직렬화한다")
-    void 팀_요약_응답은_teamAuthority_를_포함한_고정_순서로_직렬화한다() throws Exception {
+    @DisplayName("팀 요약 응답은 isLeader 를 포함한 고정 순서로 직렬화한다")
+    void 팀_요약_응답은_isLeader_를_포함한_고정_순서로_직렬화한다() throws Exception {
         GetMyProfileApiDto.Response.TeamSummary teamSummary = new GetMyProfileApiDto.Response.TeamSummary(
                 true,
                 21L,
                 "물류혁신TF",
-                UserTeamAuthority.LEADER,
+                true,
                 "플랫폼 총괄",
                 "주담당"
         );
 
         String json = objectMapper.writeValueAsString(teamSummary);
 
-        assertThat(json).startsWith("{\"isPrimary\":true,\"teamId\":21,\"teamName\":\"물류혁신TF\",\"teamAuthority\":\"LEADER\",\"teamRole\":\"플랫폼 총괄\",\"allocation\":\"주담당\"");
+        assertThat(json).startsWith("{\"isPrimary\":true,\"teamId\":21,\"teamName\":\"물류혁신TF\",\"isLeader\":true,\"teamRole\":\"플랫폼 총괄\",\"allocation\":\"주담당\"");
     }
 }

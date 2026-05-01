@@ -7,7 +7,6 @@ import static org.mockito.BDDMockito.given;
 import com.ibank.axwms.domain.organization.department.entity.Department;
 import com.ibank.axwms.domain.organization.department.repository.DepartmentRepository;
 import com.ibank.axwms.domain.organization.team.TeamStatus;
-import com.ibank.axwms.domain.organization.team.UserTeamAuthority;
 import com.ibank.axwms.domain.organization.team.UserTeamStatus;
 import com.ibank.axwms.domain.organization.team.entity.Team;
 import com.ibank.axwms.domain.organization.team.entity.UserTeam;
@@ -84,12 +83,12 @@ class UserServiceTest {
                 .extracting(GetMyProfileApiDto.Response.TeamSummary::isPrimary,
                         GetMyProfileApiDto.Response.TeamSummary::teamId,
                         GetMyProfileApiDto.Response.TeamSummary::teamName,
-                        GetMyProfileApiDto.Response.TeamSummary::teamAuthority,
+                        GetMyProfileApiDto.Response.TeamSummary::isLeader,
                         GetMyProfileApiDto.Response.TeamSummary::teamRole,
                         GetMyProfileApiDto.Response.TeamSummary::allocation)
                 .containsExactly(
-                        Tuple.tuple(true, 21L, "물류혁신TF", UserTeamAuthority.LEADER, "플랫폼 총괄", "주담당"),
-                        Tuple.tuple(false, 22L, "SCM분석팀", UserTeamAuthority.MEMBER, "SCM 분석", "겸임")
+                        Tuple.tuple(true, 21L, "물류혁신TF", true, "플랫폼 총괄", "주담당"),
+                        Tuple.tuple(false, 22L, "SCM분석팀", false, "SCM 분석", "겸임")
                 );
     }
 
@@ -232,7 +231,7 @@ class UserServiceTest {
         return UserTeam.create(
                 userId,
                 teamId,
-                isPrimary ? UserTeamAuthority.LEADER : UserTeamAuthority.MEMBER,
+                isPrimary,
                 isPrimary ? "플랫폼 총괄" : "SCM 분석",
                 isPrimary ? "주담당" : "겸임",
                 isPrimary,

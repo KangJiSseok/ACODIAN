@@ -10,7 +10,6 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 
 import com.ibank.axwms.domain.organization.department.DepartmentStatus;
 import com.ibank.axwms.domain.organization.department.entity.Department;
-import com.ibank.axwms.domain.organization.team.UserTeamAuthority;
 import com.ibank.axwms.domain.organization.team.UserTeamStatus;
 import com.ibank.axwms.domain.organization.department.repository.DepartmentRepository;
 import com.ibank.axwms.domain.organization.team.TeamStatus;
@@ -675,10 +674,10 @@ class DepartmentControllerE2eTest extends E2eTestSupport {
                 UserRole.MEMBER
         ));
 
-        userTeamRepository.save(UserTeam.create(activeMemberOne.getId(), logisticsActiveTeam.getId(), UserTeamAuthority.MEMBER, "담당", "주담당", true, UserTeamStatus.ACTIVE));
-        userTeamRepository.save(UserTeam.create(activeMemberOne.getId(), logisticsSecondActiveTeam.getId(), UserTeamAuthority.MEMBER, "협업", "겸임", false, UserTeamStatus.ACTIVE));
-        userTeamRepository.save(UserTeam.create(activeMemberTwo.getId(), operationsInactiveTeam.getId(), UserTeamAuthority.LEADER, "리드", "주담당", true, UserTeamStatus.ACTIVE));
-        userTeamRepository.save(UserTeam.create(inactiveTeamOnlyMember.getId(), operationsSecondInactiveTeam.getId(), UserTeamAuthority.MEMBER, "담당", "겸임", false, UserTeamStatus.ACTIVE));
+        userTeamRepository.save(UserTeam.create(activeMemberOne.getId(), logisticsActiveTeam.getId(), false, "담당", "주담당", true, UserTeamStatus.ACTIVE));
+        userTeamRepository.save(UserTeam.create(activeMemberOne.getId(), logisticsSecondActiveTeam.getId(), false, "협업", "겸임", false, UserTeamStatus.ACTIVE));
+        userTeamRepository.save(UserTeam.create(activeMemberTwo.getId(), operationsInactiveTeam.getId(), true, "리드", "주담당", true, UserTeamStatus.ACTIVE));
+        userTeamRepository.save(UserTeam.create(inactiveTeamOnlyMember.getId(), operationsSecondInactiveTeam.getId(), false, "담당", "겸임", false, UserTeamStatus.ACTIVE));
     }
 
     /** 테스트용 부서 엔티티를 상태까지 포함해 생성한다. */
