@@ -55,7 +55,7 @@ class WorklogVisibilityPolicyTest {
 
             WorklogVisibilityScope scope = worklogVisibilityPolicy.resolve(principal);
 
-            assertThat(scope).isEqualTo(new WorklogVisibilityScope.Department(DEPARTMENT_ID));
+            assertThat(scope).isEqualTo(new WorklogVisibilityScope.Department(DEPARTMENT_ID, USER_ID));
             verify(userService).getDepartmentIdOrThrow(USER_ID);
         }
 

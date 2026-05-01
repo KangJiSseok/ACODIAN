@@ -1,10 +1,10 @@
 package com.ibank.axwms.domain.worklog.repository.jooq;
 
 import static com.ibank.axwms.global.jooq.Tables.TB_TEAM;
+import static com.ibank.axwms.global.jooq.Tables.TB_TEAM_ADMIN;
 import static com.ibank.axwms.global.jooq.Tables.TB_USER;
 import static com.ibank.axwms.global.jooq.Tables.TB_USER_TEAM;
 import static com.ibank.axwms.global.jooq.Tables.TB_WORKLOG;
-import static com.ibank.axwms.global.jooq.Tables.TB_WORKLOG_DEPENDENCY;
 
 import com.ibank.axwms.domain.worklog.dto.GetWorklogsApiDto;
 import com.ibank.axwms.domain.worklog.policy.WorklogVisibilityScope;
@@ -13,7 +13,6 @@ import java.util.List;
 import lombok.RequiredArgsConstructor;
 import org.jooq.Condition;
 import org.jooq.DSLContext;
-import org.jooq.Field;
 import org.jooq.impl.DSL;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageImpl;
@@ -96,20 +95,38 @@ public class WorklogJooqRepositoryImpl implements WorklogJooqRepository {
     private Condition toCondition(WorklogVisibilityScope scope) {
         return switch (scope) {
             case WorklogVisibilityScope.All ignored -> DSL.noCondition();
-            case WorklogVisibilityScope.Department department -> TB_WORKLOG.TEAM_ID.in(
-                    DSL.select(TB_TEAM.TEAM_ID)
-                            .from(TB_TEAM)
-                            .where(TB_TEAM.DEPARTMENT_ID.eq(department.departmentId()))
-                            .and(TB_TEAM.DELETED_AT.isNull())
-            );
-            case WorklogVisibilityScope.MyTeams myTeams -> TB_WORKLOG.TEAM_ID.in(
-                    DSL.select(TB_USER_TEAM.TEAM_ID)
-                            .from(TB_USER_TEAM)
-                            .join(TB_TEAM).on(TB_USER_TEAM.TEAM_ID.eq(TB_TEAM.TEAM_ID))
-                            .where(TB_USER_TEAM.USER_ID.eq(myTeams.userId()))
-                            .and(TB_USER_TEAM.STATUS_CODE.eq(ACTIVE_USER_TEAM_STATUS))
-                            .and(TB_TEAM.DELETED_AT.isNull())
-            );
+            case WorklogVisibilityScope.Department department ->
+                    TB_WORKLOG.TEAM_ID.in(
+                            DSL.select(TB_USER_TEAM.TEAM_ID)
+                                    .from(TB_USER_TEAM)
+                                    .join(TB_TEAM).on(TB_USER_TEAM.TEAM_ID.eq(TB_TEAM.TEAM_ID))
+                                    .where(TB_USER_TEAM.USER_ID.eq(department.userId()))
+                                    .and(TB_USER_TEAM.STATUS_CODE.eq(ACTIVE_USER_TEAM_STATUS))
+                                    .and(TB_TEAM.DELETED_AT.isNull())
+                    )
+                    .or(TB_WORKLOG.TEAM_ID.in(
+                            DSL.select(TB_TEAM_ADMIN.TEAM_ID)
+                                    .from(TB_TEAM_ADMIN)
+                                    .join(TB_TEAM).on(TB_TEAM_ADMIN.TEAM_ID.eq(TB_TEAM.TEAM_ID))
+                                    .where(TB_TEAM_ADMIN.USER_ID.eq(department.userId()))
+                                    .and(TB_TEAM.DELETED_AT.isNull())
+                    ));
+            case WorklogVisibilityScope.MyTeams myTeams ->
+                    TB_WORKLOG.TEAM_ID.in(
+                            DSL.select(TB_USER_TEAM.TEAM_ID)
+                                    .from(TB_USER_TEAM)
+                                    .join(TB_TEAM).on(TB_USER_TEAM.TEAM_ID.eq(TB_TEAM.TEAM_ID))
+                                    .where(TB_USER_TEAM.USER_ID.eq(myTeams.userId()))
+                                    .and(TB_USER_TEAM.STATUS_CODE.eq(ACTIVE_USER_TEAM_STATUS))
+                                    .and(TB_TEAM.DELETED_AT.isNull())
+                    )
+                    .or(TB_WORKLOG.TEAM_ID.in(
+                            DSL.select(TB_TEAM_ADMIN.TEAM_ID)
+                                    .from(TB_TEAM_ADMIN)
+                                    .join(TB_TEAM).on(TB_TEAM_ADMIN.TEAM_ID.eq(TB_TEAM.TEAM_ID))
+                                    .where(TB_TEAM_ADMIN.USER_ID.eq(myTeams.userId()))
+                                    .and(TB_TEAM.DELETED_AT.isNull())
+                    ));
         };
     }
 }
