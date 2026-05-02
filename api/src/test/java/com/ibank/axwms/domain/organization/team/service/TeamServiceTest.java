@@ -8,6 +8,7 @@ import static org.mockito.BDDMockito.given;
 import static org.mockito.BDDMockito.then;
 
 import com.ibank.axwms.domain.organization.team.TeamStatus;
+import com.ibank.axwms.domain.organization.team.UserTeamStatus;
 import com.ibank.axwms.domain.organization.team.dto.GetTeamsApiDto;
 import com.ibank.axwms.domain.organization.team.entity.Team;
 import com.ibank.axwms.domain.organization.team.repository.TeamRepository;
@@ -111,14 +112,16 @@ class TeamServiceTest {
     }
 
     @Test
-    @DisplayName("사용자 팀 소속 여부는 repository 결과를 반환한다")
-    void 사용자_팀_소속_여부는_repository_결과를_반환한다() {
-        given(userTeamRepository.existsByUserIdAndTeamId(101L, 21L)).willReturn(true);
+    @DisplayName("사용자 팀 소속 여부는 ACTIVE membership 기준 repository 결과를 반환한다")
+    void 사용자_팀_소속_여부는_ACTIVE_membership_기준_repository_결과를_반환한다() {
+        given(userTeamRepository.existsByUserIdAndTeamIdAndStatusCode(101L, 21L, UserTeamStatus.ACTIVE))
+                .willReturn(true);
 
         boolean result = teamService.isMember(101L, 21L);
 
         assertThat(result).isTrue();
-        then(userTeamRepository).should().existsByUserIdAndTeamId(101L, 21L);
+        then(userTeamRepository).should()
+                .existsByUserIdAndTeamIdAndStatusCode(101L, 21L, UserTeamStatus.ACTIVE);
     }
 
     private CustomUserPrincipal principal() {

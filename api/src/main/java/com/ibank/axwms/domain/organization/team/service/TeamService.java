@@ -1,10 +1,11 @@
 package com.ibank.axwms.domain.organization.team.service;
 
+import com.ibank.axwms.domain.organization.team.UserTeamStatus;
 import com.ibank.axwms.domain.organization.team.dto.GetTeamsApiDto;
 import com.ibank.axwms.domain.organization.team.entity.Team;
 import com.ibank.axwms.domain.organization.team.repository.TeamRepository;
-import com.ibank.axwms.domain.organization.team.repository.jooq.query.TeamPageQuery;
 import com.ibank.axwms.domain.organization.team.repository.UserTeamRepository;
+import com.ibank.axwms.domain.organization.team.repository.jooq.query.TeamPageQuery;
 import com.ibank.axwms.global.error.BusinessException;
 import com.ibank.axwms.global.error.ErrorCode;
 import com.ibank.axwms.global.response.PageResponse;
@@ -46,15 +47,15 @@ public class TeamService {
     }
 
     /**
-     * 사용자가 해당 팀 소속인지 여부를 반환한다.
+     * 사용자가 해당 팀에 ACTIVE membership 으로 소속되어 있는지 여부를 반환한다.
      * 호출측(예: 업무 등록) 이 "대상 팀에 대한 쓰기 권한" 을 Principal 기반으로 판단할 때 사용한다.
      * 소속 미존재 시 던질 도메인 에러 코드는 호출측 유스케이스가 결정한다.
      *
      * @param userId 검증 대상 사용자 ID
      * @param teamId 검증 대상 팀 ID
-     * @return 사용자가 해당 팀에 속해 있으면 true
+     * @return 사용자가 해당 팀에 ACTIVE 상태로 속해 있으면 true
      */
     public boolean isMember(Long userId, Long teamId) {
-        return userTeamRepository.existsByUserIdAndTeamId(userId, teamId);
+        return userTeamRepository.existsByUserIdAndTeamIdAndStatusCode(userId, teamId, UserTeamStatus.ACTIVE);
     }
 }
