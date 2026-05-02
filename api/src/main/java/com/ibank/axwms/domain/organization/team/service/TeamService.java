@@ -2,6 +2,7 @@ package com.ibank.axwms.domain.organization.team.service;
 
 import com.ibank.axwms.domain.organization.team.UserTeamStatus;
 import com.ibank.axwms.domain.organization.team.dto.GetTeamApiDto;
+import com.ibank.axwms.domain.organization.team.dto.GetTeamSummaryApiDto;
 import com.ibank.axwms.domain.organization.team.dto.GetTeamsApiDto;
 import com.ibank.axwms.domain.organization.team.entity.Team;
 import com.ibank.axwms.domain.organization.team.repository.TeamRepository;
@@ -33,6 +34,16 @@ public class TeamService {
     public PageResponse<GetTeamsApiDto.Response> getTeams(CustomUserPrincipal principal, GetTeamsApiDto.Request request) {
         TeamPageQuery query = TeamPageQuery.from(request);
         return GetTeamsApiDto.Response.fromPage(teamRepository.findTeamPage(principal.userId(), query));
+    }
+
+    /**
+     * 로그인 사용자가 볼 수 있는 팀의 ACTIVE/INACTIVE/전체 개수를 조회한다.
+     *
+     * @param principal 현재 로그인 사용자
+     * @return 팀 상태 요약 응답
+     */
+    public GetTeamSummaryApiDto.Response getTeamSummary(CustomUserPrincipal principal) {
+        return GetTeamSummaryApiDto.Response.from(teamRepository.countTeamSummary(principal.userId()));
     }
 
     /**
