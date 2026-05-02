@@ -95,6 +95,7 @@ public class DepartmentJooqRepositoryImpl implements DepartmentJooqRepository {
         return dsl.selectCount()
                 .from(TB_TEAM)
                 .where(TB_TEAM.STATUS_CODE.eq(ACTIVE_TEAM_STATUS))
+                .and(TB_TEAM.DELETED_AT.isNull())
                 .fetchSingle(0, Integer.class)
                 .longValue();
     }
