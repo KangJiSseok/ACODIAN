@@ -1,10 +1,14 @@
 package com.ibank.axwms.domain.organization.team.service;
 
+import com.ibank.axwms.domain.organization.team.dto.GetTeamsApiDto;
 import com.ibank.axwms.domain.organization.team.entity.Team;
 import com.ibank.axwms.domain.organization.team.repository.TeamRepository;
+import com.ibank.axwms.domain.organization.team.repository.jooq.query.TeamPageQuery;
 import com.ibank.axwms.domain.organization.team.repository.UserTeamRepository;
 import com.ibank.axwms.global.error.BusinessException;
 import com.ibank.axwms.global.error.ErrorCode;
+import com.ibank.axwms.global.response.PageResponse;
+import com.ibank.axwms.global.security.CustomUserPrincipal;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -15,6 +19,19 @@ import org.springframework.transaction.annotation.Transactional;
 public class TeamService {
     private final TeamRepository teamRepository;
     private final UserTeamRepository userTeamRepository;
+
+    /**
+     * 로그인 사용자가 볼 수 있는 팀 목록을 페이지로 조회한다.
+     * admin grant 팀과 ACTIVE membership 팀의 DISTINCT 합집합만 반환한다.
+     *
+     * @param principal 현재 로그인 사용자
+     * @param request 페이지/사이즈 요청 DTO. null 이면 기본값을 사용한다.
+     * @return 팀 목록 페이지 응답
+     */
+    public PageResponse<GetTeamsApiDto.Response> getTeams(CustomUserPrincipal principal, GetTeamsApiDto.Request request) {
+        TeamPageQuery query = TeamPageQuery.from(request);
+        return GetTeamsApiDto.Response.fromPage(teamRepository.findTeamPage(principal.userId(), query));
+    }
 
     /**
      * 팀 ID로 팀을 조회하고 없으면 도메인 오류를 던진다.
