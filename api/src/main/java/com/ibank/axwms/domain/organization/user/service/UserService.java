@@ -107,10 +107,10 @@ public class UserService {
             return null;
         }
         return new GetMyProfileApiDto.Response.TeamSummary(
-                Boolean.TRUE.equals(userTeam.getIsPrimary()),
+                userTeam.getIsPrimary(),
                 team.getId(),
                 team.getTeamName(),
-                userTeam.getTeamAuthority(),
+                userTeam.getIsLeader(),
                 userTeam.getTeamRole(),
                 userTeam.getAllocation()
         );

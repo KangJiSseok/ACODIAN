@@ -119,7 +119,7 @@
   - `teamId` ↔ `teamName`
   - `departmentHeadUserId` ↔ `departmentHeadUserName`
   - `leaderUserId` ↔ `leaderUserName`
-- team domain 의 `leaderUserId` / `leaderUserName` 는 `tb_user_team.team_authority = LEADER` membership 에서 계산한 convenience summary 일 수 있다. 이런 경우 원본 필드(`teamAuthority`, `teamRole`, `allocation`, `isPrimary`) 의미를 도메인 문서에서 함께 설명한다.
+- team domain 의 `leaderUserId` / `leaderUserName` 는 `tb_user_team.is_leader = true` membership 에서 계산한 convenience summary 일 수 있다. 이런 경우 원본 필드(`isLeader`, `teamRole`, `allocation`, `isPrimary`) 의미를 도메인 문서에서 함께 설명한다.
 - 대응 이름이 없거나 title/date 처럼 name 축이 아닌 경우에는 억지로 추가하지 않는다.
 
 ## 12. 문서 작성 규칙

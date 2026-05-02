@@ -28,9 +28,6 @@ public class Team {
     @Column(name = "team_id")
     private Long id;
 
-    @Column(name = "department_id", nullable = false)
-    private Long departmentId;
-
     @Column(name = "team_name", nullable = false, length = 100)
     private String teamName;
 
@@ -62,14 +59,12 @@ public class Team {
      * 신규 팀을 생성한다.
      * soft-delete lifecycle 은 deletedAt 으로 별도 관리하므로 생성 시점에는 null 로 둔다.
      */
-    public static Team create(Long departmentId,
-                              String teamName,
+    public static Team create(String teamName,
                               TeamStatus statusCode,
                               String description,
                               LocalDate startDate,
                               LocalDate expectedEndDate) {
         Team team = new Team();
-        team.departmentId = departmentId;
         team.teamName = teamName;
         team.statusCode = statusCode;
         team.description = description;
@@ -80,24 +75,21 @@ public class Team {
     }
 
     /** 로컬 시드 재실행 시 팀의 식별 문맥과 운영 상태를 목표값으로 맞추고 soft-delete 는 해제한다. */
-    public void synchronizeSeedProfile(Long departmentId,
-                                       String teamName,
+    public void synchronizeSeedProfile(String teamName,
                                        TeamStatus statusCode,
                                        String description,
                                        LocalDate startDate,
                                        LocalDate expectedEndDate) {
-        updateProfile(departmentId, teamName, statusCode, description, startDate, expectedEndDate);
+        updateProfile(teamName, statusCode, description, startDate, expectedEndDate);
         this.deletedAt = null;
     }
 
     /** 팀 기본 정보를 최신 요청값으로 갱신한다. */
-    public void updateProfile(Long departmentId,
-                              String teamName,
+    public void updateProfile(String teamName,
                               TeamStatus statusCode,
                               String description,
                               LocalDate startDate,
                               LocalDate expectedEndDate) {
-        this.departmentId = departmentId;
         this.teamName = teamName;
         this.description = description;
         this.startDate = startDate;

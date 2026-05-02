@@ -9,7 +9,6 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import com.ibank.axwms.domain.organization.department.entity.Department;
 import com.ibank.axwms.domain.organization.department.repository.DepartmentRepository;
 import com.ibank.axwms.domain.organization.team.TeamStatus;
-import com.ibank.axwms.domain.organization.team.UserTeamAuthority;
 import com.ibank.axwms.domain.organization.team.UserTeamStatus;
 import com.ibank.axwms.domain.organization.team.entity.Team;
 import com.ibank.axwms.domain.organization.team.entity.UserTeam;
@@ -80,7 +79,6 @@ class UserMeProfileE2eTest extends E2eTestSupport {
         ));
         userRepository.save(user);
         Team primaryTeam = teamRepository.save(Team.create(
-                department.getId(),
                 "E2E플랫폼팀",
                 TeamStatus.ACTIVE,
                 "현재 사용자 조회 E2E 기본 팀",
@@ -88,7 +86,6 @@ class UserMeProfileE2eTest extends E2eTestSupport {
                 null
         ));
         Team secondaryTeam = teamRepository.save(Team.create(
-                department.getId(),
                 "E2ESCM팀",
                 TeamStatus.ACTIVE,
                 "현재 사용자 조회 E2E 추가 팀",
@@ -99,7 +96,7 @@ class UserMeProfileE2eTest extends E2eTestSupport {
         userTeamRepository.save(UserTeam.create(
                 user.getId(),
                 primaryTeam.getId(),
-                UserTeamAuthority.LEADER,
+                true,
                 "플랫폼 총괄",
                 "주담당",
                 true,
@@ -108,7 +105,7 @@ class UserMeProfileE2eTest extends E2eTestSupport {
         userTeamRepository.save(UserTeam.create(
                 user.getId(),
                 secondaryTeam.getId(),
-                UserTeamAuthority.MEMBER,
+                false,
                 "SCM 분석",
                 "겸임",
                 false,
@@ -136,7 +133,7 @@ class UserMeProfileE2eTest extends E2eTestSupport {
                 .andExpect(jsonPath("$.data.teams[0].isPrimary", is(true)))
                 .andExpect(jsonPath("$.data.teams[0].teamName", is("E2E플랫폼팀")))
                 .andExpect(jsonPath("$.data.teams[0].teamLeader").doesNotExist())
-                .andExpect(jsonPath("$.data.teams[0].teamAuthority", is("LEADER")))
+                .andExpect(jsonPath("$.data.teams[0].isLeader", is(true)))
                 .andExpect(jsonPath("$.data.teams[0].teamRole", is("플랫폼 총괄")))
                 .andExpect(jsonPath("$.data.teams[0].allocation", is("주담당")))
                 .andExpect(jsonPath("$.timestamp").exists());

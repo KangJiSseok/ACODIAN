@@ -4,7 +4,6 @@ import com.ibank.axwms.domain.organization.department.DepartmentStatus;
 import com.ibank.axwms.domain.organization.department.entity.Department;
 import com.ibank.axwms.domain.organization.department.repository.DepartmentRepository;
 import com.ibank.axwms.domain.organization.team.TeamStatus;
-import com.ibank.axwms.domain.organization.team.UserTeamAuthority;
 import com.ibank.axwms.domain.organization.team.UserTeamStatus;
 import com.ibank.axwms.domain.organization.team.entity.Team;
 import com.ibank.axwms.domain.organization.team.entity.UserTeam;
@@ -66,15 +65,15 @@ public class LocalSeedRunner implements ApplicationRunner {
             new TeamSeedSpec("솔루션사업부", "운영정산TF", TeamStatus.INACTIVE, "로컬 검증용 솔루션사업부 추가 팀", List.of("영업전략TF"))
     );
     private static final List<UserTeamSeedSpec> USER_TEAM_SEEDS = List.of(
-            new UserTeamSeedSpec("director@ibank.com", "솔루션개발사업부", "플랫폼개발팀", UserTeamAuthority.LEADER, "플랫폼 총괄", "주담당", true, UserTeamStatus.ACTIVE),
-            new UserTeamSeedSpec("director@ibank.com", "솔루션개발사업부", "아키텍처TF", UserTeamAuthority.MEMBER, "아키텍처 자문", "겸임", false, UserTeamStatus.ACTIVE),
-            new UserTeamSeedSpec("dept@ibank.com", "솔루션개발사업부", "플랫폼개발팀", UserTeamAuthority.MEMBER, "플랫폼 운영", "주담당", true, UserTeamStatus.ACTIVE),
-            new UserTeamSeedSpec("dept@ibank.com", "솔루션개발사업부", "아키텍처TF", UserTeamAuthority.LEADER, "아키텍처 리드", "겸임", false, UserTeamStatus.ACTIVE),
-            new UserTeamSeedSpec("dev.member@ibank.com", "솔루션개발사업부", "플랫폼개발팀", UserTeamAuthority.MEMBER, "WMS 개발", "겸임", false, UserTeamStatus.ACTIVE),
-            new UserTeamSeedSpec("lead@ibank.com", "솔루션개발사업부", "플랫폼운영TF", UserTeamAuthority.LEADER, "플랫폼 운영 총괄", "주담당", true, UserTeamStatus.ACTIVE),
-            new UserTeamSeedSpec("ops.head@ibank.com", "솔루션개발사업부", "플랫폼개발팀", UserTeamAuthority.MEMBER, "운영 협업", "겸임", false, UserTeamStatus.ACTIVE),
-            new UserTeamSeedSpec("member@ibank.com", "솔루션사업부", "운영지원팀", UserTeamAuthority.MEMBER, "운영 지원", "주담당", true, UserTeamStatus.ACTIVE),
-            new UserTeamSeedSpec("member@ibank.com", "솔루션사업부", "운영정산TF", UserTeamAuthority.MEMBER, "정산 지원", "겸임", false, UserTeamStatus.ACTIVE)
+            new UserTeamSeedSpec("director@ibank.com", "솔루션개발사업부", "플랫폼개발팀", true, "플랫폼 총괄", "주담당", true, UserTeamStatus.ACTIVE),
+            new UserTeamSeedSpec("director@ibank.com", "솔루션개발사업부", "아키텍처TF", false, "아키텍처 자문", "겸임", false, UserTeamStatus.ACTIVE),
+            new UserTeamSeedSpec("dept@ibank.com", "솔루션개발사업부", "플랫폼개발팀", false, "플랫폼 운영", "주담당", true, UserTeamStatus.ACTIVE),
+            new UserTeamSeedSpec("dept@ibank.com", "솔루션개발사업부", "아키텍처TF", true, "아키텍처 리드", "겸임", false, UserTeamStatus.ACTIVE),
+            new UserTeamSeedSpec("dev.member@ibank.com", "솔루션개발사업부", "플랫폼개발팀", false, "WMS 개발", "겸임", false, UserTeamStatus.ACTIVE),
+            new UserTeamSeedSpec("lead@ibank.com", "솔루션개발사업부", "플랫폼운영TF", true, "플랫폼 운영 총괄", "주담당", true, UserTeamStatus.ACTIVE),
+            new UserTeamSeedSpec("ops.head@ibank.com", "솔루션개발사업부", "플랫폼개발팀", false, "운영 협업", "겸임", false, UserTeamStatus.ACTIVE),
+            new UserTeamSeedSpec("member@ibank.com", "솔루션사업부", "운영지원팀", false, "운영 지원", "주담당", true, UserTeamStatus.ACTIVE),
+            new UserTeamSeedSpec("member@ibank.com", "솔루션사업부", "운영정산TF", false, "정산 지원", "겸임", false, UserTeamStatus.ACTIVE)
     );
     private final DepartmentRepository departmentRepository;
     private final TeamRepository teamRepository;
@@ -92,7 +91,7 @@ public class LocalSeedRunner implements ApplicationRunner {
         Map<String, Long> departmentIdsByName = seedDepartmentShells(DEPARTMENT_SEEDS);
         Map<String, Long> userIdsByEmail = seedUsers(USER_SEEDS, departmentIdsByName);
         synchronizeDepartments(DEPARTMENT_SEEDS, departmentIdsByName, userIdsByEmail);
-        Map<String, Long> teamIdsByKey = seedTeams(TEAM_SEEDS, departmentIdsByName);
+        Map<String, Long> teamIdsByKey = seedTeams(TEAM_SEEDS);
         seedUserTeams(USER_TEAM_SEEDS, userIdsByEmail, teamIdsByKey);
     }
 
@@ -198,45 +197,42 @@ public class LocalSeedRunner implements ApplicationRunner {
     /**
      * 팀 시드 목록을 순회하며 ACTIVE/INACTIVE 상태와 legacy 이름 치환을 함께 보장한다.
      */
-    private Map<String, Long> seedTeams(List<TeamSeedSpec> specs, Map<String, Long> departmentIdsByName) {
+    private Map<String, Long> seedTeams(List<TeamSeedSpec> specs) {
         Map<String, Long> teamIdsByKey = new LinkedHashMap<>();
         for (TeamSeedSpec spec : specs) {
-            Long departmentId = departmentIdsByName.get(spec.departmentName());
-            teamIdsByKey.put(teamKey(spec.departmentName(), spec.teamName()), ensureTeam(spec, departmentId));
+            teamIdsByKey.put(teamKey(spec.departmentName(), spec.teamName()), ensureTeam(spec));
         }
         return teamIdsByKey;
     }
 
     /**
-     * 부서 안의 로컬 검증용 팀이 없으면 생성하고, 있으면 이름/상태/설명을 목표값으로 보정한다.
+     * 로컬 검증용 팀이 없으면 생성하고, 있으면 이름/상태/설명을 목표값으로 보정한다.
      * legacy 팀명이 남아 있으면 같은 row 를 재사용해 현재 스펙 이름으로 수렴시킨다.
      */
-    private Long ensureTeam(TeamSeedSpec spec, Long departmentId) {
-        return findTeamByNames(departmentId, spec.teamName(), spec.legacyTeamNames())
+    private Long ensureTeam(TeamSeedSpec spec) {
+        return findTeamByNames(spec.teamName(), spec.legacyTeamNames())
                 .map(team -> {
                     team.synchronizeSeedProfile(
-                            departmentId,
                             spec.teamName(),
                             spec.statusCode(),
                             spec.description(),
                             DEFAULT_JOIN_DATE,
                             null
                     );
-                    log.info("[LocalSeed] 팀 보정 - departmentId={} teamName={} status={}",
-                            departmentId, spec.teamName(), spec.statusCode());
+                    log.info("[LocalSeed] 팀 보정 - teamName={} status={}",
+                            spec.teamName(), spec.statusCode());
                     return team.getId();
                 })
                 .orElseGet(() -> {
                     Team saved = teamRepository.save(Team.create(
-                            departmentId,
                             spec.teamName(),
                             spec.statusCode(),
                             spec.description(),
                             DEFAULT_JOIN_DATE,
                             null
                     ));
-                    log.info("[LocalSeed] 팀 생성 - departmentId={} teamName={} teamId={} status={}",
-                            departmentId, spec.teamName(), saved.getId(), spec.statusCode());
+                    log.info("[LocalSeed] 팀 생성 - teamName={} teamId={} status={}",
+                            spec.teamName(), saved.getId(), spec.statusCode());
                     return saved.getId();
                 });
     }
@@ -251,7 +247,7 @@ public class LocalSeedRunner implements ApplicationRunner {
             ensureUserTeam(
                     userIdsByEmail.get(spec.userEmail()),
                     teamIdsByKey.get(teamKey(spec.departmentName(), spec.teamName())),
-                    spec.teamAuthority(),
+                    spec.isLeader(),
                     spec.teamRole(),
                     spec.allocation(),
                     spec.isPrimary(),
@@ -266,20 +262,20 @@ public class LocalSeedRunner implements ApplicationRunner {
      */
     private void ensureUserTeam(Long userId,
                                 Long teamId,
-                                UserTeamAuthority teamAuthority,
+                                boolean isLeader,
                                 String teamRole,
                                 String allocation,
                                 boolean isPrimary,
                                 UserTeamStatus statusCode) {
         userTeamRepository.findByUserIdAndTeamId(userId, teamId)
                 .ifPresentOrElse(userTeam -> {
-                    userTeam.synchronizeSeedProfile(teamAuthority, teamRole, allocation, isPrimary, statusCode);
-                    log.info("[LocalSeed] 사용자-팀 관계 보정 - userId={} teamId={} authority={} role={} allocation={} primary={} status={}",
-                            userId, teamId, teamAuthority, teamRole, allocation, isPrimary, statusCode);
+                    userTeam.synchronizeSeedProfile(isLeader, teamRole, allocation, isPrimary, statusCode);
+                    log.info("[LocalSeed] 사용자-팀 관계 보정 - userId={} teamId={} leader={} role={} allocation={} primary={} status={}",
+                            userId, teamId, isLeader, teamRole, allocation, isPrimary, statusCode);
                 }, () -> {
-                    userTeamRepository.save(UserTeam.create(userId, teamId, teamAuthority, teamRole, allocation, isPrimary, statusCode));
-                    log.info("[LocalSeed] 사용자-팀 관계 생성 - userId={} teamId={} authority={} role={} allocation={} primary={} status={}",
-                            userId, teamId, teamAuthority, teamRole, allocation, isPrimary, statusCode);
+                    userTeamRepository.save(UserTeam.create(userId, teamId, isLeader, teamRole, allocation, isPrimary, statusCode));
+                    log.info("[LocalSeed] 사용자-팀 관계 생성 - userId={} teamId={} leader={} role={} allocation={} primary={} status={}",
+                            userId, teamId, isLeader, teamRole, allocation, isPrimary, statusCode);
                 });
     }
 
@@ -287,13 +283,13 @@ public class LocalSeedRunner implements ApplicationRunner {
      * 현재 스펙 이름을 우선하고, 없으면 legacy 이름 순서로 이미 존재하는 팀 row 를 찾는다.
      * soft-delete 된 팀도 복구 후보에 포함해 로컬 시드 재실행이 멱등하게 유지되도록 한다.
      */
-    private java.util.Optional<Team> findTeamByNames(Long departmentId, String currentName, List<String> legacyNames) {
-        java.util.Optional<Team> current = teamRepository.findFirstByDepartmentIdAndTeamNameOrderByDeletedAtDesc(departmentId, currentName);
+    private java.util.Optional<Team> findTeamByNames(String currentName, List<String> legacyNames) {
+        java.util.Optional<Team> current = teamRepository.findFirstByTeamNameOrderByDeletedAtDesc(currentName);
         if (current.isPresent()) {
             return current;
         }
         for (String legacyName : legacyNames) {
-            java.util.Optional<Team> legacy = teamRepository.findFirstByDepartmentIdAndTeamNameOrderByDeletedAtDesc(departmentId, legacyName);
+            java.util.Optional<Team> legacy = teamRepository.findFirstByTeamNameOrderByDeletedAtDesc(legacyName);
             if (legacy.isPresent()) {
                 return legacy;
             }
@@ -331,7 +327,7 @@ public class LocalSeedRunner implements ApplicationRunner {
     private record UserTeamSeedSpec(String userEmail,
                                     String departmentName,
                                     String teamName,
-                                    UserTeamAuthority teamAuthority,
+                                    boolean isLeader,
                                     String teamRole,
                                     String allocation,
                                     boolean isPrimary,

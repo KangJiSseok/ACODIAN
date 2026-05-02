@@ -11,8 +11,8 @@ public sealed interface WorklogVisibilityScope {
     record All() implements WorklogVisibilityScope {
     }
 
-    /** 지정한 부서 산하 ACTIVE 팀의 업무만 조회한다. DEPT_HEAD 에게 부여한다. */
-    record Department(Long departmentId) implements WorklogVisibilityScope {
+    /** DEPT_HEAD 의 부서 문맥과 사용자 기준 팀 접근 범위를 함께 표현한다. */
+    record Department(Long departmentId, Long userId) implements WorklogVisibilityScope {
     }
 
     /** 지정한 사용자가 ACTIVE 멤버인 팀들의 업무만 조회한다. TEAM_LEAD 에게 부여한다. */

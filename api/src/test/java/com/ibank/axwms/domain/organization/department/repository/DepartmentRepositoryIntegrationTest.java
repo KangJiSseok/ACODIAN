@@ -3,7 +3,6 @@ package com.ibank.axwms.domain.organization.department.repository;
 import static org.assertj.core.api.Assertions.assertThat;
 
 import com.ibank.axwms.domain.organization.department.DepartmentStatus;
-import com.ibank.axwms.domain.organization.team.UserTeamAuthority;
 import com.ibank.axwms.domain.organization.team.UserTeamStatus;
 import com.ibank.axwms.domain.organization.department.entity.Department;
 import com.ibank.axwms.domain.organization.department.repository.jooq.projection.DepartmentListItemProjection;
@@ -47,12 +46,12 @@ class DepartmentRepositoryIntegrationTest extends IntegrationTestSupport {
     }
 
     @Test
-    @DisplayName("활성 부서 집계를 조회하면 활성 부서와 팀과 사용자 수만 계산한다")
-    void 활성_부서_집계를_조회하면_활성_부서와_팀과_사용자_수만_계산한다() {
+    @DisplayName("부서 목록 집계를 조회하면 활성 부서와 활성 팀과 활성 사용자를 계산한다")
+    void 부서_목록_집계를_조회하면_활성_부서와_활성_팀과_활성_사용자를_계산한다() {
         DepartmentOverviewProjection overview = departmentRepository.getActiveDepartmentOverview();
 
         assertThat(overview.activeDepartmentCount()).isEqualTo(2);
-        assertThat(overview.activeTeamCount()).isEqualTo(2);
+        assertThat(overview.activeTeamCount()).isEqualTo(3);
         assertThat(overview.activeUserCount()).isEqualTo(2);
     }
 
@@ -146,12 +145,9 @@ class DepartmentRepositoryIntegrationTest extends IntegrationTestSupport {
                 UserRole.MEMBER
         ));
 
-        userTeamRepository.save(UserTeam.create(activeMemberOne.getId(), logisticsActiveTeam.getId(), UserTeamAuthority.MEMBER, "담당", "주담당", true, UserTeamStatus.ACTIVE));
-        userTeamRepository.save(UserTeam.create(activeMemberOne.getId(), emptyHeadActiveTeam.getId(), UserTeamAuthority.MEMBER, "협업", "겸임", false, UserTeamStatus.ACTIVE));
-        userTeamRepository.save(UserTeam.create(activeMemberTwo.getId(), emptyHeadActiveTeam.getId(), UserTeamAuthority.LEADER, "리드", "주담당", true, UserTeamStatus.ACTIVE));
-        userTeamRepository.save(UserTeam.create(leaveMember.getId(), logisticsActiveTeam.getId(), UserTeamAuthority.MEMBER, "담당", "주담당", true, UserTeamStatus.ACTIVE));
-        userTeamRepository.save(UserTeam.create(inactiveTeamOnlyMember.getId(), logisticsInactiveTeam.getId(), UserTeamAuthority.MEMBER, "담당", "주담당", true, UserTeamStatus.ACTIVE));
-        userTeamRepository.save(UserTeam.create(inactiveDepartmentTeamMember.getId(), inactiveDepartmentActiveTeam.getId(), UserTeamAuthority.MEMBER, "담당", "주담당", true, UserTeamStatus.ACTIVE));
+        userTeamRepository.save(UserTeam.create(activeMemberOne.getId(), logisticsActiveTeam.getId(), false, "담당", "주담당", true, UserTeamStatus.ACTIVE));
+        userTeamRepository.save(UserTeam.create(activeMemberTwo.getId(), emptyHeadActiveTeam.getId(), true, "리드", "주담당", true, UserTeamStatus.ACTIVE));
+        userTeamRepository.save(UserTeam.create(inactiveTeamOnlyMember.getId(), logisticsInactiveTeam.getId(), false, "담당", "주담당", true, UserTeamStatus.ACTIVE));
     }
 
     /** 테스트용 부서를 상태까지 포함해 생성한다. */
@@ -167,7 +163,6 @@ class DepartmentRepositoryIntegrationTest extends IntegrationTestSupport {
     /** 테스트용 팀 엔티티를 부서와 상태 기준으로 생성한다. */
     private Team createTeam(Long departmentId, String teamName, TeamStatus status) {
         return Team.create(
-                departmentId,
                 teamName,
                 status,
                 teamName + " 설명",

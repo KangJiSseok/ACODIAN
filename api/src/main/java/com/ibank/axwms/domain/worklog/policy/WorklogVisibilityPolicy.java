@@ -32,7 +32,8 @@ public class WorklogVisibilityPolicy {
         return switch (role) {
             case DIRECTOR -> new WorklogVisibilityScope.All();
             case DEPT_HEAD -> new WorklogVisibilityScope.Department(
-                    userService.getDepartmentIdOrThrow(principal.userId()));
+                    userService.getDepartmentIdOrThrow(principal.userId()),
+                    principal.userId());
             case TEAM_LEAD, MEMBER -> new WorklogVisibilityScope.MyTeams(principal.userId());
         };
     }

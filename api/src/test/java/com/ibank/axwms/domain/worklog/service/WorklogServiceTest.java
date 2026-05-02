@@ -250,7 +250,6 @@ class WorklogServiceTest {
 
     private Team sampleTeam() {
         Team team = Team.create(
-                DEPARTMENT_ID,
                 "물류혁신TF",
                 TeamStatus.ACTIVE,
                 "테스트 팀",

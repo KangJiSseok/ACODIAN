@@ -8,8 +8,6 @@ import com.ibank.axwms.domain.organization.department.entity.Department;
 import com.ibank.axwms.domain.organization.department.repository.DepartmentRepository;
 import com.ibank.axwms.domain.organization.department.repository.jooq.projection.DepartmentListItemProjection;
 import com.ibank.axwms.domain.organization.department.repository.jooq.projection.DepartmentOverviewProjection;
-import com.ibank.axwms.domain.organization.team.TeamStatus;
-import com.ibank.axwms.domain.organization.team.repository.TeamRepository;
 import com.ibank.axwms.domain.organization.user.UserRole;
 import com.ibank.axwms.domain.organization.user.entity.User;
 import com.ibank.axwms.domain.organization.user.repository.UserRepository;
@@ -26,7 +24,6 @@ import org.springframework.transaction.annotation.Transactional;
 public class DepartmentService {
 
     private final DepartmentRepository departmentRepository;
-    private final TeamRepository teamRepository;
     private final UserRepository userRepository;
 
     /**
@@ -67,10 +64,6 @@ public class DepartmentService {
 
         if (department.getStatusCode() == DepartmentStatus.INACTIVE) {
             return;
-        }
-
-        if (teamRepository.existsByDepartmentIdAndStatusCode(departmentId, TeamStatus.ACTIVE)) {
-            throw new BusinessException(ErrorCode.DEPARTMENT_HAS_ACTIVE_TEAMS);
         }
 
         department.changeStatus(DepartmentStatus.INACTIVE);

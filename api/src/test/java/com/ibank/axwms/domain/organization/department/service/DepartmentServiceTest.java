@@ -15,8 +15,6 @@ import com.ibank.axwms.domain.organization.department.entity.Department;
 import com.ibank.axwms.domain.organization.department.repository.DepartmentRepository;
 import com.ibank.axwms.domain.organization.department.repository.jooq.projection.DepartmentListItemProjection;
 import com.ibank.axwms.domain.organization.department.repository.jooq.projection.DepartmentOverviewProjection;
-import com.ibank.axwms.domain.organization.team.TeamStatus;
-import com.ibank.axwms.domain.organization.team.repository.TeamRepository;
 import com.ibank.axwms.domain.organization.user.EmploymentStatus;
 import com.ibank.axwms.domain.organization.user.UserRole;
 import com.ibank.axwms.domain.organization.user.entity.User;
@@ -40,9 +38,6 @@ class DepartmentServiceTest {
 
     @Mock
     private DepartmentRepository departmentRepository;
-
-    @Mock
-    private TeamRepository teamRepository;
 
     @Mock
     private UserRepository userRepository;
@@ -255,24 +250,20 @@ class DepartmentServiceTest {
     void 활성_팀이_없으면_부서를_inactive로_변경한다() {
         Department department = Department.create("운영지원본부", "설명");
         given(departmentRepository.findById(10L)).willReturn(java.util.Optional.of(department));
-        given(teamRepository.existsByDepartmentIdAndStatusCode(10L, TeamStatus.ACTIVE)).willReturn(false);
-
         departmentService.deleteDepartment(10L);
 
         assertThat(department.getStatusCode()).isEqualTo(DepartmentStatus.INACTIVE);
     }
 
     @Test
-    @DisplayName("활성 팀이 남아 있으면 DEPARTMENT_HAS_ACTIVE_TEAMS 예외를 던진다")
-    void 활성_팀이_남아_있으면_department_has_active_teams_예외를_던진다() {
+    @DisplayName("팀은 부서에 직접 귀속되지 않으므로 부서 삭제를 차단하지 않는다")
+    void 팀은_부서에_직접_귀속되지_않으므로_부서_삭제를_차단하지_않는다() {
         Department department = Department.create("개발본부", "설명");
         given(departmentRepository.findById(10L)).willReturn(java.util.Optional.of(department));
-        given(teamRepository.existsByDepartmentIdAndStatusCode(10L, TeamStatus.ACTIVE)).willReturn(true);
 
-        assertThatThrownBy(() -> departmentService.deleteDepartment(10L))
-                .isInstanceOf(BusinessException.class)
-                .extracting(ex -> ((BusinessException) ex).getErrorCode())
-                .isEqualTo(ErrorCode.DEPARTMENT_HAS_ACTIVE_TEAMS);
+        departmentService.deleteDepartment(10L);
+
+        assertThat(department.getStatusCode()).isEqualTo(DepartmentStatus.INACTIVE);
     }
 
     @Test
