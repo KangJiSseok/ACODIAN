@@ -5,6 +5,7 @@ import static org.mockito.BDDMockito.given;
 import static org.mockito.BDDMockito.then;
 
 import com.ibank.axwms.domain.organization.team.dto.GetTeamApiDto;
+import com.ibank.axwms.domain.organization.team.dto.GetTeamSummaryApiDto;
 import com.ibank.axwms.domain.organization.team.dto.GetTeamsApiDto;
 import com.ibank.axwms.domain.organization.team.service.TeamService;
 import com.ibank.axwms.global.security.CustomUserPrincipal;
@@ -79,6 +80,32 @@ class TeamControllerTest {
         assertThat(getMapping.value()).isEmpty();
         assertThat(preAuthorize).isNotNull();
         assertThat(preAuthorize.value()).isEqualTo("hasAnyRole('DIRECTOR','DEPT_HEAD','TEAM_LEAD','MEMBER')");
+    }
+
+    @Test
+    @DisplayName("팀 상태 요약 조회 메서드는 summary GET 매핑과 공통 역할 권한을 사용한다")
+    void 팀_상태_요약_조회_메서드는_summary_get_매핑과_공통_역할_권한을_사용한다() throws NoSuchMethodException {
+        Method method = TeamController.class.getMethod("getTeamSummary", CustomUserPrincipal.class);
+        GetMapping getMapping = method.getAnnotation(GetMapping.class);
+        PreAuthorize preAuthorize = method.getAnnotation(PreAuthorize.class);
+
+        assertThat(getMapping).isNotNull();
+        assertThat(getMapping.value()).containsExactly("/summary");
+        assertThat(preAuthorize).isNotNull();
+        assertThat(preAuthorize.value()).isEqualTo("hasAnyRole('DIRECTOR','DEPT_HEAD','TEAM_LEAD','MEMBER')");
+    }
+
+    @Test
+    @DisplayName("팀 상태 요약 조회 메서드는 서비스 결과를 그대로 반환한다")
+    void 팀_상태_요약_조회_메서드는_서비스_결과를_그대로_반환한다() {
+        CustomUserPrincipal principal = principal();
+        GetTeamSummaryApiDto.Response serviceResponse = new GetTeamSummaryApiDto.Response(3L, 1L, 4L);
+        given(teamService.getTeamSummary(principal)).willReturn(serviceResponse);
+
+        GetTeamSummaryApiDto.Response response = teamController.getTeamSummary(principal);
+
+        then(teamService).should().getTeamSummary(principal);
+        assertThat(response).isSameAs(serviceResponse);
     }
 
     private CustomUserPrincipal principal() {
