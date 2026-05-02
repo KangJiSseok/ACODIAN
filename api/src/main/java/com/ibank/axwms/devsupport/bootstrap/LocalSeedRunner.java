@@ -6,7 +6,9 @@ import com.ibank.axwms.domain.organization.department.repository.DepartmentRepos
 import com.ibank.axwms.domain.organization.team.TeamStatus;
 import com.ibank.axwms.domain.organization.team.UserTeamStatus;
 import com.ibank.axwms.domain.organization.team.entity.Team;
+import com.ibank.axwms.domain.organization.team.entity.TeamAdmin;
 import com.ibank.axwms.domain.organization.team.entity.UserTeam;
+import com.ibank.axwms.domain.organization.team.repository.TeamAdminRepository;
 import com.ibank.axwms.domain.organization.team.repository.TeamRepository;
 import com.ibank.axwms.domain.organization.team.repository.UserTeamRepository;
 import com.ibank.axwms.domain.organization.user.EmploymentStatus;
@@ -75,8 +77,14 @@ public class LocalSeedRunner implements ApplicationRunner {
             new UserTeamSeedSpec("member@ibank.com", "솔루션사업부", "운영지원팀", false, "운영 지원", "주담당", true, UserTeamStatus.ACTIVE),
             new UserTeamSeedSpec("member@ibank.com", "솔루션사업부", "운영정산TF", false, "정산 지원", "겸임", false, UserTeamStatus.ACTIVE)
     );
+    private static final List<TeamAdminSeedSpec> TEAM_ADMIN_SEEDS = List.of(
+            new TeamAdminSeedSpec("director@ibank.com", "솔루션개발사업부", "플랫폼개발팀"),
+            new TeamAdminSeedSpec("dept@ibank.com", "솔루션개발사업부", "아키텍처TF"),
+            new TeamAdminSeedSpec("candidate.head@ibank.com", "솔루션개발사업부", "플랫폼운영TF")
+    );
     private final DepartmentRepository departmentRepository;
     private final TeamRepository teamRepository;
+    private final TeamAdminRepository teamAdminRepository;
     private final UserTeamRepository userTeamRepository;
     private final UserRepository userRepository;
     private final PasswordEncoder passwordEncoder;
@@ -93,6 +101,8 @@ public class LocalSeedRunner implements ApplicationRunner {
         synchronizeDepartments(DEPARTMENT_SEEDS, departmentIdsByName, userIdsByEmail);
         Map<String, Long> teamIdsByKey = seedTeams(TEAM_SEEDS);
         seedUserTeams(USER_TEAM_SEEDS, userIdsByEmail, teamIdsByKey);
+        seedTeamAdmins(TEAM_ADMIN_SEEDS, userIdsByEmail, teamIdsByKey);
+        seedDirectorTeamAdmins(userIdsByEmail, teamIdsByKey);
     }
 
     /**
@@ -280,6 +290,40 @@ public class LocalSeedRunner implements ApplicationRunner {
     }
 
     /**
+     * 팀 관리 권한 grant 시드 목록을 순회하며 멱등하게 보장한다.
+     */
+    private void seedTeamAdmins(List<TeamAdminSeedSpec> specs,
+                                Map<String, Long> userIdsByEmail,
+                                Map<String, Long> teamIdsByKey) {
+        for (TeamAdminSeedSpec spec : specs) {
+            Long userId = userIdsByEmail.get(spec.userEmail());
+            Long teamId = teamIdsByKey.get(teamKey(spec.departmentName(), spec.teamName()));
+            if (!teamAdminRepository.existsByUserIdAndTeamId(userId, teamId)) {
+                teamAdminRepository.save(TeamAdmin.grant(userId, teamId));
+                log.info("[LocalSeed] 팀 관리자 권한 생성 - userId={} teamId={}", userId, teamId);
+            }
+        }
+    }
+
+    /**
+     * DIRECTOR 역할을 가진 사용자는 모든 팀의 관리자여야 하므로 전 팀에 grant 를 멱등 삽입한다.
+     */
+    private void seedDirectorTeamAdmins(Map<String, Long> userIdsByEmail,
+                                        Map<String, Long> teamIdsByKey) {
+        USER_SEEDS.stream()
+                .filter(spec -> spec.role() == UserRole.DIRECTOR)
+                .forEach(spec -> {
+                    Long userId = userIdsByEmail.get(spec.email());
+                    teamIdsByKey.values().forEach(teamId -> {
+                        if (!teamAdminRepository.existsByUserIdAndTeamId(userId, teamId)) {
+                            teamAdminRepository.save(TeamAdmin.grant(userId, teamId));
+                            log.info("[LocalSeed] 디렉터 팀 관리자 권한 생성 - userId={} teamId={}", userId, teamId);
+                        }
+                    });
+                });
+    }
+
+    /**
      * 현재 스펙 이름을 우선하고, 없으면 legacy 이름 순서로 이미 존재하는 팀 row 를 찾는다.
      * soft-delete 된 팀도 복구 후보에 포함해 로컬 시드 재실행이 멱등하게 유지되도록 한다.
      */
@@ -332,6 +376,11 @@ public class LocalSeedRunner implements ApplicationRunner {
                                     String allocation,
                                     boolean isPrimary,
                                     UserTeamStatus statusCode) {
+    }
+
+    private record TeamAdminSeedSpec(String userEmail,
+                                     String departmentName,
+                                     String teamName) {
     }
 
 }

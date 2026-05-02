@@ -18,6 +18,7 @@ import com.ibank.axwms.domain.organization.user.entity.User;
 import com.ibank.axwms.domain.organization.user.repository.UserRepository;
 import com.ibank.axwms.testsupport.IntegrationTestSupport;
 import java.time.LocalDate;
+import java.time.LocalDateTime;
 import java.util.List;
 import org.assertj.core.groups.Tuple;
 import org.junit.jupiter.api.BeforeEach;
@@ -108,6 +109,9 @@ class DepartmentRepositoryIntegrationTest extends IntegrationTestSupport {
         Team emptyHeadActiveTeam = teamRepository.save(createTeam(emptyHeadDepartment.getId(), "운영지원TF", TeamStatus.ACTIVE));
         Team logisticsInactiveTeam = teamRepository.save(createTeam(logisticsDepartment.getId(), "휴면팀", TeamStatus.INACTIVE));
         Team inactiveDepartmentActiveTeam = teamRepository.save(createTeam(inactiveDepartment.getId(), "휴면본부활성팀", TeamStatus.ACTIVE));
+        Team softDeletedActiveTeam = createTeam(logisticsDepartment.getId(), "삭제된활성팀", TeamStatus.ACTIVE);
+        softDeletedActiveTeam.markDeleted(LocalDateTime.of(2026, 5, 1, 0, 0));
+        teamRepository.save(softDeletedActiveTeam);
 
         User activeMemberOne = userRepository.save(createUser(
                 logisticsDepartment.getId(),

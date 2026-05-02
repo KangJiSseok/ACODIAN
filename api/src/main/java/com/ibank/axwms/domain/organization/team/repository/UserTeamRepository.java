@@ -13,10 +13,10 @@ public interface UserTeamRepository extends JpaRepository<UserTeam, Long>, UserT
     List<UserTeam> findAllByUserIdAndStatusCodeOrderByIsPrimaryDesc(Long userId, UserTeamStatus statusCode);
 
     /**
-     * 해당 사용자가 주어진 팀 소속인지 여부를 반환한다.
-     * 탈퇴/이동으로 매핑이 제거되면 false 를 반환한다.
+     * 해당 사용자가 주어진 상태의 팀 소속인지 여부를 반환한다.
+     * 업무 작성 같은 리소스 접근 판단은 ACTIVE membership 만 인정한다.
      */
-    boolean existsByUserIdAndTeamId(Long userId, Long teamId);
+    boolean existsByUserIdAndTeamIdAndStatusCode(Long userId, Long teamId, UserTeamStatus statusCode);
 
     /** 로컬 시드가 기존 사용자-팀 관계를 찾아 멱등 보정할 때 사용한다. */
     Optional<UserTeam> findByUserIdAndTeamId(Long userId, Long teamId);

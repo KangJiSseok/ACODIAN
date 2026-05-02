@@ -433,8 +433,9 @@
     `tb_user_team` 은 실제 업무 소속(`LEADER`, `MEMBER`) 중심으로 해석하고, 팀 관리 권한은 `TeamAdmin` entity-side 모델이 표현하는 별도 grant 로 모델링한다.
     동일 사용자는 같은 팀에 대해 `tb_team_admin` grant 와 `tb_user_team` membership 을 동시에 가질 수 있다.
     팀 사용자 목록은 업무 소속 membership 을 기준으로 반환하며, 관리 grant 만 가진 ADMIN-only 사용자는 제외한다.
-    이번 단계는 문서와 entity-side groundwork 를 먼저 고정하며, Flyway migration, JPA managed entity 활성화, Controller/Service/Repository/DTO/JOOQ 실제 동작 구현은 별도 후속 작업으로 진행한다.
+    현재 구현 범위는 `tb_team_admin` Flyway migration, `TeamAdmin` managed entity/repository, 로컬 시드 grant 보정, `GET /teams` 의 admin grant + ACTIVE membership DISTINCT visible scope 조회까지 포함한다.
+    grant 부여/회수 전용 API, 팀 상세/사용자/업무일지/생성·수정·상태변경·bulk·삭제 endpoint 의 실제 동작 구현은 별도 후속 작업으로 진행한다.
   consequence: |
     기존 `tb_user_team` unique 제약과 leader 단일성 규칙을 유지하면서 관리 권한을 독립적으로 확장할 수 있다.
-    후속 구현에서는 `tb_team_admin` 스키마 migration, 생성 시 grant 부여, visible scope 합집합, mutation 권한 gate, ADMIN-only 사용자 목록 제외 쿼리를 추가해야 한다.
-    migration 이 반영되기 전까지는 `TeamAdmin` 을 JPA managed entity 로 활성화하거나 런타임 persistence 경로에서 사용하지 않는다.
+    이미 반영된 `GET /teams` read path 는 admin grant 팀과 ACTIVE membership 팀의 합집합을 기준으로 visible scope 를 계산한다.
+    후속 구현에서는 생성 시 grant 부여, grant 회수/관리 흐름, mutation 권한 gate, ADMIN-only 사용자 목록 제외 쿼리를 각 endpoint 범위에 맞게 추가해야 한다.

@@ -53,7 +53,8 @@
 - `DIRECTOR` 는 시스템에 1명만 존재한다.
 - `DIRECTOR` 가 생성한 팀은 생성자 본인에게 admin grant 를 부여한다.
 - `DEPT_HEAD` 가 생성한 팀은 단일 `DIRECTOR` 와 생성자 본인에게 admin grant 를 부여한다.
-- 본 문서에서 권한 정책은 확정하되, 실제 Flyway migration, JPA managed entity 활성화, Controller/Service/Repository/JOOQ 구현은 후속 작업으로 분리한다.
+- `tb_team_admin` Flyway migration, `TeamAdmin` managed entity/repository, 로컬 시드 grant 보정, `GET /api/teams` read path 는 현재 구현 범위에 포함한다.
+- grant 부여/회수 전용 API와 `GET /api/teams` 외 Team endpoint 의 실제 동작 구현은 후속 작업으로 분리한다.
 
 ### 4.4 공통 visible scope
 - 모든 GET endpoint 의 visible scope 는 다음 두 집합의 DISTINCT 합집합이다.
@@ -98,7 +99,7 @@
 - 고정 정렬 정책
   1. `statusCode = ACTIVE` 팀 우선
   2. 호출자의 `myIsLeader = true` 인 팀 우선
-  3. 호출자의 `allocation` 이 주 담당인 팀 우선 (`PRIMARY`, `MAIN`, `LEAD` 등 실제 enum/string 은 구현 SSOT 를 따른다.)
+  3. 호출자의 `allocation` 이 `주담당` 인 팀 우선 (`allocation` 저장/응답 vocabulary 는 `주담당`, `겸임` 두 값만 사용한다.)
   4. 호출자의 `isPrimary = true` 인 팀 우선
 - 응답 (`data` 기준)
   - `PageResponse<TeamSummary>`
@@ -135,7 +136,7 @@
         "memberCount": 6,
         "myIsLeader": true,
         "teamRole": "플랫폼 총괄",
-        "allocation": "PRIMARY",
+        "allocation": "주담당",
         "isPrimary": true,
         "startDate": "2026-04-01",
         "expectedEndDate": "2026-12-31"
@@ -315,7 +316,7 @@
         "positionName": "과장",
         "email": "hong@axwms.com",
         "teamRole": "플랫폼 총괄",
-        "allocation": "PRIMARY"
+        "allocation": "주담당"
       }
     ],
     "page": 1,
@@ -445,7 +446,7 @@
     "leaderUserId": 101,
     "leaderMembership": {
       "teamRole": "플랫폼 총괄",
-      "allocation": "PRIMARY",
+      "allocation": "주담당",
       "isPrimary": true
     },
     "statusCode": "ACTIVE",
@@ -504,7 +505,7 @@
     "leaderUserId": 101,
     "leaderMembership": {
       "teamRole": "플랫폼 총괄",
-      "allocation": "PRIMARY",
+      "allocation": "주담당",
       "isPrimary": true
     },
     "statusCode": "ACTIVE",
@@ -613,7 +614,7 @@
         "userId": 102,
         "isLeader": false,
         "teamRole": "WMS 운영",
-        "allocation": "SECONDARY",
+        "allocation": "겸임",
         "isPrimary": false,
         "joinedAt": "2026-04-10"
       },
@@ -621,7 +622,7 @@
         "userId": 103,
         "isLeader": true,
         "teamRole": "현장 총괄",
-        "allocation": "PRIMARY",
+        "allocation": "주담당",
         "isPrimary": true,
         "joinedAt": "2026-04-10"
       }
@@ -724,7 +725,8 @@
 - `DELETE /api/teams/{id}` 가 membership 잔존과 무관하게 soft-delete 가능함을 명시하는가.
 
 ## 8. 후속 범위 / 비수정 감사
-- 실제 구현, Flyway migration, JPA/JOOQ/Repository/Service/Controller 변경, test code 변경은 후속 작업으로 분리한다.
+- 현재 구현 범위에는 `tb_team_admin` Flyway migration, `TeamAdmin` managed entity/repository, 로컬 시드 grant 보정, `GET /api/teams` Controller/Service/Repository/JOOQ/DTO/test code 변경이 포함된다.
+- `GET /api/teams` 외 실제 endpoint 구현, grant 부여/회수 API, mutation 권한 gate, 팀 상세/사용자/업무일지/생성·수정·상태변경·bulk·삭제 동작은 후속 작업으로 분리한다.
 - `.omx/specs/deep-interview-api-spec-team-auth-plan.md` 의 과거 Decision Boundary 중 DEPT_HEAD 의 부서 밖 확대를 막는 취지의 항목은 최신 Team API 권한 정정에 의해 superseded 된 stale bullet 로 취급한다.
 - `docs/api/spec/api-spec-common.md` 와 `docs/api/spec/api-spec-index.md` 는 이번 작업에서 수정하지 않는다. 현재 Team endpoint index 와 공통 role hierarchy 는 직접 권한 충돌을 만들지 않으므로 비수정 cross-doc audit 대상으로만 남긴다.
 - `api-spec-index.md` 의 `/api/teams/summary` 상태 표기 불일치는 auth/access 변경과 직접 관련 없는 후속 문서 정합성 검토 항목으로 기록한다.
