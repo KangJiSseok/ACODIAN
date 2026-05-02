@@ -5,12 +5,15 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.BDDMockito.given;
+import static org.mockito.BDDMockito.never;
 import static org.mockito.BDDMockito.then;
 
 import com.ibank.axwms.domain.organization.team.TeamStatus;
 import com.ibank.axwms.domain.organization.team.UserTeamStatus;
+import com.ibank.axwms.domain.organization.team.dto.GetTeamApiDto;
 import com.ibank.axwms.domain.organization.team.dto.GetTeamsApiDto;
 import com.ibank.axwms.domain.organization.team.entity.Team;
+import com.ibank.axwms.domain.organization.team.repository.jooq.projection.TeamDetailProjection;
 import com.ibank.axwms.domain.organization.team.repository.TeamRepository;
 import com.ibank.axwms.domain.organization.team.repository.UserTeamRepository;
 import com.ibank.axwms.domain.organization.team.repository.jooq.projection.TeamSummaryProjection;
@@ -90,6 +93,54 @@ class TeamServiceTest {
     }
 
     @Test
+    @DisplayName("getTeam 은 principal userId 와 teamId 로 repository 조회 결과를 상세 응답으로 변환한다")
+    void getTeam_은_principal_userId와_teamId로_repository_조회_결과를_상세_응답으로_변환한다() {
+        CustomUserPrincipal principal = principal();
+        given(teamRepository.findTeamDetail(101L, 21L)).willReturn(Optional.of(detailProjection()));
+
+        GetTeamApiDto.Response response = teamService.getTeam(principal, 21L);
+
+        assertThat(response)
+                .extracting(
+                        GetTeamApiDto.Response::teamId,
+                        GetTeamApiDto.Response::teamName,
+                        GetTeamApiDto.Response::teamLeaderId,
+                        GetTeamApiDto.Response::teamLeaderName,
+                        GetTeamApiDto.Response::deptHeadAdminUserId,
+                        GetTeamApiDto.Response::deptHeadAdminUsername
+                )
+                .containsExactly(21L, "물류혁신TF", 101L, "홍길동", 202L, "김사업부장");
+        then(teamRepository).should().findTeamDetail(101L, 21L);
+        then(teamRepository).should(never()).existsByIdAndDeletedAtIsNull(21L);
+    }
+
+    @Test
+    @DisplayName("getTeam 대상 팀이 없으면 TEAM_NOT_FOUND 예외를 던진다")
+    void getTeam_대상_팀이_없으면_TEAM_NOT_FOUND_예외를_던진다() {
+        CustomUserPrincipal principal = principal();
+        given(teamRepository.findTeamDetail(101L, 999L)).willReturn(Optional.empty());
+        given(teamRepository.existsByIdAndDeletedAtIsNull(999L)).willReturn(false);
+
+        assertThatThrownBy(() -> teamService.getTeam(principal, 999L))
+                .isInstanceOf(BusinessException.class)
+                .extracting(error -> ((BusinessException) error).getErrorCode())
+                .isEqualTo(ErrorCode.TEAM_NOT_FOUND);
+    }
+
+    @Test
+    @DisplayName("getTeam 대상 팀이 visible scope 밖이면 AUTH_ACCESS_DENIED 예외를 던진다")
+    void getTeam_대상_팀이_visible_scope_밖이면_AUTH_ACCESS_DENIED_예외를_던진다() {
+        CustomUserPrincipal principal = principal();
+        given(teamRepository.findTeamDetail(101L, 21L)).willReturn(Optional.empty());
+        given(teamRepository.existsByIdAndDeletedAtIsNull(21L)).willReturn(true);
+
+        assertThatThrownBy(() -> teamService.getTeam(principal, 21L))
+                .isInstanceOf(BusinessException.class)
+                .extracting(error -> ((BusinessException) error).getErrorCode())
+                .isEqualTo(ErrorCode.AUTH_ACCESS_DENIED);
+    }
+
+    @Test
     @DisplayName("팀 ID가 존재하면 팀 엔티티를 반환한다")
     void 팀_ID가_존재하면_팀_엔티티를_반환한다() {
         Team team = createTeam(21L);
@@ -143,6 +194,21 @@ class TeamServiceTest {
                 true,
                 LocalDate.of(2026, 4, 1),
                 LocalDate.of(2026, 12, 31)
+        );
+    }
+
+    private TeamDetailProjection detailProjection() {
+        return new TeamDetailProjection(
+                21L,
+                "물류혁신TF",
+                "ACTIVE",
+                "테스트 팀",
+                101L,
+                "홍길동",
+                LocalDate.of(2026, 4, 1),
+                LocalDate.of(2026, 12, 31),
+                202L,
+                "김사업부장"
         );
     }
 
