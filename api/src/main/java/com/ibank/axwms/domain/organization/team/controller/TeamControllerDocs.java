@@ -1,5 +1,6 @@
 package com.ibank.axwms.domain.organization.team.controller;
 
+import com.ibank.axwms.domain.organization.team.dto.GetTeamApiDto;
 import com.ibank.axwms.domain.organization.team.dto.GetTeamsApiDto;
 import com.ibank.axwms.global.response.PageResponse;
 import com.ibank.axwms.global.security.CustomUserPrincipal;
@@ -28,5 +29,20 @@ public interface TeamControllerDocs {
     PageResponse<GetTeamsApiDto.Response> getTeams(
             @Parameter(hidden = true) CustomUserPrincipal principal,
             @ParameterObject GetTeamsApiDto.Request request
+    );
+
+    @Operation(summary = "팀 상세 조회",
+            description = "로그인 사용자의 admin grant 또는 ACTIVE membership 으로 접근 가능한 단일 팀 상세와 "
+                    + "soft-delete 되지 않은 업무일지 집계를 조회한다.")
+    @SecurityRequirement(name = "bearerAuth")
+    @ApiResponses({
+            @ApiResponse(responseCode = "200", description = "팀 상세를 반환한다."),
+            @ApiResponse(responseCode = "401", description = "인증이 필요하다.", content = @Content),
+            @ApiResponse(responseCode = "403", description = "대상 팀에 접근할 권한이 없다.", content = @Content),
+            @ApiResponse(responseCode = "404", description = "팀을 찾을 수 없다.", content = @Content)
+    })
+    GetTeamApiDto.Response getTeam(
+            @Parameter(hidden = true) CustomUserPrincipal principal,
+            @Parameter(description = "팀 ID", example = "21") Long id
     );
 }

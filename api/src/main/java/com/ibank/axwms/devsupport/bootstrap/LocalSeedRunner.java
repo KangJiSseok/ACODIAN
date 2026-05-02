@@ -79,6 +79,7 @@ public class LocalSeedRunner implements ApplicationRunner {
     );
     private static final List<TeamAdminSeedSpec> TEAM_ADMIN_SEEDS = List.of(
             new TeamAdminSeedSpec("director@ibank.com", "솔루션개발사업부", "플랫폼개발팀"),
+            new TeamAdminSeedSpec("dept@ibank.com", "솔루션개발사업부", "플랫폼개발팀"),
             new TeamAdminSeedSpec("dept@ibank.com", "솔루션개발사업부", "아키텍처TF"),
             new TeamAdminSeedSpec("candidate.head@ibank.com", "솔루션개발사업부", "플랫폼운영TF")
     );

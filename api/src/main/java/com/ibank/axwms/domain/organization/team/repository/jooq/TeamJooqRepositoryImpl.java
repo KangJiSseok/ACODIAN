@@ -1,9 +1,12 @@
 package com.ibank.axwms.domain.organization.team.repository.jooq;
 
+import com.ibank.axwms.domain.organization.team.repository.jooq.projection.TeamDetailProjection;
 import com.ibank.axwms.domain.organization.team.repository.jooq.projection.TeamSummaryProjection;
 import com.ibank.axwms.domain.organization.team.repository.jooq.query.TeamPageQuery;
 import com.ibank.axwms.global.jooq.tables.TbUser;
 import com.ibank.axwms.global.jooq.tables.TbUserTeam;
+import java.util.List;
+import java.util.Optional;
 import lombok.RequiredArgsConstructor;
 import org.jooq.Condition;
 import org.jooq.DSLContext;
@@ -16,8 +19,6 @@ import org.springframework.data.domain.PageImpl;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.stereotype.Repository;
 
-import java.util.List;
-
 import static com.ibank.axwms.global.jooq.Tables.TB_TEAM;
 import static com.ibank.axwms.global.jooq.Tables.TB_TEAM_ADMIN;
 import static com.ibank.axwms.global.jooq.Tables.TB_USER;
@@ -29,6 +30,7 @@ public class TeamJooqRepositoryImpl implements TeamJooqRepository {
 
     private static final String ACTIVE_TEAM_STATUS = "ACTIVE";
     private static final String ACTIVE_USER_TEAM_STATUS = "ACTIVE";
+    private static final String DEPT_HEAD_ROLE = "DEPT_HEAD";
     private static final String PRIMARY_ALLOCATION = "주담당";
 
     private final DSLContext dsl;
@@ -151,6 +153,46 @@ public class TeamJooqRepositoryImpl implements TeamJooqRepository {
                 .fetch(TeamSummaryProjection::from);
 
         return new PageImpl<>(items, pageRequest, total);
+    }
+
+    /** 로그인 사용자가 볼 수 있는 단일 팀 상세와 DEPT_HEAD 팀 관리자 정보를 조회한다. */
+    @Override
+    public Optional<TeamDetailProjection> findTeamDetail(Long userId, Long teamId) {
+        TbUserTeam leaderMembership = TB_USER_TEAM.as("leader_membership");
+        TbUser leaderUser = TB_USER.as("leader_user");
+        TbUser deptHeadAdminUser = TB_USER.as("dha_user");
+
+        Field<Long> teamLeaderId = leaderMembership.USER_ID.as("team_leader_id");
+        Field<String> teamLeaderName = leaderUser.USER_NAME.as("team_leader_name");
+        Field<Long> deptHeadAdminUserId = deptHeadAdminUser.USER_ID.as("dept_head_admin_user_id");
+        Field<String> deptHeadAdminUsername = deptHeadAdminUser.USER_NAME.as("dept_head_admin_username");
+
+        return dsl.select(
+                        TB_TEAM.TEAM_ID,
+                        TB_TEAM.TEAM_NAME,
+                        TB_TEAM.STATUS_CODE,
+                        TB_TEAM.DESCRIPTION,
+                        teamLeaderId,
+                        teamLeaderName,
+                        TB_TEAM.START_DATE,
+                        TB_TEAM.EXPECTED_END_DATE,
+                        deptHeadAdminUserId,
+                        deptHeadAdminUsername
+                )
+                .from(TB_TEAM)
+                .leftJoin(leaderMembership).on(leaderMembership.TEAM_ID.eq(TB_TEAM.TEAM_ID)
+                        .and(leaderMembership.STATUS_CODE.eq(ACTIVE_USER_TEAM_STATUS))
+                        .and(leaderMembership.IS_LEADER.isTrue()))
+                .leftJoin(leaderUser).on(leaderUser.USER_ID.eq(leaderMembership.USER_ID))
+                .leftJoin(deptHeadAdminUser).on(
+                        deptHeadAdminUser.USER_ID.in(
+                                DSL.select(TB_TEAM_ADMIN.USER_ID)
+                                        .from(TB_TEAM_ADMIN)
+                                        .where(TB_TEAM_ADMIN.TEAM_ID.eq(TB_TEAM.TEAM_ID)))
+                        .and(deptHeadAdminUser.ROLE_CODE.eq(DEPT_HEAD_ROLE)))
+                .where(TB_TEAM.TEAM_ID.eq(teamId))
+                .and(visibleTeamCondition(userId))
+                .fetchOptional(TeamDetailProjection::from);
     }
 
     /** soft-delete 되지 않았고 호출자의 admin grant 또는 ACTIVE membership 에 포함된 팀만 통과시킨다. */

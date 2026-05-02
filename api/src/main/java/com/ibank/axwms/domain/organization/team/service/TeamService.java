@@ -1,6 +1,7 @@
 package com.ibank.axwms.domain.organization.team.service;
 
 import com.ibank.axwms.domain.organization.team.UserTeamStatus;
+import com.ibank.axwms.domain.organization.team.dto.GetTeamApiDto;
 import com.ibank.axwms.domain.organization.team.dto.GetTeamsApiDto;
 import com.ibank.axwms.domain.organization.team.entity.Team;
 import com.ibank.axwms.domain.organization.team.repository.TeamRepository;
@@ -35,6 +36,21 @@ public class TeamService {
     }
 
     /**
+     * 로그인 사용자가 볼 수 있는 단일 팀 상세와 업무일지 집계를 조회한다.
+     *
+     * @param principal 현재 로그인 사용자
+     * @param teamId 조회 대상 팀 ID
+     * @return 팀 상세 응답
+     * @throws BusinessException TEAM_NOT_FOUND 팀이 없거나 soft-delete 되었을 때
+     * @throws BusinessException AUTH_ACCESS_DENIED 대상 팀이 visible scope 에 없을 때
+     */
+    public GetTeamApiDto.Response getTeam(CustomUserPrincipal principal, Long teamId) {
+        return teamRepository.findTeamDetail(principal.userId(), teamId)
+                .map(GetTeamApiDto.Response::from)
+                .orElseThrow(() -> getTeamDetailError(teamId));
+    }
+
+    /**
      * 팀 ID로 팀을 조회하고 없으면 도메인 오류를 던진다.
      *
      * @param teamId 조회할 팀 ID
@@ -57,5 +73,13 @@ public class TeamService {
      */
     public boolean isMember(Long userId, Long teamId) {
         return userTeamRepository.existsByUserIdAndTeamIdAndStatusCode(userId, teamId, UserTeamStatus.ACTIVE);
+    }
+
+    /** 팀 존재 여부와 접근 가능 여부를 분리해 단일 상세 조회 오류 코드를 결정한다. */
+    private BusinessException getTeamDetailError(Long teamId) {
+        if (!teamRepository.existsByIdAndDeletedAtIsNull(teamId)) {
+            return new BusinessException(ErrorCode.TEAM_NOT_FOUND);
+        }
+        return new BusinessException(ErrorCode.AUTH_ACCESS_DENIED);
     }
 }
