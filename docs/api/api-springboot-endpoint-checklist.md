@@ -23,7 +23,7 @@
 
 ## 3. `organization/team` 도메인
 
-- [ ] `GET /api/teams`
+- [x] `GET /api/teams`
 - [ ] `GET /api/teams/summary`
 - [ ] `GET /api/teams/{id}`
 - [ ] `GET /api/teams/{id}/users`
