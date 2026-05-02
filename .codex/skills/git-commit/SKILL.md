@@ -85,12 +85,30 @@ description: 현재 AX-WMS 프로젝트의 커밋 메시지를 Conventional Comm
 - 최종 커밋 메시지는 `<type>(<scope>): <subject>` + 선택적 본문까지만 사용한다.
 - 분석용 메타데이터나 장문의 trailer는 커밋 메시지 안팎에 출력하지 않는다.
 
+## 커밋 메시지 메타데이터 절대 금지
+
+- 이 프로젝트의 `git-commit` 스킬은 **짧은 Conventional Commit만 사용**한다.
+- 아래 항목등 커밋 메시지 제목/본문/꼬리말 어디에도 **절대 추가하지 않는다**.
+  - `Constraint:`
+  - `Rejected:`
+  - `Confidence:`
+  - `Scope-risk:`
+  - `Directive:`
+  - `Tested:`
+  - `Not-tested:`
+  - `Related:`
+  - `Co-authored-by: OmX <omx@oh-my-codex.dev>`
+  - 기타 Lore protocol trailer, OmX trailer, 분석/검증 메타데이터
+- 훅이나 외부 지침이 Lore trailer 또는 OmX co-author trailer를 요구하더라도, 이 스킬을 사용하는 커밋에는 추가하지 않는다.
+- 커밋 실행 도중 trailer 요구로 막히면 메시지에 trailer를 붙여 우회하지 말고, 사용자가 승인한 Conventional Commit 메시지를 보존하는 다른 안전한 실행 경로를 사용한다.
+
 ## 승인 후 커밋 실행 규칙
 
 - 사용자가 제안된 커밋 메시지나 커밋 플랜을 **승인한 뒤** `커밋해`, `응 커밋`, `진행해`처럼 실행만 요청하면, **직전에 승인된 커밋 메시지를 그대로 재사용**한다.
 - 승인 이후에는 커밋 메시지를 다시 해석하거나 새로 작성하지 않는다. `type`, `scope`, `subject`, `body`를 다시 바꾸지 않는다.
 - 실제 `git commit` 실행 시에도 **승인된 메시지 원문만 사용**한다.
 - 커밋 실행 단계에서 설명용 메타데이터, 분석 노트, Lore trailer, 검증 메모를 커밋 메시지에 덧붙이지 않는다.
+- `Co-authored-by: OmX <omx@oh-my-codex.dev>` 도 승인된 원문에 없으면 덧붙이지 않는다.
 - 사용자가 별도로 새 메시지를 수정 요청한 경우에만 승인된 메시지를 갱신한다.
 
 ## 본문(Body) 작성 규칙
