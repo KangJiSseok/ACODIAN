@@ -68,7 +68,7 @@ class TeamServiceTest {
                         GetTeamsApiDto.Response::myIsLeader,
                         GetTeamsApiDto.Response::allocation
                 )
-                .containsExactly(21L, "물류혁신TF", 2L, true, "PRIMARY");
+                .containsExactly(21L, "물류혁신TF", 2L, true, "주담당");
         then(teamRepository).should().findTeamPage(101L, TeamPageQuery.from(request));
     }
 
@@ -136,7 +136,7 @@ class TeamServiceTest {
                 2L,
                 true,
                 "플랫폼 총괄",
-                "PRIMARY",
+                "주담당",
                 true,
                 LocalDate.of(2026, 4, 1),
                 LocalDate.of(2026, 12, 31)

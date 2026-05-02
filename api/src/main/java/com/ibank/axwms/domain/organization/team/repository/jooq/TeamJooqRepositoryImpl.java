@@ -29,6 +29,7 @@ public class TeamJooqRepositoryImpl implements TeamJooqRepository {
 
     private static final String ACTIVE_TEAM_STATUS = "ACTIVE";
     private static final String ACTIVE_USER_TEAM_STATUS = "ACTIVE";
+    private static final String PRIMARY_ALLOCATION = "주담당";
 
     private final DSLContext dsl;
 
@@ -85,7 +86,7 @@ public class TeamJooqRepositoryImpl implements TeamJooqRepository {
                 .otherwise(1)
                 .as("my_leader_priority");
         Field<Integer> allocationPriority = DSL.when(
-                callerMembership.ALLOCATION.in("주담당"), 0)
+                callerMembership.ALLOCATION.eq(PRIMARY_ALLOCATION), 0)
                 .otherwise(1)
                 .as("allocation_priority");
         Field<Integer> primaryPriority = DSL.when(myIsPrimaryValue.isTrue(), 0)

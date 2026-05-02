@@ -98,7 +98,7 @@
 - 고정 정렬 정책
   1. `statusCode = ACTIVE` 팀 우선
   2. 호출자의 `myIsLeader = true` 인 팀 우선
-  3. 호출자의 `allocation` 이 주 담당인 팀 우선 (`PRIMARY`, `MAIN`, `LEAD` 등 실제 enum/string 은 구현 SSOT 를 따른다.)
+  3. 호출자의 `allocation` 이 `주담당` 인 팀 우선 (`allocation` 저장/응답 vocabulary 는 `주담당`, `겸임` 두 값만 사용한다.)
   4. 호출자의 `isPrimary = true` 인 팀 우선
 - 응답 (`data` 기준)
   - `PageResponse<TeamSummary>`
@@ -135,7 +135,7 @@
         "memberCount": 6,
         "myIsLeader": true,
         "teamRole": "플랫폼 총괄",
-        "allocation": "PRIMARY",
+        "allocation": "주담당",
         "isPrimary": true,
         "startDate": "2026-04-01",
         "expectedEndDate": "2026-12-31"
@@ -315,7 +315,7 @@
         "positionName": "과장",
         "email": "hong@axwms.com",
         "teamRole": "플랫폼 총괄",
-        "allocation": "PRIMARY"
+        "allocation": "주담당"
       }
     ],
     "page": 1,
@@ -445,7 +445,7 @@
     "leaderUserId": 101,
     "leaderMembership": {
       "teamRole": "플랫폼 총괄",
-      "allocation": "PRIMARY",
+      "allocation": "주담당",
       "isPrimary": true
     },
     "statusCode": "ACTIVE",
@@ -504,7 +504,7 @@
     "leaderUserId": 101,
     "leaderMembership": {
       "teamRole": "플랫폼 총괄",
-      "allocation": "PRIMARY",
+      "allocation": "주담당",
       "isPrimary": true
     },
     "statusCode": "ACTIVE",
@@ -613,7 +613,7 @@
         "userId": 102,
         "isLeader": false,
         "teamRole": "WMS 운영",
-        "allocation": "SECONDARY",
+        "allocation": "겸임",
         "isPrimary": false,
         "joinedAt": "2026-04-10"
       },
@@ -621,7 +621,7 @@
         "userId": 103,
         "isLeader": true,
         "teamRole": "현장 총괄",
-        "allocation": "PRIMARY",
+        "allocation": "주담당",
         "isPrimary": true,
         "joinedAt": "2026-04-10"
       }

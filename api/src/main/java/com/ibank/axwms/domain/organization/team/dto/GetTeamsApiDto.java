@@ -54,9 +54,9 @@ public final class GetTeamsApiDto {
             Long memberCount,
             @Schema(description = "호출자의 해당 팀 리더 여부", example = "true")
             Boolean myIsLeader,
-            @Schema(description = "호출자의 팀 내 업무 역할", example = "플랫폼 총괄")
+            @Schema(description = "호출자의 팀 내 업무 역할", example = "백엔드 개발")
             String teamRole,
-            @Schema(description = "호출자의 배치 성격", example = "PRIMARY")
+            @Schema(description = "호출자의 배치 성격", example = "주담당")
             String allocation,
             @Schema(description = "호출자의 대표 소속 여부", example = "true")
             Boolean isPrimary,
