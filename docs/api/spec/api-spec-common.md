@@ -27,11 +27,11 @@
 ## 5. Canonical precedence
 
 ### 5.1 Upstream inventory canonical
-- **56행 coverage matrix** 의 canonical source 는 아래 순서를 따른다.
+- **54행 coverage matrix** 의 canonical source 는 아래 순서를 따른다.
   1. `docs/api/api-springboot-endpoint-checklist.md`
   2. `docs/api/api-springboot-endpoint-class-mapping.md`
   3. ERD / ADR / architecture guide
-- `api-spec-index.md` 의 matrix row count 는 항상 **56** 를 유지한다.
+- `api-spec-index.md` 의 matrix row count 는 현재 index 기준 **54** 를 유지한다.
 - checklist/class mapping 의 row identity 는 유지하되, clarified scope 에서 현재 spec path 를 명시적으로 고정한 경우 matrix/display path 는 normalized 표기를 사용할 수 있다.
 
 ### 5.2 Spec-normalized path canonical
@@ -110,7 +110,8 @@
 - 정렬 query: `sortBy`, `sortDirection=ASC|DESC`
 - 응답 payload: `PageResponse<T>`
   - `items`, `page`, `pageSize`, `totalCount`, `totalPages`, `isFirst`, `isLast`, `hasNext`, `hasPrevious`
-- 도메인 문서의 목록 API 예시는 모두 `data` 내부에 `PageResponse<T>` 구조를 둔다.
+- 도메인 문서의 목록 API 예시는 기본적으로 `data` 내부에 `PageResponse<T>` 구조를 둔다.
+- 단, 도메인 문서에서 페이지네이션을 사용하지 않는 전체 목록 endpoint 로 명시한 경우 `data.items` 배열만 둘 수 있다.
 
 ## 11. `*Id` / `*Name` 병기 규칙
 - response 에서 다른 테이블/집계 객체의 `*Id` 를 노출할 때, 대응 `*Name` 또는 동등한 식별 이름이 존재하면 함께 적는다.
@@ -137,7 +138,7 @@
 - spec 본문 변경으로 checklist/class mapping 의 상태·경로·설명과 불일치가 생기면 관련 markdown 을 함께 갱신한다.
 
 ## 13. 공통 검수 체크리스트
-- [x] `api-spec-index.md` matrix row 수가 56인가?
+- [x] `api-spec-index.md` matrix row 수가 54인가?
 - [x] addendum row 수가 2인가?
 - [x] non-GET payload 유지 예외가 정확히 2건인가? (login, refresh 는 헤더/쿠키 전송 규약으로 제외)
 - [ ] 예외 외 non-GET 응답이 모두 `data: {}` 인가?

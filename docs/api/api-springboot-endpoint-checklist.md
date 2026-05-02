@@ -25,7 +25,7 @@
 
 - [x] `GET /api/teams`
 - [ ] `GET /api/teams/summary`
-- [ ] `GET /api/teams/{id}`
+- [x] `GET /api/teams/{id}`
 - [ ] `GET /api/teams/{id}/users`
 - [ ] `GET /api/teams/{id}/worklogs`
 - [ ] `POST /api/teams`
