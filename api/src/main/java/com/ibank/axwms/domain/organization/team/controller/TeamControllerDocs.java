@@ -5,6 +5,7 @@ import com.ibank.axwms.domain.organization.team.dto.GetTeamApiDto;
 import com.ibank.axwms.domain.organization.team.dto.GetTeamSummaryApiDto;
 import com.ibank.axwms.domain.organization.team.dto.GetTeamUsersApiDto;
 import com.ibank.axwms.domain.organization.team.dto.GetTeamsApiDto;
+import com.ibank.axwms.domain.organization.team.dto.UpdateTeamApiDto;
 import com.ibank.axwms.global.response.EmptyResponse;
 import com.ibank.axwms.global.response.PageResponse;
 import com.ibank.axwms.global.security.CustomUserPrincipal;
@@ -91,4 +92,22 @@ public interface TeamControllerDocs {
             @ApiResponse(responseCode = "409", description = "같은 이름의 팀이 이미 존재한다.", content = @Content)
     })
     EmptyResponse createTeam(CreateTeamApiDto.Request request);
+
+    @Operation(summary = "팀 부분 수정",
+            description = "DIRECTOR 또는 DEPT_HEAD 가 대상 팀의 admin grant 를 보유한 경우 팀 기본 정보, "
+                    + "admin grant, 팀원을 부분 업데이트한다. null 필드는 변경하지 않는다.")
+    @SecurityRequirement(name = "bearerAuth")
+    @ApiResponses({
+            @ApiResponse(responseCode = "200", description = "팀을 부분 수정한다."),
+            @ApiResponse(responseCode = "400", description = "요청 값이 올바르지 않다.", content = @Content),
+            @ApiResponse(responseCode = "401", description = "인증이 필요하다.", content = @Content),
+            @ApiResponse(responseCode = "403", description = "대상 팀 관리 권한이 없다.", content = @Content),
+            @ApiResponse(responseCode = "404", description = "팀 또는 사용자를 찾을 수 없다.", content = @Content),
+            @ApiResponse(responseCode = "409", description = "같은 이름의 팀이 이미 존재한다.", content = @Content)
+    })
+    EmptyResponse updateTeam(
+            @Parameter(hidden = true) CustomUserPrincipal principal,
+            @Parameter(description = "팀 ID", example = "21") Long id,
+            UpdateTeamApiDto.Request request
+    );
 }
