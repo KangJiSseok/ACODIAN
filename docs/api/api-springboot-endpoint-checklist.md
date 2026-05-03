@@ -30,7 +30,7 @@
 - [x] `GET /api/teams/{id}/users`
 - [x] `POST /api/teams`
 - [x] `PATCH /api/teams/{id}`
-- [ ] `DELETE /api/teams/{id}`
+- [x] `DELETE /api/teams/{id}`
 
 ## 4. `organization/user` 도메인
 
