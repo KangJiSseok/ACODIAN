@@ -66,7 +66,7 @@ export default function Sidebar() {
             </button>
           ) : (
             <Link
-              href="/my-page"
+              href="/"
               className="flex h-10 w-[3.75rem] items-center justify-center"
               title="IBANK"
               aria-label="IBANK"
