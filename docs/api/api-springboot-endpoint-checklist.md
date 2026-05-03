@@ -14,24 +14,21 @@
 
 ## 2. `organization/department` 도메인
 
-- [ ] `GET /api/departments`
-- [ ] `GET /api/departments/{id}`
-- [ ] `GET /api/departments/{id}/users`
-- [ ] `POST /api/departments`
-- [ ] `PUT /api/departments/{id}`
-- [ ] `DELETE /api/departments/{id}`
+- [x] `GET /api/departments`
+- [x] `GET /api/departments/{id}`
+- [x] `GET /api/departments/{id}/users`
+- [x] `POST /api/departments`
+- [x] `PUT /api/departments/{id}`
+- [x] `DELETE /api/departments/{id}`
 
 ## 3. `organization/team` 도메인
 
 - [x] `GET /api/teams`
-- [ ] `GET /api/teams/summary`
+- [x] `GET /api/teams/summary`
 - [x] `GET /api/teams/{id}`
 - [ ] `GET /api/teams/{id}/users`
-- [ ] `GET /api/teams/{id}/worklogs`
 - [ ] `POST /api/teams`
-- [ ] `PUT /api/teams/{id}`
-- [ ] `PATCH /api/teams/{id}/status`
-- [ ] `POST /api/teams/{id}/users/bulk`
+- [ ] `PATCH /api/teams/{id}`
 - [ ] `DELETE /api/teams/{id}`
 
 ## 4. `organization/user` 도메인

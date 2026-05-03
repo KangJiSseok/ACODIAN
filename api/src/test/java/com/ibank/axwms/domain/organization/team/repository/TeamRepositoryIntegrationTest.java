@@ -13,6 +13,7 @@ import com.ibank.axwms.domain.organization.team.entity.Team;
 import com.ibank.axwms.domain.organization.team.entity.TeamAdmin;
 import com.ibank.axwms.domain.organization.team.entity.UserTeam;
 import com.ibank.axwms.domain.organization.team.repository.jooq.projection.TeamDetailProjection;
+import com.ibank.axwms.domain.organization.team.repository.jooq.projection.TeamStatusSummaryProjection;
 import com.ibank.axwms.domain.organization.team.repository.jooq.projection.TeamSummaryProjection;
 import com.ibank.axwms.domain.organization.team.repository.jooq.query.TeamPageQuery;
 import com.ibank.axwms.domain.organization.user.EmploymentStatus;
@@ -144,6 +145,41 @@ class TeamRepositoryIntegrationTest extends IntegrationTestSupport {
                 );
         assertThat(result.startDate()).isEqualTo(LocalDate.of(2026, 4, 1));
         assertThat(result.expectedEndDate()).isEqualTo(LocalDate.of(2026, 12, 31));
+    }
+
+    @Test
+    @DisplayName("visible scope 팀 상태 요약은 DISTINCT 팀 기준으로 soft-delete 팀을 제외하고 집계한다")
+    void visible_scope_팀_상태_요약은_distinct_팀_기준으로_soft_delete_팀을_제외하고_집계한다() {
+        TeamFixture fixture = seedVisibleScopeFixture();
+
+        TeamStatusSummaryProjection result = teamRepository.countTeamSummary(fixture.callerId());
+
+        assertThat(result)
+                .extracting(
+                        TeamStatusSummaryProjection::activeTeamCount,
+                        TeamStatusSummaryProjection::inactiveTeamCount,
+                        TeamStatusSummaryProjection::totalTeamCount
+                )
+                .containsExactly(3L, 1L, 4L);
+    }
+
+    @Test
+    @DisplayName("visible scope 팀 상태 요약은 visible 팀이 없으면 모든 집계를 0으로 반환한다")
+    void visible_scope_팀_상태_요약은_visible_팀이_없으면_모든_집계를_0으로_반환한다() {
+        Department department = departmentRepository.save(createDepartment("빈요약검증본부"));
+        User caller = userRepository.save(createUser(department.getId(), "빈요약호출자", UserRole.MEMBER));
+        Team hiddenTeam = teamRepository.save(createTeam("권한없는요약팀", TeamStatus.ACTIVE));
+        userTeamRepository.save(UserTeam.create(caller.getId(), hiddenTeam.getId(), false, "이탈", "겸임", false, UserTeamStatus.LEFT));
+
+        TeamStatusSummaryProjection result = teamRepository.countTeamSummary(caller.getId());
+
+        assertThat(result)
+                .extracting(
+                        TeamStatusSummaryProjection::activeTeamCount,
+                        TeamStatusSummaryProjection::inactiveTeamCount,
+                        TeamStatusSummaryProjection::totalTeamCount
+                )
+                .containsExactly(0L, 0L, 0L);
     }
 
     @Test

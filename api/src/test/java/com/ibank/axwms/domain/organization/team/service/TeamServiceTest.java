@@ -11,11 +11,13 @@ import static org.mockito.BDDMockito.then;
 import com.ibank.axwms.domain.organization.team.TeamStatus;
 import com.ibank.axwms.domain.organization.team.UserTeamStatus;
 import com.ibank.axwms.domain.organization.team.dto.GetTeamApiDto;
+import com.ibank.axwms.domain.organization.team.dto.GetTeamSummaryApiDto;
 import com.ibank.axwms.domain.organization.team.dto.GetTeamsApiDto;
 import com.ibank.axwms.domain.organization.team.entity.Team;
 import com.ibank.axwms.domain.organization.team.repository.jooq.projection.TeamDetailProjection;
 import com.ibank.axwms.domain.organization.team.repository.TeamRepository;
 import com.ibank.axwms.domain.organization.team.repository.UserTeamRepository;
+import com.ibank.axwms.domain.organization.team.repository.jooq.projection.TeamStatusSummaryProjection;
 import com.ibank.axwms.domain.organization.team.repository.jooq.projection.TeamSummaryProjection;
 import com.ibank.axwms.domain.organization.team.repository.jooq.query.TeamPageQuery;
 import com.ibank.axwms.global.error.BusinessException;
@@ -90,6 +92,24 @@ class TeamServiceTest {
         assertThat(requestCaptor.getValue().page()).isEqualTo(1);
         assertThat(requestCaptor.getValue().pageSize()).isEqualTo(20);
         assertThat(requestCaptor.getValue().pageIndex()).isZero();
+    }
+
+    @Test
+    @DisplayName("getTeamSummary 는 principal userId 로 repository 조회 결과를 요약 응답으로 변환한다")
+    void getTeamSummary_는_principal_userId로_repository_조회_결과를_요약_응답으로_변환한다() {
+        CustomUserPrincipal principal = principal();
+        given(teamRepository.countTeamSummary(101L)).willReturn(new TeamStatusSummaryProjection(3L, 1L, 4L));
+
+        GetTeamSummaryApiDto.Response response = teamService.getTeamSummary(principal);
+
+        assertThat(response)
+                .extracting(
+                        GetTeamSummaryApiDto.Response::activeTeamCount,
+                        GetTeamSummaryApiDto.Response::inactiveTeamCount,
+                        GetTeamSummaryApiDto.Response::totalTeamCount
+                )
+                .containsExactly(3L, 1L, 4L);
+        then(teamRepository).should().countTeamSummary(101L);
     }
 
     @Test

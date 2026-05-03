@@ -1,6 +1,7 @@
 package com.ibank.axwms.domain.organization.team.repository.jooq;
 
 import com.ibank.axwms.domain.organization.team.repository.jooq.projection.TeamDetailProjection;
+import com.ibank.axwms.domain.organization.team.repository.jooq.projection.TeamStatusSummaryProjection;
 import com.ibank.axwms.domain.organization.team.repository.jooq.projection.TeamSummaryProjection;
 import com.ibank.axwms.domain.organization.team.repository.jooq.query.TeamPageQuery;
 import com.ibank.axwms.global.jooq.tables.TbUser;
@@ -29,6 +30,7 @@ import static com.ibank.axwms.global.jooq.Tables.TB_USER_TEAM;
 public class TeamJooqRepositoryImpl implements TeamJooqRepository {
 
     private static final String ACTIVE_TEAM_STATUS = "ACTIVE";
+    private static final String INACTIVE_TEAM_STATUS = "INACTIVE";
     private static final String ACTIVE_USER_TEAM_STATUS = "ACTIVE";
     private static final String DEPT_HEAD_ROLE = "DEPT_HEAD";
     private static final String PRIMARY_ALLOCATION = "주담당";
@@ -153,6 +155,27 @@ public class TeamJooqRepositoryImpl implements TeamJooqRepository {
                 .fetch(TeamSummaryProjection::from);
 
         return new PageImpl<>(items, pageRequest, total);
+    }
+
+    /** 로그인 사용자가 볼 수 있는 팀을 상태별로 집계한다. */
+    @Override
+    public TeamStatusSummaryProjection countTeamSummary(Long userId) {
+        Field<Long> activeTeamCountValue = DSL.coalesce(
+                        DSL.sum(DSL.when(TB_TEAM.STATUS_CODE.eq(ACTIVE_TEAM_STATUS), 1).otherwise(0)),
+                        0)
+                .cast(Long.class);
+        Field<Long> inactiveTeamCountValue = DSL.coalesce(
+                        DSL.sum(DSL.when(TB_TEAM.STATUS_CODE.eq(INACTIVE_TEAM_STATUS), 1).otherwise(0)),
+                        0)
+                .cast(Long.class);
+        Field<Long> activeTeamCount = activeTeamCountValue.as("active_team_count");
+        Field<Long> inactiveTeamCount = inactiveTeamCountValue.as("inactive_team_count");
+        Field<Long> totalTeamCount = activeTeamCountValue.add(inactiveTeamCountValue).as("total_team_count");
+
+        return dsl.select(activeTeamCount, inactiveTeamCount, totalTeamCount)
+                .from(TB_TEAM)
+                .where(visibleTeamCondition(userId))
+                .fetchSingle(TeamStatusSummaryProjection::from);
     }
 
     /** 로그인 사용자가 볼 수 있는 단일 팀 상세와 DEPT_HEAD 팀 관리자 정보를 조회한다. */

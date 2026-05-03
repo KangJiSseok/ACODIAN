@@ -137,6 +137,21 @@ class TeamControllerE2eTest extends E2eTestSupport {
                 .andExpect(jsonPath("$.error.code", is("TEAM_NOT_FOUND")));
     }
 
+    @Test
+    @DisplayName("로그인한 사용자가 팀 상태 요약을 조회하면 visible scope 기준 집계를 반환한다")
+    void 로그인한_사용자가_팀_상태_요약을_조회하면_visible_scope_기준_집계를_반환한다() throws Exception {
+        String authorizationHeader = loginAndGetAuthorizationHeader();
+
+        mockMvc.perform(apiGet("/teams/summary")
+                        .header(HttpHeaders.AUTHORIZATION, authorizationHeader))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.success", is(true)))
+                .andExpect(jsonPath("$.data.activeTeamCount", is(2)))
+                .andExpect(jsonPath("$.data.inactiveTeamCount", is(1)))
+                .andExpect(jsonPath("$.data.totalTeamCount", is(3)))
+                .andExpect(jsonPath("$.timestamp").exists());
+    }
+
     /** FK 제약을 피하기 위해 업무일지부터 테스트 데이터를 비운다. */
     private void clearDatabase() {
         worklogRepository.deleteAll();
@@ -157,12 +172,14 @@ class TeamControllerE2eTest extends E2eTestSupport {
 
         Team visibleTeam = teamRepository.save(createTeam("상세조회팀", TeamStatus.ACTIVE));
         Team adminOnlyTeam = teamRepository.save(createTeam("관리전용상세팀", TeamStatus.ACTIVE));
+        Team inactiveAdminTeam = teamRepository.save(createTeam("비활성요약팀", TeamStatus.INACTIVE));
         Team deniedTeam = teamRepository.save(createTeam("권한없는상세팀", TeamStatus.ACTIVE));
         Team deletedTeam = teamRepository.save(createDeletedTeam("삭제상세팀"));
 
         userTeamRepository.save(UserTeam.create(caller.getId(), visibleTeam.getId(), true, "리더", "주담당", true, UserTeamStatus.ACTIVE));
         userTeamRepository.save(UserTeam.create(member.getId(), visibleTeam.getId(), false, "구성원", "겸임", false, UserTeamStatus.ACTIVE));
         teamAdminRepository.save(TeamAdmin.grant(caller.getId(), adminOnlyTeam.getId()));
+        teamAdminRepository.save(TeamAdmin.grant(caller.getId(), inactiveAdminTeam.getId()));
         teamAdminRepository.save(TeamAdmin.grant(deptHeadAdmin.getId(), visibleTeam.getId()));
 
         visibleTeamId = visibleTeam.getId();
