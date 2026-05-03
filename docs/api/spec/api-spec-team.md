@@ -275,8 +275,7 @@
     - `isLeader`
     - `userId`, `userName`
     - `positionName`
-    - `email`
-    - `teamRole`, `allocation`
+    - `teamRole`
 - 요청 JSON 예시
 ```json
 {
@@ -296,18 +295,14 @@
         "userId": 101,
         "userName": "홍길동",
         "positionName": "과장",
-        "email": "hong@axwms.com",
-        "teamRole": "플랫폼 총괄",
-        "allocation": "주담당"
+        "teamRole": "플랫폼 총괄"
       },
       {
         "isLeader": false,
         "userId": 102,
         "userName": "김영희",
         "positionName": "대리",
-        "email": "kim@axwms.com",
-        "teamRole": "WMS 운영",
-        "allocation": "겸임"
+        "teamRole": "WMS 운영"
       }
     ]
   },
@@ -337,8 +332,9 @@
 - 요청
   - Body: `teamName`, `description`, `addAdmin`, `addUsers`, `statusCode`, `startDate`, `expectedEndDate`
 - 요청 규칙
-  - `addAdmin` 은 단일 `userId` 숫자 필드이며, request 에 `isAdmin` 필드는 두지 않는다.
+  - `addAdmin` 은 단일 `userId` 숫자 필드이다.
   - `addAdmin` 으로 지정된 사용자는 생성된 팀의 `tb_team_admin` grant 로 추가된다.
+  - 생성된 팀의 `tb_team_admin` grant 로 추가되면서 DIRECTOR들도 grant로 추가되어야한다. 
   - `addUsers[*]` 는 `userId`, `isLeader`, `teamRole` 을 받는다.
   - `addUsers[*].isLeader = true` 로 온 사용자는 `tb_user_team.is_leader = true` 로 추가된다.
   - `addUsers[*].isLeader = false` 로 온 사용자는 `tb_user_team.is_leader = false` 로 추가된다.
@@ -403,7 +399,7 @@
   - Body: `teamName`, `description`, `addAdmin`, `removeAdmin`, `addUsers`, `removeUsers`, `editUsers`, `statusCode`, `startDate`, `expectedEndDate`
 - 요청 규칙
   - 각 body 필드가 `null` 이면 해당 필드는 업데이트하지 않는다.
-  - `addAdmin` / `removeAdmin` 은 각각 단일 `userId` 숫자 필드이며, request 에 `isAdmin` 필드는 두지 않는다.
+  - `addAdmin` / `removeAdmin` 은 각각 단일 `userId` 숫자 필드이다.
   - `addAdmin` 은 대상 팀의 `tb_team_admin` grant 를 추가한다.
   - `removeAdmin` 은 대상 팀의 `tb_team_admin` grant 를 회수한다.
   - `addUsers[*]` 는 `userId`, `isLeader`, `teamRole` 을 받는다.
