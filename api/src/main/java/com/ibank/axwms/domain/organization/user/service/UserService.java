@@ -8,7 +8,7 @@ import com.ibank.axwms.domain.organization.team.entity.UserTeam;
 import com.ibank.axwms.domain.organization.team.repository.TeamRepository;
 import com.ibank.axwms.domain.organization.team.repository.UserTeamRepository;
 import com.ibank.axwms.domain.organization.user.UserRole;
-import com.ibank.axwms.domain.organization.user.dto.GetManagerCandidatesApiDto;
+import com.ibank.axwms.domain.organization.user.dto.GetAdminCandidatesApiDto;
 import com.ibank.axwms.domain.organization.user.dto.GetMyProfileApiDto;
 import com.ibank.axwms.domain.organization.user.entity.User;
 import com.ibank.axwms.domain.organization.user.repository.UserRepository;
@@ -50,14 +50,14 @@ public class UserService {
      * 인증된 사용자 role 기준으로 상위 관리자 지정 후보를 조회한다.
      * DIRECTOR 는 부서장 전체를 선택할 수 있고, DEPT_HEAD 는 자기 자신만 후보로 노출한다.
      */
-    public List<GetManagerCandidatesApiDto.Response> getManagerCandidates(CustomUserPrincipal principal) {
+    public List<GetAdminCandidatesApiDto.Response> getAdminCandidates(CustomUserPrincipal principal) {
         if (UserRole.DIRECTOR.name().equals(principal.roleCode())) {
             return userRepository.findAllByRoleCodeOrderByIdAsc(UserRole.DEPT_HEAD).stream()
-                    .map(GetManagerCandidatesApiDto.Response::from)
+                    .map(GetAdminCandidatesApiDto.Response::from)
                     .toList();
         }
 
-        return List.of(GetManagerCandidatesApiDto.Response.from(getUserOrThrow(principal.userId())));
+        return List.of(GetAdminCandidatesApiDto.Response.from(getUserOrThrow(principal.userId())));
     }
 
     /**

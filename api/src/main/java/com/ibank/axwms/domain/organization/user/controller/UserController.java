@@ -1,6 +1,6 @@
 package com.ibank.axwms.domain.organization.user.controller;
 
-import com.ibank.axwms.domain.organization.user.dto.GetManagerCandidatesApiDto;
+import com.ibank.axwms.domain.organization.user.dto.GetAdminCandidatesApiDto;
 import com.ibank.axwms.domain.organization.user.dto.GetMyProfileApiDto;
 import com.ibank.axwms.domain.organization.user.service.UserService;
 import com.ibank.axwms.global.security.CustomUserPrincipal;
@@ -26,11 +26,11 @@ public class UserController implements UserControllerDocs {
     }
 
     @Override
-    @GetMapping("/manager-candidates")
+    @GetMapping("/admin-candidates")
     @PreAuthorize("hasAnyRole('DIRECTOR','DEPT_HEAD')")
-    public List<GetManagerCandidatesApiDto.Response> getManagerCandidates(
+    public List<GetAdminCandidatesApiDto.Response> getAdminCandidates(
             @AuthenticationPrincipal CustomUserPrincipal principal
     ) {
-        return userService.getManagerCandidates(principal);
+        return userService.getAdminCandidates(principal);
     }
 }

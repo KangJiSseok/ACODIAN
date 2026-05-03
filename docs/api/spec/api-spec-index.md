@@ -99,7 +99,7 @@
 | Method | Path | Reason | Source | Spec doc |
 |---|---|---|---|---|
 | `GET` | `/api/departments/{id}/users` | user-request clarification | deep-interview spec | [api-spec-department.md](./api-spec-department.md) |
-| `GET` | `/api/users/manager-candidates` | user-request clarification | deep-interview spec | [api-spec-user.md](./api-spec-user.md) |
+| `GET` | `/api/users/admin-candidates` | user-request clarification | deep-interview spec | [api-spec-user.md](./api-spec-user.md) |
 
 - addendum 2건은 matrix 53행, 상태 분포 count, checklist completeness count 에 포함하지 않는다.
 

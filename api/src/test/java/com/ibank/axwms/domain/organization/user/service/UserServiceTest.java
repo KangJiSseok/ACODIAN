@@ -14,7 +14,7 @@ import com.ibank.axwms.domain.organization.team.repository.TeamRepository;
 import com.ibank.axwms.domain.organization.team.repository.UserTeamRepository;
 import com.ibank.axwms.domain.organization.user.EmploymentStatus;
 import com.ibank.axwms.domain.organization.user.UserRole;
-import com.ibank.axwms.domain.organization.user.dto.GetManagerCandidatesApiDto;
+import com.ibank.axwms.domain.organization.user.dto.GetAdminCandidatesApiDto;
 import com.ibank.axwms.domain.organization.user.dto.GetMyProfileApiDto;
 import com.ibank.axwms.domain.organization.user.entity.User;
 import com.ibank.axwms.domain.organization.user.repository.UserRepository;
@@ -214,13 +214,13 @@ class UserServiceTest {
         given(userRepository.findAllByRoleCodeOrderByIdAsc(UserRole.DEPT_HEAD))
                 .willReturn(List.of(firstDepartmentHead, secondDepartmentHead));
 
-        List<GetManagerCandidatesApiDto.Response> result = userService.getManagerCandidates(principal);
+        List<GetAdminCandidatesApiDto.Response> result = userService.getAdminCandidates(principal);
 
         assertThat(result)
-                .extracting(GetManagerCandidatesApiDto.Response::userId,
-                        GetManagerCandidatesApiDto.Response::userName,
-                        GetManagerCandidatesApiDto.Response::titleName,
-                        GetManagerCandidatesApiDto.Response::positionName)
+                .extracting(GetAdminCandidatesApiDto.Response::userId,
+                        GetAdminCandidatesApiDto.Response::userName,
+                        GetAdminCandidatesApiDto.Response::titleName,
+                        GetAdminCandidatesApiDto.Response::positionName)
                 .containsExactly(
                         Tuple.tuple(201L, "김부서", "부서장", "부장"),
                         Tuple.tuple(202L, "이본부", "부서장", null)
@@ -245,13 +245,13 @@ class UserServiceTest {
         );
         given(userRepository.findById(201L)).willReturn(Optional.of(departmentHead));
 
-        List<GetManagerCandidatesApiDto.Response> result = userService.getManagerCandidates(principal);
+        List<GetAdminCandidatesApiDto.Response> result = userService.getAdminCandidates(principal);
 
         assertThat(result)
-                .extracting(GetManagerCandidatesApiDto.Response::userId,
-                        GetManagerCandidatesApiDto.Response::userName,
-                        GetManagerCandidatesApiDto.Response::titleName,
-                        GetManagerCandidatesApiDto.Response::positionName)
+                .extracting(GetAdminCandidatesApiDto.Response::userId,
+                        GetAdminCandidatesApiDto.Response::userName,
+                        GetAdminCandidatesApiDto.Response::titleName,
+                        GetAdminCandidatesApiDto.Response::positionName)
                 .containsExactly(Tuple.tuple(201L, "김부서", "부서장", "부장"));
     }
 
@@ -261,7 +261,7 @@ class UserServiceTest {
         CustomUserPrincipal principal = new CustomUserPrincipal(404L, "missing@ibank.com", "DEPT_HEAD");
         given(userRepository.findById(404L)).willReturn(Optional.empty());
 
-        assertThatThrownBy(() -> userService.getManagerCandidates(principal))
+        assertThatThrownBy(() -> userService.getAdminCandidates(principal))
                 .isInstanceOf(BusinessException.class)
                 .extracting(e -> ((BusinessException) e).getErrorCode())
                 .isEqualTo(ErrorCode.USER_NOT_FOUND);

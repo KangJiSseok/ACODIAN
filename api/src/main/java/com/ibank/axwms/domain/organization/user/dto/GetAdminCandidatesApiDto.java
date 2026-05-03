@@ -6,7 +6,7 @@ import lombok.AccessLevel;
 import lombok.NoArgsConstructor;
 
 @NoArgsConstructor(access = AccessLevel.PRIVATE)
-public final class GetManagerCandidatesApiDto {
+public final class GetAdminCandidatesApiDto {
 
     @Schema(description = "관리자 선택 후보 사용자 요약")
     public record Response(
