@@ -24,6 +24,7 @@ export interface AuthUser {
   positionName: string | null;
   titleName: string | null;
   joinDate: string | null;
+  // 백엔드 EmploymentStatus enum(ACTIVE, LEAVE, RETIRED)을 기준으로 저장한다.
   employmentStatus: "ACTIVE" | "LEAVE" | "RETIRED" | string;
   profileImageUrl: string | null;
   teams: AuthUserTeam[];

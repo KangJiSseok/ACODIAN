@@ -14,6 +14,7 @@ import {
 import { useAuth } from "@/app/_common/hooks/useAuth";
 import { cn } from "@/lib/utils";
 
+// 백엔드 EmploymentStatus enum 값을 화면용 한글 라벨로 변환한다.
 const employmentStatusLabels: Record<string, string> = {
   ACTIVE: "재직",
   LEAVE: "휴직",
@@ -44,6 +45,8 @@ function getInitial(name: string | undefined) {
 
 export default function MyPage() {
   const { user } = useAuth();
+
+  // /users/me 응답의 팀 목록에서 대표 소속 팀과 전체 소속 팀 라벨을 만든다.
   const primaryTeam = user?.teams.find((team) => team.isPrimary);
   const teamNames = user?.teams.map((team) => team.teamName).join(", ") || "-";
   const displayStatus = user?.employmentStatus
@@ -137,6 +140,7 @@ export default function MyPage() {
               <p className="text-xs font-bold uppercase tracking-[0.22em] text-muted-foreground">
                 비밀번호 변경
               </p>
+              {/* 비밀번호는 서버에서 내려받지 않으므로 변경 API 연결 전까지 마스킹 UI만 표시한다. */}
               <div className="mt-4 grid gap-4 md:grid-cols-2">
                 <ReadOnlyField label="현재 비밀번호" value="••••••••" />
                 <ReadOnlyField label="새 비밀번호" value="••••••••" />
