@@ -2,13 +2,16 @@ package com.ibank.axwms.domain.organization.user.controller;
 
 import com.ibank.axwms.domain.organization.user.dto.GetAdminCandidatesApiDto;
 import com.ibank.axwms.domain.organization.user.dto.GetMyProfileApiDto;
+import com.ibank.axwms.domain.organization.user.dto.GetUsersApiDto;
 import com.ibank.axwms.domain.organization.user.service.UserService;
 import com.ibank.axwms.global.security.CustomUserPrincipal;
+import jakarta.validation.Valid;
 import java.util.List;
 import lombok.RequiredArgsConstructor;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.ModelAttribute;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
@@ -32,5 +35,15 @@ public class UserController implements UserControllerDocs {
             @AuthenticationPrincipal CustomUserPrincipal principal
     ) {
         return userService.getAdminCandidates(principal);
+    }
+
+    @Override
+    @GetMapping
+    @PreAuthorize("hasAnyRole('DIRECTOR','DEPT_HEAD','TEAM_LEAD','MEMBER')")
+    public List<GetUsersApiDto.Response> getUsers(
+            @AuthenticationPrincipal CustomUserPrincipal principal,
+            @Valid @ModelAttribute GetUsersApiDto.Request request
+    ) {
+        return userService.getUsers(request);
     }
 }

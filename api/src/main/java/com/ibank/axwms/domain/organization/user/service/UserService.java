@@ -7,11 +7,14 @@ import com.ibank.axwms.domain.organization.team.entity.Team;
 import com.ibank.axwms.domain.organization.team.entity.UserTeam;
 import com.ibank.axwms.domain.organization.team.repository.TeamRepository;
 import com.ibank.axwms.domain.organization.team.repository.UserTeamRepository;
+import com.ibank.axwms.domain.organization.user.EmploymentStatus;
 import com.ibank.axwms.domain.organization.user.UserRole;
 import com.ibank.axwms.domain.organization.user.dto.GetAdminCandidatesApiDto;
 import com.ibank.axwms.domain.organization.user.dto.GetMyProfileApiDto;
+import com.ibank.axwms.domain.organization.user.dto.GetUsersApiDto;
 import com.ibank.axwms.domain.organization.user.entity.User;
 import com.ibank.axwms.domain.organization.user.repository.UserRepository;
+import com.ibank.axwms.domain.organization.user.repository.jooq.query.UserListQuery;
 import com.ibank.axwms.global.error.BusinessException;
 import com.ibank.axwms.global.error.ErrorCode;
 import com.ibank.axwms.global.security.CustomUserPrincipal;
@@ -58,6 +61,16 @@ public class UserService {
         }
 
         return List.of(GetAdminCandidatesApiDto.Response.from(getUserOrThrow(principal.userId())));
+    }
+
+    /**
+     * 사용자 목록을 페이지네이션 없이 필터 조건과 role 고정 정렬 기준으로 조회한다.
+     * 인증과 role gate 는 Controller/Security 체인이 보장하므로 목록 조회는 요청 filter 만 repository query 로 정규화한다.
+     */
+    public List<GetUsersApiDto.Response> getUsers(GetUsersApiDto.Request request) {
+        return userRepository.findUsers(UserListQuery.from(request)).stream()
+                .map(GetUsersApiDto.Response::from)
+                .toList();
     }
 
     /**
