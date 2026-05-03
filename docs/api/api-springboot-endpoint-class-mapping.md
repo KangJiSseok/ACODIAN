@@ -332,7 +332,7 @@
       <td><code>domain.organization.user.controller.UserController</code></td>
       <td><code>domain.organization.user.service.UserService</code></td>
       <td><code>domain.organization.user.entity.User</code>, <code>domain.organization.user.repository.UserRepository</code>, <code>domain.organization.user.repository.jooq.UserJooqRepository</code>, <code>domain.organization.team.entity.UserTeam</code>, <code>domain.organization.team.repository.jooq.UserTeamJooqRepository</code></td>
-      <td><code>RETIRED</code> 사용자는 제외하고, 대표 팀은 <code>tb_user_team.is_primary = true</code> membership 에서 계산한다. 정렬은 <code>role_code</code> 기준 <code>DIRECTOR</code> → <code>DEPT_HEAD</code> → <code>TEAM_LEAD</code> → <code>MEMBER</code> 순서다.</td>
+      <td><code>DIRECTOR</code>, <code>DEPT_HEAD</code> 만 호출할 수 있다. <code>RETIRED</code> 사용자는 제외하고, 대표 팀은 <code>tb_user_team.is_primary = true</code> membership 에서 계산한다. 정렬은 <code>role_code</code> 기준 <code>DIRECTOR</code> → <code>DEPT_HEAD</code> → <code>TEAM_LEAD</code> → <code>MEMBER</code> 순서다.</td>
     </tr>
     <tr>
       <td><code>GET /api/users/{id}</code></td>

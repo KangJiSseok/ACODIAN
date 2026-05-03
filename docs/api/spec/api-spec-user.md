@@ -179,9 +179,9 @@
 ### GET /api/users
 - 목적: 사용자 목록을 페이지네이션 없이 필터 조건에 따라 조회한다.
 - 상태: `Documented`
-- 권한/접근 주체: 인증된 사용자만 호출한다. accessToken 으로 인증한다.
+- 권한/접근 주체: `DIRECTOR`, `DEPT_HEAD` 만 호출한다. accessToken 으로 인증한다.
 - 요청
-  - Query: `departmentId`, `positionName`, `employmentStatus`
+  - Query: `userName`,`departmentId`, `positionName`, `employmentStatus`
   - 각 query 필드는 `null` 이거나 생략되면 전체 조건으로 해석한다.
   - `employmentStatus` 필터가 없으면 `ACTIVE`, `LEAVE` 사용자만 조회한다. `RETIRED` 사용자는 조회 대상에서 항상 제외한다.
 - 정렬
@@ -189,7 +189,7 @@
 - 응답 (`data` 기준)
   - 페이지네이션 래퍼를 사용하지 않고 `UserSummary[]` 배열을 반환한다.
   - `items`/`page`/`pageSize`/`totalCount` 같은 `PageResponse` 필드를 포함하지 않는다.
-  - 각 항목: `userId`, `userName`, `email`, `departmentId`, `departmentName`, `profileImageUrl`, `teamId`, `teamName`, `positionName`, `titleName`, `employmentStatus`
+  - 각 항목: `userId`, `userName`, `email`, `phone`, `departmentId`, `departmentName`, `profileImageUrl`, `teamId`, `teamName`, `positionName`, `titleName`, `employmentStatus`
 - 응답 필드 메모
   - `teamId`, `teamName` 은 `tb_user_team.is_primary = true` 인 대표 소속 팀이다.
   - 대표 소속 팀은 사용자별로 항상 1개 이하이며, 존재하지 않으면 `teamId`, `teamName` 을 `null` 로 반환한다.
@@ -197,6 +197,7 @@
 ```json
 {
   "query": {
+    "userName" : "한과장",
     "departmentId": 10,
     "positionName": "과장",
     "employmentStatus": "ACTIVE"
@@ -212,6 +213,7 @@
       "userId": 101,
       "userName": "홍길동",
       "email": "hong@axwms.com",
+      "phone": "010-1234-1234",
       "departmentId": 10,
       "departmentName": "물류본부",
       "profileImageUrl": "https://cdn.axwms.com/profile/101.png",

@@ -16,8 +16,11 @@ import com.ibank.axwms.domain.organization.user.EmploymentStatus;
 import com.ibank.axwms.domain.organization.user.UserRole;
 import com.ibank.axwms.domain.organization.user.dto.GetAdminCandidatesApiDto;
 import com.ibank.axwms.domain.organization.user.dto.GetMyProfileApiDto;
+import com.ibank.axwms.domain.organization.user.dto.GetUsersApiDto;
 import com.ibank.axwms.domain.organization.user.entity.User;
 import com.ibank.axwms.domain.organization.user.repository.UserRepository;
+import com.ibank.axwms.domain.organization.user.repository.jooq.projection.UserSummaryProjection;
+import com.ibank.axwms.domain.organization.user.repository.jooq.query.UserListQuery;
 import com.ibank.axwms.global.error.BusinessException;
 import com.ibank.axwms.global.error.ErrorCode;
 import com.ibank.axwms.global.security.CustomUserPrincipal;
@@ -265,6 +268,52 @@ class UserServiceTest {
                 .isInstanceOf(BusinessException.class)
                 .extracting(e -> ((BusinessException) e).getErrorCode())
                 .isEqualTo(ErrorCode.USER_NOT_FOUND);
+    }
+
+    @Test
+    @DisplayName("사용자 목록 조회 요청을 repository query 로 정규화하고 응답 배열을 반환한다")
+    void 사용자_목록_조회_요청을_repository_query로_정규화하고_응답_배열을_반환한다() {
+        CustomUserPrincipal principal = new CustomUserPrincipal(101L, "user@ibank.com", "MEMBER");
+        GetUsersApiDto.Request request = new GetUsersApiDto.Request("홍길동", 10L, "과장", EmploymentStatus.ACTIVE);
+        UserSummaryProjection projection = new UserSummaryProjection(
+                101L,
+                "홍길동",
+                "hong@axwms.com",
+                "010-1234-1234",
+                10L,
+                "물류본부",
+                "https://cdn.axwms.com/profile/101.png",
+                21L,
+                "물류혁신TF",
+                "과장",
+                "팀장",
+                EmploymentStatus.ACTIVE
+        );
+        given(userRepository.findUsers(UserListQuery.from(request))).willReturn(List.of(projection));
+
+        List<GetUsersApiDto.Response> result = userService.getUsers(request);
+
+        assertThat(result)
+                .extracting(GetUsersApiDto.Response::userId,
+                        GetUsersApiDto.Response::userName,
+                        GetUsersApiDto.Response::email,
+                        GetUsersApiDto.Response::phone,
+                        GetUsersApiDto.Response::departmentId,
+                        GetUsersApiDto.Response::departmentName,
+                        GetUsersApiDto.Response::teamId,
+                        GetUsersApiDto.Response::teamName,
+                        GetUsersApiDto.Response::employmentStatus)
+                .containsExactly(Tuple.tuple(
+                        101L,
+                        "홍길동",
+                        "hong@axwms.com",
+                        "010-1234-1234",
+                        10L,
+                        "물류본부",
+                        21L,
+                        "물류혁신TF",
+                        EmploymentStatus.ACTIVE
+                ));
     }
 
     private User createUser(Long id,
