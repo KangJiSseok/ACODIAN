@@ -6,11 +6,13 @@ import static org.mockito.BDDMockito.given;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.SerializationFeature;
 import com.ibank.axwms.domain.organization.user.EmploymentStatus;
+import com.ibank.axwms.domain.organization.user.dto.GetManagerCandidatesApiDto;
 import com.ibank.axwms.domain.organization.user.dto.GetMyProfileApiDto;
 import com.ibank.axwms.domain.organization.user.service.UserService;
 import com.ibank.axwms.global.security.CustomUserPrincipal;
 import java.lang.reflect.Method;
 import java.time.LocalDate;
+import java.util.List;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -18,6 +20,7 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
 
@@ -59,6 +62,35 @@ class UserControllerTest {
     }
 
     @Test
+    @DisplayName("관리자 후보 조회 메서드는 /manager-candidates GET 매핑을 사용한다")
+    void 관리자_후보_조회_메서드는_manager_candidates_get_매핑을_사용한다() throws NoSuchMethodException {
+        Method method = UserController.class.getMethod("getManagerCandidates", CustomUserPrincipal.class);
+        GetMapping getMapping = method.getAnnotation(GetMapping.class);
+
+        assertThat(getMapping).isNotNull();
+        assertThat(getMapping.value()).containsExactly("/manager-candidates");
+    }
+
+    @Test
+    @DisplayName("관리자 후보 조회 메서드는 DIRECTOR 와 DEPT_HEAD 만 허용한다")
+    void 관리자_후보_조회_메서드는_DIRECTOR와_DEPT_HEAD만_허용한다() throws NoSuchMethodException {
+        Method method = UserController.class.getMethod("getManagerCandidates", CustomUserPrincipal.class);
+        PreAuthorize preAuthorize = method.getAnnotation(PreAuthorize.class);
+
+        assertThat(preAuthorize).isNotNull();
+        assertThat(preAuthorize.value()).isEqualTo("hasAnyRole('DIRECTOR','DEPT_HEAD')");
+    }
+
+    @Test
+    @DisplayName("관리자 후보 조회 메서드는 인증 주체 외 요청 파라미터를 받지 않는다")
+    void 관리자_후보_조회_메서드는_인증_주체_외_요청_파라미터를_받지_않는다() throws NoSuchMethodException {
+        Method method = UserController.class.getMethod("getManagerCandidates", CustomUserPrincipal.class);
+
+        assertThat(method.getParameterCount()).isEqualTo(1);
+        assertThat(method.getParameterTypes()).containsExactly(CustomUserPrincipal.class);
+    }
+
+    @Test
     @DisplayName("현재 사용자 조회 메서드는 서비스 결과를 응답 DTO 로 변환한다")
     void 현재_사용자_조회_메서드는_서비스_결과를_응답_DTO로_변환한다() {
         CustomUserPrincipal principal = new CustomUserPrincipal(101L, "user@ibank.com", "MEMBER");
@@ -95,6 +127,21 @@ class UserControllerTest {
                 "플랫폼 총괄",
                 "주담당"
         ));
+    }
+
+    @Test
+    @DisplayName("관리자 후보 조회 메서드는 서비스 결과 배열을 그대로 반환한다")
+    void 관리자_후보_조회_메서드는_서비스_결과_배열을_그대로_반환한다() {
+        CustomUserPrincipal principal = new CustomUserPrincipal(1L, "director@ibank.com", "DIRECTOR");
+        List<GetManagerCandidatesApiDto.Response> responseFromService = List.of(
+                new GetManagerCandidatesApiDto.Response(201L, "김부서", "부서장", "부장"),
+                new GetManagerCandidatesApiDto.Response(202L, "이본부", "부서장", null)
+        );
+        given(userService.getManagerCandidates(principal)).willReturn(responseFromService);
+
+        List<GetManagerCandidatesApiDto.Response> response = userController.getManagerCandidates(principal);
+
+        assertThat(response).containsExactlyElementsOf(responseFromService);
     }
 
     @Test
