@@ -3,6 +3,7 @@ package com.ibank.axwms.domain.organization.team.service;
 import com.ibank.axwms.domain.organization.team.UserTeamStatus;
 import com.ibank.axwms.domain.organization.team.dto.GetTeamApiDto;
 import com.ibank.axwms.domain.organization.team.dto.GetTeamSummaryApiDto;
+import com.ibank.axwms.domain.organization.team.dto.GetTeamUsersApiDto;
 import com.ibank.axwms.domain.organization.team.dto.GetTeamsApiDto;
 import com.ibank.axwms.domain.organization.team.entity.Team;
 import com.ibank.axwms.domain.organization.team.repository.TeamRepository;
@@ -58,7 +59,22 @@ public class TeamService {
     public GetTeamApiDto.Response getTeam(CustomUserPrincipal principal, Long teamId) {
         return teamRepository.findTeamDetail(principal.userId(), teamId)
                 .map(GetTeamApiDto.Response::from)
-                .orElseThrow(() -> getTeamDetailError(teamId));
+                .orElseThrow(() -> getTeamAccessError(teamId));
+    }
+
+    /**
+     * 로그인 사용자가 볼 수 있는 팀의 ACTIVE 사용자 목록을 조회한다.
+     *
+     * @param principal 현재 로그인 사용자
+     * @param teamId 조회 대상 팀 ID
+     * @return 팀 사용자 목록 응답
+     * @throws BusinessException TEAM_NOT_FOUND 팀이 없거나 soft-delete 되었을 때
+     * @throws BusinessException AUTH_ACCESS_DENIED 대상 팀이 visible scope 에 없을 때
+     */
+    public GetTeamUsersApiDto.Response getTeamUsers(CustomUserPrincipal principal, Long teamId) {
+        return teamRepository.findTeamUsers(principal.userId(), teamId)
+                .map(GetTeamUsersApiDto.Response::from)
+                .orElseThrow(() -> getTeamAccessError(teamId));
     }
 
     /**
@@ -86,8 +102,8 @@ public class TeamService {
         return userTeamRepository.existsByUserIdAndTeamIdAndStatusCode(userId, teamId, UserTeamStatus.ACTIVE);
     }
 
-    /** 팀 존재 여부와 접근 가능 여부를 분리해 단일 상세 조회 오류 코드를 결정한다. */
-    private BusinessException getTeamDetailError(Long teamId) {
+    /** 팀 존재 여부와 visible scope 접근 가능 여부를 분리해 접근 실패 오류 코드를 결정한다. */
+    private BusinessException getTeamAccessError(Long teamId) {
         if (!teamRepository.existsByIdAndDeletedAtIsNull(teamId)) {
             return new BusinessException(ErrorCode.TEAM_NOT_FOUND);
         }

@@ -3,7 +3,9 @@ package com.ibank.axwms.domain.organization.team.repository.jooq;
 import com.ibank.axwms.domain.organization.team.repository.jooq.projection.TeamDetailProjection;
 import com.ibank.axwms.domain.organization.team.repository.jooq.projection.TeamStatusSummaryProjection;
 import com.ibank.axwms.domain.organization.team.repository.jooq.projection.TeamSummaryProjection;
+import com.ibank.axwms.domain.organization.team.repository.jooq.projection.TeamUserSummaryProjection;
 import com.ibank.axwms.domain.organization.team.repository.jooq.query.TeamPageQuery;
+import java.util.List;
 import java.util.Optional;
 import org.springframework.data.domain.Page;
 
@@ -17,4 +19,7 @@ public interface TeamJooqRepository {
 
     /** 사용자가 볼 수 있는 단일 팀 상세를 조회한다. */
     Optional<TeamDetailProjection> findTeamDetail(Long userId, Long teamId);
+
+    /** 사용자가 볼 수 있는 팀의 ACTIVE 사용자 목록을 리더 우선, 사용자 ID 순으로 조회한다. */
+    Optional<List<TeamUserSummaryProjection>> findTeamUsers(Long userId, Long teamId);
 }

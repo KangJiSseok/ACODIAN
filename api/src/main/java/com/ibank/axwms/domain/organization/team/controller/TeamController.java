@@ -2,13 +2,13 @@ package com.ibank.axwms.domain.organization.team.controller;
 
 import com.ibank.axwms.domain.organization.team.dto.GetTeamApiDto;
 import com.ibank.axwms.domain.organization.team.dto.GetTeamSummaryApiDto;
+import com.ibank.axwms.domain.organization.team.dto.GetTeamUsersApiDto;
 import com.ibank.axwms.domain.organization.team.dto.GetTeamsApiDto;
 import com.ibank.axwms.domain.organization.team.service.TeamService;
 import com.ibank.axwms.global.response.PageResponse;
 import com.ibank.axwms.global.security.CustomUserPrincipal;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
-import lombok.extern.slf4j.Slf4j;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -20,7 +20,6 @@ import org.springframework.web.bind.annotation.RestController;
 @RestController
 @RequestMapping("/teams")
 @RequiredArgsConstructor
-@Slf4j
 public class TeamController implements TeamControllerDocs {
 
     private final TeamService teamService;
@@ -52,5 +51,15 @@ public class TeamController implements TeamControllerDocs {
             @PathVariable Long id
     ) {
         return teamService.getTeam(principal, id);
+    }
+
+    @Override
+    @GetMapping("/{id}/users")
+    @PreAuthorize("hasAnyRole('DIRECTOR','DEPT_HEAD','TEAM_LEAD','MEMBER')")
+    public GetTeamUsersApiDto.Response getTeamUsers(
+            @AuthenticationPrincipal CustomUserPrincipal principal,
+            @PathVariable Long id
+    ) {
+        return teamService.getTeamUsers(principal, id);
     }
 }
