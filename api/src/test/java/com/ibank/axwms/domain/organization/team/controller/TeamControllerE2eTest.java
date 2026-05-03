@@ -1,5 +1,6 @@
 package com.ibank.axwms.domain.organization.team.controller;
 
+import static org.assertj.core.api.Assertions.assertThat;
 import static org.hamcrest.Matchers.is;
 import static org.hamcrest.Matchers.nullValue;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
@@ -201,6 +202,61 @@ class TeamControllerE2eTest extends E2eTestSupport {
                 .andExpect(jsonPath("$.timestamp").exists());
     }
 
+    @Test
+    @DisplayName("DEPT_HEAD 가 팀을 생성하면 admin grant 와 ACTIVE 팀원이 함께 저장된다")
+    void dept_head가_팀을_생성하면_admin_grant와_active_팀원이_함께_저장된다() throws Exception {
+        Department department = departmentRepository.findAll().getFirst();
+        User creator = userRepository.save(createUser(department.getId(), "생성자", "team-create-owner", UserRole.DEPT_HEAD));
+        User director = userRepository.save(createUser(department.getId(), "디렉터", "team-create-director", UserRole.DIRECTOR));
+        User requestedAdmin = userRepository.save(createUser(department.getId(), "요청관리자", "team-create-admin", UserRole.MEMBER));
+        User leader = userRepository.save(createUser(department.getId(), "생성리더", "team-create-leader", UserRole.MEMBER));
+        User member = userRepository.save(createUser(department.getId(), "생성멤버", "team-create-member", UserRole.MEMBER));
+        String teamName = "신규생성팀-" + System.nanoTime();
+        String authorizationHeader = loginAndGetAuthorizationHeader(creator.getEmail());
+
+        mockMvc.perform(apiPost("/teams")
+                        .header(HttpHeaders.AUTHORIZATION, authorizationHeader)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {
+                                  "teamName": "%s",
+                                  "description": "창고 자동화 및 운영 고도화",
+                                  "addAdmin": %d,
+                                  "addUsers": [
+                                    {"userId": %d, "isLeader": true, "teamRole": "WMS 운영"},
+                                    {"userId": %d, "isLeader": false, "teamRole": "현장 총괄"}
+                                  ],
+                                  "statusCode": "ACTIVE",
+                                  "startDate": "2026-04-01",
+                                  "expectedEndDate": "2026-12-31"
+                                }
+                                """.formatted(teamName, requestedAdmin.getId(), leader.getId(), member.getId())))
+                .andExpect(status().isCreated())
+                .andExpect(jsonPath("$.success", is(true)))
+                .andExpect(jsonPath("$.timestamp").exists());
+
+        Team createdTeam = teamRepository.findFirstByTeamNameOrderByDeletedAtDesc(teamName).orElseThrow();
+        assertThat(createdTeam)
+                .extracting(Team::getTeamName, Team::getStatusCode, Team::getDescription, Team::getStartDate, Team::getExpectedEndDate)
+                .containsExactly(
+                        teamName,
+                        TeamStatus.ACTIVE,
+                        "창고 자동화 및 운영 고도화",
+                        LocalDate.of(2026, 4, 1),
+                        LocalDate.of(2026, 12, 31)
+                );
+        assertThat(teamAdminRepository.existsByUserIdAndTeamId(requestedAdmin.getId(), createdTeam.getId())).isTrue();
+        assertThat(teamAdminRepository.existsByUserIdAndTeamId(director.getId(), createdTeam.getId())).isTrue();
+        assertThat(userTeamRepository.findByUserIdAndTeamId(leader.getId(), createdTeam.getId()))
+                .get()
+                .extracting(UserTeam::getIsLeader, UserTeam::getTeamRole, UserTeam::getStatusCode)
+                .containsExactly(true, "WMS 운영", UserTeamStatus.ACTIVE);
+        assertThat(userTeamRepository.findByUserIdAndTeamId(member.getId(), createdTeam.getId()))
+                .get()
+                .extracting(UserTeam::getIsLeader, UserTeam::getTeamRole, UserTeam::getStatusCode)
+                .containsExactly(false, "현장 총괄", UserTeamStatus.ACTIVE);
+    }
+
     /** FK 제약을 피하기 위해 업무일지부터 테스트 데이터를 비운다. */
     private void clearDatabase() {
         worklogRepository.deleteAll();
@@ -239,11 +295,15 @@ class TeamControllerE2eTest extends E2eTestSupport {
     }
 
     private String loginAndGetAuthorizationHeader() throws Exception {
+        return loginAndGetAuthorizationHeader(callerEmail);
+    }
+
+    private String loginAndGetAuthorizationHeader(String email) throws Exception {
         MvcResult result = mockMvc.perform(apiPost("/auth/login")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("""
                                 {"email":"%s","password":"%s"}
-                                """.formatted(callerEmail, RAW_PASSWORD)))
+                                """.formatted(email, RAW_PASSWORD)))
                 .andExpect(status().isOk())
                 .andReturn();
 

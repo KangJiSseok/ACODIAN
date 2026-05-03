@@ -2,6 +2,7 @@ package com.ibank.axwms.domain.organization.team.service;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.assertj.core.groups.Tuple.tuple;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.BDDMockito.given;
@@ -10,11 +11,15 @@ import static org.mockito.BDDMockito.then;
 
 import com.ibank.axwms.domain.organization.team.TeamStatus;
 import com.ibank.axwms.domain.organization.team.UserTeamStatus;
+import com.ibank.axwms.domain.organization.team.dto.CreateTeamApiDto;
 import com.ibank.axwms.domain.organization.team.dto.GetTeamApiDto;
 import com.ibank.axwms.domain.organization.team.dto.GetTeamSummaryApiDto;
 import com.ibank.axwms.domain.organization.team.dto.GetTeamUsersApiDto;
 import com.ibank.axwms.domain.organization.team.dto.GetTeamsApiDto;
 import com.ibank.axwms.domain.organization.team.entity.Team;
+import com.ibank.axwms.domain.organization.team.entity.TeamAdmin;
+import com.ibank.axwms.domain.organization.team.entity.UserTeam;
+import com.ibank.axwms.domain.organization.team.repository.TeamAdminRepository;
 import com.ibank.axwms.domain.organization.team.repository.jooq.projection.TeamDetailProjection;
 import com.ibank.axwms.domain.organization.team.repository.TeamRepository;
 import com.ibank.axwms.domain.organization.team.repository.UserTeamRepository;
@@ -22,13 +27,16 @@ import com.ibank.axwms.domain.organization.team.repository.jooq.projection.TeamS
 import com.ibank.axwms.domain.organization.team.repository.jooq.projection.TeamSummaryProjection;
 import com.ibank.axwms.domain.organization.team.repository.jooq.projection.TeamUserSummaryProjection;
 import com.ibank.axwms.domain.organization.team.repository.jooq.query.TeamPageQuery;
+import com.ibank.axwms.domain.organization.user.EmploymentStatus;
+import com.ibank.axwms.domain.organization.user.UserRole;
+import com.ibank.axwms.domain.organization.user.entity.User;
+import com.ibank.axwms.domain.organization.user.repository.UserRepository;
 import com.ibank.axwms.global.error.BusinessException;
 import com.ibank.axwms.global.error.ErrorCode;
 import com.ibank.axwms.global.response.PageResponse;
 import com.ibank.axwms.global.security.CustomUserPrincipal;
 import java.time.LocalDate;
 import java.util.List;
-import java.util.Optional;
 import java.util.Optional;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -48,7 +56,13 @@ class TeamServiceTest {
     private TeamRepository teamRepository;
 
     @Mock
+    private TeamAdminRepository teamAdminRepository;
+
+    @Mock
     private UserTeamRepository userTeamRepository;
+
+    @Mock
+    private UserRepository userRepository;
 
     @InjectMocks
     private TeamService teamService;
@@ -244,6 +258,134 @@ class TeamServiceTest {
                 .existsByUserIdAndTeamIdAndStatusCode(101L, 21L, UserTeamStatus.ACTIVE);
     }
 
+    @Test
+    @DisplayName("createTeam 은 팀과 요청 관리자 및 DIRECTOR grant 와 ACTIVE membership 을 생성한다")
+    void createTeam_은_팀과_요청_관리자_및_director_grant와_active_membership을_생성한다() {
+        CreateTeamApiDto.Request request = createTeamRequest();
+        Team savedTeam = createTeam(501L);
+        User requestedAdmin = createUser(201L, UserRole.MEMBER);
+        User leader = createUser(202L, UserRole.MEMBER);
+        User member = createUser(203L, UserRole.MEMBER);
+        User director = createUser(301L, UserRole.DIRECTOR);
+        given(teamRepository.existsByTeamNameAndDeletedAtIsNull("물류혁신TF")).willReturn(false);
+        given(userRepository.findAllById(any())).willReturn(List.of(requestedAdmin, leader, member));
+        given(userRepository.findAllByRoleCode(UserRole.DIRECTOR)).willReturn(List.of(director));
+        given(teamRepository.save(any(Team.class))).willReturn(savedTeam);
+
+        teamService.createTeam(request);
+
+        ArgumentCaptor<Team> teamCaptor = ArgumentCaptor.forClass(Team.class);
+        then(teamRepository).should().save(teamCaptor.capture());
+        assertThat(teamCaptor.getValue())
+                .extracting(Team::getTeamName, Team::getStatusCode, Team::getDescription, Team::getStartDate, Team::getExpectedEndDate)
+                .containsExactly(
+                        "물류혁신TF",
+                        TeamStatus.ACTIVE,
+                        "창고 자동화 및 운영 고도화",
+                        LocalDate.of(2026, 4, 1),
+                        LocalDate.of(2026, 12, 31)
+                );
+
+        @SuppressWarnings("unchecked")
+        ArgumentCaptor<List<TeamAdmin>> adminCaptor = ArgumentCaptor.forClass(List.class);
+        then(teamAdminRepository).should().saveAll(adminCaptor.capture());
+        assertThat(adminCaptor.getValue())
+                .extracting(TeamAdmin::getUserId, TeamAdmin::getTeamId)
+                .containsExactlyInAnyOrder(
+                        tuple(201L, 501L),
+                        tuple(301L, 501L)
+                );
+
+        @SuppressWarnings("unchecked")
+        ArgumentCaptor<List<UserTeam>> userTeamCaptor = ArgumentCaptor.forClass(List.class);
+        then(userTeamRepository).should().saveAll(userTeamCaptor.capture());
+        assertThat(userTeamCaptor.getValue())
+                .extracting(
+                        UserTeam::getUserId,
+                        UserTeam::getTeamId,
+                        UserTeam::getIsLeader,
+                        UserTeam::getTeamRole,
+                        UserTeam::getStatusCode
+                )
+                .containsExactly(
+                        tuple(202L, 501L, true, "WMS 운영", UserTeamStatus.ACTIVE),
+                        tuple(203L, 501L, false, "현장 총괄", UserTeamStatus.ACTIVE)
+                );
+    }
+
+    @Test
+    @DisplayName("createTeam 은 동일 팀명이 존재하면 TEAM_DUPLICATE_NAME 예외를 던진다")
+    void createTeam_은_동일_팀명이_존재하면_team_duplicate_name_예외를_던진다() {
+        CreateTeamApiDto.Request request = createTeamRequest();
+        given(teamRepository.existsByTeamNameAndDeletedAtIsNull("물류혁신TF")).willReturn(true);
+
+        assertThatThrownBy(() -> teamService.createTeam(request))
+                .isInstanceOf(BusinessException.class)
+                .extracting(error -> ((BusinessException) error).getErrorCode())
+                .isEqualTo(ErrorCode.TEAM_DUPLICATE_NAME);
+        then(teamRepository).should(never()).save(any());
+    }
+
+    @Test
+    @DisplayName("createTeam 은 요청 사용자 중 존재하지 않는 사용자가 있으면 USER_NOT_FOUND 예외를 던진다")
+    void createTeam_은_요청_사용자_중_존재하지_않는_사용자가_있으면_user_not_found_예외를_던진다() {
+        CreateTeamApiDto.Request request = createTeamRequest();
+        given(teamRepository.existsByTeamNameAndDeletedAtIsNull("물류혁신TF")).willReturn(false);
+        given(userRepository.findAllById(any())).willReturn(List.of(createUser(201L, UserRole.MEMBER)));
+
+        assertThatThrownBy(() -> teamService.createTeam(request))
+                .isInstanceOf(BusinessException.class)
+                .extracting(error -> ((BusinessException) error).getErrorCode())
+                .isEqualTo(ErrorCode.USER_NOT_FOUND);
+        then(teamRepository).should(never()).save(any());
+    }
+
+    @Test
+    @DisplayName("createTeam 은 팀 리더가 둘 이상이면 TEAM_LEADER_COUNT_INVALID 예외를 던진다")
+    void createTeam_은_팀_리더가_둘_이상이면_team_leader_count_invalid_예외를_던진다() {
+        CreateTeamApiDto.Request request = new CreateTeamApiDto.Request(
+                "물류혁신TF",
+                "창고 자동화 및 운영 고도화",
+                201L,
+                List.of(
+                        new CreateTeamApiDto.AddUser(202L, true, "WMS 운영"),
+                        new CreateTeamApiDto.AddUser(203L, true, "현장 총괄")
+                ),
+                TeamStatus.ACTIVE,
+                LocalDate.of(2026, 4, 1),
+                LocalDate.of(2026, 12, 31)
+        );
+
+        assertThatThrownBy(() -> teamService.createTeam(request))
+                .isInstanceOf(BusinessException.class)
+                .extracting(error -> ((BusinessException) error).getErrorCode())
+                .isEqualTo(ErrorCode.TEAM_LEADER_COUNT_INVALID);
+        then(teamRepository).should(never()).existsByTeamNameAndDeletedAtIsNull(any());
+    }
+
+    @Test
+    @DisplayName("createTeam 은 팀 리더가 없으면 TEAM_LEADER_COUNT_INVALID 예외를 던진다")
+    void createTeam_은_팀_리더가_없으면_team_leader_count_invalid_예외를_던진다() {
+        CreateTeamApiDto.Request request = new CreateTeamApiDto.Request(
+                "물류혁신TF",
+                "창고 자동화 및 운영 고도화",
+                201L,
+                List.of(
+                        new CreateTeamApiDto.AddUser(202L, false, "WMS 운영"),
+                        new CreateTeamApiDto.AddUser(203L, false, "현장 총괄")
+                ),
+                TeamStatus.ACTIVE,
+                LocalDate.of(2026, 4, 1),
+                LocalDate.of(2026, 12, 31)
+        );
+
+        assertThatThrownBy(() -> teamService.createTeam(request))
+                .isInstanceOf(BusinessException.class)
+                .extracting(error -> ((BusinessException) error).getErrorCode())
+                .isEqualTo(ErrorCode.TEAM_LEADER_COUNT_INVALID);
+        then(teamRepository).should(never()).existsByTeamNameAndDeletedAtIsNull(any());
+    }
+
     private CustomUserPrincipal principal() {
         return new CustomUserPrincipal(101L, "user@ibank.com", "MEMBER");
     }
@@ -301,5 +443,38 @@ class TeamServiceTest {
         );
         ReflectionTestUtils.setField(team, "id", id);
         return team;
+    }
+
+    private CreateTeamApiDto.Request createTeamRequest() {
+        return new CreateTeamApiDto.Request(
+                "물류혁신TF",
+                "창고 자동화 및 운영 고도화",
+                201L,
+                List.of(
+                        new CreateTeamApiDto.AddUser(202L, true, "WMS 운영"),
+                        new CreateTeamApiDto.AddUser(203L, false, "현장 총괄")
+                ),
+                TeamStatus.ACTIVE,
+                LocalDate.of(2026, 4, 1),
+                LocalDate.of(2026, 12, 31)
+        );
+    }
+
+    private User createUser(Long id, UserRole role) {
+        User user = User.create(
+                1L,
+                "테스트사용자",
+                "user-" + id + "@ibank.com",
+                "$2a$10$abcdefghijklmnopqrstuv",
+                role,
+                EmploymentStatus.ACTIVE,
+                "사원",
+                null,
+                LocalDate.of(2025, 1, 1),
+                null,
+                null
+        );
+        ReflectionTestUtils.setField(user, "id", id);
+        return user;
     }
 }
