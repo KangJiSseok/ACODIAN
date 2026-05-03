@@ -1,9 +1,11 @@
 package com.ibank.axwms.domain.organization.team.controller;
 
+import com.ibank.axwms.domain.organization.team.dto.CreateTeamApiDto;
 import com.ibank.axwms.domain.organization.team.dto.GetTeamApiDto;
 import com.ibank.axwms.domain.organization.team.dto.GetTeamSummaryApiDto;
 import com.ibank.axwms.domain.organization.team.dto.GetTeamUsersApiDto;
 import com.ibank.axwms.domain.organization.team.dto.GetTeamsApiDto;
+import com.ibank.axwms.global.response.EmptyResponse;
 import com.ibank.axwms.global.response.PageResponse;
 import com.ibank.axwms.global.security.CustomUserPrincipal;
 import io.swagger.v3.oas.annotations.Operation;
@@ -75,4 +77,18 @@ public interface TeamControllerDocs {
             @Parameter(hidden = true) CustomUserPrincipal principal,
             @Parameter(description = "팀 ID", example = "21") Long id
     );
+
+    @Operation(summary = "팀 생성",
+            description = "DIRECTOR 또는 DEPT_HEAD 가 새 팀을 생성하고, 요청된 admin grant 와 팀원을 함께 추가한다. "
+                    + "모든 DIRECTOR 사용자도 생성된 팀의 admin grant 로 추가된다.")
+    @SecurityRequirement(name = "bearerAuth")
+    @ApiResponses({
+            @ApiResponse(responseCode = "201", description = "팀을 생성한다."),
+            @ApiResponse(responseCode = "400", description = "요청 값이 올바르지 않다.", content = @Content),
+            @ApiResponse(responseCode = "401", description = "인증이 필요하다.", content = @Content),
+            @ApiResponse(responseCode = "403", description = "팀 생성 권한이 없다.", content = @Content),
+            @ApiResponse(responseCode = "404", description = "요청에 포함된 사용자를 찾을 수 없다.", content = @Content),
+            @ApiResponse(responseCode = "409", description = "같은 이름의 팀이 이미 존재한다.", content = @Content)
+    })
+    EmptyResponse createTeam(CreateTeamApiDto.Request request);
 }

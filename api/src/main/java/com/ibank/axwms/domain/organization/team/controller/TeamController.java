@@ -1,20 +1,26 @@
 package com.ibank.axwms.domain.organization.team.controller;
 
+import com.ibank.axwms.domain.organization.team.dto.CreateTeamApiDto;
 import com.ibank.axwms.domain.organization.team.dto.GetTeamApiDto;
 import com.ibank.axwms.domain.organization.team.dto.GetTeamSummaryApiDto;
 import com.ibank.axwms.domain.organization.team.dto.GetTeamUsersApiDto;
 import com.ibank.axwms.domain.organization.team.dto.GetTeamsApiDto;
 import com.ibank.axwms.domain.organization.team.service.TeamService;
+import com.ibank.axwms.global.response.EmptyResponse;
 import com.ibank.axwms.global.response.PageResponse;
 import com.ibank.axwms.global.security.CustomUserPrincipal;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
+import org.springframework.http.HttpStatus;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.ModelAttribute;
 import org.springframework.web.bind.annotation.PathVariable;
+import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestBody;
+import org.springframework.web.bind.annotation.ResponseStatus;
 import org.springframework.web.bind.annotation.RestController;
 
 @RestController
@@ -61,5 +67,14 @@ public class TeamController implements TeamControllerDocs {
             @PathVariable Long id
     ) {
         return teamService.getTeamUsers(principal, id);
+    }
+
+    @Override
+    @PostMapping
+    @ResponseStatus(HttpStatus.CREATED)
+    @PreAuthorize("hasAnyRole('DIRECTOR','DEPT_HEAD')")
+    public EmptyResponse createTeam(@Valid @RequestBody CreateTeamApiDto.Request request) {
+        teamService.createTeam(request);
+        return EmptyResponse.INSTANCE;
     }
 }
