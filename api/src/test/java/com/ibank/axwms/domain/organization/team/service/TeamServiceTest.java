@@ -12,6 +12,7 @@ import com.ibank.axwms.domain.organization.team.TeamStatus;
 import com.ibank.axwms.domain.organization.team.UserTeamStatus;
 import com.ibank.axwms.domain.organization.team.dto.GetTeamApiDto;
 import com.ibank.axwms.domain.organization.team.dto.GetTeamSummaryApiDto;
+import com.ibank.axwms.domain.organization.team.dto.GetTeamUsersApiDto;
 import com.ibank.axwms.domain.organization.team.dto.GetTeamsApiDto;
 import com.ibank.axwms.domain.organization.team.entity.Team;
 import com.ibank.axwms.domain.organization.team.repository.jooq.projection.TeamDetailProjection;
@@ -19,6 +20,7 @@ import com.ibank.axwms.domain.organization.team.repository.TeamRepository;
 import com.ibank.axwms.domain.organization.team.repository.UserTeamRepository;
 import com.ibank.axwms.domain.organization.team.repository.jooq.projection.TeamStatusSummaryProjection;
 import com.ibank.axwms.domain.organization.team.repository.jooq.projection.TeamSummaryProjection;
+import com.ibank.axwms.domain.organization.team.repository.jooq.projection.TeamUserSummaryProjection;
 import com.ibank.axwms.domain.organization.team.repository.jooq.query.TeamPageQuery;
 import com.ibank.axwms.global.error.BusinessException;
 import com.ibank.axwms.global.error.ErrorCode;
@@ -26,6 +28,7 @@ import com.ibank.axwms.global.response.PageResponse;
 import com.ibank.axwms.global.security.CustomUserPrincipal;
 import java.time.LocalDate;
 import java.util.List;
+import java.util.Optional;
 import java.util.Optional;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -161,6 +164,52 @@ class TeamServiceTest {
     }
 
     @Test
+    @DisplayName("getTeamUsers 는 visible team 의 ACTIVE 사용자 목록을 응답으로 변환한다")
+    void getTeamUsers_는_visible_team의_ACTIVE_사용자_목록을_응답으로_변환한다() {
+        CustomUserPrincipal principal = principal();
+        given(teamRepository.findTeamUsers(101L, 21L)).willReturn(Optional.of(List.of(teamUserProjection())));
+
+        GetTeamUsersApiDto.Response response = teamService.getTeamUsers(principal, 21L);
+
+        assertThat(response.items()).singleElement()
+                .extracting(
+                        GetTeamUsersApiDto.Item::isLeader,
+                        GetTeamUsersApiDto.Item::userId,
+                        GetTeamUsersApiDto.Item::userName,
+                        GetTeamUsersApiDto.Item::positionName,
+                        GetTeamUsersApiDto.Item::teamRole
+                )
+                .containsExactly(true, 101L, "홍길동", "과장", "플랫폼 총괄");
+        then(teamRepository).should().findTeamUsers(101L, 21L);
+    }
+
+    @Test
+    @DisplayName("getTeamUsers 대상 팀이 없으면 TEAM_NOT_FOUND 예외를 던진다")
+    void getTeamUsers_대상_팀이_없으면_TEAM_NOT_FOUND_예외를_던진다() {
+        CustomUserPrincipal principal = principal();
+        given(teamRepository.findTeamUsers(101L, 999L)).willReturn(Optional.empty());
+        given(teamRepository.existsByIdAndDeletedAtIsNull(999L)).willReturn(false);
+
+        assertThatThrownBy(() -> teamService.getTeamUsers(principal, 999L))
+                .isInstanceOf(BusinessException.class)
+                .extracting(error -> ((BusinessException) error).getErrorCode())
+                .isEqualTo(ErrorCode.TEAM_NOT_FOUND);
+    }
+
+    @Test
+    @DisplayName("getTeamUsers 대상 팀이 visible scope 밖이면 AUTH_ACCESS_DENIED 예외를 던진다")
+    void getTeamUsers_대상_팀이_visible_scope_밖이면_AUTH_ACCESS_DENIED_예외를_던진다() {
+        CustomUserPrincipal principal = principal();
+        given(teamRepository.findTeamUsers(101L, 21L)).willReturn(Optional.empty());
+        given(teamRepository.existsByIdAndDeletedAtIsNull(21L)).willReturn(true);
+
+        assertThatThrownBy(() -> teamService.getTeamUsers(principal, 21L))
+                .isInstanceOf(BusinessException.class)
+                .extracting(error -> ((BusinessException) error).getErrorCode())
+                .isEqualTo(ErrorCode.AUTH_ACCESS_DENIED);
+    }
+
+    @Test
     @DisplayName("팀 ID가 존재하면 팀 엔티티를 반환한다")
     void 팀_ID가_존재하면_팀_엔티티를_반환한다() {
         Team team = createTeam(21L);
@@ -229,6 +278,16 @@ class TeamServiceTest {
                 LocalDate.of(2026, 12, 31),
                 202L,
                 "김사업부장"
+        );
+    }
+
+    private TeamUserSummaryProjection teamUserProjection() {
+        return new TeamUserSummaryProjection(
+                true,
+                101L,
+                "홍길동",
+                "과장",
+                "플랫폼 총괄"
         );
     }
 

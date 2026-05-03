@@ -15,6 +15,7 @@ import com.ibank.axwms.domain.organization.team.entity.UserTeam;
 import com.ibank.axwms.domain.organization.team.repository.jooq.projection.TeamDetailProjection;
 import com.ibank.axwms.domain.organization.team.repository.jooq.projection.TeamStatusSummaryProjection;
 import com.ibank.axwms.domain.organization.team.repository.jooq.projection.TeamSummaryProjection;
+import com.ibank.axwms.domain.organization.team.repository.jooq.projection.TeamUserSummaryProjection;
 import com.ibank.axwms.domain.organization.team.repository.jooq.query.TeamPageQuery;
 import com.ibank.axwms.domain.organization.user.EmploymentStatus;
 import com.ibank.axwms.domain.organization.user.UserRole;
@@ -218,6 +219,30 @@ class TeamRepositoryIntegrationTest extends IntegrationTestSupport {
         assertThat(teamRepository.findTeamDetail(fixture.callerId(), fixture.deletedTeamId())).isEmpty();
     }
 
+    @Test
+    @DisplayName("visible scope 팀 사용자 목록은 ACTIVE membership 만 리더 우선 사용자 ID 순으로 조회한다")
+    void visible_scope_팀_사용자_목록은_ACTIVE_membership만_리더_우선_사용자_ID순으로_조회한다() {
+        TeamFixture fixture = seedVisibleScopeFixture();
+
+        List<TeamUserSummaryProjection> result = teamRepository.findTeamUsers(fixture.callerId(), fixture.leaderTeamId()).orElseThrow();
+
+        assertThat(result)
+                .extracting(
+                        TeamUserSummaryProjection::isLeader,
+                        TeamUserSummaryProjection::userId,
+                        TeamUserSummaryProjection::userName,
+                        TeamUserSummaryProjection::positionName,
+                        TeamUserSummaryProjection::teamRole
+                )
+                .containsExactly(
+                        tuple(true, fixture.callerId(), "호출자", "사원", "리더"),
+                        tuple(false, fixture.activeMemberId(), "활성멤버", "사원", "구성원")
+                );
+        assertThat(result)
+                .extracting(TeamUserSummaryProjection::userId)
+                .doesNotContain(fixture.leftMemberId());
+    }
+
     private void clearDatabase() {
         worklogRepository.deleteAll();
         List<Department> departments = departmentRepository.findAll();
@@ -262,6 +287,8 @@ class TeamRepositoryIntegrationTest extends IntegrationTestSupport {
 
         return new TeamFixture(
                 caller.getId(),
+                activeMember.getId(),
+                leftMember.getId(),
                 adminOnlyLeader.getId(),
                 deptHeadAdmin.getId(),
                 leaderTeam.getId(),
@@ -329,6 +356,8 @@ class TeamRepositoryIntegrationTest extends IntegrationTestSupport {
     }
 
     private record TeamFixture(Long callerId,
+                               Long activeMemberId,
+                               Long leftMemberId,
                                Long adminOnlyLeaderId,
                                Long deptHeadAdminId,
                                Long leaderTeamId,
