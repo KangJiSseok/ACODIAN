@@ -6,6 +6,7 @@ import com.ibank.axwms.domain.organization.team.dto.GetTeamApiDto;
 import com.ibank.axwms.domain.organization.team.dto.GetTeamSummaryApiDto;
 import com.ibank.axwms.domain.organization.team.dto.GetTeamUsersApiDto;
 import com.ibank.axwms.domain.organization.team.dto.GetTeamsApiDto;
+import com.ibank.axwms.domain.organization.team.dto.UpdateTeamApiDto;
 import com.ibank.axwms.domain.organization.team.entity.Team;
 import com.ibank.axwms.domain.organization.team.entity.TeamAdmin;
 import com.ibank.axwms.domain.organization.team.entity.UserTeam;
@@ -22,6 +23,8 @@ import com.ibank.axwms.global.response.PageResponse;
 import com.ibank.axwms.global.security.CustomUserPrincipal;
 import java.util.HashSet;
 import java.util.List;
+import java.util.Objects;
+import java.util.Optional;
 import java.util.Set;
 import java.util.stream.Collectors;
 import lombok.RequiredArgsConstructor;
@@ -102,7 +105,7 @@ public class TeamService {
         validateCreateTeamRequest(request);
         validateTeamNameUnique(request.teamName());
 
-        Set<Long> requestedUserIds = requestedUserIds(request);
+        Set<Long> requestedUserIds = requestedUserIdsForCreate(request);
         ensureUsersExist(requestedUserIds);
 
         Team team = teamRepository.save(Team.create(
@@ -116,6 +119,51 @@ public class TeamService {
 
         teamAdminRepository.saveAll(adminGrants(teamId, request.addAdmin()));
         userTeamRepository.saveAll(userMemberships(teamId, request.addUsers()));
+    }
+
+    /**
+     * 대상 팀의 기본 정보, 관리 grant, membership 을 null 이 아닌 요청 필드 기준으로 부분 수정한다.
+     *
+     * @param principal 현재 로그인 사용자
+     * @param teamId 수정 대상 팀 ID
+     * @param request 부분 수정 요청
+     * @throws BusinessException TEAM_NOT_FOUND 팀이 없거나 soft-delete 되었을 때
+     * @throws BusinessException AUTH_ACCESS_DENIED 호출자가 대상 팀의 admin grant 를 보유하지 않을 때
+     * @throws BusinessException TEAM_DUPLICATE_NAME soft-delete 되지 않은 동일 팀명이 이미 존재할 때
+     * @throws BusinessException USER_NOT_FOUND 요청에 포함된 사용자 ID가 존재하지 않을 때
+     */
+    @Transactional
+    public void updateTeam(CustomUserPrincipal principal, Long teamId, UpdateTeamApiDto.Request request) {
+
+        //검증
+        validateUpdateTeamRequest(request);
+        Team team = getActiveTeamOrThrow(teamId);
+        validateTeamAdminGrant(principal.userId(), teamId);
+        validateRemoveAdminAllowed(principal, request.removeAdmin());
+        validateTeamNameUniqueForUpdate(team, request.teamName());
+        ensureUsersExist(requestedUserIdsForUpdate(request));
+
+        //검증이 끝났으므로 모두 update
+        team.updatePartial(
+                request.teamName(),
+                request.statusCode(),
+                request.description(),
+                request.startDate(),
+                request.expectedEndDate()
+        );
+        //Admin 추가, 삭제
+        addAdminGrant(teamId, request.addAdmin());
+        removeAdminGrant(teamId, request.removeAdmin());
+
+        //팀 멤버 추가,삭제,수정
+        List<UpdateTeamApiDto.AddUser> addUsers = nonNullAddUsers(request);
+        reassignLeaderIfRequested(teamId, addUsers);
+        addOrReactivateUsers(teamId, addUsers);
+        removeUsers(teamId, nonNullRemoveUsers(request));
+        editUsers(teamId, nonNullEditUsers(request));
+
+        //최종 리더가 1명이면 예외
+        validateAtLeastOneActiveLeader(teamId);
     }
 
     /**
@@ -150,6 +198,15 @@ public class TeamService {
         }
     }
 
+    /** 수정 대상 팀명을 자기 자신을 제외한 soft-delete 되지 않은 팀명과 비교한다. */
+    private void validateTeamNameUniqueForUpdate(Team team, String requestedTeamName) {
+        if (requestedTeamName != null // 팀명 변경 요청이 있을 때만 검사
+                && !Objects.equals(team.getTeamName(), requestedTeamName) // 현재 팀명과 다를 때만 검사
+                && teamRepository.existsByTeamNameAndDeletedAtIsNullAndIdNot(requestedTeamName, team.getId())) {
+            throw new BusinessException(ErrorCode.TEAM_DUPLICATE_NAME);
+        }
+    }
+
     /** 생성 요청 내부 중복과 리더 정확히 한 명 규칙 위반을 비즈니스 오류로 정규화한다. */
     private void validateCreateTeamRequest(CreateTeamApiDto.Request request) {
         Set<Long> memberUserIds = new HashSet<>();
@@ -167,16 +224,80 @@ public class TeamService {
         }
     }
 
-    /** addAdmin 과 addUsers 의 참조 사용자 ID 집합을 만든다. */
-    private Set<Long> requestedUserIds(CreateTeamApiDto.Request request) {
+    /** 부분 수정 요청의 중복 사용자와 리더 변경 충돌을 비즈니스 오류로 정규화한다. */
+    private void validateUpdateTeamRequest(UpdateTeamApiDto.Request request) {
+        if (request == null) {
+            throw new BusinessException(ErrorCode.COMMON_INVALID_REQUEST);
+        }
+        validateNoDuplicateUsers(nonNullAddUsers(request));
+        validateNoDuplicateIds(nonNullRemoveUsers(request));
+        validateNoDuplicateEditUsers(nonNullEditUsers(request));
+        validateLeaderCount(request);
+        validateTeamNameNotBlank(request);
+        validateNoUserListConflicts(request);
+    }
+
+    /** addUsers 에 리더가 2명 이상이면 오류를 던진다. */
+    private void validateLeaderCount(UpdateTeamApiDto.Request request) {
+        if (countRequestedLeaders(nonNullAddUsers(request)) > 1) {
+            throw new BusinessException(ErrorCode.TEAM_LEADER_COUNT_INVALID);
+        }
+    }
+
+    /** 모든 membership 변경 적용 후 팀에 ACTIVE 리더가 한 명도 없으면 오류를 던진다. */
+    private void validateAtLeastOneActiveLeader(Long teamId) {
+        if (userTeamRepository.findAllByTeamIdAndStatusCodeAndIsLeader(teamId, UserTeamStatus.ACTIVE, true).isEmpty()) {
+            throw new BusinessException(ErrorCode.TEAM_LEADER_COUNT_INVALID);
+        }
+    }
+
+    /** teamName 이 null 이 아닌데 빈 문자열이면 오류를 던진다. */
+    private void validateTeamNameNotBlank(UpdateTeamApiDto.Request request) {
+        if (request.teamName() != null && request.teamName().isBlank()) {
+            throw new BusinessException(ErrorCode.COMMON_INVALID_REQUEST);
+        }
+    }
+
+    /** addUsers/removeUsers 교집합과 editUsers/removeUsers 교집합을 검사한다. */
+    private void validateNoUserListConflicts(UpdateTeamApiDto.Request request) {
+        Set<Long> addUserIds = nonNullAddUsers(request).stream()
+                .map(UpdateTeamApiDto.AddUser::userId)
+                .collect(Collectors.toSet());
+        if (nonNullRemoveUsers(request).stream().anyMatch(addUserIds::contains)) {
+            throw new BusinessException(ErrorCode.COMMON_INVALID_REQUEST);
+        }
+        Set<Long> removeUserIds = new HashSet<>(nonNullRemoveUsers(request));
+        if (nonNullEditUsers(request).stream()
+                .map(UpdateTeamApiDto.EditUser::userId)
+                .anyMatch(removeUserIds::contains)) {
+            throw new BusinessException(ErrorCode.COMMON_INVALID_REQUEST);
+        }
+    }
+
+    /** 팀 생성 요청이 참조하는 모든 사용자 ID 집합을 만든다. */
+    private Set<Long> requestedUserIdsForCreate(CreateTeamApiDto.Request request) {
         Set<Long> userIds = new HashSet<>();
         userIds.add(request.addAdmin());
         request.addUsers().forEach(addUser -> userIds.add(addUser.userId()));
         return userIds;
     }
 
+    /** 부분 수정 요청이 참조하는 모든 사용자 ID 집합을 만든다. */
+    private Set<Long> requestedUserIdsForUpdate(UpdateTeamApiDto.Request request) {
+        Set<Long> userIds = new HashSet<>();
+        addIfNotNull(userIds, request.addAdmin());
+        addIfNotNull(userIds, request.removeAdmin());
+        nonNullAddUsers(request).forEach(addUser -> addIfNotNull(userIds, addUser.userId()));
+        nonNullRemoveUsers(request).forEach(userId -> addIfNotNull(userIds, userId));
+        nonNullEditUsers(request).forEach(editUser -> addIfNotNull(userIds, editUser.userId()));
+        return userIds;
+    }
+
     /** 요청 사용자 ID가 모두 존재하는지 확인한다. */
     private void ensureUsersExist(Set<Long> requestedUserIds) {
+        if (requestedUserIds.isEmpty()) {
+            return;
+        }
         Set<Long> existingUserIds = userRepository.findAllById(requestedUserIds).stream()
                 .map(User::getId)
                 .collect(Collectors.toSet());
@@ -194,6 +315,94 @@ public class TeamService {
         return adminUserIds.stream()
                 .map(userId -> TeamAdmin.grant(userId, teamId))
                 .toList();
+    }
+
+    /** teamId 로 soft-delete 되지 않은 팀을 조회한다. */
+    private Team getActiveTeamOrThrow(Long teamId) {
+        return teamRepository.findByIdAndDeletedAtIsNull(teamId)
+                .orElseThrow(() -> new BusinessException(ErrorCode.TEAM_NOT_FOUND));
+    }
+
+    /** 호출자가 대상 팀 admin grant 를 보유하는지 검증한다. */
+    private void validateTeamAdminGrant(Long userId, Long teamId) {
+        if (!teamAdminRepository.existsByUserIdAndTeamId(userId, teamId)) {
+            throw new BusinessException(ErrorCode.AUTH_ACCESS_DENIED);
+        }
+    }
+
+    /** 팀 관리 grant 회수는 DIRECTOR 만 수행할 수 있다. */
+    private void validateRemoveAdminAllowed(CustomUserPrincipal principal, Long removeAdminUserId) {
+        if (removeAdminUserId == null || UserRole.DIRECTOR.name().equals(principal.roleCode())) {
+            return;
+        }
+        throw new BusinessException(ErrorCode.AUTH_ACCESS_DENIED);
+    }
+
+    /** 요청 사용자에게 팀 관리 grant 를 추가한다. 이미 있으면 멱등 처리한다. */
+    private void addAdminGrant(Long teamId, Long userId) {
+        if (userId != null && !teamAdminRepository.existsByUserIdAndTeamId(userId, teamId)) {
+            teamAdminRepository.save(TeamAdmin.grant(userId, teamId));
+        }
+    }
+
+    /** 요청 사용자의 팀 관리 grant 를 회수한다. */
+    private void removeAdminGrant(Long teamId, Long userId) {
+        if (userId != null) {
+            teamAdminRepository.deleteByUserIdAndTeamId(userId, teamId);
+        }
+    }
+
+    /** addUsers 중 isLeader=true 가 있으면 해당 사용자 외 기존 ACTIVE 리더를 강등한다. */
+    private void reassignLeaderIfRequested(Long teamId, List<UpdateTeamApiDto.AddUser> addUsers) {
+        addUsers.stream()
+                .filter(u -> Boolean.TRUE.equals(u.isLeader()))
+                .findFirst()
+                .ifPresent(newLeader -> demoteCurrentLeaders(teamId, newLeader.userId()));
+    }
+
+    /** 사용자 추가 요청을 신규 ACTIVE membership 생성 또는 기존 row 재활성화로 반영한다. */
+    private void addOrReactivateUsers(Long teamId, List<UpdateTeamApiDto.AddUser> addUsers) {
+        for (UpdateTeamApiDto.AddUser addUser : addUsers) {
+            Optional<UserTeam> existing = userTeamRepository.findByUserIdAndTeamId(addUser.userId(), teamId);
+            if (existing.isPresent()) {
+                existing.get().reactivate(addUser.isLeader(), addUser.teamRole(), null, false);
+            } else {
+                userTeamRepository.save(UserTeam.create(
+                        addUser.userId(),
+                        teamId,
+                        addUser.isLeader(),
+                        addUser.teamRole(),
+                        null,
+                        false,
+                        UserTeamStatus.ACTIVE
+                ));
+            }
+        }
+    }
+
+    /** 지정 사용자 외 기존 ACTIVE 리더를 일반 멤버로 강등한다. */
+    private void demoteCurrentLeaders(Long teamId, Long newLeaderUserId) {
+        userTeamRepository.findAllByTeamIdAndStatusCodeAndIsLeader(teamId, UserTeamStatus.ACTIVE, true).stream()
+                .filter(userTeam -> !Objects.equals(userTeam.getUserId(), newLeaderUserId))
+                .forEach(UserTeam::demoteToMember);
+    }
+
+    /** 요청된 사용자 membership 을 LEFT 상태로 전환한다. */
+    private void removeUsers(Long teamId, List<Long> userIds) {
+        for (Long userId : userIds) {
+            userTeamRepository.findByUserIdAndTeamId(userId, teamId)
+                    .ifPresent(userTeam -> userTeam.changeStatus(UserTeamStatus.LEFT));
+        }
+    }
+
+    /** 요청된 ACTIVE membership 의 팀 내 업무 역할을 수정한다. */
+    private void editUsers(Long teamId, List<UpdateTeamApiDto.EditUser> editUsers) {
+        for (UpdateTeamApiDto.EditUser editUser : editUsers) {
+            UserTeam userTeam = userTeamRepository.findByUserIdAndTeamId(editUser.userId(), teamId)
+                    .filter(membership -> membership.getStatusCode() == UserTeamStatus.ACTIVE)
+                    .orElseThrow(() -> new BusinessException(ErrorCode.USER_NOT_FOUND));
+            userTeam.updateTeamRole(editUser.teamRole());
+        }
     }
 
     /** 요청 팀원들을 ACTIVE membership 으로 생성한다. */
@@ -217,5 +426,58 @@ public class TeamService {
             return new BusinessException(ErrorCode.TEAM_NOT_FOUND);
         }
         return new BusinessException(ErrorCode.AUTH_ACCESS_DENIED);
+    }
+
+    /** null 이면 빈 리스트를 반환한다. addUsers 필드는 부분 수정 요청에서 생략 가능하다. */
+    private List<UpdateTeamApiDto.AddUser> nonNullAddUsers(UpdateTeamApiDto.Request request) {
+        return request.addUsers() == null ? List.of() : request.addUsers();
+    }
+
+    /** null 이면 빈 리스트를 반환한다. removeUsers 필드는 부분 수정 요청에서 생략 가능하다. */
+    private List<Long> nonNullRemoveUsers(UpdateTeamApiDto.Request request) {
+        return request.removeUsers() == null ? List.of() : request.removeUsers();
+    }
+
+    /** null 이면 빈 리스트를 반환한다. editUsers 필드는 부분 수정 요청에서 생략 가능하다. */
+    private List<UpdateTeamApiDto.EditUser> nonNullEditUsers(UpdateTeamApiDto.Request request) {
+        return request.editUsers() == null ? List.of() : request.editUsers();
+    }
+
+    /** addUsers 목록에 동일 userId 가 중복되면 오류를 던진다. */
+    private void validateNoDuplicateUsers(List<UpdateTeamApiDto.AddUser> addUsers) {
+        validateNoDuplicateIds(addUsers.stream()
+                .map(UpdateTeamApiDto.AddUser::userId)
+                .toList());
+    }
+
+    /** editUsers 목록에 동일 userId 가 중복되면 오류를 던진다. */
+    private void validateNoDuplicateEditUsers(List<UpdateTeamApiDto.EditUser> editUsers) {
+        validateNoDuplicateIds(editUsers.stream()
+                .map(UpdateTeamApiDto.EditUser::userId)
+                .toList());
+    }
+
+    /** userId 목록에 중복이 있으면 오류를 던진다. null userId 는 중복 검사에서 제외한다. */
+    private void validateNoDuplicateIds(List<Long> userIds) {
+        Set<Long> unique = new HashSet<>();
+        for (Long userId : userIds) {
+            if (userId != null && !unique.add(userId)) {
+                throw new BusinessException(ErrorCode.COMMON_INVALID_REQUEST);
+            }
+        }
+    }
+
+    /** addUsers 중 isLeader=true 인 항목 수를 반환한다. */
+    private long countRequestedLeaders(List<UpdateTeamApiDto.AddUser> addUsers) {
+        return addUsers.stream()
+                .filter(addUser -> Boolean.TRUE.equals(addUser.isLeader()))
+                .count();
+    }
+
+    /** 값이 null 이 아닌 경우에만 집합에 추가한다. */
+    private void addIfNotNull(Set<Long> userIds, Long userId) {
+        if (userId != null) {
+            userIds.add(userId);
+        }
     }
 }

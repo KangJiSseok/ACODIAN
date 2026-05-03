@@ -12,9 +12,15 @@ public interface TeamRepository extends JpaRepository<Team, Long>, TeamJooqRepos
      */
     Optional<Team> findFirstByTeamNameOrderByDeletedAtDesc(String teamName);
 
+    /** soft-delete 되지 않은 팀을 ID로 조회한다. */
+    Optional<Team> findByIdAndDeletedAtIsNull(Long id);
+
     /** soft-delete 되지 않은 팀 ID가 존재하는지 확인한다. */
     boolean existsByIdAndDeletedAtIsNull(Long id);
 
     /** soft-delete 되지 않은 동일 팀명 존재 여부를 확인한다. */
     boolean existsByTeamNameAndDeletedAtIsNull(String teamName);
+
+    /** 자기 자신을 제외하고 soft-delete 되지 않은 동일 팀명이 존재하는지 확인한다. */
+    boolean existsByTeamNameAndDeletedAtIsNullAndIdNot(String teamName, Long id);
 }

@@ -97,6 +97,29 @@ public class Team {
         changeStatus(statusCode);
     }
 
+    /** null 이 아닌 요청 필드만 팀 기본 정보에 반영한다. */
+    public void updatePartial(String teamName,
+                              TeamStatus statusCode,
+                              String description,
+                              LocalDate startDate,
+                              LocalDate expectedEndDate) {
+        if (teamName != null) {
+            this.teamName = teamName;
+        }
+        if (description != null) {
+            this.description = description;
+        }
+        if (startDate != null) {
+            this.startDate = startDate;
+        }
+        if (expectedEndDate != null) {
+            this.expectedEndDate = expectedEndDate;
+        }
+        if (statusCode != null) {
+            changeStatus(statusCode);
+        }
+    }
+
     /** 운영 상태를 바꾼다. soft-delete 와는 별개다. */
     public void changeStatus(TeamStatus statusCode) {
         this.statusCode = statusCode;

@@ -123,14 +123,14 @@ public class UserTeam {
         this.statusCode = statusCode;
     }
 
-    /** create/update leader reassignment 시 현재 membership 을 LEADER 로 승격한다. */
-    public void promoteToLeader(String teamRole, String allocation, boolean isPrimary) {
-        synchronizeMembershipProfile(true, teamRole, allocation, isPrimary, UserTeamStatus.ACTIVE);
-    }
-
     /** 같은 팀의 기존 대표자를 일반 멤버로 강등한다. */
     public void demoteToMember() {
         this.isLeader = false;
+    }
+
+    /** ACTIVE membership 의 팀 내 업무 역할을 수정한다. */
+    public void updateTeamRole(String teamRole) {
+        this.teamRole = teamRole;
     }
 
     /** LEFT 처리된 membership 을 다시 활성화한다. */
@@ -138,10 +138,4 @@ public class UserTeam {
         synchronizeMembershipProfile(isLeader, teamRole, allocation, isPrimary, UserTeamStatus.ACTIVE);
     }
 
-    /** bulk write 에서 joinedAt 을 요청값으로 맞출 필요가 있을 때만 사용한다. */
-    public void synchronizeJoinedAt(LocalDate joinedAt) {
-        if (joinedAt != null) {
-            this.joinedAt = joinedAt.atStartOfDay();
-        }
-    }
 }

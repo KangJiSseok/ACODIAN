@@ -9,6 +9,7 @@ import com.ibank.axwms.domain.organization.team.dto.CreateTeamApiDto;
 import com.ibank.axwms.domain.organization.team.dto.GetTeamApiDto;
 import com.ibank.axwms.domain.organization.team.dto.GetTeamSummaryApiDto;
 import com.ibank.axwms.domain.organization.team.dto.GetTeamUsersApiDto;
+import com.ibank.axwms.domain.organization.team.dto.UpdateTeamApiDto;
 import com.ibank.axwms.domain.organization.team.service.TeamService;
 import com.ibank.axwms.global.response.EmptyResponse;
 import com.ibank.axwms.global.security.CustomUserPrincipal;
@@ -80,6 +81,18 @@ class TeamControllerTest {
         assertThat(response).isSameAs(EmptyResponse.INSTANCE);
     }
 
+    @Test
+    @DisplayName("팀 부분 수정 메서드는 인증 사용자와 요청을 서비스에 위임하고 빈 응답을 반환한다")
+    void 팀_부분_수정_메서드는_인증_사용자와_요청을_서비스에_위임하고_빈_응답을_반환한다() {
+        CustomUserPrincipal principal = principal();
+        UpdateTeamApiDto.Request request = updateTeamRequest();
+
+        EmptyResponse response = teamController.updateTeam(principal, 21L, request);
+
+        then(teamService).should().updateTeam(principal, 21L, request);
+        assertThat(response).isSameAs(EmptyResponse.INSTANCE);
+    }
+
     private CustomUserPrincipal principal() {
         return new CustomUserPrincipal(101L, "user@ibank.com", "MEMBER");
     }
@@ -115,6 +128,21 @@ class TeamControllerTest {
                 "창고 자동화 및 운영 고도화",
                 100L,
                 List.of(new CreateTeamApiDto.AddUser(102L, true, "WMS 운영")),
+                TeamStatus.ACTIVE,
+                LocalDate.of(2026, 4, 1),
+                LocalDate.of(2026, 12, 31)
+        );
+    }
+
+    private UpdateTeamApiDto.Request updateTeamRequest() {
+        return new UpdateTeamApiDto.Request(
+                "수정팀",
+                "수정 설명",
+                110L,
+                100L,
+                List.of(new UpdateTeamApiDto.AddUser(102L, true, "WMS 운영")),
+                List.of(101L),
+                List.of(new UpdateTeamApiDto.EditUser(105L, "WMS 운영")),
                 TeamStatus.ACTIVE,
                 LocalDate.of(2026, 4, 1),
                 LocalDate.of(2026, 12, 31)

@@ -16,6 +16,7 @@ import com.ibank.axwms.domain.organization.team.dto.GetTeamApiDto;
 import com.ibank.axwms.domain.organization.team.dto.GetTeamSummaryApiDto;
 import com.ibank.axwms.domain.organization.team.dto.GetTeamUsersApiDto;
 import com.ibank.axwms.domain.organization.team.dto.GetTeamsApiDto;
+import com.ibank.axwms.domain.organization.team.dto.UpdateTeamApiDto;
 import com.ibank.axwms.domain.organization.team.entity.Team;
 import com.ibank.axwms.domain.organization.team.entity.TeamAdmin;
 import com.ibank.axwms.domain.organization.team.entity.UserTeam;
@@ -314,6 +315,109 @@ class TeamServiceTest {
     }
 
     @Test
+    @DisplayName("updateTeam 은 admin grant 보유자 요청의 null 이 아닌 필드와 grant membership 변경만 반영한다")
+    void updateTeam_은_admin_grant_보유자_요청의_null이_아닌_필드와_grant_membership_변경만_반영한다() {
+        CustomUserPrincipal principal = directorPrincipal();
+        Team team = createTeam(21L);
+        User newAdmin = createUser(204L, UserRole.MEMBER);
+        User removeAdmin = createUser(205L, UserRole.MEMBER);
+        User rejoinUser = createUser(202L, UserRole.MEMBER);
+        User removeUser = createUser(203L, UserRole.MEMBER);
+        User editUser = createUser(206L, UserRole.MEMBER);
+        UserTeam currentLeader = UserTeam.create(201L, 21L, true, "기존 리더", "주담당", true, UserTeamStatus.ACTIVE);
+        UserTeam rejoinMembership = UserTeam.create(202L, 21L, false, "이탈", "겸임", false, UserTeamStatus.LEFT);
+        UserTeam removeMembership = UserTeam.create(203L, 21L, false, "제거 대상", "겸임", false, UserTeamStatus.ACTIVE);
+        UserTeam editMembership = UserTeam.create(206L, 21L, false, "이전 역할", "겸임", false, UserTeamStatus.ACTIVE);
+        UpdateTeamApiDto.Request request = updateTeamRequest();
+        given(teamRepository.findByIdAndDeletedAtIsNull(21L)).willReturn(Optional.of(team));
+        given(teamAdminRepository.existsByUserIdAndTeamId(301L, 21L)).willReturn(true);
+        given(teamRepository.existsByTeamNameAndDeletedAtIsNullAndIdNot("수정팀", 21L)).willReturn(false);
+        given(userRepository.findAllById(any())).willReturn(List.of(newAdmin, removeAdmin, rejoinUser, removeUser, editUser));
+        given(teamAdminRepository.existsByUserIdAndTeamId(204L, 21L)).willReturn(false);
+        given(userTeamRepository.findAllByTeamIdAndStatusCodeAndIsLeader(21L, UserTeamStatus.ACTIVE, true))
+                .willReturn(List.of(currentLeader));
+        given(userTeamRepository.findByUserIdAndTeamId(202L, 21L)).willReturn(Optional.of(rejoinMembership));
+        given(userTeamRepository.findByUserIdAndTeamId(203L, 21L)).willReturn(Optional.of(removeMembership));
+        given(userTeamRepository.findByUserIdAndTeamId(206L, 21L)).willReturn(Optional.of(editMembership));
+
+        teamService.updateTeam(principal, 21L, request);
+
+        assertThat(team)
+                .extracting(Team::getTeamName, Team::getStatusCode, Team::getDescription, Team::getStartDate, Team::getExpectedEndDate)
+                .containsExactly(
+                        "수정팀",
+                        TeamStatus.INACTIVE,
+                        "수정 설명",
+                        LocalDate.of(2026, 5, 1),
+                        LocalDate.of(2026, 11, 30)
+                );
+        assertThat(currentLeader.getIsLeader()).isFalse();
+        assertThat(rejoinMembership)
+                .extracting(UserTeam::getIsLeader, UserTeam::getTeamRole, UserTeam::getStatusCode)
+                .containsExactly(true, "신규 리더", UserTeamStatus.ACTIVE);
+        assertThat(removeMembership.getStatusCode()).isEqualTo(UserTeamStatus.LEFT);
+        assertThat(editMembership.getTeamRole()).isEqualTo("수정 역할");
+        then(teamAdminRepository).should().save(any(TeamAdmin.class));
+        then(teamAdminRepository).should().deleteByUserIdAndTeamId(205L, 21L);
+    }
+
+    @Test
+    @DisplayName("updateTeam 은 대상 팀 admin grant 가 없으면 AUTH_ACCESS_DENIED 예외를 던진다")
+    void updateTeam_은_대상_팀_admin_grant가_없으면_auth_access_denied_예외를_던진다() {
+        Team team = createTeam(21L);
+        given(teamRepository.findByIdAndDeletedAtIsNull(21L)).willReturn(Optional.of(team));
+        given(teamAdminRepository.existsByUserIdAndTeamId(101L, 21L)).willReturn(false);
+
+        assertThatThrownBy(() -> teamService.updateTeam(principal(), 21L, updateTeamRequest()))
+                .isInstanceOf(BusinessException.class)
+                .extracting(error -> ((BusinessException) error).getErrorCode())
+                .isEqualTo(ErrorCode.AUTH_ACCESS_DENIED);
+        then(userRepository).should(never()).findAllById(any());
+    }
+
+    @Test
+    @DisplayName("updateTeam 은 DIRECTOR 가 아닌 사용자가 admin grant 를 회수하면 AUTH_ACCESS_DENIED 예외를 던진다")
+    void updateTeam_은_director가_아닌_사용자가_admin_grant를_회수하면_auth_access_denied_예외를_던진다() {
+        Team team = createTeam(21L);
+        UpdateTeamApiDto.Request request = new UpdateTeamApiDto.Request(
+                null,
+                null,
+                null,
+                301L,
+                null,
+                null,
+                null,
+                null,
+                null,
+                null
+        );
+        given(teamRepository.findByIdAndDeletedAtIsNull(21L)).willReturn(Optional.of(team));
+        given(teamAdminRepository.existsByUserIdAndTeamId(202L, 21L)).willReturn(true);
+
+        assertThatThrownBy(() -> teamService.updateTeam(deptHeadPrincipal(), 21L, request))
+                .isInstanceOf(BusinessException.class)
+                .extracting(error -> ((BusinessException) error).getErrorCode())
+                .isEqualTo(ErrorCode.AUTH_ACCESS_DENIED);
+        then(userRepository).should(never()).findAllById(any());
+        then(teamAdminRepository).should(never()).deleteByUserIdAndTeamId(301L, 21L);
+    }
+
+    @Test
+    @DisplayName("updateTeam 은 다른 활성 팀과 팀명이 중복되면 TEAM_DUPLICATE_NAME 예외를 던진다")
+    void updateTeam_은_다른_활성_팀과_팀명이_중복되면_team_duplicate_name_예외를_던진다() {
+        Team team = createTeam(21L);
+        given(teamRepository.findByIdAndDeletedAtIsNull(21L)).willReturn(Optional.of(team));
+        given(teamAdminRepository.existsByUserIdAndTeamId(301L, 21L)).willReturn(true);
+        given(teamRepository.existsByTeamNameAndDeletedAtIsNullAndIdNot("수정팀", 21L)).willReturn(true);
+
+        assertThatThrownBy(() -> teamService.updateTeam(directorPrincipal(), 21L, updateTeamRequest()))
+                .isInstanceOf(BusinessException.class)
+                .extracting(error -> ((BusinessException) error).getErrorCode())
+                .isEqualTo(ErrorCode.TEAM_DUPLICATE_NAME);
+        then(userRepository).should(never()).findAllById(any());
+    }
+
+    @Test
     @DisplayName("createTeam 은 동일 팀명이 존재하면 TEAM_DUPLICATE_NAME 예외를 던진다")
     void createTeam_은_동일_팀명이_존재하면_team_duplicate_name_예외를_던진다() {
         CreateTeamApiDto.Request request = createTeamRequest();
@@ -390,6 +494,14 @@ class TeamServiceTest {
         return new CustomUserPrincipal(101L, "user@ibank.com", "MEMBER");
     }
 
+    private CustomUserPrincipal deptHeadPrincipal() {
+        return new CustomUserPrincipal(202L, "dept-head@ibank.com", "DEPT_HEAD");
+    }
+
+    private CustomUserPrincipal directorPrincipal() {
+        return new CustomUserPrincipal(301L, "director@ibank.com", "DIRECTOR");
+    }
+
     private TeamSummaryProjection projection() {
         return new TeamSummaryProjection(
                 21L,
@@ -457,6 +569,21 @@ class TeamServiceTest {
                 TeamStatus.ACTIVE,
                 LocalDate.of(2026, 4, 1),
                 LocalDate.of(2026, 12, 31)
+        );
+    }
+
+    private UpdateTeamApiDto.Request updateTeamRequest() {
+        return new UpdateTeamApiDto.Request(
+                "수정팀",
+                "수정 설명",
+                204L,
+                205L,
+                List.of(new UpdateTeamApiDto.AddUser(202L, true, "신규 리더")),
+                List.of(203L),
+                List.of(new UpdateTeamApiDto.EditUser(206L, "수정 역할")),
+                TeamStatus.INACTIVE,
+                LocalDate.of(2026, 5, 1),
+                LocalDate.of(2026, 11, 30)
         );
     }
 

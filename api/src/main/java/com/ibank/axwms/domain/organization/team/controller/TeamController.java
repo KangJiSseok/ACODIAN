@@ -5,6 +5,7 @@ import com.ibank.axwms.domain.organization.team.dto.GetTeamApiDto;
 import com.ibank.axwms.domain.organization.team.dto.GetTeamSummaryApiDto;
 import com.ibank.axwms.domain.organization.team.dto.GetTeamUsersApiDto;
 import com.ibank.axwms.domain.organization.team.dto.GetTeamsApiDto;
+import com.ibank.axwms.domain.organization.team.dto.UpdateTeamApiDto;
 import com.ibank.axwms.domain.organization.team.service.TeamService;
 import com.ibank.axwms.global.response.EmptyResponse;
 import com.ibank.axwms.global.response.PageResponse;
@@ -16,6 +17,7 @@ import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.ModelAttribute;
+import org.springframework.web.bind.annotation.PatchMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
@@ -75,6 +77,18 @@ public class TeamController implements TeamControllerDocs {
     @PreAuthorize("hasAnyRole('DIRECTOR','DEPT_HEAD')")
     public EmptyResponse createTeam(@Valid @RequestBody CreateTeamApiDto.Request request) {
         teamService.createTeam(request);
+        return EmptyResponse.INSTANCE;
+    }
+
+    @Override
+    @PatchMapping("/{id}")
+    @PreAuthorize("hasAnyRole('DIRECTOR','DEPT_HEAD')")
+    public EmptyResponse updateTeam(
+            @AuthenticationPrincipal CustomUserPrincipal principal,
+            @PathVariable Long id,
+            @Valid @RequestBody UpdateTeamApiDto.Request request
+    ) {
+        teamService.updateTeam(principal, id, request);
         return EmptyResponse.INSTANCE;
     }
 }
