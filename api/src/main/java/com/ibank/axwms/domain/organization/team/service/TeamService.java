@@ -139,6 +139,7 @@ public class TeamService {
         validateUpdateTeamRequest(request);
         Team team = getActiveTeamOrThrow(teamId);
         validateTeamAdminGrant(principal.userId(), teamId);
+        validateRemoveAdminAllowed(principal, request.removeAdmin());
         validateTeamNameUniqueForUpdate(team, request.teamName());
         ensureUsersExist(requestedUserIdsForUpdate(request));
 
@@ -327,6 +328,14 @@ public class TeamService {
         if (!teamAdminRepository.existsByUserIdAndTeamId(userId, teamId)) {
             throw new BusinessException(ErrorCode.AUTH_ACCESS_DENIED);
         }
+    }
+
+    /** 팀 관리 grant 회수는 DIRECTOR 만 수행할 수 있다. */
+    private void validateRemoveAdminAllowed(CustomUserPrincipal principal, Long removeAdminUserId) {
+        if (removeAdminUserId == null || UserRole.DIRECTOR.name().equals(principal.roleCode())) {
+            return;
+        }
+        throw new BusinessException(ErrorCode.AUTH_ACCESS_DENIED);
     }
 
     /** 요청 사용자에게 팀 관리 grant 를 추가한다. 이미 있으면 멱등 처리한다. */

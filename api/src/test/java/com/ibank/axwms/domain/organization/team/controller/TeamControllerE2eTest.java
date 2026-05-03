@@ -260,16 +260,18 @@ class TeamControllerE2eTest extends E2eTestSupport {
     }
 
     @Test
-    @DisplayName("DEPT_HEAD admin grant 보유자가 팀을 부분 수정하면 기본 정보와 grant membership 이 반영된다")
-    void dept_head_admin_grant_보유자가_팀을_부분_수정하면_기본_정보와_grant_membership이_반영된다() throws Exception {
+    @DisplayName("DIRECTOR admin grant 보유자가 팀을 부분 수정하면 기본 정보와 grant membership 이 반영된다")
+    void director_admin_grant_보유자가_팀을_부분_수정하면_기본_정보와_grant_membership이_반영된다() throws Exception {
         Department department = departmentRepository.findAll().getFirst();
+        User directorAdmin = userRepository.save(createUser(department.getId(), "본부장관리자", "team-update-director", UserRole.DIRECTOR));
         User newAdmin = userRepository.save(createUser(department.getId(), "신규관리자", "team-update-admin", UserRole.MEMBER));
         User removedAdmin = userRepository.save(createUser(department.getId(), "회수관리자", "team-update-remove-admin", UserRole.MEMBER));
         User newLeader = userRepository.save(createUser(department.getId(), "신규리더", "team-update-leader", UserRole.MEMBER));
         User editMember = userRepository.save(createUser(department.getId(), "역할수정대상", "team-update-edit", UserRole.MEMBER));
+        teamAdminRepository.save(TeamAdmin.grant(directorAdmin.getId(), visibleTeamId));
         teamAdminRepository.save(TeamAdmin.grant(removedAdmin.getId(), visibleTeamId));
         userTeamRepository.save(UserTeam.create(editMember.getId(), visibleTeamId, false, "이전 역할", "겸임", false, UserTeamStatus.ACTIVE));
-        String authorizationHeader = loginAndGetAuthorizationHeader(deptHeadAdminEmail);
+        String authorizationHeader = loginAndGetAuthorizationHeader(directorAdmin.getEmail());
         String updatedTeamName = "부분수정팀-" + System.nanoTime();
 
         mockMvc.perform(apiPatch("/teams/" + visibleTeamId)
