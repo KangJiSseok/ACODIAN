@@ -12,12 +12,17 @@ import com.ibank.axwms.domain.organization.team.dto.GetTeamsApiDto;
 import com.ibank.axwms.domain.organization.team.entity.Team;
 import com.ibank.axwms.domain.organization.team.entity.TeamAdmin;
 import com.ibank.axwms.domain.organization.team.entity.UserTeam;
+import com.ibank.axwms.domain.organization.team.repository.jooq.projection.TeamDetailProjection;
 import com.ibank.axwms.domain.organization.team.repository.jooq.projection.TeamSummaryProjection;
 import com.ibank.axwms.domain.organization.team.repository.jooq.query.TeamPageQuery;
 import com.ibank.axwms.domain.organization.user.EmploymentStatus;
 import com.ibank.axwms.domain.organization.user.UserRole;
 import com.ibank.axwms.domain.organization.user.entity.User;
 import com.ibank.axwms.domain.organization.user.repository.UserRepository;
+import com.ibank.axwms.domain.worklog.WorklogImportance;
+import com.ibank.axwms.domain.worklog.WorklogStatus;
+import com.ibank.axwms.domain.worklog.entity.Worklog;
+import com.ibank.axwms.domain.worklog.repository.WorklogRepository;
 import com.ibank.axwms.testsupport.IntegrationTestSupport;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
@@ -27,6 +32,7 @@ import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.data.domain.Page;
+import org.springframework.test.util.ReflectionTestUtils;
 
 class TeamRepositoryIntegrationTest extends IntegrationTestSupport {
 
@@ -44,6 +50,9 @@ class TeamRepositoryIntegrationTest extends IntegrationTestSupport {
 
     @Autowired
     private UserTeamRepository userTeamRepository;
+
+    @Autowired
+    private WorklogRepository worklogRepository;
 
     @BeforeEach
     void setUp() {
@@ -106,7 +115,75 @@ class TeamRepositoryIntegrationTest extends IntegrationTestSupport {
                 .doesNotContain(fixture.leftOnlyTeamId(), fixture.deletedTeamId());
     }
 
+    @Test
+    @DisplayName("visible scope 팀 상세는 기본 정보와 DEPT_HEAD 팀 관리자를 조회한다")
+    void visible_scope_팀_상세는_기본_정보와_DEPT_HEAD_팀_관리자를_조회한다() {
+        TeamFixture fixture = seedVisibleScopeFixture();
+
+        TeamDetailProjection result = teamRepository.findTeamDetail(fixture.callerId(), fixture.leaderTeamId())
+                .orElseThrow();
+
+        assertThat(result)
+                .extracting(
+                        TeamDetailProjection::teamId,
+                        TeamDetailProjection::teamName,
+                        TeamDetailProjection::statusCode,
+                        TeamDetailProjection::teamLeaderId,
+                        TeamDetailProjection::teamLeaderName,
+                        TeamDetailProjection::deptHeadAdminUserId,
+                        TeamDetailProjection::deptHeadAdminUsername
+                )
+                .containsExactly(
+                        fixture.leaderTeamId(),
+                        "리더팀",
+                        "ACTIVE",
+                        fixture.callerId(),
+                        "호출자",
+                        fixture.deptHeadAdminId(),
+                        "사업부장관리자"
+                );
+        assertThat(result.startDate()).isEqualTo(LocalDate.of(2026, 4, 1));
+        assertThat(result.expectedEndDate()).isEqualTo(LocalDate.of(2026, 12, 31));
+    }
+
+    @Test
+    @DisplayName("팀 상세는 admin grant 만 있는 팀도 visible scope 로 조회한다")
+    void 팀_상세는_admin_grant만_있는_팀도_visible_scope로_조회한다() {
+        TeamFixture fixture = seedVisibleScopeFixture();
+
+        TeamDetailProjection result = teamRepository.findTeamDetail(fixture.callerId(), fixture.adminOnlyTeamId())
+                .orElseThrow();
+
+        assertThat(result)
+                .extracting(
+                        TeamDetailProjection::teamId,
+                        TeamDetailProjection::teamName,
+                        TeamDetailProjection::teamLeaderId,
+                        TeamDetailProjection::teamLeaderName,
+                        TeamDetailProjection::deptHeadAdminUserId,
+                        TeamDetailProjection::deptHeadAdminUsername
+                )
+                .containsExactly(
+                        fixture.adminOnlyTeamId(),
+                        "관리전용팀",
+                        fixture.adminOnlyLeaderId(),
+                        "관리전용리더",
+                        null,
+                        null
+                );
+    }
+
+    @Test
+    @DisplayName("팀 상세는 LEFT membership 전용 팀과 soft-delete 팀을 반환하지 않는다")
+    void 팀_상세는_left_membership_전용_팀과_soft_delete_팀을_반환하지_않는다() {
+        TeamFixture fixture = seedVisibleScopeFixture();
+
+        assertThat(teamRepository.findTeamDetail(fixture.callerId(), fixture.leftOnlyTeamId())).isEmpty();
+        assertThat(teamRepository.findTeamDetail(fixture.callerId(), fixture.deletedTeamId())).isEmpty();
+    }
+
     private void clearDatabase() {
+        worklogRepository.deleteAll();
         List<Department> departments = departmentRepository.findAll();
         departments.forEach(department -> department.assignHeadUserId(null));
         departmentRepository.saveAll(departments);
@@ -125,6 +202,7 @@ class TeamRepositoryIntegrationTest extends IntegrationTestSupport {
         User activeMember = userRepository.save(createUser(department.getId(), "활성멤버", UserRole.MEMBER));
         User leftMember = userRepository.save(createUser(department.getId(), "이탈멤버", UserRole.MEMBER));
         User adminOnlyLeader = userRepository.save(createUser(department.getId(), "관리전용리더", UserRole.MEMBER));
+        User deptHeadAdmin = userRepository.save(createUser(department.getId(), "사업부장관리자", UserRole.DEPT_HEAD));
 
         Team leaderTeam = teamRepository.save(createTeam("리더팀", TeamStatus.ACTIVE));
         Team primaryTeam = teamRepository.save(createTeam("주담당팀", TeamStatus.ACTIVE));
@@ -144,10 +222,12 @@ class TeamRepositoryIntegrationTest extends IntegrationTestSupport {
         teamAdminRepository.save(TeamAdmin.grant(caller.getId(), adminOnlyTeam.getId()));
         teamAdminRepository.save(TeamAdmin.grant(caller.getId(), inactiveDuplicateTeam.getId()));
         teamAdminRepository.save(TeamAdmin.grant(caller.getId(), deletedTeam.getId()));
+        teamAdminRepository.save(TeamAdmin.grant(deptHeadAdmin.getId(), leaderTeam.getId()));
 
         return new TeamFixture(
                 caller.getId(),
                 adminOnlyLeader.getId(),
+                deptHeadAdmin.getId(),
                 leaderTeam.getId(),
                 primaryTeam.getId(),
                 adminOnlyTeam.getId(),
@@ -196,8 +276,25 @@ class TeamRepositoryIntegrationTest extends IntegrationTestSupport {
         return team;
     }
 
+    private Worklog createWorklog(Long authorId, Long teamId, WorklogStatus statusCode, boolean isDeleted) {
+        Worklog worklog = Worklog.create(
+                authorId,
+                teamId,
+                "팀 상세 집계 검증",
+                "요청 내용",
+                "업무 내용",
+                WorklogImportance.NORMAL,
+                LocalDate.of(2026, 4, 1),
+                LocalDate.of(2026, 4, 2)
+        );
+        ReflectionTestUtils.setField(worklog, "statusCode", statusCode);
+        ReflectionTestUtils.setField(worklog, "isDeleted", isDeleted);
+        return worklog;
+    }
+
     private record TeamFixture(Long callerId,
                                Long adminOnlyLeaderId,
+                               Long deptHeadAdminId,
                                Long leaderTeamId,
                                Long primaryTeamId,
                                Long adminOnlyTeamId,
