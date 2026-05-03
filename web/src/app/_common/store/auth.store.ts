@@ -8,7 +8,7 @@ export interface AuthUserTeam {
   isPrimary: boolean;
   teamId: number;
   teamName: string;
-  teamLeader: boolean;
+  isLeader: boolean;
   teamRole: string;
   allocation: string | null;
 }
@@ -17,10 +17,14 @@ export interface AuthUserTeam {
 export interface AuthUser {
   userId: number;
   userName: string;
+  email: string;
+  phone: string | null;
   departmentId: number;
   departmentName: string;
   positionName: string | null;
   titleName: string | null;
+  joinDate: string | null;
+  employmentStatus: "ACTIVE" | "LEAVE" | "RETIRED" | string;
   profileImageUrl: string | null;
   teams: AuthUserTeam[];
 }

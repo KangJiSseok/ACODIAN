@@ -66,7 +66,7 @@ export default function Sidebar() {
             </button>
           ) : (
             <Link
-              href="/"
+              href="/my-page"
               className="flex h-10 w-[3.75rem] items-center justify-center"
               title="IBANK"
               aria-label="IBANK"
@@ -156,7 +156,7 @@ export default function Sidebar() {
         <div className="mt-auto">
           <div className="relative grid w-full grid-cols-[3.75rem_minmax(0,1fr)] items-center">
             <Link
-              href="/"
+              href="/my-page"
               className={cn(
                 "col-span-2 grid h-14 w-full min-w-0 grid-cols-[3.75rem_minmax(0,1fr)] items-center rounded-xl text-white transition-colors hover:bg-white/8",
                 sidebarCollapsed
