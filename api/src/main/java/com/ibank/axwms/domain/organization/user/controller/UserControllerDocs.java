@@ -60,7 +60,7 @@ public interface UserControllerDocs {
 
     @Operation(
             summary = "사용자 목록 조회",
-            description = "인증된 사용자가 사용자 목록을 페이지네이션 없이 조회한다. "
+            description = "DIRECTOR 또는 DEPT_HEAD 가 사용자 목록을 페이지네이션 없이 조회한다. "
                     + "userName, departmentId, positionName, employmentStatus optional filter 를 적용하며, "
                     + "employmentStatus 가 없으면 ACTIVE/LEAVE 만 포함하고 RETIRED 는 항상 제외한다. "
                     + "정렬은 DIRECTOR, DEPT_HEAD, TEAM_LEAD, MEMBER 순서다."

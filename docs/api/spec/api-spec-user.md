@@ -179,7 +179,7 @@
 ### GET /api/users
 - 목적: 사용자 목록을 페이지네이션 없이 필터 조건에 따라 조회한다.
 - 상태: `Documented`
-- 권한/접근 주체: 인증된 사용자만 호출한다. accessToken 으로 인증한다.
+- 권한/접근 주체: `DIRECTOR`, `DEPT_HEAD` 만 호출한다. accessToken 으로 인증한다.
 - 요청
   - Query: `userName`,`departmentId`, `positionName`, `employmentStatus`
   - 각 query 필드는 `null` 이거나 생략되면 전체 조건으로 해석한다.

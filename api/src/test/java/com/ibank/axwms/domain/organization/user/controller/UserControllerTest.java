@@ -103,13 +103,13 @@ class UserControllerTest {
     }
 
     @Test
-    @DisplayName("사용자 목록 조회 메서드는 인증된 모든 role 을 허용한다")
-    void 사용자_목록_조회_메서드는_인증된_모든_role을_허용한다() throws NoSuchMethodException {
+    @DisplayName("사용자 목록 조회 메서드는 DIRECTOR 와 DEPT_HEAD role 을 허용한다")
+    void 사용자_목록_조회_메서드는_DIRECTOR와_DEPT_HEAD_role을_허용한다() throws NoSuchMethodException {
         Method method = UserController.class.getMethod("getUsers", CustomUserPrincipal.class, GetUsersApiDto.Request.class);
         PreAuthorize preAuthorize = method.getAnnotation(PreAuthorize.class);
 
         assertThat(preAuthorize).isNotNull();
-        assertThat(preAuthorize.value()).isEqualTo("hasAnyRole('DIRECTOR','DEPT_HEAD','TEAM_LEAD','MEMBER')");
+        assertThat(preAuthorize.value()).isEqualTo("hasAnyRole('DIRECTOR','DEPT_HEAD')");
     }
 
     @Test

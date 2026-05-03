@@ -39,7 +39,7 @@ public class UserController implements UserControllerDocs {
 
     @Override
     @GetMapping
-    @PreAuthorize("hasAnyRole('DIRECTOR','DEPT_HEAD','TEAM_LEAD','MEMBER')")
+    @PreAuthorize("hasAnyRole('DIRECTOR','DEPT_HEAD')")
     public List<GetUsersApiDto.Response> getUsers(
             @AuthenticationPrincipal CustomUserPrincipal principal,
             @Valid @ModelAttribute GetUsersApiDto.Request request
