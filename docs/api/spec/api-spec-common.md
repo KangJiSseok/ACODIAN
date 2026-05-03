@@ -27,11 +27,11 @@
 ## 5. Canonical precedence
 
 ### 5.1 Upstream inventory canonical
-- **54행 coverage matrix** 의 canonical source 는 아래 순서를 따른다.
+- **53행 coverage matrix** 의 canonical source 는 아래 순서를 따른다.
   1. `docs/api/api-springboot-endpoint-checklist.md`
   2. `docs/api/api-springboot-endpoint-class-mapping.md`
   3. ERD / ADR / architecture guide
-- `api-spec-index.md` 의 matrix row count 는 현재 index 기준 **54** 를 유지한다.
+- `api-spec-index.md` 의 matrix row count 는 현재 index 기준 **53**을 유지한다.
 - checklist/class mapping 의 row identity 는 유지하되, clarified scope 에서 현재 spec path 를 명시적으로 고정한 경우 matrix/display path 는 normalized 표기를 사용할 수 있다.
 
 ### 5.2 Spec-normalized path canonical
@@ -138,7 +138,7 @@
 - spec 본문 변경으로 checklist/class mapping 의 상태·경로·설명과 불일치가 생기면 관련 markdown 을 함께 갱신한다.
 
 ## 13. 공통 검수 체크리스트
-- [x] `api-spec-index.md` matrix row 수가 54인가?
+- [x] `api-spec-index.md` matrix row 수가 53인가?
 - [x] addendum row 수가 2인가?
 - [x] non-GET payload 유지 예외가 정확히 2건인가? (login, refresh 는 헤더/쿠키 전송 규약으로 제외)
 - [ ] 예외 외 non-GET 응답이 모두 `data: {}` 인가?

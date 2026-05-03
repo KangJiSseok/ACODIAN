@@ -47,6 +47,15 @@
       <td>인증 유스케이스는 <code>domain/auth</code>, JWT 기술 인프라는 <code>global/security</code>가 소유한다.</td>
     </tr>
     <tr>
+      <td><code>POST /api/auth/signup</code></td>
+      <td><code>Documented</code></td>
+      <td>비인증 사용자의 셀프 회원가입 요청을 처리한다.</td>
+      <td><code>domain.auth.controller.AuthController</code></td>
+      <td><code>domain.auth.service.AuthService</code></td>
+      <td><code>domain.organization.user.entity.User</code>, <code>domain.organization.user.repository.UserRepository</code>, <code>domain.organization.department.repository.DepartmentRepository</code></td>
+      <td>회원가입은 <code>multipart/form-data</code> 의 <code>request</code> JSON part 와 선택 <code>profile_image</code> file part 를 사용하며, 사용자 도메인의 <code>POST /api/users/signup</code> 이 아니다.</td>
+    </tr>
+    <tr>
       <td><code>POST /api/auth/logout</code></td>
       <td><code>Documented</code></td>
       <td>세션 종료와 토큰 무효화 정책을 처리하는 로그아웃 API다.</td>
@@ -290,63 +299,44 @@
       <td>로그인 컨텍스트는 <code>global.security.CustomUserPrincipal</code>에서 받고, 사용자/부서/팀 문맥은 <code>organization/user</code> feature가 조합한다.</td>
     </tr>
     <tr>
-      <td><code>GET /api/users</code></td>
+      <td><code>GET /api/users/manager-candidates</code></td>
       <td><code>Documented</code></td>
-      <td>사용자 목록과 조직/권한 필터 결과를 조회한다.</td>
+      <td>호출자 role 기준으로 관리자 선택 후보를 조회한다.</td>
       <td><code>domain.organization.user.controller.UserController</code></td>
       <td><code>domain.organization.user.service.UserService</code></td>
-      <td><code>domain.organization.user.entity.User</code>, <code>domain.organization.user.repository.UserRepository</code>, <code>domain.organization.user.repository.jooq.UserJooqRepository</code></td>
-      <td>사용자 본체 ownership은 <code>user</code> feature가 가진다.</td>
+      <td><code>global.security.CustomUserPrincipal</code>, <code>domain.organization.user.entity.User</code>, <code>domain.organization.user.repository.UserRepository</code>, <code>domain.organization.user.repository.jooq.UserJooqRepository</code></td>
+      <td><code>DIRECTOR</code>, <code>DEPT_HEAD</code> 만 호출할 수 있다. 분기 기준은 client-supplied role 이 아니라 access token 의 authenticated principal role 이며, <code>DIRECTOR</code> 는 <code>DEPT_HEAD</code> 전체, <code>DEPT_HEAD</code> 는 자기 자신만 조회한다.</td>
+    </tr>
+    <tr>
+      <td><code>GET /api/users</code></td>
+      <td><code>Documented</code></td>
+      <td>사용자 목록을 페이지네이션 없이 부서/직급/재직상태 필터로 조회한다.</td>
+      <td><code>domain.organization.user.controller.UserController</code></td>
+      <td><code>domain.organization.user.service.UserService</code></td>
+      <td><code>domain.organization.user.entity.User</code>, <code>domain.organization.user.repository.UserRepository</code>, <code>domain.organization.user.repository.jooq.UserJooqRepository</code>, <code>domain.organization.team.entity.UserTeam</code>, <code>domain.organization.team.repository.jooq.UserTeamJooqRepository</code></td>
+      <td><code>RETIRED</code> 사용자는 제외하고, 대표 팀은 <code>tb_user_team.is_primary = true</code> membership 에서 계산한다. 정렬은 <code>role_code</code> 기준 <code>DIRECTOR</code> → <code>DEPT_HEAD</code> → <code>TEAM_LEAD</code> → <code>MEMBER</code> 순서다.</td>
     </tr>
     <tr>
       <td><code>GET /api/users/{id}</code></td>
       <td><code>Documented</code></td>
-      <td>단일 사용자 상세와 조직 소속 문맥을 조회한다.</td>
+      <td>단일 사용자 상세와 전체 소속 팀 문맥을 조회한다.</td>
       <td><code>domain.organization.user.controller.UserController</code></td>
       <td><code>domain.organization.user.service.UserService</code></td>
       <td><code>domain.organization.user.entity.User</code>, <code>domain.organization.user.repository.UserRepository</code>, <code>domain.organization.team.entity.UserTeam</code>, <code>domain.organization.team.repository.UserTeamRepository</code></td>
-      <td>소속 관계는 team feature entity/repository를 함께 참고한다.</td>
+      <td>상세 응답은 대표 팀을 top-level 필드로 중복 반환하지 않고 <code>teams[*].isPrimary</code> 로 포함한다. 소속 팀 목록은 <code>is_primary</code> 우선 후 <code>is_leader</code> 우선으로 배치한다.</td>
     </tr>
     <tr>
-      <td><code>POST /api/users/signup</code></td>
+      <td><code>PATCH /api/users/{id}</code></td>
       <td><code>Documented</code></td>
-      <td>셀프 회원가입 요청을 처리한다.</td>
+      <td>사용자 기본 정보와 대표 소속 팀을 부분 수정한다.</td>
       <td><code>domain.organization.user.controller.UserController</code></td>
       <td><code>domain.organization.user.service.UserService</code></td>
-      <td><code>domain.organization.user.entity.User</code>, <code>domain.organization.user.repository.UserRepository</code></td>
-      <td>clarified-scope addendum. 비인증 셀프 가입 경로이며 관리자 등록(<code>POST /api/users</code>)과 요청 필드/권한이 분리된다.</td>
-    </tr>
-    <tr>
-      <td><code>POST /api/users</code></td>
-      <td><code>Documented</code></td>
-      <td>관리자가 사용자 계정과 초기 조직 문맥을 등록한다.</td>
-      <td><code>domain.organization.user.controller.UserController</code></td>
-      <td><code>domain.organization.user.service.UserService</code></td>
-      <td><code>domain.organization.user.entity.User</code>, <code>domain.organization.user.repository.UserRepository</code>, <code>domain.organization.team.repository.UserTeamRepository</code></td>
-      <td>사용자 생성과 초기 팀 연결은 user/team 경계 협력이 필요하다.</td>
-    </tr>
-    <tr>
-      <td><code>PUT /api/users/{id}</code></td>
-      <td><code>Documented</code></td>
-      <td>사용자 기본 정보와 역할/상태를 수정한다.</td>
-      <td><code>domain.organization.user.controller.UserController</code></td>
-      <td><code>domain.organization.user.service.UserService</code></td>
-      <td><code>domain.organization.user.entity.User</code>, <code>domain.organization.user.repository.UserRepository</code></td>
-      <td>역할 enum은 <code>domain.organization.user.UserRole</code>과 연결된다.</td>
-    </tr>
-    <tr>
-      <td><code>DELETE /api/users/{id}</code></td>
-      <td><code>Documented</code></td>
-      <td>사용자를 하드 삭제가 아니라 퇴직/비활성 처리하는 관리 API다.</td>
-      <td><code>domain.organization.user.controller.UserController</code></td>
-      <td><code>domain.organization.user.service.UserService</code></td>
-      <td><code>domain.organization.user.entity.User</code>, <code>domain.organization.user.repository.UserRepository</code></td>
-      <td>실제 비즈니스 의미는 <code>employmentStatus</code> 전환에 가깝다.</td>
+      <td><code>domain.organization.user.entity.User</code>, <code>domain.organization.user.repository.UserRepository</code>, <code>domain.organization.team.entity.UserTeam</code>, <code>domain.organization.team.repository.UserTeamRepository</code></td>
+      <td><code>DIRECTOR</code>, <code>DEPT_HEAD</code> 만 호출할 수 있다. null 필드는 기존 값을 유지하고, <code>primaryTeamId</code> 가 오면 기존 대표 팀을 해제한 뒤 요청 팀만 대표 팀으로 지정한다.</td>
     </tr>
   </tbody>
 </table>
 </div>
-
 
 ### 2.5 `organization/skill` 도메인
 
