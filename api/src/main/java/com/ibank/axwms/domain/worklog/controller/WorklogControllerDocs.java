@@ -2,6 +2,7 @@ package com.ibank.axwms.domain.worklog.controller;
 
 import com.ibank.axwms.domain.worklog.dto.CreateWorklogApiDto;
 import com.ibank.axwms.domain.worklog.dto.GetWorklogsApiDto;
+import com.ibank.axwms.domain.worklog.dto.SearchWorklogsApiDto;
 import com.ibank.axwms.global.response.PageResponse;
 import com.ibank.axwms.global.security.CustomUserPrincipal;
 import io.swagger.v3.oas.annotations.Operation;
@@ -48,5 +49,19 @@ public interface WorklogControllerDocs {
     PageResponse<GetWorklogsApiDto.Response.Item> getWorklogs(
             @Parameter(hidden = true) CustomUserPrincipal principal,
             @ParameterObject GetWorklogsApiDto.Request request
+    );
+
+    @Operation(summary = "업무일지 검색",
+            description = "업무 제목 LIKE 검색과 팀/상태/중요도/작성자/태그/기간 필터를 조합한다. "
+                    + "가시 범위는 업무 목록 조회와 동일하며, 정렬은 created_at 내림차순으로 고정된다.")
+    @SecurityRequirement(name = "bearerAuth")
+    @ApiResponses({
+            @ApiResponse(responseCode = "200", description = "검색 결과 페이지를 반환한다."),
+            @ApiResponse(responseCode = "400", description = "요청 값이 올바르지 않다.", content = @Content),
+            @ApiResponse(responseCode = "401", description = "인증이 필요하다.", content = @Content)
+    })
+    PageResponse<SearchWorklogsApiDto.Response.Item> searchWorklogs(
+            @Parameter(hidden = true) CustomUserPrincipal principal,
+            @ParameterObject SearchWorklogsApiDto.Request request
     );
 }
