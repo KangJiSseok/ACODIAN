@@ -109,6 +109,55 @@ class TeamControllerE2eTest extends E2eTestSupport {
     }
 
     @Test
+    @DisplayName("로그인한 사용자가 팀 사용자 목록을 조회하면 ACTIVE 팀원을 리더 우선으로 반환한다")
+    void 로그인한_사용자가_팀_사용자_목록을_조회하면_ACTIVE_팀원을_리더_우선으로_반환한다() throws Exception {
+        String authorizationHeader = loginAndGetAuthorizationHeader();
+
+        mockMvc.perform(apiGet("/teams/" + visibleTeamId + "/users")
+                        .header(HttpHeaders.AUTHORIZATION, authorizationHeader))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.success", is(true)))
+                .andExpect(jsonPath("$.data.items[0].isLeader", is(true)))
+                .andExpect(jsonPath("$.data.items[0].userName", is("호출자")))
+                .andExpect(jsonPath("$.data.items[0].positionName", is("사원")))
+                .andExpect(jsonPath("$.data.items[0].teamRole", is("리더")))
+                .andExpect(jsonPath("$.data.items[1].isLeader", is(false)))
+                .andExpect(jsonPath("$.data.items[1].userName", is("구성원")))
+                .andExpect(jsonPath("$.data.items[1].positionName", is("사원")))
+                .andExpect(jsonPath("$.data.items[1].teamRole", is("구성원")))
+                .andExpect(jsonPath("$.timestamp").exists());
+    }
+
+    @Test
+    @DisplayName("visible scope 밖 팀 사용자 목록을 조회하면 AUTH_ACCESS_DENIED 응답을 반환한다")
+    void visible_scope_밖_팀_사용자_목록을_조회하면_auth_access_denied_응답을_반환한다() throws Exception {
+        String authorizationHeader = loginAndGetAuthorizationHeader();
+
+        mockMvc.perform(apiGet("/teams/" + deniedTeamId + "/users")
+                        .header(HttpHeaders.AUTHORIZATION, authorizationHeader))
+                .andExpect(status().isForbidden())
+                .andExpect(jsonPath("$.success", is(false)))
+                .andExpect(jsonPath("$.error.code", is("AUTH_ACCESS_DENIED")));
+    }
+
+    @Test
+    @DisplayName("없는 팀이나 soft-delete 팀 사용자 목록을 조회하면 TEAM_NOT_FOUND 응답을 반환한다")
+    void 없는_팀이나_soft_delete_팀_사용자_목록을_조회하면_team_not_found_응답을_반환한다() throws Exception {
+        String authorizationHeader = loginAndGetAuthorizationHeader();
+
+        mockMvc.perform(apiGet("/teams/999999/users")
+                        .header(HttpHeaders.AUTHORIZATION, authorizationHeader))
+                .andExpect(status().isNotFound())
+                .andExpect(jsonPath("$.success", is(false)))
+                .andExpect(jsonPath("$.error.code", is("TEAM_NOT_FOUND")));
+
+        mockMvc.perform(apiGet("/teams/" + deletedTeamId + "/users")
+                        .header(HttpHeaders.AUTHORIZATION, authorizationHeader))
+                .andExpect(status().isNotFound())
+                .andExpect(jsonPath("$.error.code", is("TEAM_NOT_FOUND")));
+    }
+
+    @Test
     @DisplayName("visible scope 밖 팀 상세를 조회하면 AUTH_ACCESS_DENIED 응답을 반환한다")
     void visible_scope_밖_팀_상세를_조회하면_auth_access_denied_응답을_반환한다() throws Exception {
         String authorizationHeader = loginAndGetAuthorizationHeader();

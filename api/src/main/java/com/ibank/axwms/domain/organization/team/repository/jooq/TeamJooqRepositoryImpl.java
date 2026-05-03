@@ -3,6 +3,7 @@ package com.ibank.axwms.domain.organization.team.repository.jooq;
 import com.ibank.axwms.domain.organization.team.repository.jooq.projection.TeamDetailProjection;
 import com.ibank.axwms.domain.organization.team.repository.jooq.projection.TeamStatusSummaryProjection;
 import com.ibank.axwms.domain.organization.team.repository.jooq.projection.TeamSummaryProjection;
+import com.ibank.axwms.domain.organization.team.repository.jooq.projection.TeamUserSummaryProjection;
 import com.ibank.axwms.domain.organization.team.repository.jooq.query.TeamPageQuery;
 import com.ibank.axwms.global.jooq.tables.TbUser;
 import com.ibank.axwms.global.jooq.tables.TbUserTeam;
@@ -216,6 +217,54 @@ public class TeamJooqRepositoryImpl implements TeamJooqRepository {
                 .where(TB_TEAM.TEAM_ID.eq(teamId))
                 .and(visibleTeamCondition(userId))
                 .fetchOptional(TeamDetailProjection::from);
+    }
+
+    /** 사용자가 볼 수 있는 팀의 ACTIVE 사용자 목록을 조회한다. 팀이 없거나 visible scope 밖이면 empty 를 반환한다. */
+    @Override
+    public Optional<List<TeamUserSummaryProjection>> findTeamUsers(Long userId, Long teamId) {
+        TbUserTeam membership = TB_USER_TEAM.as("membership");
+        TbUser user = TB_USER.as("team_user");
+
+        Field<Boolean> isLeader = membership.IS_LEADER.as("is_leader");
+        Field<Long> memberUserId = user.USER_ID.as("user_id");
+        Field<String> userName = user.USER_NAME.as("user_name");
+        Field<String> positionName = user.POSITION_NAME.as("position_name");
+        Field<String> teamRole = membership.TEAM_ROLE.as("team_role");
+        Field<Integer> leaderPriority = DSL.when(membership.IS_LEADER.isTrue(), 0)
+                .otherwise(1)
+                .as("leader_priority");
+
+        // Result<Record6<Boolean, Long, String, String, String, Integer>> records 는 오히려 가독성 떨어진다.
+        // jOOQ는 select에 넘긴 필드 개수와 타입을 제네릭으로 받는다.
+        // JOOQ의 장점 : 컴파일러가 이미 타입을 알고있다.
+        // 따라서 타입을 이미 알고있고, 제네릭이 복잡할때 var를 쓰면 좋다고 한다.
+        var records = dsl.select(
+                        isLeader,
+                        memberUserId,
+                        userName,
+                        positionName,
+                        teamRole,
+                        leaderPriority
+                )
+                .from(TB_TEAM)
+                .leftJoin(membership).on(membership.TEAM_ID.eq(TB_TEAM.TEAM_ID)
+                        .and(membership.STATUS_CODE.eq(ACTIVE_USER_TEAM_STATUS)))
+                .leftJoin(user).on(user.USER_ID.eq(membership.USER_ID))
+                .where(TB_TEAM.TEAM_ID.eq(teamId))
+                .and(visibleTeamCondition(userId))
+                .orderBy(leaderPriority.asc(), user.USER_ID.asc())
+                .fetch();
+
+        //결과가 없다면 팀이 없거나, 접근권한이 없다.
+        if (records.isEmpty()) {
+            return Optional.empty();
+        }
+
+        List<TeamUserSummaryProjection> users = records.stream()
+                .filter(r -> r.get(memberUserId) != null)
+                .map(TeamUserSummaryProjection::from)
+                .toList();
+        return Optional.of(users);
     }
 
     /** soft-delete 되지 않았고 호출자의 admin grant 또는 ACTIVE membership 에 포함된 팀만 통과시킨다. */
