@@ -4,10 +4,11 @@
 - 인덱스: [api-spec-index.md](./api-spec-index.md)
 
 ## 1. 도메인 목적 / 개요
-인증 진입, 세션 종료, 토큰 재발급, 비밀번호 변경 계약을 정의한다. Auth 는 인증 유스케이스를 소유하고, JWT 검증/RoleHierarchy 는 global/security 정책을 따른다. 현재 로그인 사용자 문맥 조회는 `GET /api/users/me` 로 분리되어 [api-spec-user.md](./api-spec-user.md) 가 소유한다.
+인증 진입, 셀프 회원가입, 세션 종료, 토큰 재발급, 비밀번호 변경 계약을 정의한다. Auth 는 인증 유스케이스를 소유하고, JWT 검증/RoleHierarchy 는 global/security 정책을 따른다. 현재 로그인 사용자 문맥 조회는 `GET /api/users/me` 로 분리되어 [api-spec-user.md](./api-spec-user.md) 가 소유한다.
 
 ## 2. 주요 ERD 연관
 - `tb_user`
+- `tb_department`
 - `refresh token` 저장소
 
 ## 3. 참조 문서
@@ -19,6 +20,7 @@
 | Method | Path | Status | 목적 |
 |---|---|---|---|
 | `POST` | `/api/auth/login` | `Documented` | 로그인 후 access/refresh token 과 사용자 권한 문맥을 발급한다. |
+| `POST` | `/api/auth/signup` | `Documented` | 비인증 사용자의 셀프 회원가입 요청을 처리한다. |
 | `POST` | `/api/auth/logout` | `Documented` | 현재 세션을 종료하고 refresh cookie 를 만료시킨다. |
 | `POST` | `/api/auth/refresh` | `Documented` | refresh cookie 검증 후 access token 재발급을 수행한다. |
 | `POST` | `/api/auth/change-password` | `Proposed-risk-closure` | 본인 비밀번호를 변경한다. |
@@ -68,6 +70,60 @@ Set-Cookie: <configured-refresh-cookie-name>=refresh-token-sample; Max-Age=12096
   - source: class mapping
   - source: ADR-002
   - source: ADR — 로그인 토큰 전송 규약 (access=Authorization 헤더, refresh=HttpOnly 쿠키, 바디 비움)
+
+
+### POST /api/auth/signup
+- 목적: 비인증 사용자의 셀프 회원가입 요청을 처리한다.
+- 상태: `Documented`
+- 권한/접근 주체: 비인증 사용자가 호출한다.
+- 요청
+  - Content-Type: `multipart/form-data`
+  - JSON part: `request`
+  - File part: `profile_image` (선택)
+  - `request` 필드: `department_id`, `user_name`, `email`, `password`, `position_name`, `title_name`, `join_date`, `phone`, `employment_status`
+- 응답 (`data` 기준)
+  - 빈 객체 (`EmptyResponse`)
+  - signup 성공 시 access token 헤더나 refresh cookie 는 발급하지 않는다.
+- 요청 예시
+```json
+{
+  "multipart": {
+    "request": {
+      "department_id": 10,
+      "user_name": "신입사원",
+      "email": "new@axwms.com",
+      "password": "********",
+      "position_name": "사원",
+      "title_name": "팀원",
+      "join_date": "2026-04-21",
+      "phone": "010-5555-6666",
+      "employment_status": "ACTIVE"
+    },
+    "profile_image": "<optional file>"
+  }
+}
+```
+- 응답 JSON 예시
+```json
+{
+  "success": true,
+  "data": {},
+  "timestamp": "2026-04-21T03:00:00Z"
+}
+```
+- 상태/에러
+  - 성공: `201 Created`
+  - 대표 오류: `COMMON_VALIDATION_FAILED` [추론]
+  - 대표 오류: `USER_EMAIL_DUPLICATE` [추론]
+  - 대표 오류: `DEPARTMENT_NOT_FOUND` [추론]
+  - 대표 오류: `AUTH_PASSWORD_POLICY_VIOLATION` [추론]
+- ERD 연관
+  - `tb_user`
+  - `tb_department`
+- 근거
+  - source: `domain.auth.controller.AuthController#signup`
+  - source: `domain.auth.controller.AuthControllerDocs#signup`
+  - source: `domain.auth.dto.SignupApiDto.Request`
 
 ### POST /api/auth/logout
 - 목적: 현재 세션을 종료하고 refresh cookie 를 만료한다.
@@ -184,4 +240,5 @@ Set-Cookie: <configured-refresh-cookie-name>=refresh-token-rotated; Max-Age=1209
 - `login` 은 ADR(로그인 토큰 전송 규약)에 따라 응답 바디를 비우고 accessToken 은 Authorization 헤더, refreshToken 은 HttpOnly 쿠키로 전달한다. 사용자 문맥은 `/api/users/me` 에서 조회한다.
 - `refresh` 는 현재 구현 기준으로 request body 를 사용하지 않고 설정된 쿠키 이름으로 refresh token 을 추출한다.
 - `refresh` 는 성공 시 항상 Authorization 헤더를 내려주고, refresh cookie 회전은 남은 유효 시간이 절반 이하일 때만 수행한다.
+- signup 은 `POST /api/users/signup` 이 아니라 `POST /api/auth/signup` 이 canonical path 이며, 실제 Controller 기준으로 `multipart/form-data` 의 `request` JSON part 와 선택 `profile_image` file part 를 사용한다.
 - logout/change-password 는 common 의 non-GET empty 규칙을 그대로 따른다.

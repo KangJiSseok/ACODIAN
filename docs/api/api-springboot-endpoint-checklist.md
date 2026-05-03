@@ -8,6 +8,7 @@
 ## 1. `auth` 도메인
 
 - [x] `POST /api/auth/login`
+- [x] `POST /api/auth/signup`
 - [x] `POST /api/auth/logout`
 - [x] `POST /api/auth/refresh`
 - [ ] `POST /api/auth/change-password`
@@ -34,12 +35,10 @@
 ## 4. `organization/user` 도메인
 
 - [x] `GET /api/users/me`
+- [ ] `GET /api/users/manager-candidates`
 - [ ] `GET /api/users`
 - [ ] `GET /api/users/{id}`
-- [ ] `POST /api/users/signup`
-- [ ] `POST /api/users`
-- [ ] `PUT /api/users/{id}`
-- [ ] `DELETE /api/users/{id}`
+- [ ] `PATCH /api/users/{id}`
 
 ## 5. `organization/skill` 도메인
 
