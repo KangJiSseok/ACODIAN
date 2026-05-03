@@ -299,13 +299,31 @@
       <td>로그인 컨텍스트는 <code>global.security.CustomUserPrincipal</code>에서 받고, 사용자/부서/팀 문맥은 <code>organization/user</code> feature가 조합한다.</td>
     </tr>
     <tr>
-      <td><code>GET /api/users/manager-candidates</code></td>
+      <td><code>GET /api/users/admin-candidates</code></td>
       <td><code>Documented</code></td>
       <td>호출자 role 기준으로 관리자 선택 후보를 조회한다.</td>
       <td><code>domain.organization.user.controller.UserController</code></td>
       <td><code>domain.organization.user.service.UserService</code></td>
       <td><code>global.security.CustomUserPrincipal</code>, <code>domain.organization.user.entity.User</code>, <code>domain.organization.user.repository.UserRepository</code>, <code>domain.organization.user.repository.jooq.UserJooqRepository</code></td>
       <td><code>DIRECTOR</code>, <code>DEPT_HEAD</code> 만 호출할 수 있다. 분기 기준은 client-supplied role 이 아니라 access token 의 authenticated principal role 이며, <code>DIRECTOR</code> 는 <code>DEPT_HEAD</code> 전체, <code>DEPT_HEAD</code> 는 자기 자신만 조회한다.</td>
+    </tr>
+    <tr>
+      <td><code>GET /api/users</code></td>
+      <td><code>Documented</code></td>
+      <td>사용자 목록과 조직/권한 필터 결과를 조회한다.</td>
+      <td><code>domain.organization.user.controller.UserController</code></td>
+      <td><code>domain.organization.user.service.UserService</code></td>
+      <td><code>domain.organization.user.entity.User</code>, <code>domain.organization.user.repository.UserRepository</code>, <code>domain.organization.user.repository.jooq.UserJooqRepository</code></td>
+      <td>사용자 본체 ownership은 <code>user</code> feature가 가진다.</td>
+    </tr>
+    <tr>
+      <td><code>GET /api/users/{id}</code></td>
+      <td><code>Documented</code></td>
+      <td>단일 사용자 상세와 조직 소속 문맥을 조회한다.</td>
+      <td><code>domain.organization.user.controller.UserController</code></td>
+      <td><code>domain.organization.user.service.UserService</code></td>
+      <td><code>domain.organization.user.entity.User</code>, <code>domain.organization.user.repository.UserRepository</code>, <code>domain.organization.team.entity.UserTeam</code>, <code>domain.organization.team.repository.UserTeamRepository</code></td>
+      <td>소속 관계는 team feature entity/repository를 함께 참고한다.</td>
     </tr>
     <tr>
       <td><code>GET /api/users</code></td>

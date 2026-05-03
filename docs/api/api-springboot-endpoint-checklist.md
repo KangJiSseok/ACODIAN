@@ -35,7 +35,7 @@
 ## 4. `organization/user` 도메인
 
 - [x] `GET /api/users/me`
-- [ ] `GET /api/users/manager-candidates`
+- [x] `GET /api/users/admin-candidates`
 - [ ] `GET /api/users`
 - [ ] `GET /api/users/{id}`
 - [ ] `PATCH /api/users/{id}`

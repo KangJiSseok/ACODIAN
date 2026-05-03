@@ -14,6 +14,7 @@ import com.ibank.axwms.domain.organization.team.repository.TeamRepository;
 import com.ibank.axwms.domain.organization.team.repository.UserTeamRepository;
 import com.ibank.axwms.domain.organization.user.EmploymentStatus;
 import com.ibank.axwms.domain.organization.user.UserRole;
+import com.ibank.axwms.domain.organization.user.dto.GetAdminCandidatesApiDto;
 import com.ibank.axwms.domain.organization.user.dto.GetMyProfileApiDto;
 import com.ibank.axwms.domain.organization.user.entity.User;
 import com.ibank.axwms.domain.organization.user.repository.UserRepository;
@@ -182,6 +183,90 @@ class UserServiceTest {
                 .isEqualTo(ErrorCode.USER_NOT_FOUND);
     }
 
+    @Test
+    @DisplayName("DIRECTOR 는 DEPT_HEAD 사용자 전체를 관리자 후보로 조회한다")
+    void DIRECTOR는_DEPT_HEAD_사용자_전체를_관리자_후보로_조회한다() {
+        CustomUserPrincipal principal = new CustomUserPrincipal(1L, "director@ibank.com", "DIRECTOR");
+        User firstDepartmentHead = createUser(
+                201L,
+                10L,
+                "김부서",
+                "부장",
+                "부서장",
+                null,
+                null,
+                LocalDate.of(2025, 1, 1),
+                UserRole.DEPT_HEAD,
+                "dept-head-1@ibank.com"
+        );
+        User secondDepartmentHead = createUser(
+                202L,
+                11L,
+                "이본부",
+                null,
+                "부서장",
+                null,
+                null,
+                LocalDate.of(2025, 1, 2),
+                UserRole.DEPT_HEAD,
+                "dept-head-2@ibank.com"
+        );
+        given(userRepository.findAllByRoleCodeOrderByIdAsc(UserRole.DEPT_HEAD))
+                .willReturn(List.of(firstDepartmentHead, secondDepartmentHead));
+
+        List<GetAdminCandidatesApiDto.Response> result = userService.getAdminCandidates(principal);
+
+        assertThat(result)
+                .extracting(GetAdminCandidatesApiDto.Response::userId,
+                        GetAdminCandidatesApiDto.Response::userName,
+                        GetAdminCandidatesApiDto.Response::titleName,
+                        GetAdminCandidatesApiDto.Response::positionName)
+                .containsExactly(
+                        Tuple.tuple(201L, "김부서", "부서장", "부장"),
+                        Tuple.tuple(202L, "이본부", "부서장", null)
+                );
+    }
+
+    @Test
+    @DisplayName("DEPT_HEAD 는 자기 자신만 관리자 후보로 조회한다")
+    void DEPT_HEAD는_자기_자신만_관리자_후보로_조회한다() {
+        CustomUserPrincipal principal = new CustomUserPrincipal(201L, "dept-head@ibank.com", "DEPT_HEAD");
+        User departmentHead = createUser(
+                201L,
+                10L,
+                "김부서",
+                "부장",
+                "부서장",
+                null,
+                null,
+                LocalDate.of(2025, 1, 1),
+                UserRole.DEPT_HEAD,
+                "dept-head@ibank.com"
+        );
+        given(userRepository.findById(201L)).willReturn(Optional.of(departmentHead));
+
+        List<GetAdminCandidatesApiDto.Response> result = userService.getAdminCandidates(principal);
+
+        assertThat(result)
+                .extracting(GetAdminCandidatesApiDto.Response::userId,
+                        GetAdminCandidatesApiDto.Response::userName,
+                        GetAdminCandidatesApiDto.Response::titleName,
+                        GetAdminCandidatesApiDto.Response::positionName)
+                .containsExactly(Tuple.tuple(201L, "김부서", "부서장", "부장"));
+    }
+
+    @Test
+    @DisplayName("DEPT_HEAD principal 사용자 id 가 없으면 USER_NOT_FOUND 예외를 던진다")
+    void DEPT_HEAD_principal_사용자_id가_없으면_USER_NOT_FOUND_예외를_던진다() {
+        CustomUserPrincipal principal = new CustomUserPrincipal(404L, "missing@ibank.com", "DEPT_HEAD");
+        given(userRepository.findById(404L)).willReturn(Optional.empty());
+
+        assertThatThrownBy(() -> userService.getAdminCandidates(principal))
+                .isInstanceOf(BusinessException.class)
+                .extracting(e -> ((BusinessException) e).getErrorCode())
+                .isEqualTo(ErrorCode.USER_NOT_FOUND);
+    }
+
     private User createUser(Long id,
                             Long departmentId,
                             String userName,
@@ -190,12 +275,36 @@ class UserServiceTest {
                             String profileImageUrl,
                             String phone,
                             LocalDate joinDate) {
+        return createUser(
+                id,
+                departmentId,
+                userName,
+                positionName,
+                titleName,
+                profileImageUrl,
+                phone,
+                joinDate,
+                UserRole.MEMBER,
+                "user@ibank.com"
+        );
+    }
+
+    private User createUser(Long id,
+                            Long departmentId,
+                            String userName,
+                            String positionName,
+                            String titleName,
+                            String profileImageUrl,
+                            String phone,
+                            LocalDate joinDate,
+                            UserRole roleCode,
+                            String email) {
         User user = User.create(
                 departmentId,
                 userName,
-                "user@ibank.com",
+                email,
                 "$2a$10$fake-hashed",
-                UserRole.MEMBER,
+                roleCode,
                 EmploymentStatus.ACTIVE,
                 positionName,
                 titleName,

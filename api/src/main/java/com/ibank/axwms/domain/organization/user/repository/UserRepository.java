@@ -17,4 +17,7 @@ public interface UserRepository extends JpaRepository<User, Long>, UserJooqRepos
 
     /** 특정 역할을 가진 사용자 전체를 조회한다. */
     List<User> findAllByRoleCode(UserRole roleCode);
+    /**
+     * 특정 역할 사용자를 안정적인 id 오름차순으로 반환한다. */
+    List<User> findAllByRoleCodeOrderByIdAsc(UserRole roleCode);
 }

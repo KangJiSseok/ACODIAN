@@ -22,7 +22,7 @@
 | Method | Path | Status | 목적 |
 |---|---|---|---|
 | `GET` | `/api/users/me` | `Documented` | 현재 로그인 사용자의 프로필/권한 문맥을 조회한다. |
-| `GET` | `/api/users/manager-candidates` | `Documented` | 호출자 role 기준으로 관리자 선택 후보를 조회한다. |
+| `GET` | `/api/users/admin-candidates` | `Documented` | 호출자 role 기준으로 관리자 선택 후보를 조회한다. |
 | `GET` | `/api/users` | `Documented` | 사용자 목록을 페이지네이션 없이 필터 조건에 따라 조회한다. |
 | `GET` | `/api/users/{id}` | `Documented` | 단일 사용자 상세와 전체 소속 팀 문맥을 조회한다. |
 | `PATCH` | `/api/users/{id}` | `Documented` | 사용자 기본 정보와 대표 소속 팀을 부분 수정한다. |
@@ -103,7 +103,7 @@
   - source: `domain.organization.user.dto.GetMyProfileApiDto.Response`
   - source: ADR-002
 
-### GET /api/users/manager-candidates
+### GET /api/users/admin-candidates
 - 목적: 호출자 role 기준으로 관리자 선택 후보를 조회한다.
 - 상태: `Documented`
 - 권한/접근 주체: `DIRECTOR`, `DEPT_HEAD` 만 호출할 수 있다. accessToken 으로 인증한다.
@@ -342,7 +342,7 @@
   - 다른 팀이 이미 `is_primary = true` 이면 기존 팀은 `false` 로 변경하고 요청된 팀만 `true` 로 변경한다.
   - 사용자별 대표 소속 팀은 1개 이하만 존재할 수 있다.
 - 응답 (`data` 기준)
-  - 빈 객체 (`EmptyResponse`)
+  - 빈 객체 (`ApiResponse.empty()`)
 - 요청 JSON 예시
 ```json
 {
