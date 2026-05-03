@@ -333,6 +333,39 @@ class TeamControllerE2eTest extends E2eTestSupport {
                 .isEqualTo("수정 역할");
     }
 
+    @Test
+    @DisplayName("DEPT_HEAD admin grant 보유자가 팀을 삭제하면 팀만 soft-delete 되고 membership 은 유지된다")
+    void dept_head_admin_grant_보유자가_팀을_삭제하면_팀만_soft_delete되고_membership은_유지된다() throws Exception {
+        String authorizationHeader = loginAndGetAuthorizationHeader(deptHeadAdminEmail);
+
+        mockMvc.perform(apiDelete("/teams/" + visibleTeamId)
+                        .header(HttpHeaders.AUTHORIZATION, authorizationHeader))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.success", is(true)))
+                .andExpect(jsonPath("$.data").isMap())
+                .andExpect(jsonPath("$.timestamp").exists());
+
+        Team deletedTeam = teamRepository.findById(visibleTeamId).orElseThrow();
+        assertThat(deletedTeam.getDeletedAt()).isNotNull();
+        assertThat(userTeamRepository.findByUserIdAndTeamId(visibleMemberId, visibleTeamId)).isPresent();
+    }
+
+    @Test
+    @DisplayName("DEPT_HEAD admin grant 가 없으면 팀 삭제 요청은 AUTH_ACCESS_DENIED 응답을 반환한다")
+    void dept_head_admin_grant가_없으면_팀_삭제_요청은_auth_access_denied_응답을_반환한다() throws Exception {
+        Department department = departmentRepository.findAll().getFirst();
+        User noGrantDeptHead = userRepository.save(createUser(department.getId(), "무권한부서장", "team-delete-no-grant", UserRole.DEPT_HEAD));
+        String authorizationHeader = loginAndGetAuthorizationHeader(noGrantDeptHead.getEmail());
+
+        mockMvc.perform(apiDelete("/teams/" + visibleTeamId)
+                        .header(HttpHeaders.AUTHORIZATION, authorizationHeader))
+                .andExpect(status().isForbidden())
+                .andExpect(jsonPath("$.success", is(false)))
+                .andExpect(jsonPath("$.error.code", is("AUTH_ACCESS_DENIED")));
+
+        assertThat(teamRepository.findById(visibleTeamId).orElseThrow().getDeletedAt()).isNull();
+    }
+
     /** FK 제약을 피하기 위해 업무일지부터 테스트 데이터를 비운다. */
     private void clearDatabase() {
         worklogRepository.deleteAll();

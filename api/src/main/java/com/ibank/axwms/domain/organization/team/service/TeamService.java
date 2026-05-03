@@ -21,6 +21,7 @@ import com.ibank.axwms.global.error.BusinessException;
 import com.ibank.axwms.global.error.ErrorCode;
 import com.ibank.axwms.global.response.PageResponse;
 import com.ibank.axwms.global.security.CustomUserPrincipal;
+import java.time.LocalDateTime;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Objects;
@@ -164,6 +165,22 @@ public class TeamService {
 
         //최종 리더가 1명이면 예외
         validateAtLeastOneActiveLeader(teamId);
+    }
+
+    /**
+     * 대상 팀의 admin grant 를 보유한 사용자가 팀을 soft-delete 한다.
+     *
+     * @param principal 현재 로그인 사용자
+     * @param teamId 삭제 대상 팀 ID
+     * @throws BusinessException TEAM_NOT_FOUND 팀이 없거나 이미 soft-delete 되었을 때
+     * @throws BusinessException AUTH_ACCESS_DENIED 호출자가 대상 팀의 admin grant 를 보유하지 않을 때
+     */
+    @Transactional
+    public void deleteTeam(CustomUserPrincipal principal, Long teamId) {
+        Team team = getActiveTeamOrThrow(teamId);
+        validateTeamAdminGrant(principal.userId(), teamId);
+
+        team.markDeleted(LocalDateTime.now());
     }
 
     /**

@@ -93,6 +93,17 @@ class TeamControllerTest {
         assertThat(response).isSameAs(EmptyResponse.INSTANCE);
     }
 
+    @Test
+    @DisplayName("팀 삭제 메서드는 인증 사용자를 서비스에 위임하고 빈 응답을 반환한다")
+    void 팀_삭제_메서드는_인증_사용자를_서비스에_위임하고_빈_응답을_반환한다() {
+        CustomUserPrincipal principal = principal();
+
+        EmptyResponse response = teamController.deleteTeam(principal, 21L);
+
+        then(teamService).should().deleteTeam(principal, 21L);
+        assertThat(response).isSameAs(EmptyResponse.INSTANCE);
+    }
+
     private CustomUserPrincipal principal() {
         return new CustomUserPrincipal(101L, "user@ibank.com", "MEMBER");
     }

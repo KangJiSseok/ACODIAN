@@ -110,4 +110,19 @@ public interface TeamControllerDocs {
             @Parameter(description = "팀 ID", example = "21") Long id,
             UpdateTeamApiDto.Request request
     );
+
+    @Operation(summary = "팀 삭제",
+            description = "DIRECTOR 또는 DEPT_HEAD 가 대상 팀의 admin grant 를 보유한 경우 팀을 soft-delete 한다. "
+                    + "membership row 는 유지하고 팀의 deletedAt 만 설정한다.")
+    @SecurityRequirement(name = "bearerAuth")
+    @ApiResponses({
+            @ApiResponse(responseCode = "200", description = "팀을 soft-delete 한다."),
+            @ApiResponse(responseCode = "401", description = "인증이 필요하다.", content = @Content),
+            @ApiResponse(responseCode = "403", description = "대상 팀 관리 권한이 없다.", content = @Content),
+            @ApiResponse(responseCode = "404", description = "팀을 찾을 수 없다.", content = @Content)
+    })
+    EmptyResponse deleteTeam(
+            @Parameter(hidden = true) CustomUserPrincipal principal,
+            @Parameter(description = "팀 ID", example = "21") Long id
+    );
 }

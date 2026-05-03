@@ -37,6 +37,7 @@ import com.ibank.axwms.global.error.ErrorCode;
 import com.ibank.axwms.global.response.PageResponse;
 import com.ibank.axwms.global.security.CustomUserPrincipal;
 import java.time.LocalDate;
+import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Optional;
 import org.junit.jupiter.api.DisplayName;
@@ -415,6 +416,47 @@ class TeamServiceTest {
                 .extracting(error -> ((BusinessException) error).getErrorCode())
                 .isEqualTo(ErrorCode.TEAM_DUPLICATE_NAME);
         then(userRepository).should(never()).findAllById(any());
+    }
+
+    @Test
+    @DisplayName("deleteTeam 은 admin grant 보유자가 요청하면 팀만 soft-delete 한다")
+    void deleteTeam_은_admin_grant_보유자가_요청하면_팀만_soft_delete_한다() {
+        Team team = createTeam(21L);
+        LocalDateTime beforeDelete = LocalDateTime.now();
+        given(teamRepository.findByIdAndDeletedAtIsNull(21L)).willReturn(Optional.of(team));
+        given(teamAdminRepository.existsByUserIdAndTeamId(101L, 21L)).willReturn(true);
+
+        teamService.deleteTeam(principal(), 21L);
+
+        assertThat(team.getDeletedAt()).isAfterOrEqualTo(beforeDelete);
+        then(teamAdminRepository).should().existsByUserIdAndTeamId(101L, 21L);
+        then(userTeamRepository).shouldHaveNoInteractions();
+    }
+
+    @Test
+    @DisplayName("deleteTeam 은 대상 팀이 없거나 soft-delete 되었으면 TEAM_NOT_FOUND 예외를 던진다")
+    void deleteTeam_은_대상_팀이_없거나_soft_delete_되었으면_team_not_found_예외를_던진다() {
+        given(teamRepository.findByIdAndDeletedAtIsNull(999L)).willReturn(Optional.empty());
+
+        assertThatThrownBy(() -> teamService.deleteTeam(principal(), 999L))
+                .isInstanceOf(BusinessException.class)
+                .extracting(error -> ((BusinessException) error).getErrorCode())
+                .isEqualTo(ErrorCode.TEAM_NOT_FOUND);
+        then(teamAdminRepository).should(never()).existsByUserIdAndTeamId(any(), any());
+    }
+
+    @Test
+    @DisplayName("deleteTeam 은 대상 팀 admin grant 가 없으면 AUTH_ACCESS_DENIED 예외를 던진다")
+    void deleteTeam_은_대상_팀_admin_grant가_없으면_auth_access_denied_예외를_던진다() {
+        Team team = createTeam(21L);
+        given(teamRepository.findByIdAndDeletedAtIsNull(21L)).willReturn(Optional.of(team));
+        given(teamAdminRepository.existsByUserIdAndTeamId(101L, 21L)).willReturn(false);
+
+        assertThatThrownBy(() -> teamService.deleteTeam(principal(), 21L))
+                .isInstanceOf(BusinessException.class)
+                .extracting(error -> ((BusinessException) error).getErrorCode())
+                .isEqualTo(ErrorCode.AUTH_ACCESS_DENIED);
+        assertThat(team.getDeletedAt()).isNull();
     }
 
     @Test
