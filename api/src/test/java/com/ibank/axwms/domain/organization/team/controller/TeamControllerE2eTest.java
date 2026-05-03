@@ -60,10 +60,12 @@ class TeamControllerE2eTest extends E2eTestSupport {
     private PasswordEncoder passwordEncoder;
 
     private Long visibleTeamId;
+    private Long visibleMemberId;
     private Long adminOnlyTeamId;
     private Long deniedTeamId;
     private Long deletedTeamId;
     private Long deptHeadAdminUserId;
+    private String deptHeadAdminEmail;
     private String callerEmail;
 
     @BeforeEach
@@ -257,6 +259,78 @@ class TeamControllerE2eTest extends E2eTestSupport {
                 .containsExactly(false, "현장 총괄", UserTeamStatus.ACTIVE);
     }
 
+    @Test
+    @DisplayName("DEPT_HEAD admin grant 보유자가 팀을 부분 수정하면 기본 정보와 grant membership 이 반영된다")
+    void dept_head_admin_grant_보유자가_팀을_부분_수정하면_기본_정보와_grant_membership이_반영된다() throws Exception {
+        Department department = departmentRepository.findAll().getFirst();
+        User newAdmin = userRepository.save(createUser(department.getId(), "신규관리자", "team-update-admin", UserRole.MEMBER));
+        User removedAdmin = userRepository.save(createUser(department.getId(), "회수관리자", "team-update-remove-admin", UserRole.MEMBER));
+        User newLeader = userRepository.save(createUser(department.getId(), "신규리더", "team-update-leader", UserRole.MEMBER));
+        User editMember = userRepository.save(createUser(department.getId(), "역할수정대상", "team-update-edit", UserRole.MEMBER));
+        teamAdminRepository.save(TeamAdmin.grant(removedAdmin.getId(), visibleTeamId));
+        userTeamRepository.save(UserTeam.create(editMember.getId(), visibleTeamId, false, "이전 역할", "겸임", false, UserTeamStatus.ACTIVE));
+        String authorizationHeader = loginAndGetAuthorizationHeader(deptHeadAdminEmail);
+        String updatedTeamName = "부분수정팀-" + System.nanoTime();
+
+        mockMvc.perform(apiPatch("/teams/" + visibleTeamId)
+                        .header(HttpHeaders.AUTHORIZATION, authorizationHeader)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {
+                                  "teamName": "%s",
+                                  "description": "부분 수정 설명",
+                                  "addAdmin": %d,
+                                  "removeAdmin": %d,
+                                  "addUsers": [
+                                    {"userId": %d, "isLeader": true, "teamRole": "신규 리더"}
+                                  ],
+                                  "removeUsers": [%d],
+                                  "editUsers": [
+                                    {"userId": %d, "teamRole": "수정 역할"}
+                                  ],
+                                  "statusCode": "INACTIVE",
+                                  "startDate": "2026-05-01",
+                                  "expectedEndDate": "2026-11-30"
+                                }
+                                """.formatted(
+                                updatedTeamName,
+                                newAdmin.getId(),
+                                removedAdmin.getId(),
+                                newLeader.getId(),
+                                visibleMemberId,
+                                editMember.getId()
+                        )))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.success", is(true)))
+                .andExpect(jsonPath("$.data").isMap())
+                .andExpect(jsonPath("$.timestamp").exists());
+
+        Team updatedTeam = teamRepository.findById(visibleTeamId).orElseThrow();
+        assertThat(updatedTeam)
+                .extracting(Team::getTeamName, Team::getStatusCode, Team::getDescription, Team::getStartDate, Team::getExpectedEndDate)
+                .containsExactly(
+                        updatedTeamName,
+                        TeamStatus.INACTIVE,
+                        "부분 수정 설명",
+                        LocalDate.of(2026, 5, 1),
+                        LocalDate.of(2026, 11, 30)
+                );
+        assertThat(teamAdminRepository.existsByUserIdAndTeamId(newAdmin.getId(), visibleTeamId)).isTrue();
+        assertThat(teamAdminRepository.existsByUserIdAndTeamId(removedAdmin.getId(), visibleTeamId)).isFalse();
+        assertThat(userTeamRepository.findByUserIdAndTeamId(newLeader.getId(), visibleTeamId))
+                .get()
+                .extracting(UserTeam::getIsLeader, UserTeam::getTeamRole, UserTeam::getStatusCode)
+                .containsExactly(true, "신규 리더", UserTeamStatus.ACTIVE);
+        assertThat(userTeamRepository.findByUserIdAndTeamId(visibleMemberId, visibleTeamId))
+                .get()
+                .extracting(UserTeam::getStatusCode)
+                .isEqualTo(UserTeamStatus.LEFT);
+        assertThat(userTeamRepository.findByUserIdAndTeamId(editMember.getId(), visibleTeamId))
+                .get()
+                .extracting(UserTeam::getTeamRole)
+                .isEqualTo("수정 역할");
+    }
+
     /** FK 제약을 피하기 위해 업무일지부터 테스트 데이터를 비운다. */
     private void clearDatabase() {
         worklogRepository.deleteAll();
@@ -288,10 +362,12 @@ class TeamControllerE2eTest extends E2eTestSupport {
         teamAdminRepository.save(TeamAdmin.grant(deptHeadAdmin.getId(), visibleTeam.getId()));
 
         visibleTeamId = visibleTeam.getId();
+        visibleMemberId = member.getId();
         adminOnlyTeamId = adminOnlyTeam.getId();
         deniedTeamId = deniedTeam.getId();
         deletedTeamId = deletedTeam.getId();
         deptHeadAdminUserId = deptHeadAdmin.getId();
+        deptHeadAdminEmail = deptHeadAdmin.getEmail();
     }
 
     private String loginAndGetAuthorizationHeader() throws Exception {
