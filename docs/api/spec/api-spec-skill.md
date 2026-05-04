@@ -28,7 +28,7 @@
 ### GET /api/users/{userId}/skills
 - 목적: 특정 사용자의 보유 스킬 목록을 조회한다.
 - 상태: `Documented`
-- 권한/접근 주체: `DIRECTOR`, `DEPT_HEAD` 만 호출한다. 자기 자신 조회와 `DEPT_HEAD` 의 `DIRECTOR` 조회는 성공 응답으로 처리하되 `skills: []` 로 비노출한다.
+- 권한/접근 주체: `DIRECTOR`, `DEPT_HEAD` 만 호출한다. 자기 자신 조회와 `DEPT_HEAD` 의 `DIRECTOR` 조회는 성공 응답으로 처리하되 `skills: []` 로 비노출한다. `DEPT_HEAD` 는 같은 부서 사용자만 조회할 수 있다.
 - 요청
   - Path: `userId`
 - 응답 (`data` 기준)

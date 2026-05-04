@@ -100,6 +100,25 @@ class UserSkillServiceTest {
     }
 
     @Test
+    @DisplayName("사업부장이 다른 부서 사용자 스킬 목록을 조회하면 접근 거부 예외를 던진다")
+    void 사업부장이_다른_부서_사용자_스킬_목록을_조회하면_접근_거부_예외를_던진다() {
+        // given
+        given(userRepository.findById(OTHER_USER_ID)).willReturn(Optional.of(user(OTHER_USER_ID, UserRole.MEMBER, 20L)));
+        given(userRepository.findById(USER_ID)).willReturn(Optional.of(user(USER_ID, UserRole.DEPT_HEAD, 10L)));
+
+        // when & then
+        assertThatThrownBy(() -> userSkillService.getSkills(
+                principal(USER_ID, UserRole.DEPT_HEAD),
+                OTHER_USER_ID
+        ))
+                .isInstanceOf(BusinessException.class)
+                .extracting("errorCode")
+                .isEqualTo(ErrorCode.AUTH_ACCESS_DENIED);
+
+        verifyNoInteractions(userSkillRepository);
+    }
+
+    @Test
     @DisplayName("일반 사용자가 다른 사용자 스킬 목록을 조회하면 접근 거부 예외를 던진다")
     void 일반_사용자가_다른_사용자_스킬_목록을_조회하면_접근_거부_예외를_던진다() {
         assertThatThrownBy(() -> userSkillService.getSkills(
@@ -136,8 +155,12 @@ class UserSkillServiceTest {
     }
 
     private static User user(Long userId, UserRole role) {
+        return user(userId, role, 10L);
+    }
+
+    private static User user(Long userId, UserRole role, Long departmentId) {
         User user = User.create(
-                10L,
+                departmentId,
                 "사용자" + userId,
                 "user" + userId + "@test.com",
                 "encoded",
@@ -152,4 +175,5 @@ class UserSkillServiceTest {
         ReflectionTestUtils.setField(user, "id", userId);
         return user;
     }
+
 }

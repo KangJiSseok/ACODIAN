@@ -33,6 +33,7 @@ public class UserSkillService {
         if (shouldHideSkills(principal, targetUser)) {
             return GetSkillsApiDto.Response.of(userId, List.of());
         }
+        validateReadableScope(principal, targetUser);
 
         List<UserSkillListItemProjection> skills = userSkillRepository.findUserSkillsByUserId(userId);
         return GetSkillsApiDto.Response.of(userId, skills);
@@ -44,6 +45,18 @@ public class UserSkillService {
             return;
         }
         throw new BusinessException(ErrorCode.AUTH_ACCESS_DENIED);
+    }
+
+    /** DEPT_HEAD 는 자기 부서 사용자 스킬만 조회할 수 있다. */
+    private void validateReadableScope(CustomUserPrincipal principal, User targetUser) {
+        if (UserRole.DIRECTOR.name().equals(principal.roleCode())) {
+            return;
+        }
+
+        User actor = getUserOrThrow(principal.userId());
+        if (!actor.getDepartmentId().equals(targetUser.getDepartmentId())) {
+            throw new BusinessException(ErrorCode.AUTH_ACCESS_DENIED);
+        }
     }
 
     /** 조회는 성공시키되 목록을 비워야 하는 비노출 정책을 판별한다. */
