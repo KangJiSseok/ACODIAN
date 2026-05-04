@@ -8,6 +8,12 @@ class FakeTaggingClient:
     def __init__(self) -> None:
         self.updated_tag_ids: list[int] | None = None
 
+    async def __aenter__(self) -> "FakeTaggingClient":
+        return self
+
+    async def __aexit__(self, exc_type, exc, traceback) -> None:
+        return None
+
     async def list_tags(self) -> list[MetaTag]:
         return [
             MetaTag(tagId=1, tagName="재고"),

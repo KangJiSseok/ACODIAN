@@ -28,19 +28,19 @@ async def _generate_worklog_summary(
         request_content: str | None,
         work_content: str,
 ) -> dict[str, int | str]:
-    
-    try: 
+    try:
 
         summary = await SummaryService().generate_summary(
             request_content=request_content,
             work_content=work_content,
         )
 
-        await WorklogClient().update_ai_result(
-            worklog_id=worklog_id,
-            ai_summary=summary,
-            ai_processing_status="COMPLETED",
-        )
+        async with WorklogClient() as worklog_client:
+            await worklog_client.update_ai_result(
+                worklog_id=worklog_id,
+                ai_summary=summary,
+                ai_processing_status="COMPLETED",
+            )
 
         return {
             "worklog_id": worklog_id,
@@ -51,10 +51,11 @@ async def _generate_worklog_summary(
     except Exception:
         logger.exception("Failed to run worklog AI pipeline. worklog_id=%s", worklog_id)
 
-        await WorklogClient().update_ai_result(
-            worklog_id=worklog_id,
-            ai_summary="",
-            ai_processing_status="FAILED",
-        )
+        async with WorklogClient() as worklog_client:
+            await worklog_client.update_ai_result(
+                worklog_id=worklog_id,
+                ai_summary="",
+                ai_processing_status="FAILED",
+            )
 
         raise
