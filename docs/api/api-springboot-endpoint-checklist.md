@@ -42,7 +42,7 @@
 
 ## 5. `organization/skill` 도메인
 
-- [ ] `GET /api/users/{userId}/skills`
+- [x] `GET /api/users/{userId}/skills`
 - [ ] `POST /api/users/{userId}/skills`
 - [ ] `PATCH /api/users/{userId}/skills/{id}`
 - [ ] `DELETE /api/users/{userId}/skills/{id}`
