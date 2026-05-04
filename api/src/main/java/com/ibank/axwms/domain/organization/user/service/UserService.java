@@ -2,15 +2,12 @@ package com.ibank.axwms.domain.organization.user.service;
 
 import com.ibank.axwms.domain.organization.department.entity.Department;
 import com.ibank.axwms.domain.organization.department.repository.DepartmentRepository;
-import com.ibank.axwms.domain.organization.team.UserTeamStatus;
-import com.ibank.axwms.domain.organization.team.entity.Team;
-import com.ibank.axwms.domain.organization.team.entity.UserTeam;
-import com.ibank.axwms.domain.organization.team.repository.TeamRepository;
 import com.ibank.axwms.domain.organization.team.repository.UserTeamRepository;
-import com.ibank.axwms.domain.organization.user.EmploymentStatus;
+import com.ibank.axwms.domain.organization.team.repository.jooq.projection.UserTeamSummaryProjection;
 import com.ibank.axwms.domain.organization.user.UserRole;
 import com.ibank.axwms.domain.organization.user.dto.GetAdminCandidatesApiDto;
 import com.ibank.axwms.domain.organization.user.dto.GetMyProfileApiDto;
+import com.ibank.axwms.domain.organization.user.dto.GetUserApiDto;
 import com.ibank.axwms.domain.organization.user.dto.GetUsersApiDto;
 import com.ibank.axwms.domain.organization.user.entity.User;
 import com.ibank.axwms.domain.organization.user.repository.UserRepository;
@@ -19,10 +16,6 @@ import com.ibank.axwms.global.error.BusinessException;
 import com.ibank.axwms.global.error.ErrorCode;
 import com.ibank.axwms.global.security.CustomUserPrincipal;
 import java.util.List;
-import java.util.Map;
-import java.util.Objects;
-import java.util.function.Function;
-import java.util.stream.Collectors;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -35,7 +28,6 @@ public class UserService {
     private final UserRepository userRepository;
     private final DepartmentRepository departmentRepository;
     private final UserTeamRepository userTeamRepository;
-    private final TeamRepository teamRepository;
 
     /**
      * access token principal 에 해당하는 현재 로그인 사용자의 프로필/소속 팀 문맥을 조회한다.
@@ -43,10 +35,25 @@ public class UserService {
      */
     public GetMyProfileApiDto.Response getMyProfile(CustomUserPrincipal principal) {
         User user = getUserOrThrow(principal.userId());
-        Department department = getRequiredDepartment(user.getDepartmentId());
+        Department department = getDepartmentOrThrow(user.getDepartmentId());
         List<GetMyProfileApiDto.Response.TeamSummary> teams = getTeamSummaries(user.getId());
 
         return GetMyProfileApiDto.Response.of(user, department, teams);
+    }
+
+    /**
+     * 사용자 id 에 해당하는 사용자 상세와 전체 ACTIVE 팀 membership 문맥을 조회한다.
+     *
+     * @param userId 조회 대상 사용자 id
+     * @return 사용자 기본 정보, 부서 정보, 소속 팀 목록
+     * @throws BusinessException USER_NOT_FOUND 사용자가 없거나 사용자 부서 문맥이 깨진 경우
+     */
+    public GetUserApiDto.Response getUser(Long userId) {
+        User user = getUserOrThrow(userId);
+        Department department = getDepartmentOrThrow(user.getDepartmentId());
+        List<GetUserApiDto.Response.TeamSummary> teams = getUserDetailTeamSummaries(user.getId());
+
+        return GetUserApiDto.Response.of(user, department, teams);
     }
 
     /**
@@ -86,8 +93,7 @@ public class UserService {
     }
 
     /**
-     * JWT subject 로 복원한 사용자 id 에 해당하는 User 를 조회한다.
-     * access token 은 유효하지만 사용자가 삭제된 비정상 케이스를 404 비즈니스 예외로 정규화한다.
+     * 사용자 id 에 해당하는 User 를 조회한다. 없으면 404에러를 반환한다.
      */
     private User getUserOrThrow(Long userId) {
         return userRepository.findById(userId)
@@ -95,10 +101,9 @@ public class UserService {
     }
 
     /**
-     * 사용자의 소속 부서명을 응답에 포함하기 위해 Department 를 조회한다.
-     * 사용자 레코드가 가리키는 부서가 없으면 조직 문맥이 깨진 상태이므로 사용자 미존재와 동일하게 취급한다.
+     * 사용자에 연결된 departmentId 의 Department 문맥을 조회한다. 없으면 사용자 문맥 복원 실패로 처리한다.
      */
-    private Department getRequiredDepartment(Long departmentId) {
+    private Department getDepartmentOrThrow(Long departmentId) {
         return departmentRepository.findById(departmentId)
                 .orElseThrow(() -> new BusinessException(ErrorCode.USER_NOT_FOUND));
     }
@@ -108,40 +113,36 @@ public class UserService {
      * soft-delete 된 팀이나 LEFT membership 은 현재 사용자 문맥에서 노출하지 않는다.
      */
     private List<GetMyProfileApiDto.Response.TeamSummary> getTeamSummaries(Long userId) {
-        List<UserTeam> userTeams = userTeamRepository.findAllByUserIdAndStatusCodeOrderByIsPrimaryDesc(userId, UserTeamStatus.ACTIVE);
-        if (userTeams.isEmpty()) {
-            return List.of();
-        }
-
-        Map<Long, Team> teamsById = teamRepository.findAllById(
-                        userTeams.stream()
-                                .map(UserTeam::getTeamId)
-                                .toList()
-                ).stream()
-                .filter(team -> team.getDeletedAt() == null)
-                .collect(Collectors.toMap(Team::getId, Function.identity()));
-
-        return userTeams.stream()
-                .map(userTeam -> toTeamSummary(userTeam, teamsById.get(userTeam.getTeamId())))
-                .filter(Objects::nonNull)
+        return fetchUserTeamSummaries(userId).stream()
+                .map(p -> new GetMyProfileApiDto.Response.TeamSummary(
+                        p.isPrimary(),
+                        p.teamId(),
+                        p.teamName(),
+                        p.isLeader(),
+                        p.teamRole(),
+                        p.allocation()
+                ))
                 .toList();
     }
 
     /**
-     * 사용자-팀 관계와 팀 엔티티를 응답용 팀 요약으로 변환한다.
-     * FK 무결성상 team 은 존재해야 하지만, 운영 데이터 불일치가 있더라도 전체 조회를 500 으로 깨지 않게 누락 팀은 제외한다.
+     * 사용자 상세 응답의 팀 membership 을 대표 소속 여부, 팀 대표 여부 순서로 정렬해 만든다.
+     * LEFT membership 과 soft-delete 된 팀은 현재 소속 문맥에서 제외한다.
      */
-    private GetMyProfileApiDto.Response.TeamSummary toTeamSummary(UserTeam userTeam, Team team) {
-        if (team == null) {
-            return null;
-        }
-        return new GetMyProfileApiDto.Response.TeamSummary(
-                userTeam.getIsPrimary(),
-                team.getId(),
-                team.getTeamName(),
-                userTeam.getIsLeader(),
-                userTeam.getTeamRole(),
-                userTeam.getAllocation()
-        );
+    private List<GetUserApiDto.Response.TeamSummary> getUserDetailTeamSummaries(Long userId) {
+        return fetchUserTeamSummaries(userId).stream()
+                .map(p -> new GetUserApiDto.Response.TeamSummary(
+                        p.isPrimary(),
+                        p.teamId(),
+                        p.teamName(),
+                        p.isLeader(),
+                        p.teamRole()
+                ))
+                .toList();
+    }
+
+    /** 사용자의 ACTIVE membership 중 soft-delete 되지 않은 팀을 주 소속·리더 순으로 조회한다. */
+    private List<UserTeamSummaryProjection> fetchUserTeamSummaries(Long userId) {
+        return userTeamRepository.findUserTeamSummaries(userId);
     }
 }
