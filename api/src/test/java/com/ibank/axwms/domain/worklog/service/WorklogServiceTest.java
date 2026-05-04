@@ -1,5 +1,6 @@
 package com.ibank.axwms.domain.worklog.service;
 
+import com.ibank.axwms.domain.file.repository.FileRepository;
 import com.ibank.axwms.domain.file.service.FileService;
 import com.ibank.axwms.domain.organization.team.TeamStatus;
 import com.ibank.axwms.domain.organization.team.entity.Team;
@@ -8,8 +9,10 @@ import com.ibank.axwms.domain.worklog.WorklogImportance;
 import com.ibank.axwms.domain.worklog.dto.CreateWorklogApiDto;
 import com.ibank.axwms.domain.worklog.dto.GetWorklogsApiDto;
 import com.ibank.axwms.domain.worklog.entity.Worklog;
-import com.ibank.axwms.domain.worklog.policy.WorklogVisibilityPolicy;
+import com.ibank.axwms.domain.worklog.repository.WorklogDependencyRepository;
 import com.ibank.axwms.domain.worklog.repository.WorklogRepository;
+import com.ibank.axwms.domain.worklog.repository.WorklogStatusHistoryRepository;
+import com.ibank.axwms.domain.worklog.repository.WorklogTagRepository;
 import com.ibank.axwms.domain.worklog.repository.jooq.projection.WorklogListProjection;
 import com.ibank.axwms.domain.worklog.repository.jooq.query.WorklogPageQuery;
 import com.ibank.axwms.global.error.BusinessException;
@@ -33,6 +36,7 @@ import org.springframework.web.multipart.MultipartFile;
 import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.util.List;
+import java.util.Map;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
@@ -45,17 +49,19 @@ import static org.mockito.Mockito.verify;
 @ExtendWith(MockitoExtension.class)
 class WorklogServiceTest {
     @Mock private WorklogRepository worklogRepository;
+    @Mock private WorklogTagRepository worklogTagRepository;
+    @Mock private WorklogDependencyRepository worklogDependencyRepository;
+    @Mock private WorklogStatusHistoryRepository worklogStatusHistoryRepository;
+    @Mock private FileRepository fileRepository;
     @Mock private TeamService teamService;
     @Mock private FileService fileService;
     @Mock private WorklogStatusHistoryService worklogStatusHistoryService;
-    @Mock private WorklogVisibilityPolicy worklogVisibilityPolicy;
 
     @InjectMocks private WorklogService worklogService;
 
     private static final Long USER_ID = 101L;
     private static final Long TEAM_ID = 21L;
     private static final Long WORKLOG_ID = 501L;
-    private static final Long DEPARTMENT_ID = 31L;
     private static final LocalDate INSTRUCTION_DATE = LocalDate.of(2026, 4, 22);
     private static final LocalDate DUE_DATE = LocalDate.of(2026, 4, 25);
 
@@ -187,6 +193,8 @@ class WorklogServiceTest {
 
         given(worklogRepository.findWorklogPage(eq(USER_ID), any(WorklogPageQuery.class)))
                 .willReturn(projectionPage);
+        given(worklogDependencyRepository.countByWorklogIds(List.of(WORKLOG_ID)))
+                .willReturn(Map.of(WORKLOG_ID, 2L));
 
         // when
         PageResponse<GetWorklogsApiDto.Response.Item> response = worklogService.getWorklogs(principal, request);
@@ -223,8 +231,7 @@ class WorklogServiceTest {
                 USER_ID,
                 "홍길동",
                 INSTRUCTION_DATE,
-                DUE_DATE,
-                2L
+                DUE_DATE
         );
     }
 
