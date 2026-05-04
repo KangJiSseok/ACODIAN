@@ -34,7 +34,7 @@ export default function Sidebar() {
   return (
     <aside
       className={cn(
-        "dark workspace-sidebar relative z-20 hidden h-screen shrink-0 flex-col overflow-hidden border-r border-white/10 text-white transition-[width,min-width,max-width,flex-basis] duration-300 ease-out md:flex",
+        "dark workspace-sidebar sticky top-0 z-20 hidden h-screen shrink-0 flex-col overflow-hidden border-r border-white/10 text-white transition-[width,min-width,max-width,flex-basis] duration-300 ease-out md:flex",
         sidebarCollapsed
           ? "w-[4.75rem] min-w-[4.75rem] max-w-[4.75rem] basis-[4.75rem]"
           : "w-[17.5rem] min-w-[17.5rem] max-w-[17.5rem] basis-[17.5rem]",
