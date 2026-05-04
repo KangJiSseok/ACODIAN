@@ -1,26 +1,17 @@
 package com.ibank.axwms.domain.worklog.repository.jooq;
 
+import com.ibank.axwms.domain.worklog.policy.WorklogVisibilityScope;
 import com.ibank.axwms.domain.worklog.repository.jooq.projection.WorklogDetailProjection;
-import static com.ibank.axwms.global.jooq.Tables.TB_TEAM;
-import static com.ibank.axwms.global.jooq.Tables.TB_TEAM_ADMIN;
-import static com.ibank.axwms.global.jooq.Tables.TB_USER;
-import static com.ibank.axwms.global.jooq.Tables.TB_USER_TEAM;
-import static com.ibank.axwms.global.jooq.Tables.TB_WORKLOG;
-import static com.ibank.axwms.global.jooq.Tables.TB_WORKLOG_DEPENDENCY;
-import static com.ibank.axwms.global.jooq.Tables.TB_WORKLOG_DEPENDENCY;
-import static com.ibank.axwms.global.jooq.Tables.TB_WORKLOG_TAG;
-
 import com.ibank.axwms.domain.worklog.repository.jooq.projection.WorklogListProjection;
-import com.ibank.axwms.domain.worklog.repository.jooq.query.WorklogPageQuery;
 import com.ibank.axwms.domain.worklog.repository.jooq.projection.WorklogSearchProjection;
+import com.ibank.axwms.domain.worklog.repository.jooq.query.WorklogPageQuery;
 import com.ibank.axwms.domain.worklog.repository.jooq.query.WorklogSearchQuery;
-import java.util.List;
 import lombok.RequiredArgsConstructor;
 import org.jooq.Condition;
 import org.jooq.DSLContext;
+import org.jooq.Field;
 import org.jooq.Record1;
 import org.jooq.Select;
-import org.jooq.Field;
 import org.jooq.impl.DSL;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageImpl;
@@ -35,6 +26,8 @@ import static com.ibank.axwms.global.jooq.Tables.TB_TEAM_ADMIN;
 import static com.ibank.axwms.global.jooq.Tables.TB_USER;
 import static com.ibank.axwms.global.jooq.Tables.TB_USER_TEAM;
 import static com.ibank.axwms.global.jooq.Tables.TB_WORKLOG;
+import static com.ibank.axwms.global.jooq.Tables.TB_WORKLOG_DEPENDENCY;
+import static com.ibank.axwms.global.jooq.Tables.TB_WORKLOG_TAG;
 
 @Repository
 @RequiredArgsConstructor
@@ -137,7 +130,8 @@ public class WorklogJooqRepositoryImpl implements WorklogJooqRepository {
                         .from(TB_USER_TEAM)
                         .where(TB_USER_TEAM.USER_ID.eq(userId))
                         .and(TB_USER_TEAM.STATUS_CODE.eq(ACTIVE_USER_TEAM_STATUS)));
-    /** 정규화된 검색 query 와 가시 범위로 업무일지 페이지를 조회한다. */
+    }
+
     @Override
     public Page<WorklogSearchProjection> searchWorklogPage(WorklogVisibilityScope scope, WorklogSearchQuery query) {
         int pageIndex = query.pageIndex();
@@ -227,12 +221,13 @@ public class WorklogJooqRepositoryImpl implements WorklogJooqRepository {
         return condition;
     }
 
-    /** 가시 범위 값을 JOOQ Condition 으로 매핑한다. */
+    /**
+     * 가시 범위 값을 JOOQ Condition 으로 매핑한다.
+     */
     private Condition toCondition(WorklogVisibilityScope scope) {
         return switch (scope) {
             case WorklogVisibilityScope.All ignored -> DSL.noCondition();
-            case WorklogVisibilityScope.Department department ->
-                    TB_WORKLOG.TEAM_ID.in(
+            case WorklogVisibilityScope.Department department -> TB_WORKLOG.TEAM_ID.in(
                             DSL.select(TB_USER_TEAM.TEAM_ID)
                                     .from(TB_USER_TEAM)
                                     .join(TB_TEAM).on(TB_USER_TEAM.TEAM_ID.eq(TB_TEAM.TEAM_ID))
@@ -247,8 +242,7 @@ public class WorklogJooqRepositoryImpl implements WorklogJooqRepository {
                                     .where(TB_TEAM_ADMIN.USER_ID.eq(department.userId()))
                                     .and(TB_TEAM.DELETED_AT.isNull())
                     ));
-            case WorklogVisibilityScope.MyTeams myTeams ->
-                    TB_WORKLOG.TEAM_ID.in(
+            case WorklogVisibilityScope.MyTeams myTeams -> TB_WORKLOG.TEAM_ID.in(
                             DSL.select(TB_USER_TEAM.TEAM_ID)
                                     .from(TB_USER_TEAM)
                                     .join(TB_TEAM).on(TB_USER_TEAM.TEAM_ID.eq(TB_TEAM.TEAM_ID))
