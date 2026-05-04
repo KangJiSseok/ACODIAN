@@ -5,20 +5,19 @@ import com.ibank.axwms.domain.organization.team.service.TeamService;
 import com.ibank.axwms.domain.worklog.dto.CreateWorklogApiDto;
 import com.ibank.axwms.domain.worklog.dto.GetWorklogsApiDto;
 import com.ibank.axwms.domain.worklog.entity.Worklog;
-import com.ibank.axwms.domain.worklog.policy.WorklogVisibilityPolicy;
-import com.ibank.axwms.domain.worklog.policy.WorklogVisibilityScope;
 import com.ibank.axwms.domain.worklog.repository.WorklogRepository;
+import com.ibank.axwms.domain.worklog.repository.jooq.query.WorklogPageQuery;
 import com.ibank.axwms.global.error.BusinessException;
 import com.ibank.axwms.global.error.ErrorCode;
 import com.ibank.axwms.global.response.PageResponse;
 import com.ibank.axwms.global.security.CustomUserPrincipal;
-import java.time.LocalDate;
-import java.util.List;
-
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.multipart.MultipartFile;
+
+import java.time.LocalDate;
+import java.util.List;
 
 @Service
 @RequiredArgsConstructor
@@ -29,14 +28,13 @@ public class WorklogService {
     private final TeamService teamService;
     private final FileService fileService;
     private final WorklogStatusHistoryService worklogStatusHistoryService;
-    private final WorklogVisibilityPolicy worklogVisibilityPolicy;
 
     /**
      * 로그인 사용자의 권한으로 업무를 등록한다.
      * 팀 존재 여부와 사용자의 해당 팀 소속 여부를 확인한 뒤 신규 Worklog 엔티티를 저장한다.
      *
      * @param principal 현재 로그인 사용자
-     * @param request 업무 등록 요청 DTO
+     * @param request   업무 등록 요청 DTO
      * @return 생성된 업무 ID 를 담은 응답 DTO
      * @throws BusinessException TEAM_NOT_FOUND 대상 팀이 없을 때
      * @throws BusinessException WORKLOG_TEAM_FORBIDDEN 사용자가 대상 팀 소속이 아닐 때
@@ -78,14 +76,14 @@ public class WorklogService {
      * 가시 범위 결정은 WorklogVisibilityPolicy 가, SQL 분기는 Repository 가 담당한다.
      *
      * @param principal 현재 로그인 사용자
-     * @param request 페이지/사이즈 요청 DTO. null 이면 기본값을 사용한다.
+     * @param request   페이지/사이즈 요청 DTO. null 이면 기본값을 사용한다.
      * @return 페이지네이션 응답
      */
     public PageResponse<GetWorklogsApiDto.Response.Item> getWorklogs(CustomUserPrincipal principal,
                                                                      GetWorklogsApiDto.Request request) {
-        WorklogVisibilityScope scope = worklogVisibilityPolicy.resolve(principal);
+        WorklogPageQuery query = WorklogPageQuery.from(request);
         return GetWorklogsApiDto.Response.fromPage(
-                worklogRepository.findWorklogPage(scope, request));
+                worklogRepository.findWorklogPage(principal.userId(), query));
     }
 
     private void validateDateRange(LocalDate instructionDate, LocalDate dueDate) {

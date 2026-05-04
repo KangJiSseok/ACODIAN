@@ -6,17 +6,20 @@ import static com.ibank.axwms.global.jooq.Tables.TB_USER;
 import static com.ibank.axwms.global.jooq.Tables.TB_USER_TEAM;
 import static com.ibank.axwms.global.jooq.Tables.TB_WORKLOG;
 import static com.ibank.axwms.global.jooq.Tables.TB_WORKLOG_DEPENDENCY;
+import static com.ibank.axwms.global.jooq.Tables.TB_WORKLOG_DEPENDENCY;
 import static com.ibank.axwms.global.jooq.Tables.TB_WORKLOG_TAG;
 
-import com.ibank.axwms.domain.worklog.dto.GetWorklogsApiDto;
-import com.ibank.axwms.domain.worklog.policy.WorklogVisibilityScope;
 import com.ibank.axwms.domain.worklog.repository.jooq.projection.WorklogListProjection;
+import com.ibank.axwms.domain.worklog.repository.jooq.query.WorklogPageQuery;
 import com.ibank.axwms.domain.worklog.repository.jooq.projection.WorklogSearchProjection;
 import com.ibank.axwms.domain.worklog.repository.jooq.query.WorklogSearchQuery;
 import java.util.List;
 import lombok.RequiredArgsConstructor;
 import org.jooq.Condition;
 import org.jooq.DSLContext;
+import org.jooq.Field;
+import org.jooq.Record1;
+import org.jooq.Select;
 import org.jooq.Field;
 import org.jooq.impl.DSL;
 import org.springframework.data.domain.Page;
@@ -34,16 +37,16 @@ public class WorklogJooqRepositoryImpl implements WorklogJooqRepository {
 
     /** 가시 범위와 페이지 요청을 받아 업무 목록을 조회한다. */
     @Override
-    public Page<WorklogListProjection> findWorklogPage(WorklogVisibilityScope scope, GetWorklogsApiDto.Request request) {
-        int pageIndex = request.pageOrDefault() - 1;
-        int pageSize = request.pageSizeOrDefault();
+    public Page<WorklogListProjection> findWorklogPage(Long userId, WorklogPageQuery query) {
+        int pageIndex = query.pageIndex();
+        int pageSize = query.pageSize();
         PageRequest pageRequest = PageRequest.of(pageIndex, pageSize);
 
-        Condition baseCondition = TB_WORKLOG.IS_DELETED.isFalse().and(toCondition(scope));
-
+        Condition condition = TB_WORKLOG.IS_DELETED.isFalse().and(visibleTeamCondition(userId));
         long total = dsl.selectCount()
                 .from(TB_WORKLOG)
-                .where(baseCondition)
+                .join(TB_TEAM).on(TB_WORKLOG.TEAM_ID.eq(TB_TEAM.TEAM_ID))
+                .where(condition)
                 .fetchSingle(0, Integer.class)
                 .longValue();
 
@@ -71,31 +74,28 @@ public class WorklogJooqRepositoryImpl implements WorklogJooqRepository {
                 .from(TB_WORKLOG)
                 .join(TB_TEAM).on(TB_WORKLOG.TEAM_ID.eq(TB_TEAM.TEAM_ID))
                 .join(TB_USER).on(TB_WORKLOG.AUTHOR_ID.eq(TB_USER.USER_ID))
-                .where(baseCondition)
+                .where(condition)
                 .orderBy(TB_WORKLOG.CREATED_AT.desc(), TB_WORKLOG.WORKLOG_ID.desc())
                 .limit(pageSize)
                 .offset((long) pageIndex * pageSize)
-                .fetch(record -> new WorklogListProjection(
-                        record.get(TB_WORKLOG.WORKLOG_ID),
-                        record.get(TB_WORKLOG.TITLE),
-                        record.get(TB_WORKLOG.STATUS_CODE),
-                        record.get(TB_WORKLOG.WORK_CONTENT),
-                        record.get(TB_WORKLOG.ACTUAL_HOURS),
-                        record.get(TB_WORKLOG.IMPORTANCE_CODE),
-                        record.get(TB_WORKLOG.AI_SUMMARY),
-                        record.get(TB_WORKLOG.AI_PROCESSING_STATUS),
-                        record.get(TB_WORKLOG.AI_SUMMARY_EDITED),
-                        record.get(TB_WORKLOG.TEAM_ID),
-                        record.get(TB_TEAM.TEAM_NAME),
-                        record.get(TB_WORKLOG.AUTHOR_ID),
-                        record.get(TB_USER.USER_NAME),
-                        record.get(TB_WORKLOG.INSTRUCTION_DATE),
-                        record.get(TB_WORKLOG.DUE_DATE)
-                ));
+                .fetch(record -> WorklogListProjection.from(record));
 
         return new PageImpl<>(items, pageRequest, total);
     }
 
+    private Condition visibleTeamCondition(Long userId) {
+        return TB_TEAM.DELETED_AT.isNull()
+                .and(TB_TEAM.TEAM_ID.in(visibleTeamIds(userId)));
+    }
+
+    private Select<Record1<Long>> visibleTeamIds(Long userId) {
+        return DSL.select(TB_TEAM_ADMIN.TEAM_ID)
+                .from(TB_TEAM_ADMIN)
+                .where(TB_TEAM_ADMIN.USER_ID.eq(userId))
+                .union(DSL.select(TB_USER_TEAM.TEAM_ID)
+                        .from(TB_USER_TEAM)
+                        .where(TB_USER_TEAM.USER_ID.eq(userId))
+                        .and(TB_USER_TEAM.STATUS_CODE.eq(ACTIVE_USER_TEAM_STATUS)));
     /** 정규화된 검색 query 와 가시 범위로 업무일지 페이지를 조회한다. */
     @Override
     public Page<WorklogSearchProjection> searchWorklogPage(WorklogVisibilityScope scope, WorklogSearchQuery query) {
