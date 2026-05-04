@@ -50,7 +50,7 @@ export default function MyPage() {
   const primaryTeam = user?.teams.find((team) => team.isPrimary);
   const teamNames = user?.teams.map((team) => team.teamName).join(", ") || "-";
   const displayStatus = user?.employmentStatus
-    ? employmentStatusLabels[user.employmentStatus] ?? user.employmentStatus
+    ? (employmentStatusLabels[user.employmentStatus] ?? user.employmentStatus)
     : "-";
   const roleLabel = [user?.positionName, user?.titleName]
     .filter(Boolean)
@@ -62,7 +62,7 @@ export default function MyPage() {
         <div className="mb-8 flex items-start justify-between gap-4">
           <div>
             <p className="text-xs font-bold uppercase tracking-[0.34em] text-muted-foreground">
-              My Profile
+              나의 정보
             </p>
             <h1 className="mt-2 text-xl font-black tracking-[-0.04em] text-foreground">
               프로필 정보 및 계정 설정
@@ -111,7 +111,9 @@ export default function MyPage() {
                   </p>
                   <p className="mt-3 text-sm font-bold text-foreground">
                     주 소속 팀{" "}
-                    <span className="text-primary">{primaryTeam?.teamName ?? "-"}</span>
+                    <span className="text-primary">
+                      {primaryTeam?.teamName ?? "-"}
+                    </span>
                   </p>
                 </div>
               </div>
@@ -127,7 +129,11 @@ export default function MyPage() {
                 value={user?.profileImageUrl ?? "-"}
               />
               <div className="grid gap-4 md:grid-cols-2">
-                <ReadOnlyField icon={Phone} label="연락처" value={user?.phone ?? "-"} />
+                <ReadOnlyField
+                  icon={Phone}
+                  label="연락처"
+                  value={user?.phone ?? "-"}
+                />
                 <ReadOnlyField
                   icon={UsersRound}
                   label="주 소속 팀"
@@ -141,9 +147,11 @@ export default function MyPage() {
                 비밀번호 변경
               </p>
               {/* 비밀번호는 서버에서 내려받지 않으므로 변경 API 연결 전까지 마스킹 UI만 표시한다. */}
+              {/* 입력 필드 연결 시 새 비밀번호와 확인 값의 일치 여부를 검증한다. */}
               <div className="mt-4 grid gap-4 md:grid-cols-2">
                 <ReadOnlyField label="현재 비밀번호" value="••••••••" />
                 <ReadOnlyField label="새 비밀번호" value="••••••••" />
+                <ReadOnlyField label="새 비밀번호 확인" value="••••••••" />
               </div>
             </section>
           </div>
@@ -169,9 +177,21 @@ export default function MyPage() {
                 label="주 소속 팀"
                 value={primaryTeam?.teamName ?? "-"}
               />
-              <InfoCard icon={UsersRound} label="소속 팀 목록" value={teamNames} />
-              <InfoCard icon={ShieldCheck} label="직급 / 직책" value={roleLabel || "-"} />
-              <InfoCard icon={CheckCircle2} label="상태" value={displayStatus} />
+              <InfoCard
+                icon={UsersRound}
+                label="소속 팀 목록"
+                value={teamNames}
+              />
+              <InfoCard
+                icon={ShieldCheck}
+                label="직급 / 직책"
+                value={roleLabel || "-"}
+              />
+              <InfoCard
+                icon={CheckCircle2}
+                label="상태"
+                value={displayStatus}
+              />
             </div>
           </aside>
         </div>
@@ -191,9 +211,13 @@ function ReadOnlyField({
 }) {
   return (
     <label className="block">
-      <span className="mb-2 block text-sm font-bold text-foreground">{label}</span>
+      <span className="mb-2 block text-sm font-bold text-foreground">
+        {label}
+      </span>
       <span className="flex h-14 items-center gap-3 rounded-2xl border border-border bg-input px-4 text-sm font-semibold text-foreground shadow-[0_12px_30px_-22px_rgba(15,23,42,0.48)]">
-        {Icon ? <Icon className="size-4 shrink-0 text-muted-foreground" /> : null}
+        {Icon ? (
+          <Icon className="size-4 shrink-0 text-muted-foreground" />
+        ) : null}
         <span className="truncate">{value}</span>
       </span>
     </label>
