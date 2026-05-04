@@ -373,22 +373,40 @@
   </thead>
   <tbody>
     <tr>
-      <td><code>GET /api/users/{id}/skills</code></td>
+      <td><code>GET /api/users/{userId}/skills</code></td>
       <td><code>Documented</code></td>
       <td>특정 사용자의 보유 스킬 목록을 조회한다.</td>
       <td><code>domain.organization.skill.controller.UserSkillController</code></td>
       <td><code>domain.organization.skill.service.UserSkillService</code></td>
       <td><code>domain.organization.skill.entity.UserSkill</code>, <code>domain.organization.skill.repository.UserSkillRepository</code>, <code>domain.organization.skill.repository.jooq.UserSkillJooqRepository</code></td>
-      <td>현행 코드 skeleton의 클래스는 존재하며 endpoint/status는 <code>api-design</code> 상세 본문을 우선 따른다.</td>
+      <td>사용자별 스킬 ownership은 <code>organization/skill</code> feature에 둔다.</td>
     </tr>
     <tr>
-      <td><code>PUT /api/users/{id}/skills</code></td>
+      <td><code>POST /api/users/{userId}/skills</code></td>
       <td><code>Documented</code></td>
-      <td>특정 사용자의 스킬 세트를 교체/정리한다.</td>
+      <td>특정 사용자에게 스킬을 추가한다.</td>
       <td><code>domain.organization.skill.controller.UserSkillController</code></td>
       <td><code>domain.organization.skill.service.UserSkillService</code></td>
       <td><code>domain.organization.skill.entity.UserSkill</code>, <code>domain.organization.skill.repository.UserSkillRepository</code></td>
-      <td>사용자별 스킬 ownership은 <code>organization/skill</code> feature에 둔다.</td>
+      <td>스킬 생성 ownership은 <code>organization/skill</code> feature에 둔다.</td>
+    </tr>
+    <tr>
+      <td><code>PATCH /api/users/{userId}/skills/{id}</code></td>
+      <td><code>Documented</code></td>
+      <td>특정 사용자의 특정 스킬 정보를 수정한다.</td>
+      <td><code>domain.organization.skill.controller.UserSkillController</code></td>
+      <td><code>domain.organization.skill.service.UserSkillService</code></td>
+      <td><code>domain.organization.skill.entity.UserSkill</code>, <code>domain.organization.skill.repository.UserSkillRepository</code></td>
+      <td><code>userId</code>는 사용자 식별자, <code>id</code>는 스킬 레코드 식별자다.</td>
+    </tr>
+    <tr>
+      <td><code>DELETE /api/users/{userId}/skills/{id}</code></td>
+      <td><code>Documented</code></td>
+      <td>특정 사용자의 특정 스킬을 삭제한다.</td>
+      <td><code>domain.organization.skill.controller.UserSkillController</code></td>
+      <td><code>domain.organization.skill.service.UserSkillService</code></td>
+      <td><code>domain.organization.skill.entity.UserSkill</code>, <code>domain.organization.skill.repository.UserSkillRepository</code></td>
+      <td><code>userId</code>는 사용자 식별자, <code>id</code>는 스킬 레코드 식별자다.</td>
     </tr>
   </tbody>
 </table>
@@ -412,7 +430,7 @@
   </thead>
   <tbody>
     <tr>
-      <td><code>GET /api/users/{id}/evaluations</code></td>
+      <td><code>GET /api/users/{userId}/evaluations</code></td>
       <td><code>Documented</code></td>
       <td>특정 사용자의 평가 이력을 조회한다.</td>
       <td><code>domain.organization.evaluation.controller.UserEvaluationController</code></td>
@@ -421,13 +439,31 @@
       <td>평가 read/write ownership은 <code>organization/evaluation</code> feature가 가진다.</td>
     </tr>
     <tr>
-      <td><code>POST /api/users/{id}/evaluations</code></td>
+      <td><code>POST /api/users/{userId}/evaluations</code></td>
       <td><code>Documented</code></td>
       <td>특정 사용자에 대한 평가를 등록한다.</td>
       <td><code>domain.organization.evaluation.controller.UserEvaluationController</code></td>
       <td><code>domain.organization.evaluation.service.UserEvaluationService</code></td>
       <td><code>domain.organization.evaluation.entity.UserEvaluation</code>, <code>domain.organization.evaluation.repository.UserEvaluationRepository</code></td>
       <td>평가 생성 규칙과 권한 검증은 서비스에서 처리한다.</td>
+    </tr>
+    <tr>
+      <td><code>PATCH /api/users/{userId}/evaluations/{id}</code></td>
+      <td><code>Documented</code></td>
+      <td>특정 사용자의 평가 내용을 수정한다.</td>
+      <td><code>domain.organization.evaluation.controller.UserEvaluationController</code></td>
+      <td><code>domain.organization.evaluation.service.UserEvaluationService</code></td>
+      <td><code>domain.organization.evaluation.entity.UserEvaluation</code>, <code>domain.organization.evaluation.repository.UserEvaluationRepository</code></td>
+      <td><code>userId</code>는 사용자 식별자, <code>id</code>는 평가 레코드 식별자다.</td>
+    </tr>
+    <tr>
+      <td><code>DELETE /api/users/{userId}/evaluations/{id}</code></td>
+      <td><code>Documented</code></td>
+      <td>특정 사용자의 평가를 삭제한다.</td>
+      <td><code>domain.organization.evaluation.controller.UserEvaluationController</code></td>
+      <td><code>domain.organization.evaluation.service.UserEvaluationService</code></td>
+      <td><code>domain.organization.evaluation.entity.UserEvaluation</code>, <code>domain.organization.evaluation.repository.UserEvaluationRepository</code></td>
+      <td><code>userId</code>는 사용자 식별자, <code>id</code>는 평가 레코드 식별자다.</td>
     </tr>
   </tbody>
 </table>
