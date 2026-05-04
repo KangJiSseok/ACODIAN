@@ -65,6 +65,7 @@ export default function Sidebar() {
               </span>
             </button>
           ) : (
+            // 펼친 상태의 IB 브랜드 버튼은 홈 역할을 하므로 대시보드로 이동한다.
             <Link
               href="/"
               className="flex h-10 w-[3.75rem] items-center justify-center"
@@ -155,8 +156,9 @@ export default function Sidebar() {
 
         <div className="mt-auto">
           <div className="relative grid w-full grid-cols-[3.75rem_minmax(0,1fr)] items-center">
+            {/* 하단 프로필 영역은 현재 사용자의 마이페이지 진입점이다. */}
             <Link
-              href="/"
+              href="/my-page"
               className={cn(
                 "col-span-2 grid h-14 w-full min-w-0 grid-cols-[3.75rem_minmax(0,1fr)] items-center rounded-xl text-white transition-colors hover:bg-white/8",
                 sidebarCollapsed

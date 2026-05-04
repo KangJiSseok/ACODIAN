@@ -13,6 +13,10 @@ function resolveExactBreadcrumbs(pathname: string): BreadcrumbItem[] | null {
     return [{ label: "대시보드" }];
   }
 
+  if (pathname === "/my-page") {
+    return [{ label: "마이페이지" }];
+  }
+
   const submenuMatch = findNavSubItemByHref(pathname);
   if (submenuMatch) {
     return [
