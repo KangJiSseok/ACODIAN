@@ -1,5 +1,6 @@
 package com.ibank.axwms.domain.worklog.service;
 
+import com.ibank.axwms.domain.file.repository.FileRepository;
 import com.ibank.axwms.domain.file.service.FileService;
 import com.ibank.axwms.domain.organization.team.TeamStatus;
 import com.ibank.axwms.domain.organization.team.entity.Team;
@@ -8,10 +9,12 @@ import com.ibank.axwms.domain.worklog.WorklogImportance;
 import com.ibank.axwms.domain.worklog.dto.CreateWorklogApiDto;
 import com.ibank.axwms.domain.worklog.dto.GetWorklogsApiDto;
 import com.ibank.axwms.domain.worklog.entity.Worklog;
-import com.ibank.axwms.domain.worklog.policy.WorklogVisibilityPolicy;
-import com.ibank.axwms.domain.worklog.policy.WorklogVisibilityScope;
+import com.ibank.axwms.domain.worklog.repository.WorklogDependencyRepository;
 import com.ibank.axwms.domain.worklog.repository.WorklogRepository;
+import com.ibank.axwms.domain.worklog.repository.WorklogStatusHistoryRepository;
+import com.ibank.axwms.domain.worklog.repository.WorklogTagRepository;
 import com.ibank.axwms.domain.worklog.repository.jooq.projection.WorklogListProjection;
+import com.ibank.axwms.domain.worklog.repository.jooq.query.WorklogPageQuery;
 import com.ibank.axwms.global.error.BusinessException;
 import com.ibank.axwms.global.error.ErrorCode;
 import com.ibank.axwms.global.response.PageResponse;
@@ -19,6 +22,7 @@ import com.ibank.axwms.global.security.CustomUserPrincipal;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.ArgumentCaptor;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
@@ -32,6 +36,7 @@ import org.springframework.web.multipart.MultipartFile;
 import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.util.List;
+import java.util.Map;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
@@ -44,17 +49,19 @@ import static org.mockito.Mockito.verify;
 @ExtendWith(MockitoExtension.class)
 class WorklogServiceTest {
     @Mock private WorklogRepository worklogRepository;
+    @Mock private WorklogTagRepository worklogTagRepository;
+    @Mock private WorklogDependencyRepository worklogDependencyRepository;
+    @Mock private WorklogStatusHistoryRepository worklogStatusHistoryRepository;
+    @Mock private FileRepository fileRepository;
     @Mock private TeamService teamService;
     @Mock private FileService fileService;
     @Mock private WorklogStatusHistoryService worklogStatusHistoryService;
-    @Mock private WorklogVisibilityPolicy worklogVisibilityPolicy;
 
     @InjectMocks private WorklogService worklogService;
 
     private static final Long USER_ID = 101L;
     private static final Long TEAM_ID = 21L;
     private static final Long WORKLOG_ID = 501L;
-    private static final Long DEPARTMENT_ID = 31L;
     private static final LocalDate INSTRUCTION_DATE = LocalDate.of(2026, 4, 22);
     private static final LocalDate DUE_DATE = LocalDate.of(2026, 4, 25);
 
@@ -173,31 +180,39 @@ class WorklogServiceTest {
     }
 
     @Test
-    @DisplayName("getWorklogs 는 정책이 결정한 Scope 와 Request 를 그대로 Repository 에 위임한다")
-    void getWorklogs_는_정책이_결정한_Scope_와_Request_를_Repository_에_위임한다() {
+    @DisplayName("getWorklogs 는 사용자 ID 와 페이지 쿼리를 Repository 에 위임하고 응답으로 변환한다")
+    void getWorklogs_는_사용자_ID_와_페이지_쿼리를_Repository_에_위임한다() {
         // given
         CustomUserPrincipal principal = principal();
         GetWorklogsApiDto.Request request = new GetWorklogsApiDto.Request(1, 20);
-        WorklogVisibilityScope scope = new WorklogVisibilityScope.MyTeams(USER_ID);
         Page<WorklogListProjection> projectionPage = new PageImpl<>(
                 List.of(sampleProjection()),
                 PageRequest.of(0, 20),
                 1
         );
 
-        given(worklogVisibilityPolicy.resolve(principal)).willReturn(scope);
-        given(worklogRepository.findWorklogPage(scope, request)).willReturn(projectionPage);
+        given(worklogRepository.findWorklogPage(eq(USER_ID), any(WorklogPageQuery.class)))
+                .willReturn(projectionPage);
+        given(worklogDependencyRepository.countByWorklogIds(List.of(WORKLOG_ID)))
+                .willReturn(Map.of(WORKLOG_ID, 2L));
 
         // when
         PageResponse<GetWorklogsApiDto.Response.Item> response = worklogService.getWorklogs(principal, request);
 
         // then
         assertThat(response.items()).hasSize(1);
-        assertThat(response.items().get(0).worklogId()).isEqualTo(WORKLOG_ID);
-        assertThat(response.items().get(0).teamName()).isEqualTo("물류혁신TF");
+        GetWorklogsApiDto.Response.Item item = response.items().get(0);
+        assertThat(item.worklogId()).isEqualTo(WORKLOG_ID);
+        assertThat(item.teamName()).isEqualTo("물류혁신TF");
+        assertThat(item.predecessorCount()).isEqualTo(2L);
         assertThat(response.totalCount()).isEqualTo(1);
         assertThat(response.page()).isEqualTo(1);
-        verify(worklogRepository).findWorklogPage(eq(scope), eq(request));
+
+        ArgumentCaptor<WorklogPageQuery> queryCaptor = ArgumentCaptor.forClass(WorklogPageQuery.class);
+        verify(worklogRepository).findWorklogPage(eq(USER_ID), queryCaptor.capture());
+        assertThat(queryCaptor.getValue().page()).isEqualTo(1);
+        assertThat(queryCaptor.getValue().pageSize()).isEqualTo(20);
+        assertThat(queryCaptor.getValue().pageIndex()).isEqualTo(0);
     }
 
     private static WorklogListProjection sampleProjection() {

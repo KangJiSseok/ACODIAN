@@ -123,6 +123,9 @@ public class LocalSeedRunner implements ApplicationRunner {
     private void synchronizeDepartments(List<DepartmentSeedSpec> specs,
                                         Map<String, Long> departmentIdsByName,
                                         Map<String, Long> userIdsByEmail) {
+        clearSeedDepartmentHeads(specs, departmentIdsByName);
+        departmentRepository.flush();
+
         for (DepartmentSeedSpec spec : specs) {
             Department department = departmentRepository.findById(departmentIdsByName.get(spec.departmentName()))
                     .orElseThrow();
@@ -135,6 +138,21 @@ public class LocalSeedRunner implements ApplicationRunner {
             );
             log.info("[LocalSeed] 부서 보정 - name={} status={} headUserEmail={}",
                     spec.departmentName(), spec.statusCode(), spec.headUserEmail());
+        }
+    }
+
+    /**
+     * 부서장 UNIQUE 제약이 있는 상태에서 시드 재배치가 일어나면, 같은 트랜잭션 안에서도
+     * 조회 시점 auto flush 때문에 "기존 부서 -> 새 부서" 이동 중간 상태가 먼저 반영될 수 있다.
+     * 먼저 시드 대상 부서들의 head 를 모두 비우고 flush 한 뒤 최종 head 를 다시 할당해
+     * 로컬 시드 재실행을 멱등하게 유지한다.
+     */
+    private void clearSeedDepartmentHeads(List<DepartmentSeedSpec> specs,
+                                          Map<String, Long> departmentIdsByName) {
+        for (DepartmentSeedSpec spec : specs) {
+            Department department = departmentRepository.findById(departmentIdsByName.get(spec.departmentName()))
+                    .orElseThrow();
+            department.assignHeadUserId(null);
         }
     }
 
