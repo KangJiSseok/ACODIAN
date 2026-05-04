@@ -101,11 +101,11 @@ public class UserService {
     }
 
     /**
-     * departmentId 에 해당하는 Department 를 조회한다. 없으면 404에러를 반환한다.
+     * 사용자에 연결된 departmentId 의 Department 문맥을 조회한다. 없으면 사용자 문맥 복원 실패로 처리한다.
      */
     private Department getDepartmentOrThrow(Long departmentId) {
         return departmentRepository.findById(departmentId)
-                .orElseThrow(() -> new BusinessException(ErrorCode.DEPARTMENT_NOT_FOUND));
+                .orElseThrow(() -> new BusinessException(ErrorCode.USER_NOT_FOUND));
     }
 
     /**
