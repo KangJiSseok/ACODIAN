@@ -89,6 +89,8 @@ public final class SearchWorklogsApiDto {
                 Long authorId,
                 @Schema(description = "작성자 사용자명", example = "홍길동")
                 String authorName,
+                @Schema(description = "작성자 프로필 이미지", example = "https://이미지경로")
+                String profileImageUrl,
                 @Schema(description = "업무 지시 일자", example = "2026-04-22")
                 LocalDate instructionDate,
                 @Schema(description = "업무 마감 일자", example = "2026-04-25")
@@ -108,6 +110,7 @@ public final class SearchWorklogsApiDto {
                         projection.teamName(),
                         projection.authorId(),
                         projection.authorName(),
+                        projection.profileImageUrl(),
                         projection.instructionDate(),
                         projection.dueDate()
                 );

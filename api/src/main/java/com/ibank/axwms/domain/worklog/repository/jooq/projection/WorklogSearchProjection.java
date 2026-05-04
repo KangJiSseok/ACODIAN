@@ -15,6 +15,7 @@ public record WorklogSearchProjection(
         String teamName,
         Long authorId,
         String authorName,
+        String profileImageUrl,
         LocalDate instructionDate,
         LocalDate dueDate
 ) {

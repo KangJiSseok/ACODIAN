@@ -234,6 +234,7 @@ class KeywordWorklogSearchServiceTest {
                 "물류혁신TF",
                 AUTHOR_ID,
                 "홍길동",
+                "https://cdn.axwms.com/profile/7.png",
                 INSTRUCTION_DATE,
                 DUE_DATE
         );

@@ -134,6 +134,7 @@ public class WorklogJooqRepositoryImpl implements WorklogJooqRepository {
                         TB_TEAM.TEAM_NAME,
                         TB_WORKLOG.AUTHOR_ID,
                         TB_USER.USER_NAME,
+                        TB_USER.PROFILE_IMAGE_URL,
                         TB_WORKLOG.INSTRUCTION_DATE,
                         TB_WORKLOG.DUE_DATE
                 )
@@ -156,6 +157,7 @@ public class WorklogJooqRepositoryImpl implements WorklogJooqRepository {
                         record.get(TB_TEAM.TEAM_NAME),
                         record.get(TB_WORKLOG.AUTHOR_ID),
                         record.get(TB_USER.USER_NAME),
+                        record.get(TB_USER.PROFILE_IMAGE_URL),
                         record.get(TB_WORKLOG.INSTRUCTION_DATE),
                         record.get(TB_WORKLOG.DUE_DATE)
                 ));
