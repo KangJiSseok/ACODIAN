@@ -58,6 +58,8 @@ public enum ErrorCode {
     TEAM_LEADER_COUNT_INVALID(HttpStatus.BAD_REQUEST, "리더는 1명이어야 합니다."),
     /** access token 으로 복원한 현재 사용자 문맥이 DB 에 존재하지 않을 때 사용한다. */
     USER_NOT_FOUND(HttpStatus.NOT_FOUND, "사용자를 찾을 수 없습니다."),
+    /** 같은 사용자가 이미 보유한 스킬명을 다시 등록하려 할 때 사용한다. */
+    USER_SKILL_DUPLICATE_NAME(HttpStatus.CONFLICT, "이미 등록된 사용자 스킬입니다."),
     /** 평가 조회/등록 대상에 대한 역할/부서 접근 범위를 만족하지 못할 때 사용한다. */
     EVALUATION_ACCESS_DENIED(HttpStatus.FORBIDDEN, "해당 평가에 접근할 권한이 없습니다."),
     /** 현재 로그인 사용자가 자기 자신에게 평가를 작성하려 할 때 사용한다. */

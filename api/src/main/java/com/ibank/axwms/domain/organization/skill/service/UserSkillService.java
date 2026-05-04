@@ -1,6 +1,8 @@
 package com.ibank.axwms.domain.organization.skill.service;
 
+import com.ibank.axwms.domain.organization.skill.dto.CreateSkillApiDto;
 import com.ibank.axwms.domain.organization.skill.dto.GetSkillsApiDto;
+import com.ibank.axwms.domain.organization.skill.entity.UserSkill;
 import com.ibank.axwms.domain.organization.skill.repository.UserSkillRepository;
 import com.ibank.axwms.domain.organization.skill.repository.jooq.projection.UserSkillListItemProjection;
 import com.ibank.axwms.domain.organization.user.UserRole;
@@ -27,7 +29,7 @@ public class UserSkillService {
      * 자기 자신 또는 DEPT_HEAD 가 DIRECTOR 를 조회하면 스킬을 노출하지 않고 빈 목록을 반환한다.
      */
     public GetSkillsApiDto.Response getSkills(CustomUserPrincipal principal, Long userId) {
-        validateReadable(principal);
+        validateOrganizationManagerRole(principal);
 
         User targetUser = getUserOrThrow(userId);
         if (shouldHideSkills(principal, targetUser)) {
@@ -39,8 +41,20 @@ public class UserSkillService {
         return GetSkillsApiDto.Response.of(userId, skills);
     }
 
-    /** 스킬 조회 API 는 조직 관리자에게만 열어 둔다. */
-    private void validateReadable(CustomUserPrincipal principal) {
+    /** 특정 사용자에게 스킬을 등록한다. 조직 관리자만 자기 자신을 제외한 허용 범위 사용자에게 등록할 수 있다. */
+    @Transactional
+    public void createSkill(CustomUserPrincipal principal, Long userId, CreateSkillApiDto.Request request) {
+        validateOrganizationManagerRole(principal);
+
+        User targetUser = getUserOrThrow(userId);
+        validateWritable(principal, targetUser);
+        ensureSkillNameAvailable(userId, request.skillName());
+
+        userSkillRepository.save(UserSkill.create(userId, request.skillName(), request.skillLevel()));
+    }
+
+    /** 스킬 API 는 조직 관리자에게만 열어 둔다. */
+    private void validateOrganizationManagerRole(CustomUserPrincipal principal) {
         if (isOrganizationManager(principal)) {
             return;
         }
@@ -56,6 +70,31 @@ public class UserSkillService {
         User actor = getUserOrThrow(principal.userId());
         if (!actor.getDepartmentId().equals(targetUser.getDepartmentId())) {
             throw new BusinessException(ErrorCode.AUTH_ACCESS_DENIED);
+        }
+    }
+
+    /** 스킬 등록 권한과 DEPT_HEAD 의 부서 범위를 함께 검증한다. */
+    private void validateWritable(CustomUserPrincipal principal, User targetUser) {
+        if (!isOrganizationManager(principal) || principal.userId().equals(targetUser.getId())) {
+            throw new BusinessException(ErrorCode.AUTH_ACCESS_DENIED);
+        }
+        if (UserRole.DIRECTOR.name().equals(principal.roleCode())) {
+            return;
+        }
+        if (UserRole.DIRECTOR.equals(targetUser.getRoleCode())) {
+            throw new BusinessException(ErrorCode.AUTH_ACCESS_DENIED);
+        }
+
+        User actor = getUserOrThrow(principal.userId());
+        if (!actor.getDepartmentId().equals(targetUser.getDepartmentId())) {
+            throw new BusinessException(ErrorCode.AUTH_ACCESS_DENIED);
+        }
+    }
+
+    /** 사용자별 스킬명 UNIQUE 충돌을 사전에 확인한다. */
+    private void ensureSkillNameAvailable(Long userId, String skillName) {
+        if (userSkillRepository.existsByUserIdAndSkillName(userId, skillName)) {
+            throw new BusinessException(ErrorCode.USER_SKILL_DUPLICATE_NAME);
         }
     }
 

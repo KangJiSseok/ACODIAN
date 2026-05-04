@@ -44,4 +44,13 @@ public class UserSkill {
     @UpdateTimestamp
     @Column(name = "updated_at", nullable = false)
     private LocalDateTime updatedAt;
+
+    /** 특정 사용자에게 새 스킬을 등록한다. userId 와 skillName 조합은 UNIQUE 제약을 따른다. */
+    public static UserSkill create(Long userId, String skillName, Short skillLevel) {
+        UserSkill userSkill = new UserSkill();
+        userSkill.userId = userId;
+        userSkill.skillName = skillName;
+        userSkill.skillLevel = skillLevel;
+        return userSkill;
+    }
 }
