@@ -359,7 +359,13 @@
     controller/service 외부 API 계약 타입은 기존대로 `dto/` 규칙을 유지한다.
     projection 은 repository 내부 nested record 보다 재사용 가능한 top-level 타입을 기본으로 사용한다.
     projection 생성 책임을 projection 타입 옆에 두는 편이 더 읽기 쉬우면, top-level projection 안에
-    `from(Record, GeneratedTable...)` 같은 jOOQ 전용 static factory 를 둘 수 있다.
+    jOOQ 전용 static factory 를 둘 수 있다.
+    JOOQ repository 의 `fetch(...)` 매핑은 projection 생성자가 길어지거나 계산 필드가 포함되면 inline `new Projection(...)` 대신
+    projection 의 정적 팩토리를 호출한다.
+    선택한 `Record` 만으로 projection 을 1:1 조립할 수 있으면 `from(record)` 를 사용한다.
+    계산 Field, table alias, 외부에서 만든 매핑 단서처럼 `Record` 외 추가 입력이 필요하면 `from(record, ...)` 형태로 추가 인자를 명시한다.
+    `selectCount().asField(...)` 처럼 쿼리 안에서 만든 계산 Field 는 같은 Field 인스턴스를 `select(...)` 와 `from(record, field)` 에 함께 전달해
+    projection 내부에서 `record.get(field)` 로 읽는다.
     이 경우에도 query 작성과 where/order/limit 책임은 repository 가 계속 소유한다.
     projection 과 API DTO 는 단순 data carrier 성격의 standalone 테스트를 만들지 않고, Service/Controller/E2E/통합 테스트에서 간접 검증한다.
     이번 변경의 첫 적용 대상으로 department GET 조회용 타입을 nested record 에서 projection 디렉토리의 top-level projection 타입으로 이동한다.

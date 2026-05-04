@@ -2,7 +2,9 @@ package com.ibank.axwms.domain.worklog.controller;
 
 import com.ibank.axwms.domain.worklog.dto.CreateWorklogApiDto;
 import com.ibank.axwms.domain.worklog.dto.GetWorklogsApiDto;
+import com.ibank.axwms.domain.worklog.dto.SearchWorklogsApiDto;
 import com.ibank.axwms.domain.worklog.service.WorklogService;
+import com.ibank.axwms.domain.worklog.service.search.WorklogSearchService;
 import com.ibank.axwms.global.response.PageResponse;
 import com.ibank.axwms.global.security.CustomUserPrincipal;
 import jakarta.validation.Valid;
@@ -28,6 +30,7 @@ import java.util.List;
 public class WorklogController implements WorklogControllerDocs {
 
     private final WorklogService worklogService;
+    private final WorklogSearchService worklogSearchService;
 
     @Override
     @PostMapping
@@ -48,5 +51,15 @@ public class WorklogController implements WorklogControllerDocs {
             @Valid @ModelAttribute GetWorklogsApiDto.Request request
     ) {
         return worklogService.getWorklogs(principal, request);
+    }
+
+    @Override
+    @GetMapping("/search")
+    @PreAuthorize("hasAnyRole('DIRECTOR','DEPT_HEAD','TEAM_LEAD','MEMBER')")
+    public PageResponse<SearchWorklogsApiDto.Response.Item> searchWorklogs(
+            @AuthenticationPrincipal CustomUserPrincipal principal,
+            @Valid @ModelAttribute SearchWorklogsApiDto.Request request
+    ) {
+        return worklogSearchService.searchWorklogs(principal, request);
     }
 }
