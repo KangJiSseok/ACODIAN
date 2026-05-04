@@ -18,12 +18,14 @@
 ## 4. 엔드포인트 목록
 | Method | Path | Status | 목적 |
 |---|---|---|---|
-| `GET` | `/api/users/{id}/evaluations` | `Documented` | 특정 사용자의 평가 이력을 조회한다. |
-| `POST` | `/api/users/{id}/evaluations` | `Documented` | 특정 사용자에 대한 평가를 등록한다. |
+| `GET` | `/api/users/{userId}/evaluations` | `Documented` | 특정 사용자의 평가 이력을 조회한다. |
+| `POST` | `/api/users/{userId}/evaluations` | `Documented` | 특정 사용자에 대한 평가를 등록한다. |
+| `PATCH` | `/api/users/{userId}/evaluations/{id}` | `Documented` | 특정 사용자의 평가 내용을 수정한다. |
+| `DELETE` | `/api/users/{userId}/evaluations/{id}` | `Documented` | 특정 사용자의 평가를 삭제한다. |
 
 ## 5. 엔드포인트 상세
 
-### GET /api/users/{id}/evaluations
+### GET /api/users/{userId}/evaluations
 - 목적: 특정 사용자의 평가 이력을 조회한다.
 - 상태: `Documented`
 - 권한/접근 주체: DIRECTOR, DEPT_HEAD 조회를 허용한다.
@@ -32,7 +34,7 @@
 - DEPT_HEAD는 같은 부서라도 `DIRECTOR` 권한 사용자의 평가 이력은 볼 수 없다.
 - DEPT_HEAD는 자기 자신에 대한 평가 이력은 볼 수 없다.
 - 요청
-  - Path: `id`
+  - Path: `userId`
   - Query: `page`, `pageSize`, `sortDirection`
 - 응답 (`data` 기준)
   - `PageResponse<EvaluationSummary>`
@@ -88,7 +90,7 @@
   - source: class mapping
   - source: ADR-007
 
-### POST /api/users/{id}/evaluations
+### POST /api/users/{userId}/evaluations
 - 목적: 특정 사용자에 대한 평가를 등록한다.
 - 상태: `Documented`
 - 권한/접근 주체: `DIRECTOR`, `DEPT_HEAD`만 호출한다.
@@ -96,7 +98,7 @@
 - 자기 자신한테는 평가를 할 수 없다.
 - DEPT_HEAD은 자기보다 높은 권한인 DIRECTOR를 평가 할 수 없다.
 - 요청
-  - Path: `id`
+  - Path: `userId`
   - Body: `content`
 - 응답 (`data` 기준)
   - 빈 객체 (`ApiResponse.empty()`)
@@ -130,5 +132,81 @@
   - source: checklist
   - source: class mapping
 
+### PATCH /api/users/{userId}/evaluations/{id}
+- 목적: 특정 사용자의 평가 내용을 수정한다.
+- 상태: `Documented`
+- 권한/접근 주체: 평가를 등록한 본인(`evaluatorUserId`)만 수정할 수 있다. [추론]
+- 요청
+  - Path: `userId`, `id` (평가 레코드 식별자)
+  - Body: `content`
+- 응답 (`data` 기준)
+  - 빈 객체 (`ApiResponse.empty()`)
+- 요청 JSON 예시
+```json
+{
+  "path": {
+    "userId": 101,
+    "id": 501
+  },
+  "body": {
+    "content": "수정된 평가 내용입니다."
+  }
+}
+```
+- 응답 JSON 예시
+```json
+{
+  "success": true,
+  "data": {},
+  "timestamp": "2026-04-21T03:00:00Z"
+}
+```
+- 상태/에러
+  - 성공: `200 OK` [추론]
+  - 대표 오류: `USER_NOT_FOUND` [추론]
+  - 대표 오류: `EVALUATION_NOT_FOUND` [추론]
+  - 대표 오류: `EVALUATION_ACCESS_DENIED` [추론]
+- ERD 연관
+  - `tb_user_evaluation`
+- 근거
+  - source: checklist
+  - source: class mapping
+
+### DELETE /api/users/{userId}/evaluations/{id}
+- 목적: 특정 사용자의 평가를 삭제한다.
+- 상태: `Documented`
+- 권한/접근 주체: 평가를 등록한 본인(`evaluatorUserId`) 또는 `DIRECTOR`만 삭제할 수 있다. [추론]
+- 요청
+  - Path: `userId`, `id` (평가 레코드 식별자)
+- 응답 (`data` 기준)
+  - 빈 객체 (`ApiResponse.empty()`)
+- 요청 JSON 예시
+```json
+{
+  "path": {
+    "userId": 101,
+    "id": 501
+  }
+}
+```
+- 응답 JSON 예시
+```json
+{
+  "success": true,
+  "data": {},
+  "timestamp": "2026-04-21T03:00:00Z"
+}
+```
+- 상태/에러
+  - 성공: `200 OK` [추론]
+  - 대표 오류: `USER_NOT_FOUND` [추론]
+  - 대표 오류: `EVALUATION_NOT_FOUND` [추론]
+  - 대표 오류: `EVALUATION_ACCESS_DENIED` [추론]
+- ERD 연관
+  - `tb_user_evaluation`
+- 근거
+  - source: checklist
+  - source: class mapping
+
 ## 6. 추론 메모
-- inventory matrix 는 legacy 단수형 inventory path 를 유지하지만, 본문은 normalized `/api/users/{id}/evaluations` 를 canonical 로 사용한다.
+- `{userId}`는 사용자 식별자, `{id}`는 평가 레코드 식별자로 구분한다.

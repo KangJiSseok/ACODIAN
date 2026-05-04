@@ -42,13 +42,17 @@
 
 ## 5. `organization/skill` 도메인
 
-- [ ] `GET /api/users/{id}/skills`
-- [ ] `PUT /api/users/{id}/skills`
+- [ ] `GET /api/users/{userId}/skills`
+- [ ] `POST /api/users/{userId}/skills`
+- [ ] `PATCH /api/users/{userId}/skills/{id}`
+- [ ] `DELETE /api/users/{userId}/skills/{id}`
 
 ## 6. `organization/evaluation` 도메인
 
-- [x] `GET /api/users/{id}/evaluations`
-- [ ] `POST /api/users/{id}/evaluations`
+- [ ] `GET /api/users/{userId}/evaluations`
+- [ ] `POST /api/users/{userId}/evaluations`
+- [ ] `PATCH /api/users/{userId}/evaluations/{id}`
+- [ ] `DELETE /api/users/{userId}/evaluations/{id}`
 
 ## 7. `worklog` 도메인
 

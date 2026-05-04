@@ -18,25 +18,27 @@
 ## 4. 엔드포인트 목록
 | Method | Path | Status | 목적 |
 |---|---|---|---|
-| `GET` | `/api/users/{id}/skills` | `Documented` | 특정 사용자의 보유 스킬 목록을 조회한다. |
-| `PUT` | `/api/users/{id}/skills` | `Documented` | 특정 사용자의 스킬 세트를 교체한다. |
+| `GET` | `/api/users/{userId}/skills` | `Documented` | 특정 사용자의 보유 스킬 목록을 조회한다. |
+| `POST` | `/api/users/{userId}/skills` | `Documented` | 특정 사용자에게 스킬을 추가한다. |
+| `PATCH` | `/api/users/{userId}/skills/{id}` | `Documented` | 특정 사용자의 특정 스킬 정보를 수정한다. |
+| `DELETE` | `/api/users/{userId}/skills/{id}` | `Documented` | 특정 사용자의 특정 스킬을 삭제한다. |
 
 ## 5. 엔드포인트 상세
 
-### GET /api/users/{id}/skills
+### GET /api/users/{userId}/skills
 - 목적: 특정 사용자의 보유 스킬 목록을 조회한다.
 - 상태: `Documented`
 - 권한/접근 주체: 본인 조회 또는 조직 관리자 조회를 허용한다. [추론]
 - 요청
-  - Path: `id`
+  - Path: `userId`
 - 응답 (`data` 기준)
   - `userId`, `userName`
-  - `skills[*]`: `skillName`, `skillLevel`, `updatedAt`
+  - `skills[*]`: `skillId`, `skillName`, `skillLevel`, `updatedAt`
 - 요청 JSON 예시
 ```json
 {
   "path": {
-    "id": 101
+    "userId": 101
   }
 }
 ```
@@ -49,11 +51,13 @@
     "userName": "홍길동",
     "skills": [
       {
+        "skillId": 1,
         "skillName": "WMS",
         "skillLevel": 5,
         "updatedAt": "2026-04-20T09:00:00Z"
       },
       {
+        "skillId": 2,
         "skillName": "SQL",
         "skillLevel": 4,
         "updatedAt": "2026-04-18T09:00:00Z"
@@ -73,32 +77,63 @@
   - source: checklist
   - source: class mapping
 
-### PUT /api/users/{id}/skills
-- 목적: 특정 사용자의 스킬 세트를 교체한다.
+### POST /api/users/{userId}/skills
+- 목적: 특정 사용자에게 스킬을 추가한다.
 - 상태: `Documented`
-- 권한/접근 주체: 본인 수정 또는 조직 관리자 보정 작업으로 본다. [추론]
+- 권한/접근 주체: 본인 추가 또는 조직 관리자 보정 작업으로 본다. [추론]
 - 요청
-  - Path: `id`
-  - Body: `skills[]` (`skillName`, `skillLevel`)
+  - Path: `userId`
+  - Body: `skillName`, `skillLevel`
 - 응답 (`data` 기준)
   - 빈 객체 (`ApiResponse.empty()`)
 - 요청 JSON 예시
 ```json
 {
   "path": {
-    "id": 101
+    "userId": 101
   },
   "body": {
-    "skills": [
-      {
-        "skillName": "WMS",
-        "skillLevel": 5
-      },
-      {
-        "skillName": "Python",
-        "skillLevel": 3
-      }
-    ]
+    "skillName": "WMS",
+    "skillLevel": 5
+  }
+}
+```
+- 응답 JSON 예시
+```json
+{
+  "success": true,
+  "data": {},
+  "timestamp": "2026-04-21T03:00:00Z"
+}
+```
+- 상태/에러
+  - 성공: `201 Created` [추론]
+  - 대표 오류: `USER_NOT_FOUND` [추론]
+  - 대표 오류: `SKILL_LEVEL_OUT_OF_RANGE` [추론]
+- ERD 연관
+  - `tb_user_skill`
+- 근거
+  - source: checklist
+  - source: class mapping
+
+### PATCH /api/users/{userId}/skills/{id}
+- 목적: 특정 사용자의 특정 스킬 정보를 수정한다.
+- 상태: `Documented`
+- 권한/접근 주체: 본인 수정 또는 조직 관리자 보정 작업으로 본다. [추론]
+- 요청
+  - Path: `userId`, `id` (스킬 레코드 식별자)
+  - Body: `skillName`, `skillLevel` (null 필드는 기존 값 유지)
+- 응답 (`data` 기준)
+  - 빈 객체 (`ApiResponse.empty()`)
+- 요청 JSON 예시
+```json
+{
+  "path": {
+    "userId": 101,
+    "id": 1
+  },
+  "body": {
+    "skillLevel": 5
   }
 }
 ```
@@ -113,6 +148,7 @@
 - 상태/에러
   - 성공: `200 OK` [추론]
   - 대표 오류: `USER_NOT_FOUND` [추론]
+  - 대표 오류: `SKILL_NOT_FOUND` [추론]
   - 대표 오류: `SKILL_LEVEL_OUT_OF_RANGE` [추론]
 - ERD 연관
   - `tb_user_skill`
@@ -120,6 +156,41 @@
   - source: checklist
   - source: class mapping
 
+### DELETE /api/users/{userId}/skills/{id}
+- 목적: 특정 사용자의 특정 스킬을 삭제한다.
+- 상태: `Documented`
+- 권한/접근 주체: 본인 삭제 또는 조직 관리자 보정 작업으로 본다. [추론]
+- 요청
+  - Path: `userId`, `id` (스킬 레코드 식별자)
+- 응답 (`data` 기준)
+  - 빈 객체 (`ApiResponse.empty()`)
+- 요청 JSON 예시
+```json
+{
+  "path": {
+    "userId": 101,
+    "id": 1
+  }
+}
+```
+- 응답 JSON 예시
+```json
+{
+  "success": true,
+  "data": {},
+  "timestamp": "2026-04-21T03:00:00Z"
+}
+```
+- 상태/에러
+  - 성공: `200 OK` [추론]
+  - 대표 오류: `USER_NOT_FOUND` [추론]
+  - 대표 오류: `SKILL_NOT_FOUND` [추론]
+- ERD 연관
+  - `tb_user_skill`
+- 근거
+  - source: checklist
+  - source: class mapping
+
 ## 6. 추론 메모
-- inventory matrix 는 legacy 단수형 inventory path 를 유지하지만, 본문은 normalized `/api/users/{id}/skills` 를 canonical 로 사용한다.
+- `{userId}`는 사용자 식별자, `{id}`는 스킬 레코드 식별자로 구분한다.
 

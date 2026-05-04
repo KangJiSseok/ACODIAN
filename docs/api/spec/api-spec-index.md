@@ -1,7 +1,7 @@
 # API 명세 인덱스
 
 ## 1. 목적
-- 이 문서는 checklist 기반 **53개 current inventory** 의 coverage 와 상태 분포를 검수하기 위한 인덱스다.
+- 이 문서는 checklist 기반 **57개 current inventory** 의 coverage 와 상태 분포를 검수하기 위한 인덱스다.
 - 실제 도메인 문서 본문은 normalized path 를 사용할 수 있으며, 그 차이는 의도된 구조다.
 - 공통 규칙은 [api-spec-common.md](./api-spec-common.md) 를 따른다.
 
@@ -25,15 +25,15 @@
 ## 3. 상태 분포
 | Status | Count |
 |---|---:|
-| `Documented` | 45 |
+| `Documented` | 49 |
 | `Proposed-risk-closure` | 3 |
 | `Inferred-required` | 5 |
 
-- 총 endpoint 수: **53**
+- 총 endpoint 수: **57**
 - addendum 2건은 위 count 와 matrix row count 에 포함하지 않는다.
 - team canonical row count: **7**
 
-## 4. Coverage Matrix (inventory-linked 53 rows)
+## 4. Coverage Matrix (inventory-linked 57 rows)
 | Domain | Method | Path                              | Status | Source priority | Spec doc |
 |---|---|-----------------------------------|---|---|---|
 | `auth` | `POST` | `/api/auth/login`                 | `Documented` | checklist → class mapping → ERD/ADR | [api-spec-auth.md](./api-spec-auth.md) |
@@ -57,10 +57,14 @@
 | `user` | `GET` | `/api/users`                      | `Documented` | checklist → class mapping → ERD/ADR | [api-spec-user.md](./api-spec-user.md) |
 | `user` | `GET` | `/api/users/{id}`                 | `Documented` | checklist → class mapping → ERD/ADR | [api-spec-user.md](./api-spec-user.md) |
 | `user` | `PATCH` | `/api/users/{id}`                | `Documented` | checklist → class mapping → ERD/ADR | [api-spec-user.md](./api-spec-user.md) |
-| `skill` | `GET` | `/api/users/{id}/skills`          | `Documented` | checklist → class mapping → ERD/ADR | [api-spec-skill.md](./api-spec-skill.md) |
-| `skill` | `PUT` | `/api/users/{id}/skills`          | `Documented` | checklist → class mapping → ERD/ADR | [api-spec-skill.md](./api-spec-skill.md) |
-| `evaluation` | `GET` | `/api/users/{id}/evaluations`     | `Documented` | checklist → class mapping → ERD/ADR | [api-spec-evaluation.md](./api-spec-evaluation.md) |
-| `evaluation` | `POST` | `/api/users/{id}/evaluations`     | `Documented` | checklist → class mapping → ERD/ADR | [api-spec-evaluation.md](./api-spec-evaluation.md) |
+| `skill` | `GET` | `/api/users/{userId}/skills`              | `Documented` | checklist → class mapping → ERD/ADR | [api-spec-skill.md](./api-spec-skill.md) |
+| `skill` | `POST` | `/api/users/{userId}/skills`             | `Documented` | checklist → class mapping → ERD/ADR | [api-spec-skill.md](./api-spec-skill.md) |
+| `skill` | `PATCH` | `/api/users/{userId}/skills/{id}`       | `Documented` | checklist → class mapping → ERD/ADR | [api-spec-skill.md](./api-spec-skill.md) |
+| `skill` | `DELETE` | `/api/users/{userId}/skills/{id}`      | `Documented` | checklist → class mapping → ERD/ADR | [api-spec-skill.md](./api-spec-skill.md) |
+| `evaluation` | `GET` | `/api/users/{userId}/evaluations`         | `Documented` | checklist → class mapping → ERD/ADR | [api-spec-evaluation.md](./api-spec-evaluation.md) |
+| `evaluation` | `POST` | `/api/users/{userId}/evaluations`        | `Documented` | checklist → class mapping → ERD/ADR | [api-spec-evaluation.md](./api-spec-evaluation.md) |
+| `evaluation` | `PATCH` | `/api/users/{userId}/evaluations/{id}`  | `Documented` | checklist → class mapping → ERD/ADR | [api-spec-evaluation.md](./api-spec-evaluation.md) |
+| `evaluation` | `DELETE` | `/api/users/{userId}/evaluations/{id}` | `Documented` | checklist → class mapping → ERD/ADR | [api-spec-evaluation.md](./api-spec-evaluation.md) |
 | `worklog` | `GET` | `/api/worklogs`                   | `Documented` | checklist → class mapping → ERD/ADR | [api-spec-worklog.md](./api-spec-worklog.md) |
 | `worklog` | `GET` | `/api/worklogs/{id}`              | `Documented` | checklist → class mapping → ERD/ADR | [api-spec-worklog.md](./api-spec-worklog.md) |
 | `worklog` | `POST` | `/api/worklogs`                   | `Documented` | checklist → class mapping → ERD/ADR | [api-spec-worklog.md](./api-spec-worklog.md) |
@@ -104,7 +108,7 @@
 - addendum 2건은 matrix 53행, 상태 분포 count, checklist completeness count 에 포함하지 않는다.
 
 ## 7. 검수 체크리스트
-- [x] matrix row count = 53
+- [x] matrix row count = 57
 - [x] addendum row count = 2
 - [x] team canonical row count = 7
 - [x] matrix / checklist / class mapping path 표기가 normalized (복수형, `/list` 미사용) 으로 정렬됨
