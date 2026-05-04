@@ -5,24 +5,26 @@ import type {
   GetDepartmentsResponse,
   UpdateDepartmentRequest,
 } from "../_types/department.types";
-import { Update } from "next/dist/build/swc/types";
 
 export const departmentService = {
-  // 부서 목록 + 상단 집계 조회
+  // 부서 목록과 상단 집계를 함께 조회합니다.
   getDepartments: () => apiClient.get<GetDepartmentsResponse>("/departments"),
 
-  // 부서 등록
+  // 새 부서를 등록합니다.
   createDepartment: (payload: CreateDepartmentRequest) =>
     apiClient.post<EmptyResponse, CreateDepartmentRequest>(
       "/departments",
       payload,
     ),
 
-  // 부서 수정
+  // 기존 부서 정보를 수정합니다.
   updateDepartment: (departmentId: number, payload: UpdateDepartmentRequest) =>
-    apiClient.put<EmptyResponse>("/departments/${departmentId}", payload),
+    apiClient.put<EmptyResponse, UpdateDepartmentRequest>(
+      `/departments/${departmentId}`,
+      payload,
+    ),
 
-  // 부서 비활성화
+  // 부서를 비활성화합니다.
   deleteDepartment: (departmentId: number) =>
-    apiClient.delete<EmptyResponse>("/departments/${departmentId}"),
+    apiClient.delete<EmptyResponse>(`/departments/${departmentId}`),
 };

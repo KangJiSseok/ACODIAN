@@ -21,6 +21,5 @@ export interface DepartmentFormValues {
   departmentHeadUserId: number | null;
 }
 
-// 똑같은 객체지만, 사용 맥락에 따라 부르는 이름을 다르게 두기 위함
 export type CreateDepartmentRequest = DepartmentFormValues;
 export type UpdateDepartmentRequest = DepartmentFormValues;
