@@ -379,7 +379,7 @@
       <td><code>domain.organization.skill.controller.UserSkillController</code></td>
       <td><code>domain.organization.skill.service.UserSkillService</code></td>
       <td><code>domain.organization.skill.entity.UserSkill</code>, <code>domain.organization.skill.repository.UserSkillRepository</code>, <code>domain.organization.skill.repository.jooq.UserSkillJooqRepository</code></td>
-      <td>사용자별 스킬 ownership은 <code>organization/skill</code> feature에 둔다.</td>
+      <td><code>DIRECTOR</code>, <code>DEPT_HEAD</code> 만 호출한다. 자기 자신 조회와 <code>DEPT_HEAD</code> 의 <code>DIRECTOR</code> 조회는 빈 <code>skills</code> 목록으로 비노출한다.</td>
     </tr>
     <tr>
       <td><code>POST /api/users/{userId}/skills</code></td>

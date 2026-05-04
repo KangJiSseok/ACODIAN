@@ -4,7 +4,7 @@
 - 인덱스: [api-spec-index.md](./api-spec-index.md)
 
 ## 1. 도메인 목적 / 개요
-사용자별 보유 스킬 목록 조회와 일괄 교체 계약을 정의한다. 본 문서는 inventory 의 legacy 단수형 path 표기와 분리해 normalized path 인 `/api/users/{id}/skills` 를 사용한다.
+사용자별 보유 스킬 목록 조회와 일괄 교체 계약을 정의한다. 본 문서는 inventory 의 legacy 단수형 path 표기와 분리해 normalized path 인 `/api/users/{userId}/skills` 를 사용한다.
 
 ## 2. 주요 ERD 연관
 - `tb_user_skill`
@@ -28,12 +28,13 @@
 ### GET /api/users/{userId}/skills
 - 목적: 특정 사용자의 보유 스킬 목록을 조회한다.
 - 상태: `Documented`
-- 권한/접근 주체: 본인 조회 또는 조직 관리자 조회를 허용한다. [추론]
+- 권한/접근 주체: `DIRECTOR`, `DEPT_HEAD` 만 호출한다. 자기 자신 조회와 `DEPT_HEAD` 의 `DIRECTOR` 조회는 성공 응답으로 처리하되 `skills: []` 로 비노출한다.
 - 요청
   - Path: `userId`
 - 응답 (`data` 기준)
-  - `userId`, `userName`
+  - `userId`
   - `skills[*]`: `skillId`, `skillName`, `skillLevel`, `updatedAt`
+  - 정렬: `skillLevel` 내림차순을 우선한다.
 - 요청 JSON 예시
 ```json
 {
@@ -48,7 +49,6 @@
   "success": true,
   "data": {
     "userId": 101,
-    "userName": "홍길동",
     "skills": [
       {
         "skillId": 1,
@@ -67,10 +67,21 @@
   "timestamp": "2026-04-21T03:00:00Z"
 }
 ```
+- 비노출 응답 JSON 예시
+```json
+{
+  "success": true,
+  "data": {
+    "userId": 101,
+    "skills": []
+  },
+  "timestamp": "2026-04-21T03:00:00Z"
+}
+```
 - 상태/에러
   - 성공: `200 OK`
-  - 대표 오류: `USER_NOT_FOUND` [추론]
-  - 대표 오류: `USER_ACCESS_DENIED` [추론]
+  - 대표 오류: `USER_NOT_FOUND`
+  - 대표 오류: `AUTH_ACCESS_DENIED`
 - ERD 연관
   - `tb_user_skill`
 - 근거
@@ -193,4 +204,3 @@
 
 ## 6. 추론 메모
 - `{userId}`는 사용자 식별자, `{id}`는 스킬 레코드 식별자로 구분한다.
-
