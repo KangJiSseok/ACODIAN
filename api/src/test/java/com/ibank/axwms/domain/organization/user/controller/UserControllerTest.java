@@ -3,11 +3,13 @@ package com.ibank.axwms.domain.organization.user.controller;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.BDDMockito.given;
 
+import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.SerializationFeature;
 import com.ibank.axwms.domain.organization.user.EmploymentStatus;
 import com.ibank.axwms.domain.organization.user.dto.GetAdminCandidatesApiDto;
 import com.ibank.axwms.domain.organization.user.dto.GetMyProfileApiDto;
+import com.ibank.axwms.domain.organization.user.dto.GetUserApiDto;
 import com.ibank.axwms.domain.organization.user.dto.GetUsersApiDto;
 import com.ibank.axwms.domain.organization.user.service.UserService;
 import com.ibank.axwms.global.security.CustomUserPrincipal;
@@ -24,6 +26,7 @@ import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.ModelAttribute;
+import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.RequestMapping;
 
 @ExtendWith(MockitoExtension.class)
@@ -61,6 +64,24 @@ class UserControllerTest {
 
         assertThat(getMapping).isNotNull();
         assertThat(getMapping.value()).containsExactly("/me");
+    }
+
+    @Test
+    @DisplayName("사용자 상세 조회 메서드는 /{id} GET 매핑을 사용한다")
+    void 사용자_상세_조회_메서드는_id_GET_매핑을_사용한다() throws NoSuchMethodException {
+        Method method = UserController.class.getMethod("getUser", CustomUserPrincipal.class, Long.class);
+        GetMapping getMapping = method.getAnnotation(GetMapping.class);
+
+        assertThat(getMapping).isNotNull();
+        assertThat(getMapping.value()).containsExactly("/{id}");
+    }
+
+    @Test
+    @DisplayName("사용자 상세 조회 id 는 PathVariable 로 바인딩한다")
+    void 사용자_상세_조회_id는_PathVariable로_바인딩한다() throws NoSuchMethodException {
+        Method method = UserController.class.getMethod("getUser", CustomUserPrincipal.class, Long.class);
+
+        assertThat(method.getParameters()[1].getAnnotation(PathVariable.class)).isNotNull();
     }
 
     @Test
@@ -160,6 +181,42 @@ class UserControllerTest {
     }
 
     @Test
+    @DisplayName("사용자 상세 조회 메서드는 서비스 결과를 그대로 반환한다")
+    void 사용자_상세_조회_메서드는_서비스_결과를_그대로_반환한다() throws Exception {
+        CustomUserPrincipal principal = new CustomUserPrincipal(1L, "viewer@ibank.com", "MEMBER");
+        GetUserApiDto.Response responseFromService = new GetUserApiDto.Response(
+                101L,
+                "홍길동",
+                "hong@axwms.com",
+                10L,
+                "물류본부",
+                "과장",
+                "팀장",
+                LocalDate.of(2024, 3, 1),
+                "https://cdn.axwms.com/profile/101.png",
+                "010-1234-5678",
+                EmploymentStatus.ACTIVE,
+                List.of(new GetUserApiDto.Response.TeamSummary(
+                        true,
+                        21L,
+                        "웹서비스 개발",
+                        true,
+                        "플랫폼 총괄"
+                ))
+        );
+        given(userService.getUser(101L)).willReturn(responseFromService);
+
+        GetUserApiDto.Response response = userController.getUser(principal, 101L);
+        JsonNode json = objectMapper.readTree(objectMapper.writeValueAsString(response));
+
+        assertThat(response).isEqualTo(responseFromService);
+        assertThat(json.has("teamId")).isFalse();
+        assertThat(json.has("teamName")).isFalse();
+        assertThat(json.get("teams").get(0).has("teamId")).isTrue();
+        assertThat(json.get("teams").get(0).has("teamName")).isTrue();
+    }
+
+    @Test
     @DisplayName("관리자 후보 조회 메서드는 서비스 결과 배열을 그대로 반환한다")
     void 관리자_후보_조회_메서드는_서비스_결과_배열을_그대로_반환한다() {
         CustomUserPrincipal principal = new CustomUserPrincipal(1L, "director@ibank.com", "DIRECTOR");
@@ -244,5 +301,22 @@ class UserControllerTest {
         String json = objectMapper.writeValueAsString(teamSummary);
 
         assertThat(json).startsWith("{\"isPrimary\":true,\"teamId\":21,\"teamName\":\"물류혁신TF\",\"isLeader\":true,\"teamRole\":\"플랫폼 총괄\",\"allocation\":\"주담당\"");
+    }
+
+    @Test
+    @DisplayName("사용자 상세 팀 요약 응답은 allocation 없이 고정 순서로 직렬화한다")
+    void 사용자_상세_팀_요약_응답은_allocation_없이_고정_순서로_직렬화한다() throws Exception {
+        GetUserApiDto.Response.TeamSummary teamSummary = new GetUserApiDto.Response.TeamSummary(
+                true,
+                21L,
+                "웹서비스 개발",
+                true,
+                "플랫폼 총괄"
+        );
+
+        String json = objectMapper.writeValueAsString(teamSummary);
+
+        assertThat(json).startsWith("{\"isPrimary\":true,\"teamId\":21,\"teamName\":\"웹서비스 개발\",\"isLeader\":true,\"teamRole\":\"플랫폼 총괄\"");
+        assertThat(json).doesNotContain("allocation");
     }
 }
