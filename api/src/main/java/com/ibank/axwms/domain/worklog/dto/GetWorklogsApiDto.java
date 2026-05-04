@@ -7,6 +7,7 @@ import jakarta.validation.constraints.Max;
 import jakarta.validation.constraints.Min;
 import java.math.BigDecimal;
 import java.time.LocalDate;
+import java.util.Map;
 import lombok.AccessLevel;
 import lombok.NoArgsConstructor;
 import org.springframework.data.domain.Page;
@@ -40,9 +41,14 @@ public final class GetWorklogsApiDto {
     @NoArgsConstructor(access = AccessLevel.PRIVATE)
     public static final class Response {
 
-        /** repository projection 페이지를 API 응답 페이지로 변환한다. */
-        public static PageResponse<Item> fromPage(Page<WorklogListProjection> page) {
-            return PageResponse.from(page.map(Item::from));
+        /**
+         * repository projection 페이지와 (worklogId → 선행 업무 개수) 맵을 합쳐 API 응답 페이지로 변환한다.
+         * 맵에 없는 worklog 는 0 으로 보정한다.
+         */
+        public static PageResponse<Item> fromPage(Page<WorklogListProjection> page,
+                                                  Map<Long, Long> predecessorCountByWorklogId) {
+            return PageResponse.from(page.map(p ->
+                    Item.from(p, predecessorCountByWorklogId.getOrDefault(p.worklogId(), 0L))));
         }
 
         @Schema(description = "업무 목록 항목")
@@ -81,7 +87,7 @@ public final class GetWorklogsApiDto {
                 long predecessorCount
         ) {
 
-            public static Item from(WorklogListProjection projection) {
+            public static Item from(WorklogListProjection projection, long predecessorCount) {
                 return new Item(
                         projection.worklogId(),
                         projection.title(),
@@ -98,7 +104,7 @@ public final class GetWorklogsApiDto {
                         projection.authorName(),
                         projection.instructionDate(),
                         projection.dueDate(),
-                        projection.predecessorCount()
+                        predecessorCount
                 );
             }
         }

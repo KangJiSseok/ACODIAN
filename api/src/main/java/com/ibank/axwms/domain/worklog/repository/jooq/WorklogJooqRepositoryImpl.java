@@ -1,5 +1,6 @@
 package com.ibank.axwms.domain.worklog.repository.jooq;
 
+import com.ibank.axwms.domain.worklog.repository.jooq.projection.WorklogDetailProjection;
 import static com.ibank.axwms.global.jooq.Tables.TB_TEAM;
 import static com.ibank.axwms.global.jooq.Tables.TB_TEAM_ADMIN;
 import static com.ibank.axwms.global.jooq.Tables.TB_USER;
@@ -17,7 +18,6 @@ import java.util.List;
 import lombok.RequiredArgsConstructor;
 import org.jooq.Condition;
 import org.jooq.DSLContext;
-import org.jooq.Field;
 import org.jooq.Record1;
 import org.jooq.Select;
 import org.jooq.Field;
@@ -27,6 +27,15 @@ import org.springframework.data.domain.PageImpl;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.stereotype.Repository;
 
+import java.util.List;
+import java.util.Optional;
+
+import static com.ibank.axwms.global.jooq.Tables.TB_TEAM;
+import static com.ibank.axwms.global.jooq.Tables.TB_TEAM_ADMIN;
+import static com.ibank.axwms.global.jooq.Tables.TB_USER;
+import static com.ibank.axwms.global.jooq.Tables.TB_USER_TEAM;
+import static com.ibank.axwms.global.jooq.Tables.TB_WORKLOG;
+
 @Repository
 @RequiredArgsConstructor
 public class WorklogJooqRepositoryImpl implements WorklogJooqRepository {
@@ -35,7 +44,9 @@ public class WorklogJooqRepositoryImpl implements WorklogJooqRepository {
 
     private final DSLContext dsl;
 
-    /** 가시 범위와 페이지 요청을 받아 업무 목록을 조회한다. */
+    /**
+     * 사용자가 접근 가능한 팀의 업무 목록을 페이지로 조회한다.
+     */
     @Override
     public Page<WorklogListProjection> findWorklogPage(Long userId, WorklogPageQuery query) {
         int pageIndex = query.pageIndex();
@@ -78,9 +89,39 @@ public class WorklogJooqRepositoryImpl implements WorklogJooqRepository {
                 .orderBy(TB_WORKLOG.CREATED_AT.desc(), TB_WORKLOG.WORKLOG_ID.desc())
                 .limit(pageSize)
                 .offset((long) pageIndex * pageSize)
-                .fetch(record -> WorklogListProjection.from(record));
+                .fetch(WorklogListProjection::from);
 
         return new PageImpl<>(items, pageRequest, total);
+    }
+
+    /**
+     * 사용자가 접근 가능한 팀의 업무 한 건 본문을 조회한다. 권한 밖이거나 삭제된 행이면 empty.
+     */
+    @Override
+    public Optional<WorklogDetailProjection> findWorklogDetail(Long userId, Long worklogId) {
+        Condition condition = TB_WORKLOG.WORKLOG_ID.eq(worklogId)
+                .and(TB_WORKLOG.IS_DELETED.isFalse())
+                .and(visibleTeamCondition(userId));
+
+        return dsl.select(
+                        TB_WORKLOG.WORKLOG_ID,
+                        TB_WORKLOG.TEAM_ID,
+                        TB_TEAM.TEAM_NAME,
+                        TB_WORKLOG.AUTHOR_ID,
+                        TB_USER.USER_NAME,
+                        TB_WORKLOG.TITLE,
+                        TB_WORKLOG.REQUEST_CONTENT,
+                        TB_WORKLOG.WORK_CONTENT,
+                        TB_WORKLOG.STATUS_CODE,
+                        TB_WORKLOG.ACTUAL_HOURS,
+                        TB_WORKLOG.INSTRUCTION_DATE,
+                        TB_WORKLOG.DUE_DATE
+                )
+                .from(TB_WORKLOG)
+                .join(TB_TEAM).on(TB_WORKLOG.TEAM_ID.eq(TB_TEAM.TEAM_ID))
+                .join(TB_USER).on(TB_WORKLOG.AUTHOR_ID.eq(TB_USER.USER_ID))
+                .where(condition)
+                .fetchOptional(WorklogDetailProjection::from);
     }
 
     private Condition visibleTeamCondition(Long userId) {

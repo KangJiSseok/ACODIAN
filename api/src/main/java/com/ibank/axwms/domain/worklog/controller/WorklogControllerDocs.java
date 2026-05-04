@@ -1,6 +1,7 @@
 package com.ibank.axwms.domain.worklog.controller;
 
 import com.ibank.axwms.domain.worklog.dto.CreateWorklogApiDto;
+import com.ibank.axwms.domain.worklog.dto.GetWorklogDetailApiDto;
 import com.ibank.axwms.domain.worklog.dto.GetWorklogsApiDto;
 import com.ibank.axwms.domain.worklog.dto.SearchWorklogsApiDto;
 import com.ibank.axwms.global.response.PageResponse;
@@ -49,6 +50,21 @@ public interface WorklogControllerDocs {
     PageResponse<GetWorklogsApiDto.Response.Item> getWorklogs(
             @Parameter(hidden = true) CustomUserPrincipal principal,
             @ParameterObject GetWorklogsApiDto.Request request
+    );
+
+    @Operation(summary = "업무 상세 조회",
+            description = "로그인 사용자가 접근 가능한 업무 한 건의 상세 정보를 조회한다. "
+                    + "본문, 첨부 파일 목록, 태그 이름 목록, 직접 연결된 선행 업무(depth 1), 상태 변경 이력을 함께 반환한다. "
+                    + "권한 밖이거나 존재하지 않는 worklog 는 404 로 응답한다.")
+    @SecurityRequirement(name = "bearerAuth")
+    @ApiResponses({
+            @ApiResponse(responseCode = "200", description = "업무 상세를 반환한다."),
+            @ApiResponse(responseCode = "401", description = "인증이 필요하다.", content = @Content),
+            @ApiResponse(responseCode = "404", description = "업무가 없거나 가시 범위 밖이다.", content = @Content)
+    })
+    GetWorklogDetailApiDto.Response getWorklogDetail(
+            @Parameter(hidden = true) CustomUserPrincipal principal,
+            @Parameter(description = "업무 ID", example = "501") Long worklogId
     );
 
     @Operation(summary = "업무일지 검색",

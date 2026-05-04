@@ -6,7 +6,6 @@ import static com.ibank.axwms.global.jooq.Tables.TB_WORKLOG;
 
 import java.math.BigDecimal;
 import java.time.LocalDate;
-import org.jooq.Field;
 import org.jooq.Record;
 
 /** 업무 목록 한 행에 필요한 필드만 담는 읽기 전용 projection 이다. */
@@ -25,12 +24,10 @@ public record WorklogListProjection(
         Long authorId,
         String authorName,
         LocalDate instructionDate,
-        LocalDate dueDate,
-        long predecessorCount
+        LocalDate dueDate
 ) {
 
-    /** jOOQ Record 한 행을 projection 으로 매핑한다. predecessorCount 필드는 호출 측에서 만든 별칭 필드를 넘긴다. */
-    public static WorklogListProjection from(Record record, Field<Integer> predecessorCountField) {
+    public static WorklogListProjection from(Record record) {
         return new WorklogListProjection(
                 record.get(TB_WORKLOG.WORKLOG_ID),
                 record.get(TB_WORKLOG.TITLE),
@@ -46,8 +43,7 @@ public record WorklogListProjection(
                 record.get(TB_WORKLOG.AUTHOR_ID),
                 record.get(TB_USER.USER_NAME),
                 record.get(TB_WORKLOG.INSTRUCTION_DATE),
-                record.get(TB_WORKLOG.DUE_DATE),
-                record.get(predecessorCountField).longValue()
+                record.get(TB_WORKLOG.DUE_DATE)
         );
     }
 }
