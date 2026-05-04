@@ -7,21 +7,23 @@ from app.task.celery_app import celery_app
 
 logger = logging.getLogger(__name__)
 
-@celery_app.task(name="worklog.pipeline")
-def run_worklog_pipeline(
+
+@celery_app.task(name="worklog.summary")
+def generate_worklog_summary(
     worklog_id: int,
     request_content: str | None,
     work_content: str,
 ) -> dict[str, int | str]:
     return asyncio.run(
-        _run_worklog_pipeline(
+        _generate_worklog_summary(
             worklog_id=worklog_id,
             request_content=request_content,
             work_content=work_content,
         )
     )
 
-async def _run_worklog_pipeline(
+
+async def _generate_worklog_summary(
         worklog_id: int,
         request_content: str | None,
         work_content: str,
@@ -37,7 +39,6 @@ async def _run_worklog_pipeline(
         await WorklogClient().update_ai_result(
             worklog_id=worklog_id,
             ai_summary=summary,
-            ai_summary_edited=False,
             ai_processing_status="COMPLETED",
         )
 
@@ -53,7 +54,6 @@ async def _run_worklog_pipeline(
         await WorklogClient().update_ai_result(
             worklog_id=worklog_id,
             ai_summary="",
-            ai_summary_edited=False,
             ai_processing_status="FAILED",
         )
 

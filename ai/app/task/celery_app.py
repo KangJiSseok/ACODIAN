@@ -6,7 +6,7 @@ celery_app = Celery(
     "ax_wms_ai",
     broker=settings.celery_broker_url or settings.redis_url,
     backend=settings.celery_result_backend or settings.redis_url,
-    include=["app.task.worklog_tasks"],
+    include=["app.task.worklog_tasks", "app.task.tagging_tasks"],
 )
 
 celery_app.conf.update(

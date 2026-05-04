@@ -18,5 +18,6 @@ class PipelineAcceptedResponse(BaseModel):
     model_config = ConfigDict(populate_by_name=True)
 
     worklog_id: int = Field(alias="worklogId")
-    task_id: str = Field(alias="taskId")
+    summary_task_id: str = Field(alias="summaryTaskId")
+    tagging_task_id: str = Field(alias="taggingTaskId")
     status: Literal["ACCEPTED"] = "ACCEPTED"
