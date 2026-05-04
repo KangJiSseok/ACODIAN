@@ -2,6 +2,7 @@ package com.ibank.axwms.domain.organization.user.controller;
 
 import com.ibank.axwms.domain.organization.user.dto.GetAdminCandidatesApiDto;
 import com.ibank.axwms.domain.organization.user.dto.GetMyProfileApiDto;
+import com.ibank.axwms.domain.organization.user.dto.GetUserApiDto;
 import com.ibank.axwms.domain.organization.user.dto.GetUsersApiDto;
 import com.ibank.axwms.global.security.CustomUserPrincipal;
 import io.swagger.v3.oas.annotations.Operation;
@@ -35,6 +36,26 @@ public interface UserControllerDocs {
     })
     GetMyProfileApiDto.Response getMyProfile(
             @Parameter(hidden = true) CustomUserPrincipal principal
+    );
+
+    @Operation(
+            summary = "사용자 상세 조회",
+            description = "인증된 사용자가 단일 사용자의 기본 정보, 소속 부서, 전체 ACTIVE 팀 membership 문맥을 조회한다. "
+                    + "teams 는 대표 소속 팀, 팀 대표 membership 순서로 정렬하며 top-level teamId/teamName 은 반환하지 않는다."
+    )
+    @SecurityRequirement(name = "bearerAuth")
+    @ApiResponses({
+            @ApiResponse(
+                    responseCode = "200",
+                    description = "사용자 상세 정보를 반환한다.",
+                    content = @Content(schema = @Schema(implementation = GetUserApiDto.Response.class))
+            ),
+            @ApiResponse(responseCode = "401", description = "access token 이 없거나 유효하지 않다.", content = @Content),
+            @ApiResponse(responseCode = "404", description = "조회 대상 사용자를 찾을 수 없다.", content = @Content)
+    })
+    GetUserApiDto.Response getUser(
+            @Parameter(hidden = true) CustomUserPrincipal principal,
+            @Parameter(description = "사용자 ID", example = "101") Long id
     );
 
     @Operation(
