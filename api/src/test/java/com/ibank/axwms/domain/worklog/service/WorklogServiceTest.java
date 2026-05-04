@@ -9,9 +9,9 @@ import com.ibank.axwms.domain.worklog.dto.CreateWorklogApiDto;
 import com.ibank.axwms.domain.worklog.dto.GetWorklogsApiDto;
 import com.ibank.axwms.domain.worklog.entity.Worklog;
 import com.ibank.axwms.domain.worklog.policy.WorklogVisibilityPolicy;
-import com.ibank.axwms.domain.worklog.policy.WorklogVisibilityScope;
 import com.ibank.axwms.domain.worklog.repository.WorklogRepository;
 import com.ibank.axwms.domain.worklog.repository.jooq.projection.WorklogListProjection;
+import com.ibank.axwms.domain.worklog.repository.jooq.query.WorklogPageQuery;
 import com.ibank.axwms.global.error.BusinessException;
 import com.ibank.axwms.global.error.ErrorCode;
 import com.ibank.axwms.global.response.PageResponse;
@@ -19,6 +19,7 @@ import com.ibank.axwms.global.security.CustomUserPrincipal;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.ArgumentCaptor;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
@@ -173,31 +174,37 @@ class WorklogServiceTest {
     }
 
     @Test
-    @DisplayName("getWorklogs 는 정책이 결정한 Scope 와 Request 를 그대로 Repository 에 위임한다")
-    void getWorklogs_는_정책이_결정한_Scope_와_Request_를_Repository_에_위임한다() {
+    @DisplayName("getWorklogs 는 사용자 ID 와 페이지 쿼리를 Repository 에 위임하고 응답으로 변환한다")
+    void getWorklogs_는_사용자_ID_와_페이지_쿼리를_Repository_에_위임한다() {
         // given
         CustomUserPrincipal principal = principal();
         GetWorklogsApiDto.Request request = new GetWorklogsApiDto.Request(1, 20);
-        WorklogVisibilityScope scope = new WorklogVisibilityScope.MyTeams(USER_ID);
         Page<WorklogListProjection> projectionPage = new PageImpl<>(
                 List.of(sampleProjection()),
                 PageRequest.of(0, 20),
                 1
         );
 
-        given(worklogVisibilityPolicy.resolve(principal)).willReturn(scope);
-        given(worklogRepository.findWorklogPage(scope, request)).willReturn(projectionPage);
+        given(worklogRepository.findWorklogPage(eq(USER_ID), any(WorklogPageQuery.class)))
+                .willReturn(projectionPage);
 
         // when
         PageResponse<GetWorklogsApiDto.Response.Item> response = worklogService.getWorklogs(principal, request);
 
         // then
         assertThat(response.items()).hasSize(1);
-        assertThat(response.items().get(0).worklogId()).isEqualTo(WORKLOG_ID);
-        assertThat(response.items().get(0).teamName()).isEqualTo("물류혁신TF");
+        GetWorklogsApiDto.Response.Item item = response.items().get(0);
+        assertThat(item.worklogId()).isEqualTo(WORKLOG_ID);
+        assertThat(item.teamName()).isEqualTo("물류혁신TF");
+        assertThat(item.predecessorCount()).isEqualTo(2L);
         assertThat(response.totalCount()).isEqualTo(1);
         assertThat(response.page()).isEqualTo(1);
-        verify(worklogRepository).findWorklogPage(eq(scope), eq(request));
+
+        ArgumentCaptor<WorklogPageQuery> queryCaptor = ArgumentCaptor.forClass(WorklogPageQuery.class);
+        verify(worklogRepository).findWorklogPage(eq(USER_ID), queryCaptor.capture());
+        assertThat(queryCaptor.getValue().page()).isEqualTo(1);
+        assertThat(queryCaptor.getValue().pageSize()).isEqualTo(20);
+        assertThat(queryCaptor.getValue().pageIndex()).isEqualTo(0);
     }
 
     private static WorklogListProjection sampleProjection() {
@@ -216,7 +223,8 @@ class WorklogServiceTest {
                 USER_ID,
                 "홍길동",
                 INSTRUCTION_DATE,
-                DUE_DATE
+                DUE_DATE,
+                2L
         );
     }
 
