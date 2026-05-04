@@ -129,8 +129,11 @@ springboot:
       projection 은 read-only 조회 결과 타입이며 Entity, API DTO 와 구분한다.
       projection 기본 위치는 domain/{module}/repository/jooq/projection/ 하위 패키지다.
       projection 은 재사용 가능한 top-level 타입으로 선언하는 것을 기본으로 하며, 특정 JOOQ repository 내부 nested record 로 숨기지 않는다.
-      projection 생성 책임을 projection 타입 옆에 두는 편이 더 읽기 쉬우면 top-level projection 안에
-      `from(Record, GeneratedTable...)` 형태의 jOOQ 전용 static factory 를 둘 수 있다.
+      projection 생성 책임을 projection 타입 옆에 두는 편이 더 읽기 쉬우면 top-level projection 안에 jOOQ 전용 static factory 를 둘 수 있다.
+      JOOQ repository 의 fetch 매핑에서 projection 생성자 인자가 길어지거나 계산 Field 가 포함되면 inline `new Projection(...)` 대신 projection 정적 팩토리를 사용한다.
+      선택한 `Record` 만으로 projection 을 1:1 조립할 수 있으면 `Projection.from(record)` 를 사용한다.
+      계산 Field, table alias, 외부에서 만든 매핑 단서처럼 `Record` 외 추가 입력이 필요하면 `Projection.from(record, ...)` 형태로 추가 인자를 명시한다.
+      `selectCount().asField(...)` 같은 계산 Field 는 같은 Field 인스턴스를 `select(...)` 와 `Projection.from(record, field)` 에 전달하고, projection 내부에서 `record.get(field)` 로 값을 읽는다.
       단, query 조립(where/order/group/limit/offset) 책임은 repository 에 둔다.
       Service 가 repository 조회 입력을 별도로 정규화해야 하면 입력 vocabulary 는 `domain/{module}/repository/jooq/query/*Query` top-level 타입으로 둔다.
       repository 는 `Get*ApiDto.Request` 같은 controller Request DTO 를 직접 받지 않고, service 가 기본값/정렬/visibility 를 반영한 query 를 받는다.

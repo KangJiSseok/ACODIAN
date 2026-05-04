@@ -145,22 +145,7 @@ public class WorklogJooqRepositoryImpl implements WorklogJooqRepository {
                 .orderBy(TB_WORKLOG.CREATED_AT.desc(), TB_WORKLOG.WORKLOG_ID.desc())
                 .limit(pageSize)
                 .offset((long) pageIndex * pageSize)
-                .fetch(record -> new WorklogSearchProjection(
-                        record.get(TB_WORKLOG.WORKLOG_ID),
-                        record.get(TB_WORKLOG.TITLE),
-                        record.get(TB_WORKLOG.AI_SUMMARY),
-                        record.get(TB_WORKLOG.STATUS_CODE),
-                        record.get(TB_WORKLOG.IMPORTANCE_CODE),
-                        record.get(TB_WORKLOG.AI_PROCESSING_STATUS),
-                        record.get(predecessorCountField),
-                        record.get(TB_WORKLOG.TEAM_ID),
-                        record.get(TB_TEAM.TEAM_NAME),
-                        record.get(TB_WORKLOG.AUTHOR_ID),
-                        record.get(TB_USER.USER_NAME),
-                        record.get(TB_USER.PROFILE_IMAGE_URL),
-                        record.get(TB_WORKLOG.INSTRUCTION_DATE),
-                        record.get(TB_WORKLOG.DUE_DATE)
-                ));
+                .fetch(record -> WorklogSearchProjection.from(record, predecessorCountField));
 
         return new PageImpl<>(items, pageRequest, total);
     }
