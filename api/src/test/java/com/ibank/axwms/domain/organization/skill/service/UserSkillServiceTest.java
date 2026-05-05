@@ -8,6 +8,7 @@ import static org.mockito.Mockito.verifyNoInteractions;
 
 import com.ibank.axwms.domain.organization.skill.dto.CreateSkillApiDto;
 import com.ibank.axwms.domain.organization.skill.dto.GetSkillsApiDto;
+import com.ibank.axwms.domain.organization.skill.dto.UpdateSkillApiDto;
 import com.ibank.axwms.domain.organization.skill.entity.UserSkill;
 import com.ibank.axwms.domain.organization.skill.repository.UserSkillRepository;
 import com.ibank.axwms.domain.organization.skill.repository.jooq.projection.UserSkillListItemProjection;
@@ -288,6 +289,104 @@ class UserSkillServiceTest {
         verifyNoInteractions(userSkillRepository);
     }
 
+    @Test
+    @DisplayName("본부장이 다른 사용자 스킬을 수정하면 요청 값만 반영한다")
+    void director_updates_other_user_skill() {
+        // given
+        UserSkill userSkill = userSkill(1L, OTHER_USER_ID, "SQL", (short) 3);
+        given(userRepository.findById(OTHER_USER_ID)).willReturn(Optional.of(user(OTHER_USER_ID, UserRole.MEMBER)));
+        given(userSkillRepository.findByIdAndUserId(1L, OTHER_USER_ID)).willReturn(Optional.of(userSkill));
+        given(userSkillRepository.existsByUserIdAndSkillNameAndIdNot(OTHER_USER_ID, "WMS", 1L)).willReturn(false);
+
+        // when
+        userSkillService.updateSkill(
+                principal(USER_ID, UserRole.DIRECTOR),
+                OTHER_USER_ID,
+                1L,
+                updateRequest("WMS", (short) 5)
+        );
+
+        // then
+        assertThat(userSkill.getSkillName()).isEqualTo("WMS");
+        assertThat(userSkill.getSkillLevel()).isEqualTo((short) 5);
+    }
+
+    @Test
+    @DisplayName("스킬명 수정 시 같은 사용자의 다른 스킬명과 중복되면 예외를 던진다")
+    void update_skill_duplicate_name_throws_exception() {
+        // given
+        UserSkill userSkill = userSkill(1L, OTHER_USER_ID, "SQL", (short) 3);
+        given(userRepository.findById(OTHER_USER_ID)).willReturn(Optional.of(user(OTHER_USER_ID, UserRole.MEMBER)));
+        given(userSkillRepository.findByIdAndUserId(1L, OTHER_USER_ID)).willReturn(Optional.of(userSkill));
+        given(userSkillRepository.existsByUserIdAndSkillNameAndIdNot(OTHER_USER_ID, "WMS", 1L)).willReturn(true);
+
+        // when & then
+        assertThatThrownBy(() -> userSkillService.updateSkill(
+                principal(USER_ID, UserRole.DIRECTOR),
+                OTHER_USER_ID,
+                1L,
+                updateRequest("WMS", null)
+        ))
+                .isInstanceOf(BusinessException.class)
+                .extracting("errorCode")
+                .isEqualTo(ErrorCode.USER_SKILL_DUPLICATE_NAME);
+    }
+
+    @Test
+    @DisplayName("path 사용자에게 속한 스킬이 없으면 예외를 던진다")
+    void update_skill_not_found_throws_exception() {
+        // given
+        given(userRepository.findById(OTHER_USER_ID)).willReturn(Optional.of(user(OTHER_USER_ID, UserRole.MEMBER)));
+        given(userSkillRepository.findByIdAndUserId(1L, OTHER_USER_ID)).willReturn(Optional.empty());
+
+        // when & then
+        assertThatThrownBy(() -> userSkillService.updateSkill(
+                principal(USER_ID, UserRole.DIRECTOR),
+                OTHER_USER_ID,
+                1L,
+                updateRequest("WMS", null)
+        ))
+                .isInstanceOf(BusinessException.class)
+                .extracting("errorCode")
+                .isEqualTo(ErrorCode.USER_SKILL_NOT_FOUND);
+    }
+
+    @Test
+    @DisplayName("조직 관리자가 자기 스킬을 수정하면 접근 거부 예외를 던진다")
+    void organization_manager_updates_own_skill_throws_exception() {
+        // given
+        given(userRepository.findById(USER_ID)).willReturn(Optional.of(user(USER_ID, UserRole.DEPT_HEAD, 10L)));
+
+        // when & then
+        assertThatThrownBy(() -> userSkillService.updateSkill(
+                principal(USER_ID, UserRole.DEPT_HEAD),
+                USER_ID,
+                1L,
+                updateRequest("WMS", (short) 5)
+        ))
+                .isInstanceOf(BusinessException.class)
+                .extracting("errorCode")
+                .isEqualTo(ErrorCode.AUTH_ACCESS_DENIED);
+
+        verifyNoInteractions(userSkillRepository);
+    }
+
+    @Test
+    @DisplayName("일반 사용자가 스킬을 수정하면 접근 거부 예외를 던진다")
+    void member_updates_skill_throws_exception() {
+        assertThatThrownBy(() -> userSkillService.updateSkill(
+                principal(USER_ID, UserRole.MEMBER),
+                OTHER_USER_ID,
+                1L,
+                updateRequest("WMS", (short) 5)
+        ))
+                .isInstanceOf(BusinessException.class)
+                .extracting("errorCode")
+                .isEqualTo(ErrorCode.AUTH_ACCESS_DENIED);
+
+        verifyNoInteractions(userRepository, userSkillRepository);
+    }
+
     private static CustomUserPrincipal principal(Long userId, UserRole role) {
         return new CustomUserPrincipal(userId, "user@test.com", role.name());
     }
@@ -316,5 +415,15 @@ class UserSkillServiceTest {
 
     private static CreateSkillApiDto.Request request(String skillName, Short skillLevel) {
         return new CreateSkillApiDto.Request(skillName, skillLevel);
+    }
+
+    private static UpdateSkillApiDto.Request updateRequest(String skillName, Short skillLevel) {
+        return new UpdateSkillApiDto.Request(skillName, skillLevel);
+    }
+
+    private static UserSkill userSkill(Long id, Long userId, String skillName, Short skillLevel) {
+        UserSkill userSkill = UserSkill.create(userId, skillName, skillLevel);
+        ReflectionTestUtils.setField(userSkill, "id", id);
+        return userSkill;
     }
 }
