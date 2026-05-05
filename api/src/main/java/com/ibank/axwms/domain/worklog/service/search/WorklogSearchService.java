@@ -1,5 +1,6 @@
 package com.ibank.axwms.domain.worklog.service.search;
 
+import com.ibank.axwms.domain.worklog.dto.GetWorklogFilterOptionsApiDto;
 import com.ibank.axwms.domain.worklog.dto.SearchWorklogsApiDto;
 import com.ibank.axwms.global.response.PageResponse;
 import com.ibank.axwms.global.security.CustomUserPrincipal;
@@ -22,4 +23,12 @@ public interface WorklogSearchService {
             CustomUserPrincipal principal,
             SearchWorklogsApiDto.Request request
     );
+
+    /**
+     * 업무일지 검색 화면 진입 시 필요한 필터 옵션(가시 팀+멤버, 전체 태그)을 한 번에 반환한다.
+     *
+     * @param principal 현재 로그인 사용자
+     * @return 필터 옵션 응답
+     */
+    GetWorklogFilterOptionsApiDto.Response getFilterOptions(CustomUserPrincipal principal);
 }

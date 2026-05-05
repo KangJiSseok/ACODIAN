@@ -1,6 +1,7 @@
 package com.ibank.axwms.domain.organization.team.repository.jooq;
 
 import com.ibank.axwms.domain.organization.team.repository.jooq.projection.TeamDetailProjection;
+import com.ibank.axwms.domain.organization.team.repository.jooq.projection.TeamMemberFilterProjection;
 import com.ibank.axwms.domain.organization.team.repository.jooq.projection.TeamStatusSummaryProjection;
 import com.ibank.axwms.domain.organization.team.repository.jooq.projection.TeamSummaryProjection;
 import com.ibank.axwms.domain.organization.team.repository.jooq.projection.TeamUserSummaryProjection;
@@ -22,4 +23,10 @@ public interface TeamJooqRepository {
 
     /** 사용자가 볼 수 있는 팀의 ACTIVE 사용자 목록을 리더 우선, 사용자 ID 순으로 조회한다. */
     Optional<List<TeamUserSummaryProjection>> findTeamUsers(Long userId, Long teamId);
+
+    /**
+     * 사용자가 볼 수 있는 팀과 각 팀의 ACTIVE 멤버를 한 번의 LEFT JOIN 쿼리로 조회한다.
+     * 멤버가 없는 팀은 userId/userName 이 null 인 행으로 들어오며, service 가 teamId 로 그룹핑한다.
+     */
+    List<TeamMemberFilterProjection> findVisibleTeamsWithMembersForFilter(Long userId);
 }
