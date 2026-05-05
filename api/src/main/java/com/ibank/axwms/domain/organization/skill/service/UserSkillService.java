@@ -47,9 +47,10 @@ public class UserSkillService {
     public void createSkill(CustomUserPrincipal principal, Long userId, CreateSkillApiDto.Request request) {
         validateWritableTargetUser(principal, userId);
 
-        ensureSkillNameAvailable(userId, request.skillName());
+        String skillName = normalizeRequiredSkillName(request.skillName());
+        ensureSkillNameAvailable(userId, skillName);
 
-        userSkillRepository.save(UserSkill.create(userId, request.skillName(), request.skillLevel()));
+        userSkillRepository.save(UserSkill.create(userId, skillName, request.skillLevel()));
     }
 
     /** 특정 사용자의 스킬 정보를 부분 수정한다. 조직 관리자만 허용 범위 안에서 수정할 수 있다. */
@@ -58,9 +59,10 @@ public class UserSkillService {
         validateWritableTargetUser(principal, userId);
 
         UserSkill userSkill = getUserSkillOrThrow(skillId, userId);
-        ensureSkillNameAvailableForUpdate(userId, skillId, request.skillName());
+        String skillName = normalizeOptionalSkillName(request.skillName());
+        ensureSkillNameAvailableForUpdate(userId, skillId, skillName);
 
-        userSkill.updatePartial(request.skillName(), request.skillLevel());
+        userSkill.updatePartial(skillName, request.skillLevel());
     }
 
     /** 특정 사용자의 스킬을 삭제한다. 조직 관리자만 허용 범위 안에서 삭제할 수 있다. */
@@ -135,6 +137,19 @@ public class UserSkillService {
         if (userSkillRepository.existsByUserIdAndSkillNameAndIdNot(userId, skillName, skillId)) {
             throw new BusinessException(ErrorCode.USER_SKILL_DUPLICATE_NAME);
         }
+    }
+
+    /** 필수 스킬명은 저장 전 양끝 공백을 제거해 중복 검사와 저장 값을 일치시킨다. */
+    private String normalizeRequiredSkillName(String skillName) {
+        return skillName.trim();
+    }
+
+    /** 부분 수정 스킬명은 null 또는 blank 이면 기존 값 유지를 의미하는 null 로 정규화한다. */
+    private String normalizeOptionalSkillName(String skillName) {
+        if (skillName == null || skillName.isBlank()) {
+            return null;
+        }
+        return skillName.trim();
     }
 
     /** 조회는 성공시키되 목록을 비워야 하는 비노출 정책을 판별한다. */
