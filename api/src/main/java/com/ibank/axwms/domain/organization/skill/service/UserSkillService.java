@@ -45,10 +45,8 @@ public class UserSkillService {
     /** 특정 사용자에게 스킬을 등록한다. 조직 관리자만 자기 자신을 제외한 허용 범위 사용자에게 등록할 수 있다. */
     @Transactional
     public void createSkill(CustomUserPrincipal principal, Long userId, CreateSkillApiDto.Request request) {
-        validateOrganizationManagerRole(principal);
+        validateWritableTargetUser(principal, userId);
 
-        User targetUser = getUserOrThrow(userId);
-        validateWritable(principal, targetUser);
         ensureSkillNameAvailable(userId, request.skillName());
 
         userSkillRepository.save(UserSkill.create(userId, request.skillName(), request.skillLevel()));
@@ -57,10 +55,7 @@ public class UserSkillService {
     /** 특정 사용자의 스킬 정보를 부분 수정한다. 조직 관리자만 허용 범위 안에서 수정할 수 있다. */
     @Transactional
     public void updateSkill(CustomUserPrincipal principal, Long userId, Long skillId, UpdateSkillApiDto.Request request) {
-        validateOrganizationManagerRole(principal);
-
-        User targetUser = getUserOrThrow(userId);
-        validateWritable(principal, targetUser);
+        validateWritableTargetUser(principal, userId);
 
         UserSkill userSkill = getUserSkillOrThrow(skillId, userId);
         ensureSkillNameAvailableForUpdate(userId, skillId, request.skillName());
@@ -71,10 +66,7 @@ public class UserSkillService {
     /** 특정 사용자의 스킬을 삭제한다. 조직 관리자만 허용 범위 안에서 삭제할 수 있다. */
     @Transactional
     public void deleteSkill(CustomUserPrincipal principal, Long userId, Long skillId) {
-        validateOrganizationManagerRole(principal);
-
-        User targetUser = getUserOrThrow(userId);
-        validateWritable(principal, targetUser);
+        validateWritableTargetUser(principal, userId);
 
         UserSkill userSkill = getUserSkillOrThrow(skillId, userId);
         userSkillRepository.delete(userSkill);
@@ -100,9 +92,19 @@ public class UserSkillService {
         }
     }
 
-    /** 스킬 등록 권한과 DEPT_HEAD 의 부서 범위를 함께 검증한다. */
-    private void validateWritable(CustomUserPrincipal principal, User targetUser) {
-        if (!isOrganizationManager(principal) || principal.userId().equals(targetUser.getId())) {
+    /**
+     * 쓰기 요청의 공통 권한 검증 순서를 보존하며 대상 사용자를 조회한다.
+     */
+    private void validateWritableTargetUser(CustomUserPrincipal principal, Long userId) {
+        validateOrganizationManagerRole(principal);
+
+        User targetUser = getUserOrThrow(userId);
+        validateWritableScope(principal, targetUser);
+    }
+
+    /** 조직 관리자 쓰기 작업의 대상 사용자 범위를 검증한다. */
+    private void validateWritableScope(CustomUserPrincipal principal, User targetUser) {
+        if (principal.userId().equals(targetUser.getId())) {
             throw new BusinessException(ErrorCode.AUTH_ACCESS_DENIED);
         }
         if (UserRole.DIRECTOR.name().equals(principal.roleCode())) {
