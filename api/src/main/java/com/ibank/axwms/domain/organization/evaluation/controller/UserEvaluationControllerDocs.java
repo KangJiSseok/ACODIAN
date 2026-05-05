@@ -1,6 +1,8 @@
 package com.ibank.axwms.domain.organization.evaluation.controller;
 
+import com.ibank.axwms.domain.organization.evaluation.dto.CreateUserEvaluationApiDto;
 import com.ibank.axwms.domain.organization.evaluation.dto.GetUserEvaluationsApiDto;
+import com.ibank.axwms.global.response.EmptyResponse;
 import com.ibank.axwms.global.response.PageResponse;
 import com.ibank.axwms.global.security.CustomUserPrincipal;
 import io.swagger.v3.oas.annotations.Operation;
@@ -37,5 +39,28 @@ public interface UserEvaluationControllerDocs {
             @Parameter(hidden = true) CustomUserPrincipal principal,
             @Parameter(description = "사용자 ID", example = "101") Long userId,
             @ParameterObject GetUserEvaluationsApiDto.Request request
+    );
+
+    @Operation(
+            summary = "사용자 평가 등록",
+            description = "DIRECTOR 또는 DEPT_HEAD 가 특정 사용자에게 평가를 등록한다. "
+                    + "DIRECTOR 는 자기 자신을 제외한 사용자를, DEPT_HEAD 는 같은 부서 TEAM_LEAD/MEMBER 만 평가할 수 있다."
+    )
+    @SecurityRequirement(name = "bearerAuth")
+    @ApiResponses({
+            @ApiResponse(
+                    responseCode = "201",
+                    description = "사용자 평가 등록에 성공한다.",
+                    content = @Content(schema = @Schema(implementation = EmptyResponse.class))
+            ),
+            @ApiResponse(responseCode = "400", description = "요청 값 검증에 실패했다.", content = @Content),
+            @ApiResponse(responseCode = "401", description = "access token 이 없거나 유효하지 않다.", content = @Content),
+            @ApiResponse(responseCode = "403", description = "평가 등록 권한 또는 대상 사용자 접근 권한이 없다.", content = @Content),
+            @ApiResponse(responseCode = "404", description = "평가 대상 사용자를 찾을 수 없다.", content = @Content)
+    })
+    EmptyResponse createUserEvaluation(
+            @Parameter(hidden = true) CustomUserPrincipal principal,
+            @Parameter(description = "사용자 ID", example = "101") Long userId,
+            CreateUserEvaluationApiDto.Request request
     );
 }
