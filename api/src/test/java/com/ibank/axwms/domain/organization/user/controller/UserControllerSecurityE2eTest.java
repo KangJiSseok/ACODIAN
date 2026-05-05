@@ -1,14 +1,18 @@
 package com.ibank.axwms.domain.organization.user.controller;
 
 import static org.hamcrest.Matchers.is;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.multipart;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 import com.ibank.axwms.testsupport.E2eTestSupport;
+import java.nio.charset.StandardCharsets;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.http.MediaType;
+import org.springframework.mock.web.MockMultipartFile;
 import org.springframework.security.test.context.support.WithMockUser;
+import org.springframework.test.web.servlet.request.MockMultipartHttpServletRequestBuilder;
 
 class UserControllerSecurityE2eTest extends E2eTestSupport {
 
@@ -70,9 +74,7 @@ class UserControllerSecurityE2eTest extends E2eTestSupport {
     @Test
     @DisplayName("인증 없이 사용자 부분 수정을 호출하면 AUTH_UNAUTHORIZED 응답을 반환한다")
     void 인증_없이_사용자_부분_수정을_호출하면_AUTH_UNAUTHORIZED_응답을_반환한다() throws Exception {
-        mockMvc.perform(apiPatch("/users/101")
-                        .contentType(MediaType.APPLICATION_JSON)
-                        .content("{}"))
+        mockMvc.perform(apiMultipartPatch("/users/101"))
                 .andExpect(status().isUnauthorized())
                 .andExpect(jsonPath("$.success", is(false)))
                 .andExpect(jsonPath("$.error.code", is("AUTH_UNAUTHORIZED")))
@@ -120,9 +122,7 @@ class UserControllerSecurityE2eTest extends E2eTestSupport {
     @WithMockUser(roles = "TEAM_LEAD")
     @DisplayName("TEAM_LEAD 는 사용자 부분 수정을 호출하면 AUTH_ACCESS_DENIED 응답을 반환한다")
     void TEAM_LEAD는_사용자_부분_수정을_호출하면_AUTH_ACCESS_DENIED_응답을_반환한다() throws Exception {
-        mockMvc.perform(apiPatch("/users/101")
-                        .contentType(MediaType.APPLICATION_JSON)
-                        .content("{}"))
+        mockMvc.perform(apiMultipartPatch("/users/101"))
                 .andExpect(status().isForbidden())
                 .andExpect(jsonPath("$.success", is(false)))
                 .andExpect(jsonPath("$.error.code", is("AUTH_ACCESS_DENIED")))
@@ -134,13 +134,27 @@ class UserControllerSecurityE2eTest extends E2eTestSupport {
     @WithMockUser(roles = "MEMBER")
     @DisplayName("MEMBER 는 사용자 부분 수정을 호출하면 AUTH_ACCESS_DENIED 응답을 반환한다")
     void MEMBER는_사용자_부분_수정을_호출하면_AUTH_ACCESS_DENIED_응답을_반환한다() throws Exception {
-        mockMvc.perform(apiPatch("/users/101")
-                        .contentType(MediaType.APPLICATION_JSON)
-                        .content("{}"))
+        mockMvc.perform(apiMultipartPatch("/users/101"))
                 .andExpect(status().isForbidden())
                 .andExpect(jsonPath("$.success", is(false)))
                 .andExpect(jsonPath("$.error.code", is("AUTH_ACCESS_DENIED")))
                 .andExpect(jsonPath("$.error.statusCode", is(403)))
                 .andExpect(jsonPath("$.timestamp").exists());
+    }
+
+    /** 사용자 부분 수정 API 의 multipart PATCH 요청을 context-path 포함 형태로 만든다. */
+    private MockMultipartHttpServletRequestBuilder apiMultipartPatch(String path) {
+        return multipart("/api" + path)
+                .file(new MockMultipartFile(
+                        "request",
+                        "",
+                        MediaType.APPLICATION_JSON_VALUE,
+                        "{}".getBytes(StandardCharsets.UTF_8)
+                ))
+                .contextPath("/api")
+                .with(request -> {
+                    request.setMethod("PATCH");
+                    return request;
+                });
     }
 }

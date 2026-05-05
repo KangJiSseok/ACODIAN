@@ -138,25 +138,25 @@ public class User {
                               String phone,
                               EmploymentStatus employmentStatus,
                               LocalDate joinDate) {
-        if (userName != null) {
+        if (userName != null && !userName.isBlank()) {
             this.userName = userName;
         }
-        if (email != null) {
+        if (email != null && !email.isBlank()) {
             this.email = email;
         }
         if (profileImageUrl != null) {
             this.profileImageUrl = profileImageUrl;
         }
-        if (positionName != null) {
+        if (positionName != null && !positionName.isBlank()) {
             this.positionName = positionName;
         }
-        if (titleName != null) {
+        if (titleName != null && !titleName.isBlank()) {
             this.titleName = titleName;
         }
         if (departmentId != null) {
             this.departmentId = departmentId;
         }
-        if (phone != null) {
+        if (phone != null && !phone.isBlank()) {
             this.phone = phone;
         }
         if (employmentStatus != null) {

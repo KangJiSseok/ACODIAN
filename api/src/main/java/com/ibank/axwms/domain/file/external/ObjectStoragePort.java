@@ -2,6 +2,7 @@ package com.ibank.axwms.domain.file.external;
 
 import java.time.Instant;
 import java.util.List;
+import java.util.Optional;
 import org.springframework.web.multipart.MultipartFile;
 
 /**
@@ -38,6 +39,14 @@ public interface ObjectStoragePort {
      * 업로드 없이 key 만으로 URL 을 미리 계산할 때 사용한다.
      */
     String toPublicUrl(String key);
+
+    /**
+     * 공개 접근 URL 을 storage 상대 key 로 복원한다.
+     * 구현체가 URL 규칙을 알 수 없거나 자기 저장소 URL 이 아니면 빈 값을 반환한다.
+     */
+    default Optional<String> toStorageKey(String publicUrl) {
+        return Optional.empty();
+    }
 
     /**
      * prefix 하위에서 cutoff 이전에 업로드된 객체의 상대 키 목록을 반환한다.

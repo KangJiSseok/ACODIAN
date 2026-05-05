@@ -2,6 +2,11 @@ package com.ibank.axwms.domain.organization.user.service;
 
 import com.ibank.axwms.domain.file.external.ObjectStoragePort;
 import com.ibank.axwms.domain.file.external.S3StorageProperties;
+import java.io.IOException;
+import java.io.InputStream;
+import java.time.Instant;
+import java.util.List;
+import java.util.Optional;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Component;
 import org.springframework.util.StringUtils;
@@ -13,11 +18,6 @@ import software.amazon.awssdk.services.s3.model.DeleteObjectRequest;
 import software.amazon.awssdk.services.s3.model.ListObjectsV2Request;
 import software.amazon.awssdk.services.s3.model.ListObjectsV2Response;
 import software.amazon.awssdk.services.s3.model.PutObjectRequest;
-
-import java.io.IOException;
-import java.io.InputStream;
-import java.time.Instant;
-import java.util.List;
 
 /**
  * 프로필 이미지 저장소 전용 S3 어댑터.
@@ -93,6 +93,20 @@ public class ProfileImageS3ObjectStorageAdapter implements ObjectStoragePort {
         return buildPublicUrl(qualify(key));
     }
 
+    /** 공개 URL 이 이 어댑터의 publicBaseUrl 하위이면 상대 storage key 로 복원한다. */
+    @Override
+    public Optional<String> toStorageKey(String publicUrl) {
+        if (!StringUtils.hasText(publicUrl)) {
+            return Optional.empty();
+        }
+        String base = trimTrailingSlash(properties.publicBaseUrl());
+        String prefix = base + "/";
+        if (!publicUrl.startsWith(prefix)) {
+            return Optional.empty();
+        }
+        return Optional.of(unqualify(publicUrl.substring(prefix.length())));
+    }
+
     /** prefix 하위에서 cutoff 이전에 업로드된 객체의 상대 키 목록을 반환한다. */
     @Override
     public List<String> listKeysUploadedBefore(String prefix, Instant cutoff) {
@@ -134,5 +148,13 @@ public class ProfileImageS3ObjectStorageAdapter implements ObjectStoragePort {
     private String buildPublicUrl(String qualifiedKey) {
         String base = properties.publicBaseUrl();
         return base.endsWith("/") ? base + qualifiedKey : base + "/" + qualifiedKey;
+    }
+
+    /** publicBaseUrl 비교가 trailing slash 유무에 흔들리지 않도록 정규화한다. */
+    private String trimTrailingSlash(String value) {
+        if (!StringUtils.hasText(value)) {
+            return "";
+        }
+        return value.endsWith("/") ? value.substring(0, value.length() - 1) : value;
     }
 }

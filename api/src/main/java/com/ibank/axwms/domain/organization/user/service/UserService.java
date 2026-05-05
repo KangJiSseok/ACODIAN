@@ -14,15 +14,19 @@ import com.ibank.axwms.domain.organization.user.dto.GetUserApiDto;
 import com.ibank.axwms.domain.organization.user.dto.GetUsersApiDto;
 import com.ibank.axwms.domain.organization.user.dto.UpdateUserApiDto;
 import com.ibank.axwms.domain.organization.user.entity.User;
+import com.ibank.axwms.domain.organization.user.event.ProfileImageCommittedEvent;
 import com.ibank.axwms.domain.organization.user.repository.UserRepository;
 import com.ibank.axwms.domain.organization.user.repository.jooq.query.UserListQuery;
+import com.ibank.axwms.domain.organization.user.service.ProfileImageStorageService.TempUploadResult;
 import com.ibank.axwms.global.error.BusinessException;
 import com.ibank.axwms.global.error.ErrorCode;
 import com.ibank.axwms.global.security.CustomUserPrincipal;
 import java.util.List;
 import lombok.RequiredArgsConstructor;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.web.multipart.MultipartFile;
 
 @Service
 @RequiredArgsConstructor
@@ -33,6 +37,8 @@ public class UserService {
     private final DepartmentRepository departmentRepository;
     private final TeamRepository teamRepository;
     private final UserTeamRepository userTeamRepository;
+    private final ProfileImageStorageService profileImageStorageService;
+    private final ApplicationEventPublisher eventPublisher;
 
     /**
      * access token principal 에 해당하는 현재 로그인 사용자의 프로필/소속 팀 문맥을 조회한다.
@@ -101,22 +107,37 @@ public class UserService {
      * @param principal 수정 요청을 보낸 인증 사용자
      * @param userId 수정 대상 사용자 id
      * @param request null 이 아닌 필드만 반영할 부분 수정 요청
+     * @param profileImage 새 프로필 이미지 파일. null 또는 empty 이면 기존 이미지를 유지한다.
      * @throws BusinessException USER_NOT_FOUND 수정 대상 사용자가 없을 때
      * @throws BusinessException AUTH_ACCESS_DENIED DEPT_HEAD 가 수정 가능한 부서/role 범위를 벗어났을 때
      * @throws BusinessException DEPARTMENT_NOT_FOUND 요청 부서가 없을 때
      * @throws BusinessException TEAM_NOT_FOUND 요청 팀이 없거나 대상 사용자의 membership 이 아닐 때
      */
     @Transactional
-    public void updateUser(CustomUserPrincipal principal, Long userId, UpdateUserApiDto.Request request) {
+    public void updateUser(CustomUserPrincipal principal,
+                           Long userId,
+                           UpdateUserApiDto.Request request,
+                           MultipartFile profileImage) {
         User user = getUserOrThrow(userId);
         validateUpdateUserPermission(principal, user, request);
         ensureDepartmentExistsOrThrow(request.departmentId());
         updatePrimaryTeam(userId, request.primaryTeamId());
 
+        TempUploadResult tempUpload = null;
+        //S3 temp에 올려놓기
+        if (profileImage != null && !profileImage.isEmpty()) {
+            tempUpload = profileImageStorageService.uploadTemp(profileImage);
+        }
+
+        String oldProfileImageKey = tempUpload != null
+                ? profileImageStorageService.resolveDeletableProfileImageKey(user.getProfileImageUrl())
+                : null;
+        String profileImageUrl = tempUpload != null ? tempUpload.finalUrl() : null;
+
         user.updatePartial(
                 request.userName(),
                 request.email(),
-                request.profileImageUrl(),
+                profileImageUrl,
                 request.positionName(),
                 request.titleName(),
                 request.departmentId(),
@@ -124,6 +145,14 @@ public class UserService {
                 request.employmentStatus(),
                 request.joinDate()
         );
+
+        if (tempUpload != null) {
+            eventPublisher.publishEvent(new ProfileImageCommittedEvent(
+                    tempUpload.tempKey(),
+                    tempUpload.finalKey(),
+                    oldProfileImageKey
+            ));
+        }
     }
 
     /** DIRECTOR는 모두 평가 할 수 있다.

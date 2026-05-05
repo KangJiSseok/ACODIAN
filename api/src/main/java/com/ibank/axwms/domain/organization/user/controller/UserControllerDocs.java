@@ -19,6 +19,8 @@ import io.swagger.v3.oas.annotations.security.SecurityRequirement;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import java.util.List;
 import org.springdoc.core.annotations.ParameterObject;
+import org.springframework.web.bind.annotation.RequestPart;
+import org.springframework.web.multipart.MultipartFile;
 
 @Tag(name = "User", description = "사용자 API")
 public interface UserControllerDocs {
@@ -127,7 +129,9 @@ public interface UserControllerDocs {
     @Operation(
             summary = "사용자 부분 수정",
             description = "DIRECTOR 또는 DEPT_HEAD 가 사용자 기본 정보와 대표 소속 팀을 부분 수정한다. "
-                    + "요청 body 의 null 필드는 기존 값을 유지하고, primaryTeamId 는 대상 사용자의 기존 team membership 만 지정할 수 있다."
+                    + "multipart/form-data 요청의 JSON part(`request`) null 필드는 기존 값을 유지하고, "
+                    + "선택 file part(`profile_image`)가 있으면 프로필 이미지를 새 파일로 교체한다. "
+                    + "primaryTeamId 는 대상 사용자의 기존 team membership 만 지정할 수 있다."
     )
     @SecurityRequirement(name = "bearerAuth")
     @ApiResponses({
@@ -137,13 +141,20 @@ public interface UserControllerDocs {
                     content = @Content(schema = @Schema(implementation = EmptyResponse.class))
             ),
             @ApiResponse(responseCode = "400", description = "요청 값이 올바르지 않다.", content = @Content),
+            @ApiResponse(responseCode = "413", description = "multipart 업로드 크기 제한을 초과했다.", content = @Content),
             @ApiResponse(responseCode = "401", description = "access token 이 없거나 유효하지 않다.", content = @Content),
             @ApiResponse(responseCode = "403", description = "사용자 수정 권한이 없다.", content = @Content),
-            @ApiResponse(responseCode = "404", description = "사용자, 부서 또는 팀을 찾을 수 없다.", content = @Content)
+            @ApiResponse(responseCode = "404", description = "사용자, 부서 또는 팀을 찾을 수 없다.", content = @Content),
+            @ApiResponse(responseCode = "503", description = "프로필 이미지 업로드를 처리할 수 없다. 잠시 후 다시 시도해야 한다.", content = @Content)
     })
     EmptyResponse updateUser(
             @Parameter(hidden = true) CustomUserPrincipal principal,
             @Parameter(description = "사용자 ID", example = "101") Long id,
-            UpdateUserApiDto.Request request
+            @Parameter(description = "사용자 부분 수정 JSON part. multipart part name 은 `request` 이다.")
+            @RequestPart("request")
+            UpdateUserApiDto.Request request,
+            @Parameter(description = "선택 프로필 이미지 file part. multipart part name 은 `profile_image` 이다. 미첨부 시 기존 이미지를 유지한다.")
+            @RequestPart(value = "profile_image", required = false)
+            MultipartFile profileImage
     );
 }
