@@ -307,11 +307,12 @@ class TeamServiceTest {
                         UserTeam::getTeamId,
                         UserTeam::getIsLeader,
                         UserTeam::getTeamRole,
+                        UserTeam::getIsPrimary,
                         UserTeam::getStatusCode
                 )
                 .containsExactly(
-                        tuple(202L, 501L, true, "WMS 운영", UserTeamStatus.ACTIVE),
-                        tuple(203L, 501L, false, "현장 총괄", UserTeamStatus.ACTIVE)
+                        tuple(202L, 501L, true, "WMS 운영", false, UserTeamStatus.ACTIVE),
+                        tuple(203L, 501L, false, "현장 총괄", false, UserTeamStatus.ACTIVE)
                 );
     }
 
@@ -354,8 +355,8 @@ class TeamServiceTest {
                 );
         assertThat(currentLeader.getIsLeader()).isFalse();
         assertThat(rejoinMembership)
-                .extracting(UserTeam::getIsLeader, UserTeam::getTeamRole, UserTeam::getStatusCode)
-                .containsExactly(true, "신규 리더", UserTeamStatus.ACTIVE);
+                .extracting(UserTeam::getIsLeader, UserTeam::getTeamRole, UserTeam::getIsPrimary, UserTeam::getStatusCode)
+                .containsExactly(true, "신규 리더", false, UserTeamStatus.ACTIVE);
         assertThat(removeMembership.getStatusCode()).isEqualTo(UserTeamStatus.LEFT);
         assertThat(editMembership.getTeamRole()).isEqualTo("수정 역할");
         then(teamAdminRepository).should().save(any(TeamAdmin.class));

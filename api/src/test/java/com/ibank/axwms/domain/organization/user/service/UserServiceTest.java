@@ -6,6 +6,9 @@ import static org.mockito.BDDMockito.given;
 
 import com.ibank.axwms.domain.organization.department.entity.Department;
 import com.ibank.axwms.domain.organization.department.repository.DepartmentRepository;
+import com.ibank.axwms.domain.organization.team.UserTeamStatus;
+import com.ibank.axwms.domain.organization.team.entity.UserTeam;
+import com.ibank.axwms.domain.organization.team.repository.TeamRepository;
 import com.ibank.axwms.domain.organization.team.repository.UserTeamRepository;
 import com.ibank.axwms.domain.organization.team.repository.jooq.projection.UserTeamSummaryProjection;
 import com.ibank.axwms.domain.organization.user.EmploymentStatus;
@@ -14,6 +17,7 @@ import com.ibank.axwms.domain.organization.user.dto.GetAdminCandidatesApiDto;
 import com.ibank.axwms.domain.organization.user.dto.GetMyProfileApiDto;
 import com.ibank.axwms.domain.organization.user.dto.GetUserApiDto;
 import com.ibank.axwms.domain.organization.user.dto.GetUsersApiDto;
+import com.ibank.axwms.domain.organization.user.dto.UpdateUserApiDto;
 import com.ibank.axwms.domain.organization.user.entity.User;
 import com.ibank.axwms.domain.organization.user.repository.UserRepository;
 import com.ibank.axwms.domain.organization.user.repository.jooq.projection.UserSummaryProjection;
@@ -41,6 +45,9 @@ class UserServiceTest {
 
     @Mock
     private DepartmentRepository departmentRepository;
+
+    @Mock
+    private TeamRepository teamRepository;
 
     @Mock
     private UserTeamRepository userTeamRepository;
@@ -376,6 +383,260 @@ class UserServiceTest {
                         "물류혁신TF",
                         EmploymentStatus.ACTIVE
                 ));
+    }
+
+    @Test
+    @DisplayName("사용자 부분 수정은 null 이 아닌 기본 필드와 대표 팀만 반영한다")
+    void 사용자_부분_수정은_null이_아닌_기본_필드와_대표_팀만_반영한다() {
+        User user = createUser(101L, 10L, "홍길동", "과장", "팀장", "https://old.example/profile.png", "010-0000-0000", LocalDate.of(2024, 1, 1));
+        UserTeam oldPrimary = UserTeam.create(101L, 21L, false, "기존 역할", "주담당", true, UserTeamStatus.ACTIVE);
+        UserTeam newPrimary = UserTeam.create(101L, 22L, false, "신규 역할", "겸임", false, UserTeamStatus.ACTIVE);
+        UpdateUserApiDto.Request request = new UpdateUserApiDto.Request(
+                "김수정",
+                "updated@axwms.com",
+                "https://new.example/profile.png",
+                "차장",
+                "파트장",
+                20L,
+                "010-1111-2222",
+                EmploymentStatus.LEAVE,
+                LocalDate.of(2025, 2, 3),
+                22L
+        );
+        given(userRepository.findById(101L)).willReturn(Optional.of(user));
+        given(departmentRepository.existsById(20L)).willReturn(true);
+        given(teamRepository.existsByIdAndDeletedAtIsNull(22L)).willReturn(true);
+        given(userTeamRepository.findByUserIdAndTeamId(101L, 22L)).willReturn(Optional.of(newPrimary));
+        given(userTeamRepository.findAllByUserId(101L)).willReturn(List.of(oldPrimary, newPrimary));
+
+        userService.updateUser(directorPrincipal(), 101L, request);
+
+        assertThat(user)
+                .extracting(User::getUserName,
+                        User::getEmail,
+                        User::getProfileImageUrl,
+                        User::getPositionName,
+                        User::getTitleName,
+                        User::getDepartmentId,
+                        User::getPhone,
+                        User::getEmploymentStatus,
+                        User::getJoinDate)
+                .containsExactly(
+                        "김수정",
+                        "updated@axwms.com",
+                        "https://new.example/profile.png",
+                        "차장",
+                        "파트장",
+                        20L,
+                        "010-1111-2222",
+                        EmploymentStatus.LEAVE,
+                        LocalDate.of(2025, 2, 3)
+                );
+        assertThat(oldPrimary.getIsPrimary()).isFalse();
+        assertThat(newPrimary.getIsPrimary()).isTrue();
+    }
+
+    @Test
+    @DisplayName("사용자 부분 수정 요청 필드가 null 이면 기존 값을 유지한다")
+    void 사용자_부분_수정_요청_필드가_null이면_기존_값을_유지한다() {
+        User user = createUser(101L, 10L, "홍길동", "과장", "팀장", "https://old.example/profile.png", "010-0000-0000", LocalDate.of(2024, 1, 1));
+        UpdateUserApiDto.Request request = new UpdateUserApiDto.Request(null, null, null, null, null, null, null, null, null, null);
+        given(userRepository.findById(101L)).willReturn(Optional.of(user));
+
+        userService.updateUser(directorPrincipal(), 101L, request);
+
+        assertThat(user)
+                .extracting(User::getUserName,
+                        User::getEmail,
+                        User::getProfileImageUrl,
+                        User::getPositionName,
+                        User::getTitleName,
+                        User::getDepartmentId,
+                        User::getPhone,
+                        User::getEmploymentStatus,
+                        User::getJoinDate)
+                .containsExactly(
+                        "홍길동",
+                        "user@ibank.com",
+                        "https://old.example/profile.png",
+                        "과장",
+                        "팀장",
+                        10L,
+                        "010-0000-0000",
+                        EmploymentStatus.ACTIVE,
+                        LocalDate.of(2024, 1, 1)
+                );
+    }
+
+    @Test
+    @DisplayName("사용자 부분 수정 대상이 없으면 USER_NOT_FOUND 예외를 던진다")
+    void 사용자_부분_수정_대상이_없으면_USER_NOT_FOUND_예외를_던진다() {
+        UpdateUserApiDto.Request request = new UpdateUserApiDto.Request(null, null, null, null, null, null, null, null, null, null);
+        given(userRepository.findById(404L)).willReturn(Optional.empty());
+
+        assertThatThrownBy(() -> userService.updateUser(directorPrincipal(), 404L, request))
+                .isInstanceOf(BusinessException.class)
+                .extracting(error -> ((BusinessException) error).getErrorCode())
+                .isEqualTo(ErrorCode.USER_NOT_FOUND);
+    }
+
+    @Test
+    @DisplayName("사용자 부분 수정 요청 부서가 없으면 DEPARTMENT_NOT_FOUND 예외를 던진다")
+    void 사용자_부분_수정_요청_부서가_없으면_DEPARTMENT_NOT_FOUND_예외를_던진다() {
+        User user = createUser(101L, 10L, "홍길동", "과장", "팀장", null, null, LocalDate.of(2024, 1, 1));
+        UpdateUserApiDto.Request request = new UpdateUserApiDto.Request(null, null, null, null, null, 999L, null, null, null, null);
+        given(userRepository.findById(101L)).willReturn(Optional.of(user));
+        given(departmentRepository.existsById(999L)).willReturn(false);
+
+        assertThatThrownBy(() -> userService.updateUser(directorPrincipal(), 101L, request))
+                .isInstanceOf(BusinessException.class)
+                .extracting(error -> ((BusinessException) error).getErrorCode())
+                .isEqualTo(ErrorCode.DEPARTMENT_NOT_FOUND);
+    }
+
+    @Test
+    @DisplayName("사용자 부분 수정 요청 팀이 없으면 TEAM_NOT_FOUND 예외를 던진다")
+    void 사용자_부분_수정_요청_팀이_없으면_TEAM_NOT_FOUND_예외를_던진다() {
+        User user = createUser(101L, 10L, "홍길동", "과장", "팀장", null, null, LocalDate.of(2024, 1, 1));
+        UpdateUserApiDto.Request request = new UpdateUserApiDto.Request(null, null, null, null, null, null, null, null, null, 999L);
+        given(userRepository.findById(101L)).willReturn(Optional.of(user));
+        given(teamRepository.existsByIdAndDeletedAtIsNull(999L)).willReturn(false);
+
+        assertThatThrownBy(() -> userService.updateUser(directorPrincipal(), 101L, request))
+                .isInstanceOf(BusinessException.class)
+                .extracting(error -> ((BusinessException) error).getErrorCode())
+                .isEqualTo(ErrorCode.TEAM_NOT_FOUND);
+    }
+
+    @Test
+    @DisplayName("사용자 부분 수정 요청 팀 membership 이 없으면 TEAM_NOT_FOUND 예외를 던진다")
+    void 사용자_부분_수정_요청_팀_membership이_없으면_TEAM_NOT_FOUND_예외를_던진다() {
+        User user = createUser(101L, 10L, "홍길동", "과장", "팀장", null, null, LocalDate.of(2024, 1, 1));
+        UpdateUserApiDto.Request request = new UpdateUserApiDto.Request(null, null, null, null, null, null, null, null, null, 22L);
+        given(userRepository.findById(101L)).willReturn(Optional.of(user));
+        given(teamRepository.existsByIdAndDeletedAtIsNull(22L)).willReturn(true);
+        given(userTeamRepository.findByUserIdAndTeamId(101L, 22L)).willReturn(Optional.empty());
+
+        assertThatThrownBy(() -> userService.updateUser(directorPrincipal(), 101L, request))
+                .isInstanceOf(BusinessException.class)
+                .extracting(error -> ((BusinessException) error).getErrorCode())
+                .isEqualTo(ErrorCode.TEAM_NOT_FOUND);
+    }
+
+    @Test
+    @DisplayName("기존 대표 팀이 없어도 요청 팀을 대표 팀으로 지정한다")
+    void 기존_대표_팀이_없어도_요청_팀을_대표_팀으로_지정한다() {
+        User user = createUser(101L, 10L, "홍길동", "과장", "팀장", null, null, LocalDate.of(2024, 1, 1));
+        UserTeam firstMembership = UserTeam.create(101L, 21L, false, "일반 역할", "겸임", false, UserTeamStatus.ACTIVE);
+        UserTeam requestedMembership = UserTeam.create(101L, 22L, false, "대표 역할", "주담당", false, UserTeamStatus.ACTIVE);
+        UpdateUserApiDto.Request request = new UpdateUserApiDto.Request(null, null, null, null, null, null, null, null, null, 22L);
+        given(userRepository.findById(101L)).willReturn(Optional.of(user));
+        given(teamRepository.existsByIdAndDeletedAtIsNull(22L)).willReturn(true);
+        given(userTeamRepository.findByUserIdAndTeamId(101L, 22L)).willReturn(Optional.of(requestedMembership));
+        given(userTeamRepository.findAllByUserId(101L)).willReturn(List.of(firstMembership, requestedMembership));
+
+        userService.updateUser(directorPrincipal(), 101L, request);
+
+        assertThat(firstMembership.getIsPrimary()).isFalse();
+        assertThat(requestedMembership.getIsPrimary()).isTrue();
+    }
+
+    @Test
+    @DisplayName("DEPT_HEAD 는 같은 부서 TEAM_LEAD 사용자를 부분 수정할 수 있다")
+    void DEPT_HEAD는_같은_부서_TEAM_LEAD_사용자를_부분_수정할_수_있다() {
+        CustomUserPrincipal principal = new CustomUserPrincipal(201L, "dept-head@ibank.com", "DEPT_HEAD");
+        User departmentHead = createUser(201L, 10L, "김부서", "부장", "사업부장", null, null, LocalDate.of(2023, 1, 1), UserRole.DEPT_HEAD, "dept-head@ibank.com");
+        User teamLead = createUser(101L, 10L, "홍팀장", "과장", "팀장", null, null, LocalDate.of(2024, 1, 1), UserRole.TEAM_LEAD, "team-lead@ibank.com");
+        UpdateUserApiDto.Request request = new UpdateUserApiDto.Request("홍수정", null, null, null, null, null, null, null, null, null);
+        given(userRepository.findById(101L)).willReturn(Optional.of(teamLead));
+        given(userRepository.findById(201L)).willReturn(Optional.of(departmentHead));
+
+        userService.updateUser(principal, 101L, request);
+
+        assertThat(teamLead.getUserName()).isEqualTo("홍수정");
+    }
+
+    @Test
+    @DisplayName("DEPT_HEAD 는 같은 부서 MEMBER 사용자를 부분 수정할 수 있다")
+    void DEPT_HEAD는_같은_부서_MEMBER_사용자를_부분_수정할_수_있다() {
+        CustomUserPrincipal principal = new CustomUserPrincipal(201L, "dept-head@ibank.com", "DEPT_HEAD");
+        User departmentHead = createUser(201L, 10L, "김부서", "부장", "사업부장", null, null, LocalDate.of(2023, 1, 1), UserRole.DEPT_HEAD, "dept-head@ibank.com");
+        User member = createUser(101L, 10L, "홍팀원", "대리", "팀원", null, null, LocalDate.of(2024, 1, 1), UserRole.MEMBER, "member@ibank.com");
+        UpdateUserApiDto.Request request = new UpdateUserApiDto.Request("홍수정", null, null, null, null, null, null, null, null, null);
+        given(userRepository.findById(101L)).willReturn(Optional.of(member));
+        given(userRepository.findById(201L)).willReturn(Optional.of(departmentHead));
+
+        userService.updateUser(principal, 101L, request);
+
+        assertThat(member.getUserName()).isEqualTo("홍수정");
+    }
+
+    @Test
+    @DisplayName("DEPT_HEAD 는 DIRECTOR 사용자를 부분 수정할 수 없다")
+    void DEPT_HEAD는_DIRECTOR_사용자를_부분_수정할_수_없다() {
+        CustomUserPrincipal principal = new CustomUserPrincipal(201L, "dept-head@ibank.com", "DEPT_HEAD");
+        User departmentHead = createUser(201L, 10L, "김부서", "부장", "사업부장", null, null, LocalDate.of(2023, 1, 1), UserRole.DEPT_HEAD, "dept-head@ibank.com");
+        User director = createUser(1L, 10L, "박본부", "본부장", "본부장", null, null, LocalDate.of(2022, 1, 1), UserRole.DIRECTOR, "director@ibank.com");
+        UpdateUserApiDto.Request request = new UpdateUserApiDto.Request("박수정", null, null, null, null, null, null, null, null, null);
+        given(userRepository.findById(1L)).willReturn(Optional.of(director));
+        given(userRepository.findById(201L)).willReturn(Optional.of(departmentHead));
+
+        assertThatThrownBy(() -> userService.updateUser(principal, 1L, request))
+                .isInstanceOf(BusinessException.class)
+                .extracting(error -> ((BusinessException) error).getErrorCode())
+                .isEqualTo(ErrorCode.AUTH_ACCESS_DENIED);
+    }
+
+    @Test
+    @DisplayName("DEPT_HEAD 는 다른 DEPT_HEAD 사용자를 부분 수정할 수 없다")
+    void DEPT_HEAD는_다른_DEPT_HEAD_사용자를_부분_수정할_수_없다() {
+        CustomUserPrincipal principal = new CustomUserPrincipal(201L, "dept-head@ibank.com", "DEPT_HEAD");
+        User actor = createUser(201L, 10L, "김부서", "부장", "사업부장", null, null, LocalDate.of(2023, 1, 1), UserRole.DEPT_HEAD, "dept-head@ibank.com");
+        User otherDepartmentHead = createUser(202L, 10L, "이부서", "부장", "사업부장", null, null, LocalDate.of(2023, 2, 1), UserRole.DEPT_HEAD, "other-head@ibank.com");
+        UpdateUserApiDto.Request request = new UpdateUserApiDto.Request("이수정", null, null, null, null, null, null, null, null, null);
+        given(userRepository.findById(202L)).willReturn(Optional.of(otherDepartmentHead));
+        given(userRepository.findById(201L)).willReturn(Optional.of(actor));
+
+        assertThatThrownBy(() -> userService.updateUser(principal, 202L, request))
+                .isInstanceOf(BusinessException.class)
+                .extracting(error -> ((BusinessException) error).getErrorCode())
+                .isEqualTo(ErrorCode.AUTH_ACCESS_DENIED);
+    }
+
+    @Test
+    @DisplayName("DEPT_HEAD 는 다른 부서 TEAM_LEAD 사용자를 부분 수정할 수 없다")
+    void DEPT_HEAD는_다른_부서_TEAM_LEAD_사용자를_부분_수정할_수_없다() {
+        CustomUserPrincipal principal = new CustomUserPrincipal(201L, "dept-head@ibank.com", "DEPT_HEAD");
+        User departmentHead = createUser(201L, 10L, "김부서", "부장", "사업부장", null, null, LocalDate.of(2023, 1, 1), UserRole.DEPT_HEAD, "dept-head@ibank.com");
+        User otherDepartmentTeamLead = createUser(101L, 20L, "홍팀장", "과장", "팀장", null, null, LocalDate.of(2024, 1, 1), UserRole.TEAM_LEAD, "team-lead@ibank.com");
+        UpdateUserApiDto.Request request = new UpdateUserApiDto.Request("홍수정", null, null, null, null, null, null, null, null, null);
+        given(userRepository.findById(101L)).willReturn(Optional.of(otherDepartmentTeamLead));
+        given(userRepository.findById(201L)).willReturn(Optional.of(departmentHead));
+
+        assertThatThrownBy(() -> userService.updateUser(principal, 101L, request))
+                .isInstanceOf(BusinessException.class)
+                .extracting(error -> ((BusinessException) error).getErrorCode())
+                .isEqualTo(ErrorCode.AUTH_ACCESS_DENIED);
+    }
+
+    @Test
+    @DisplayName("DEPT_HEAD 는 같은 부서 사용자를 다른 부서로 이동시킬 수 없다")
+    void DEPT_HEAD는_같은_부서_사용자를_다른_부서로_이동시킬_수_없다() {
+        CustomUserPrincipal principal = new CustomUserPrincipal(201L, "dept-head@ibank.com", "DEPT_HEAD");
+        User departmentHead = createUser(201L, 10L, "김부서", "부장", "사업부장", null, null, LocalDate.of(2023, 1, 1), UserRole.DEPT_HEAD, "dept-head@ibank.com");
+        User member = createUser(101L, 10L, "홍팀원", "대리", "팀원", null, null, LocalDate.of(2024, 1, 1), UserRole.MEMBER, "member@ibank.com");
+        UpdateUserApiDto.Request request = new UpdateUserApiDto.Request(null, null, null, null, null, 20L, null, null, null, null);
+        given(userRepository.findById(101L)).willReturn(Optional.of(member));
+        given(userRepository.findById(201L)).willReturn(Optional.of(departmentHead));
+
+        assertThatThrownBy(() -> userService.updateUser(principal, 101L, request))
+                .isInstanceOf(BusinessException.class)
+                .extracting(error -> ((BusinessException) error).getErrorCode())
+                .isEqualTo(ErrorCode.AUTH_ACCESS_DENIED);
+    }
+
+    private CustomUserPrincipal directorPrincipal() {
+        return new CustomUserPrincipal(1L, "director@ibank.com", "DIRECTOR");
     }
 
     private User createUser(Long id,
