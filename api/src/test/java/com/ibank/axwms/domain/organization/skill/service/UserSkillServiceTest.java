@@ -387,6 +387,77 @@ class UserSkillServiceTest {
         verifyNoInteractions(userRepository, userSkillRepository);
     }
 
+    @Test
+    @DisplayName("본부장이 다른 사용자 스킬을 삭제하면 삭제한다")
+    void director_deletes_other_user_skill() {
+        // given
+        UserSkill userSkill = userSkill(1L, OTHER_USER_ID, "SQL", (short) 3);
+        given(userRepository.findById(OTHER_USER_ID)).willReturn(Optional.of(user(OTHER_USER_ID, UserRole.MEMBER)));
+        given(userSkillRepository.findByIdAndUserId(1L, OTHER_USER_ID)).willReturn(Optional.of(userSkill));
+
+        // when
+        userSkillService.deleteSkill(
+                principal(USER_ID, UserRole.DIRECTOR),
+                OTHER_USER_ID,
+                1L
+        );
+
+        // then
+        verify(userSkillRepository).delete(userSkill);
+    }
+
+    @Test
+    @DisplayName("삭제 대상 스킬이 path 사용자에게 속하지 않으면 예외를 던진다")
+    void delete_skill_not_found_throws_exception() {
+        // given
+        given(userRepository.findById(OTHER_USER_ID)).willReturn(Optional.of(user(OTHER_USER_ID, UserRole.MEMBER)));
+        given(userSkillRepository.findByIdAndUserId(1L, OTHER_USER_ID)).willReturn(Optional.empty());
+
+        // when & then
+        assertThatThrownBy(() -> userSkillService.deleteSkill(
+                principal(USER_ID, UserRole.DIRECTOR),
+                OTHER_USER_ID,
+                1L
+        ))
+                .isInstanceOf(BusinessException.class)
+                .extracting("errorCode")
+                .isEqualTo(ErrorCode.USER_SKILL_NOT_FOUND);
+    }
+
+    @Test
+    @DisplayName("조직 관리자가 자기 스킬을 삭제하면 접근 거부 예외를 던진다")
+    void organization_manager_deletes_own_skill_throws_exception() {
+        // given
+        given(userRepository.findById(USER_ID)).willReturn(Optional.of(user(USER_ID, UserRole.DEPT_HEAD, 10L)));
+
+        // when & then
+        assertThatThrownBy(() -> userSkillService.deleteSkill(
+                principal(USER_ID, UserRole.DEPT_HEAD),
+                USER_ID,
+                1L
+        ))
+                .isInstanceOf(BusinessException.class)
+                .extracting("errorCode")
+                .isEqualTo(ErrorCode.AUTH_ACCESS_DENIED);
+
+        verifyNoInteractions(userSkillRepository);
+    }
+
+    @Test
+    @DisplayName("일반 사용자가 스킬을 삭제하면 접근 거부 예외를 던진다")
+    void member_deletes_skill_throws_exception() {
+        assertThatThrownBy(() -> userSkillService.deleteSkill(
+                principal(USER_ID, UserRole.MEMBER),
+                OTHER_USER_ID,
+                1L
+        ))
+                .isInstanceOf(BusinessException.class)
+                .extracting("errorCode")
+                .isEqualTo(ErrorCode.AUTH_ACCESS_DENIED);
+
+        verifyNoInteractions(userRepository, userSkillRepository);
+    }
+
     private static CustomUserPrincipal principal(Long userId, UserRole role) {
         return new CustomUserPrincipal(userId, "user@test.com", role.name());
     }
