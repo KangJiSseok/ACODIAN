@@ -115,6 +115,28 @@ class UserRepositoryIntegrationTest extends IntegrationTestSupport {
         assertThat(result).isEmpty();
     }
 
+    @Test
+    @DisplayName("부서 후보는 departmentId 가 null 인 DEPT_HEAD 사용자만 id 오름차순으로 조회한다")
+    void 부서_후보는_departmentId가_null인_DEPT_HEAD_사용자만_id_오름차순으로_조회한다() {
+        Department department = departmentRepository.save(createDepartment("소속부서"));
+        User firstCandidate = userRepository.save(createUser(null, "무소속부서장", "candidate-1@example.com", UserRole.DEPT_HEAD, EmploymentStatus.ACTIVE, "부장", "부서장 후보", "010-0000-0011"));
+        User assignedDeptHead = userRepository.save(createUser(department.getId(), "소속부서장", "assigned@example.com", UserRole.DEPT_HEAD, EmploymentStatus.ACTIVE, "부장", "부서장", "010-0000-0012"));
+        User memberWithoutDepartment = userRepository.save(createUser(null, "무소속팀원", "member-null@example.com", UserRole.MEMBER, EmploymentStatus.ACTIVE, "사원", "팀원", "010-0000-0013"));
+        User secondCandidate = userRepository.save(createUser(null, "예비부서장", "candidate-2@example.com", UserRole.DEPT_HEAD, EmploymentStatus.ACTIVE, "차장", "부서장 후보", "010-0000-0014"));
+
+        List<User> result = userRepository.findAllByRoleCodeAndDepartmentIdIsNullOrderByIdAsc(UserRole.DEPT_HEAD);
+
+        assertThat(result)
+                .extracting(User::getId, User::getUserName)
+                .containsExactly(
+                        tuple(firstCandidate.getId(), "무소속부서장"),
+                        tuple(secondCandidate.getId(), "예비부서장")
+                );
+        assertThat(result)
+                .extracting(User::getId)
+                .doesNotContain(assignedDeptHead.getId(), memberWithoutDepartment.getId());
+    }
+
     /** FK 제약을 피하기 위해 참조 테이블부터 테스트 데이터를 비운다. */
     private void clearDatabase() {
         worklogRepository.deleteAll();

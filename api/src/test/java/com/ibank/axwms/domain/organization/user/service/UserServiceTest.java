@@ -14,6 +14,7 @@ import com.ibank.axwms.domain.organization.team.repository.jooq.projection.UserT
 import com.ibank.axwms.domain.organization.user.EmploymentStatus;
 import com.ibank.axwms.domain.organization.user.UserRole;
 import com.ibank.axwms.domain.organization.user.dto.GetAdminCandidatesApiDto;
+import com.ibank.axwms.domain.organization.user.dto.GetDepartmentCandidatesApiDto;
 import com.ibank.axwms.domain.organization.user.dto.GetMyProfileApiDto;
 import com.ibank.axwms.domain.organization.user.dto.GetUserApiDto;
 import com.ibank.axwms.domain.organization.user.dto.GetUsersApiDto;
@@ -338,6 +339,47 @@ class UserServiceTest {
                 .isInstanceOf(BusinessException.class)
                 .extracting(e -> ((BusinessException) e).getErrorCode())
                 .isEqualTo(ErrorCode.USER_NOT_FOUND);
+    }
+
+    @Test
+    @DisplayName("부서 후보는 departmentId 가 없는 DEPT_HEAD 사용자만 조회한다")
+    void 부서_후보는_departmentId가_없는_DEPT_HEAD_사용자만_조회한다() {
+        User firstCandidate = createUser(
+                301L,
+                null,
+                "무소속부서장",
+                "부장",
+                "부서장 후보",
+                null,
+                null,
+                LocalDate.of(2025, 1, 1),
+                UserRole.DEPT_HEAD,
+                "candidate-1@ibank.com"
+        );
+        User secondCandidate = createUser(
+                302L,
+                null,
+                "예비부서장",
+                "차장",
+                "부서장 후보",
+                null,
+                null,
+                LocalDate.of(2025, 1, 2),
+                UserRole.DEPT_HEAD,
+                "candidate-2@ibank.com"
+        );
+        given(userRepository.findAllByRoleCodeAndDepartmentIdIsNullOrderByIdAsc(UserRole.DEPT_HEAD))
+                .willReturn(List.of(firstCandidate, secondCandidate));
+
+        List<GetDepartmentCandidatesApiDto.Response> result = userService.getDepartmentCandidates();
+
+        assertThat(result)
+                .extracting(GetDepartmentCandidatesApiDto.Response::userId,
+                        GetDepartmentCandidatesApiDto.Response::userName)
+                .containsExactly(
+                        Tuple.tuple(301L, "무소속부서장"),
+                        Tuple.tuple(302L, "예비부서장")
+                );
     }
 
     @Test
