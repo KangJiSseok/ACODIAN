@@ -1,6 +1,7 @@
 package com.ibank.axwms.domain.organization.team.repository.jooq;
 
 import com.ibank.axwms.domain.organization.team.repository.jooq.projection.TeamDetailProjection;
+import com.ibank.axwms.domain.organization.team.repository.jooq.projection.TeamMemberFilterProjection;
 import com.ibank.axwms.domain.organization.team.repository.jooq.projection.TeamStatusSummaryProjection;
 import com.ibank.axwms.domain.organization.team.repository.jooq.projection.TeamSummaryProjection;
 import com.ibank.axwms.domain.organization.team.repository.jooq.projection.TeamUserSummaryProjection;
@@ -265,6 +266,22 @@ public class TeamJooqRepositoryImpl implements TeamJooqRepository {
                 .map(TeamUserSummaryProjection::from)
                 .toList();
         return Optional.of(users);
+    }
+
+    /**
+     * 필터 옵션용으로 가시 팀과 각 팀의 ACTIVE 멤버를 한 번의 LEFT JOIN 으로 조회한다.
+     * 멤버 없는 팀도 user_id/user_name 이 null 인 한 행으로 포함된다.
+     */
+    @Override
+    public List<TeamMemberFilterProjection> findVisibleTeamsWithMembersForFilter(Long userId) {
+        return dsl.select(TB_TEAM.TEAM_ID, TB_TEAM.TEAM_NAME, TB_USER.USER_ID, TB_USER.USER_NAME)
+                .from(TB_TEAM)
+                .leftJoin(TB_USER_TEAM).on(TB_USER_TEAM.TEAM_ID.eq(TB_TEAM.TEAM_ID)
+                        .and(TB_USER_TEAM.STATUS_CODE.eq(ACTIVE_USER_TEAM_STATUS)))
+                .leftJoin(TB_USER).on(TB_USER.USER_ID.eq(TB_USER_TEAM.USER_ID))
+                .where(visibleTeamCondition(userId))
+                .orderBy(TB_TEAM.TEAM_NAME.asc(), TB_TEAM.TEAM_ID.asc(), TB_USER.USER_NAME.asc())
+                .fetch(TeamMemberFilterProjection::from);
     }
 
     /** soft-delete 되지 않았고 호출자의 admin grant 또는 ACTIVE membership 에 포함된 팀만 통과시킨다. */

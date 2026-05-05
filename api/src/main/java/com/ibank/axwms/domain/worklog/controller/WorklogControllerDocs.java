@@ -2,6 +2,7 @@ package com.ibank.axwms.domain.worklog.controller;
 
 import com.ibank.axwms.domain.worklog.dto.CreateWorklogApiDto;
 import com.ibank.axwms.domain.worklog.dto.GetWorklogDetailApiDto;
+import com.ibank.axwms.domain.worklog.dto.GetWorklogFilterOptionsApiDto;
 import com.ibank.axwms.domain.worklog.dto.GetWorklogsApiDto;
 import com.ibank.axwms.domain.worklog.dto.SearchWorklogsApiDto;
 import com.ibank.axwms.global.response.PageResponse;
@@ -79,5 +80,17 @@ public interface WorklogControllerDocs {
     PageResponse<SearchWorklogsApiDto.Response.Item> searchWorklogs(
             @Parameter(hidden = true) CustomUserPrincipal principal,
             @ParameterObject SearchWorklogsApiDto.Request request
+    );
+
+    @Operation(summary = "업무일지 검색 필터 옵션 조회",
+            description = "검색 화면 진입 시 사용할 필터 옵션을 한 번에 반환한다. "
+                    + "사용자가 볼 수 있는 팀 목록, 각 팀의 ACTIVE 멤버, 전체 태그를 포함한다.")
+    @SecurityRequirement(name = "bearerAuth")
+    @ApiResponses({
+            @ApiResponse(responseCode = "200", description = "필터 옵션을 반환한다."),
+            @ApiResponse(responseCode = "401", description = "인증이 필요하다.", content = @Content)
+    })
+    GetWorklogFilterOptionsApiDto.Response getFilterOptions(
+            @Parameter(hidden = true) CustomUserPrincipal principal
     );
 }
