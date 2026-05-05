@@ -11,6 +11,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.SerializationFeature;
 import com.ibank.axwms.domain.organization.user.EmploymentStatus;
 import com.ibank.axwms.domain.organization.user.dto.GetAdminCandidatesApiDto;
+import com.ibank.axwms.domain.organization.user.dto.GetDepartmentCandidatesApiDto;
 import com.ibank.axwms.domain.organization.user.dto.GetMyProfileApiDto;
 import com.ibank.axwms.domain.organization.user.dto.GetUserApiDto;
 import com.ibank.axwms.domain.organization.user.dto.GetUsersApiDto;
@@ -127,6 +128,26 @@ class UserControllerTest {
 
         assertThat(method.getParameterCount()).isEqualTo(1);
         assertThat(method.getParameterTypes()).containsExactly(CustomUserPrincipal.class);
+    }
+
+    @Test
+    @DisplayName("부서 후보 조회 메서드는 /department-candidates GET 매핑을 사용한다")
+    void 부서_후보_조회_메서드는_department_candidates_GET_매핑을_사용한다() throws NoSuchMethodException {
+        Method method = UserController.class.getMethod("getDepartmentCandidates", CustomUserPrincipal.class);
+        GetMapping getMapping = method.getAnnotation(GetMapping.class);
+
+        assertThat(getMapping).isNotNull();
+        assertThat(getMapping.value()).containsExactly("/department-candidates");
+    }
+
+    @Test
+    @DisplayName("부서 후보 조회 메서드는 DIRECTOR role 만 허용한다")
+    void 부서_후보_조회_메서드는_DIRECTOR_role만_허용한다() throws NoSuchMethodException {
+        Method method = UserController.class.getMethod("getDepartmentCandidates", CustomUserPrincipal.class);
+        PreAuthorize preAuthorize = method.getAnnotation(PreAuthorize.class);
+
+        assertThat(preAuthorize).isNotNull();
+        assertThat(preAuthorize.value()).isEqualTo("hasRole('DIRECTOR')");
     }
 
     @Test
@@ -272,6 +293,21 @@ class UserControllerTest {
         given(userService.getAdminCandidates(principal)).willReturn(responseFromService);
 
         List<GetAdminCandidatesApiDto.Response> response = userController.getAdminCandidates(principal);
+
+        assertThat(response).containsExactlyElementsOf(responseFromService);
+    }
+
+    @Test
+    @DisplayName("부서 후보 조회 메서드는 서비스 결과 배열을 그대로 반환한다")
+    void 부서_후보_조회_메서드는_서비스_결과_배열을_그대로_반환한다() {
+        CustomUserPrincipal principal = new CustomUserPrincipal(1L, "director@ibank.com", "DIRECTOR");
+        List<GetDepartmentCandidatesApiDto.Response> responseFromService = List.of(
+                new GetDepartmentCandidatesApiDto.Response(301L, "무소속부서장"),
+                new GetDepartmentCandidatesApiDto.Response(302L, "예비부서장")
+        );
+        given(userService.getDepartmentCandidates()).willReturn(responseFromService);
+
+        List<GetDepartmentCandidatesApiDto.Response> response = userController.getDepartmentCandidates(principal);
 
         assertThat(response).containsExactlyElementsOf(responseFromService);
     }

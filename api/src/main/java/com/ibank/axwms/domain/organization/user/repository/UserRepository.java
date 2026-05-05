@@ -20,4 +20,7 @@ public interface UserRepository extends JpaRepository<User, Long>, UserJooqRepos
     /**
      * 특정 역할 사용자를 안정적인 id 오름차순으로 반환한다. */
     List<User> findAllByRoleCodeOrderByIdAsc(UserRole roleCode);
+
+    /** 특정 역할 중 아직 부서에 소속되지 않은 사용자를 안정적인 id 오름차순으로 반환한다. */
+    List<User> findAllByRoleCodeAndDepartmentIdIsNullOrderByIdAsc(UserRole roleCode);
 }

@@ -1,6 +1,7 @@
 package com.ibank.axwms.domain.organization.user.controller;
 
 import com.ibank.axwms.domain.organization.user.dto.GetAdminCandidatesApiDto;
+import com.ibank.axwms.domain.organization.user.dto.GetDepartmentCandidatesApiDto;
 import com.ibank.axwms.domain.organization.user.dto.GetMyProfileApiDto;
 import com.ibank.axwms.domain.organization.user.dto.GetUserApiDto;
 import com.ibank.axwms.domain.organization.user.dto.GetUsersApiDto;
@@ -50,6 +51,15 @@ public class UserController implements UserControllerDocs {
             @AuthenticationPrincipal CustomUserPrincipal principal
     ) {
         return userService.getAdminCandidates(principal);
+    }
+
+    @Override
+    @GetMapping("/department-candidates")
+    @PreAuthorize("hasRole('DIRECTOR')")
+    public List<GetDepartmentCandidatesApiDto.Response> getDepartmentCandidates(
+            @AuthenticationPrincipal CustomUserPrincipal principal
+    ) {
+        return userService.getDepartmentCandidates();
     }
 
     @Override

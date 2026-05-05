@@ -36,6 +36,7 @@
 
 - [x] `GET /api/users/me`
 - [x] `GET /api/users/admin-candidates`
+- [x] `GET /api/users/department-candidates`
 - [x] `GET /api/users`
 - [x] `GET /api/users/{id}`
 - [x] `PATCH /api/users/{id}`

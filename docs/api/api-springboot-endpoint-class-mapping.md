@@ -308,6 +308,15 @@
       <td><code>DIRECTOR</code>, <code>DEPT_HEAD</code> 만 호출할 수 있다. 분기 기준은 client-supplied role 이 아니라 access token 의 authenticated principal role 이며, <code>DIRECTOR</code> 는 <code>DEPT_HEAD</code> 전체, <code>DEPT_HEAD</code> 는 자기 자신만 조회한다.</td>
     </tr>
     <tr>
+      <td><code>GET /api/users/department-candidates</code></td>
+      <td><code>Documented</code></td>
+      <td>부서에 아직 소속되지 않은 부서장 후보를 조회한다.</td>
+      <td><code>domain.organization.user.controller.UserController</code></td>
+      <td><code>domain.organization.user.service.UserService</code></td>
+      <td><code>domain.organization.user.entity.User</code>, <code>domain.organization.user.repository.UserRepository</code></td>
+      <td><code>DIRECTOR</code> 만 호출할 수 있다. <code>role_code = DEPT_HEAD</code> 이고 <code>department_id IS NULL</code> 인 사용자만 <code>userId</code>, <code>userName</code> 으로 반환한다.</td>
+    </tr>
+    <tr>
       <td><code>GET /api/users</code></td>
       <td><code>Documented</code></td>
       <td>사용자 목록과 조직/권한 필터 결과를 조회한다.</td>

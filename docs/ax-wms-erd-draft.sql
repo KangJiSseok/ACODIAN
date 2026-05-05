@@ -22,7 +22,7 @@ CREATE EXTENSION IF NOT EXISTS vector;
 -- 관계 요약
 --   [사용자 소속 관계]
 --   - tb_department (1) : tb_user (N)
---     -> 사용자는 1개의 부서에 소속되고, 부서는 여러 사용자를 가질 수 있음.
+--     -> 사용자는 보통 1개의 부서에 소속되며, 부서 배정 전 DEPT_HEAD 후보는 department_id가 NULL일 수 있음.
 --
 --   [팀 소속 관계]
 --   - tb_department (1) : tb_team (N)
@@ -48,7 +48,7 @@ CREATE TABLE tb_department (
 -- 관계 요약
 --   [부서 소속 관계]
 --   - tb_user (N) : tb_department (1)
---     -> 여러 사용자가 1개의 부서에 소속됨.
+--     -> 여러 사용자가 1개의 부서에 소속될 수 있으며, 부서 배정 전 후보 사용자는 예외적으로 소속 부서가 없을 수 있음.
 --
 --   [팀 소속 관계]
 --   - tb_user (1) : tb_user_team (N)
@@ -80,7 +80,7 @@ CREATE TABLE tb_department (
 -- =====================================================================
 CREATE TABLE tb_user (
     user_id              BIGSERIAL PRIMARY KEY,                 -- PK, 사용자 식별자
-    department_id        BIGINT NOT NULL,                      -- N:1, 소속 부서 ID -> tb_department.department_id
+    department_id        BIGINT,                               -- N:1, 소속 부서 ID -> tb_department.department_id, 부서 배정 전 DEPT_HEAD 후보는 NULL 허용
     user_name            VARCHAR(50) NOT NULL,                 -- 사용자 이름
     email                VARCHAR(100) NOT NULL UNIQUE,         -- 로그인 이메일, 유니크
     password_hash        VARCHAR(255) NOT NULL,                -- 비밀번호 해시

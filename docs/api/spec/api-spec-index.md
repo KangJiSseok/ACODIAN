@@ -103,8 +103,9 @@
 |---|---|---|---|---|
 | `GET` | `/api/departments/{id}/users` | user-request clarification | deep-interview spec | [api-spec-department.md](./api-spec-department.md) |
 | `GET` | `/api/users/admin-candidates` | user-request clarification | deep-interview spec | [api-spec-user.md](./api-spec-user.md) |
+| `GET` | `/api/users/department-candidates` | user-request clarification | ralplan implementation | [api-spec-user.md](./api-spec-user.md) |
 
-- addendum 2건은 matrix 56행, 상태 분포 count, checklist completeness count 에 포함하지 않는다.
+- addendum 3건은 matrix 56행, 상태 분포 count, checklist completeness count 에 포함하지 않는다.
 
 ## 7. 검수 체크리스트
 - [x] matrix row count = 56

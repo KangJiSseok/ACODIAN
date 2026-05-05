@@ -23,6 +23,7 @@
 |---|---|---|---|
 | `GET` | `/api/users/me` | `Documented` | 현재 로그인 사용자의 프로필/권한 문맥을 조회한다. |
 | `GET` | `/api/users/admin-candidates` | `Documented` | 호출자 role 기준으로 관리자 선택 후보를 조회한다. |
+| `GET` | `/api/users/department-candidates` | `Documented` | 부서에 아직 소속되지 않은 부서장 후보를 조회한다. |
 | `GET` | `/api/users` | `Documented` | 사용자 목록을 페이지네이션 없이 필터 조건에 따라 조회한다. |
 | `GET` | `/api/users/{id}` | `Documented` | 단일 사용자 상세와 전체 소속 팀 문맥을 조회한다. |
 | `PATCH` | `/api/users/{id}` | `Documented` | 사용자 기본 정보와 대표 소속 팀을 부분 수정한다. |
@@ -175,6 +176,56 @@
 - 근거
   - source: user-request clarification
   - source: deep-interview spec `.omx/specs/deep-interview-user-lookup-endpoints.md`
+
+### GET /api/users/department-candidates
+- 목적: 새 부서 또는 미배정 부서장 연결에 사용할 부서장 후보를 조회한다.
+- 상태: `Documented`
+- 권한/접근 주체: `DIRECTOR` 만 호출할 수 있다. accessToken 으로 인증한다.
+- 요청
+  - Header: `Authorization: Bearer <access-token>`
+  - Query/Body 를 받지 않는다.
+- 조회 규칙
+  - 전체 사용자 중 `role_code = DEPT_HEAD` 이고 `department_id IS NULL` 인 사용자만 반환한다.
+  - 페이지네이션을 사용하지 않는다.
+  - 정렬은 `user_id ASC` 로 안정화한다.
+  - `department_id IS NULL` 은 아직 주 소속 부서가 배정되지 않은 사용자만을 뜻한다. 기존 프로필/상세 조회처럼 부서 문맥이 필요한 API는 계속 소속 부서가 있는 사용자를 전제로 한다.
+- 응답 (`data` 기준)
+  - 페이지네이션 래퍼를 사용하지 않고 `DepartmentCandidate[]` 배열을 반환한다.
+  - 각 항목: `userId`, `userName`
+- 요청 JSON 예시
+```json
+{
+  "headers": {
+    "Authorization": "Bearer <access-token>"
+  }
+}
+```
+- 응답 JSON 예시
+```json
+{
+  "success": true,
+  "data": [
+    {
+      "userId": 301,
+      "userName": "무소속부서장"
+    },
+    {
+      "userId": 302,
+      "userName": "예비부서장"
+    }
+  ],
+  "timestamp": "2026-05-05T07:20:00Z"
+}
+```
+- 상태/에러
+  - 성공: `200 OK`
+  - 대표 오류: `AUTH_UNAUTHORIZED` [추론]
+  - 대표 오류: `AUTH_ACCESS_DENIED` [추론]
+- ERD 연관
+  - `tb_user`
+- 근거
+  - source: user-request clarification
+  - source: `domain.organization.user.controller.UserController#getDepartmentCandidates`
 
 ### GET /api/users
 - 목적: 사용자 목록을 페이지네이션 없이 필터 조건에 따라 조회한다.
@@ -395,3 +446,5 @@
 - `DELETE /api/users/{id}` 는 현재 사용자 명세에서 삭제한다.
 - 기존 `PUT /api/users/{id}` 표기는 `PATCH /api/users/{id}` 로 정정한다.
 - `GET /api/users` 는 ADR-007의 일반 목록 페이지네이션 표준과 달리, 본 요구사항에 따라 페이지네이션 없이 배열을 반환한다.
+- `GET /api/users/department-candidates` 요구에 따라 `tb_user.department_id` 는 미배정 DEPT_HEAD 후보를 표현할 때만 `NULL` 을 허용한다. 후보 조회 외 기존 사용자 프로필/상세 API는 부서 문맥이 있는 사용자를 전제로 한다.
+- 부서 후보 조회는 조회 전용이며, 후보 사용자를 실제 부서에 배정하는 쓰기 정책은 부서 생성/수정 유스케이스에서 별도로 다룬다.
