@@ -385,27 +385,31 @@
 - 권한/접근 주체: `DIRECTOR`, `DEPT_HEAD` 만 호출할 수 있다. `DIRECTOR` 는 역할 계층상 `DEPT_HEAD` 권한을 포함한다.
 - 요청
   - Path: `id`
-  - Body: `userName`, `email`, `profileImageUrl`, `positionName`, `titleName`, `departmentId`, `phone`, `employmentStatus`, `joinDate`, `primaryTeamId`
-  - 각 Body 필드는 `null` 이거나 생략되면 수정하지 않고 기존 값을 유지한다.
+  - Content-Type: `multipart/form-data`
+  - JSON part: `request` (`userName`, `email`, `positionName`, `titleName`, `departmentId`, `phone`, `employmentStatus`, `joinDate`, `primaryTeamId`)
+  - File part: `profile_image` (선택). 첨부하면 서버가 새 프로필 이미지 URL 을 생성해 저장하고, 미첨부/null/empty 이면 기존 프로필 이미지를 유지한다.
+  - `request` 의 각 필드는 `null` 이거나 생략되면 수정하지 않고 기존 값을 유지한다.
   - `primaryTeamId` 는 사용자 요청 초안의 `privateTeamId` 의미를 `tb_user_team.is_primary` vocabulary 에 맞춰 정규화한 필드명이다.
 - 수정 규칙
   - 값이 새로 전달된 필드만 업데이트한다.
+  - `profile_image` 가 전달되면 temp 업로드 후 DB 에 final URL 을 저장하고, 커밋 이후 final 위치로 복사한다.
+  - 새 이미지 교체 성공 후 기존 프로필 이미지 오브젝트 삭제를 best-effort 로 시도하며, 삭제 실패는 응답 성공을 롤백하지 않는다.
   - `primaryTeamId` 가 전달되면 대상 사용자의 해당 팀 membership 을 `is_primary = true` 로 설정한다.
   - 대상 사용자에게 기존 대표 소속 팀이 없으면 요청된 팀을 대표 소속 팀으로 지정한다.
   - 다른 팀이 이미 `is_primary = true` 이면 기존 팀은 `false` 로 변경하고 요청된 팀만 `true` 로 변경한다.
   - 사용자별 대표 소속 팀은 1개 이하만 존재할 수 있다.
 - 응답 (`data` 기준)
   - 빈 객체 (`ApiResponse.empty()`)
-- 요청 JSON 예시
+- 요청 multipart 예시 (`request` JSON part)
 ```json
 {
   "path": {
     "id": 101
   },
-  "body": {
+  "parts": {
+    "request": {
     "userName": "홍길동",
     "email": "hong@axwms.com",
-    "profileImageUrl": "https://cdn.axwms.com/profile/101.png",
     "positionName": "차장",
     "titleName": "팀장",
     "departmentId": 10,
@@ -413,6 +417,8 @@
     "employmentStatus": "ACTIVE",
     "joinDate": "2024-03-01",
     "primaryTeamId": 21
+    },
+    "profile_image": "<optional binary file>"
   }
 }
 ```

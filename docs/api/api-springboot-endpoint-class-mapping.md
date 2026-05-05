@@ -359,7 +359,7 @@
       <td><code>domain.organization.user.controller.UserController</code></td>
       <td><code>domain.organization.user.service.UserService</code></td>
       <td><code>domain.organization.user.entity.User</code>, <code>domain.organization.user.repository.UserRepository</code>, <code>domain.organization.team.entity.UserTeam</code>, <code>domain.organization.team.repository.UserTeamRepository</code></td>
-      <td><code>DIRECTOR</code>, <code>DEPT_HEAD</code> 만 호출할 수 있다. null 필드는 기존 값을 유지하고, <code>primaryTeamId</code> 가 오면 기존 대표 팀을 해제한 뒤 요청 팀만 대표 팀으로 지정한다.</td>
+      <td><code>DIRECTOR</code>, <code>DEPT_HEAD</code> 만 호출할 수 있다. <code>multipart/form-data</code> 의 <code>request</code> JSON part 와 선택 <code>profile_image</code> file part 를 사용한다. null 필드는 기존 값을 유지하고, <code>profile_image</code> 미첨부 시 기존 이미지를 유지한다. <code>primaryTeamId</code> 가 오면 기존 대표 팀을 해제한 뒤 요청 팀만 대표 팀으로 지정한다.</td>
     </tr>
   </tbody>
 </table>
