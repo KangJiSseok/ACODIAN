@@ -8,6 +8,7 @@ import com.ibank.axwms.domain.organization.team.repository.UserTeamRepository;
 import com.ibank.axwms.domain.organization.team.repository.jooq.projection.UserTeamSummaryProjection;
 import com.ibank.axwms.domain.organization.user.UserRole;
 import com.ibank.axwms.domain.organization.user.dto.GetAdminCandidatesApiDto;
+import com.ibank.axwms.domain.organization.user.dto.GetDepartmentCandidatesApiDto;
 import com.ibank.axwms.domain.organization.user.dto.GetMyProfileApiDto;
 import com.ibank.axwms.domain.organization.user.dto.GetUserApiDto;
 import com.ibank.axwms.domain.organization.user.dto.GetUsersApiDto;
@@ -72,6 +73,16 @@ public class UserService {
         }
 
         return List.of(GetAdminCandidatesApiDto.Response.from(getUserOrThrow(principal.userId())));
+    }
+
+    /**
+     * 아직 부서에 소속되지 않은 DEPT_HEAD 사용자를 부서 배정 후보로 조회한다.
+     * 후보 조건은 사용자 역할과 departmentId null 여부만 사용하며, 호출 권한은 Controller role gate 가 보장한다.
+     */
+    public List<GetDepartmentCandidatesApiDto.Response> getDepartmentCandidates() {
+        return userRepository.findAllByRoleCodeAndDepartmentIdIsNullOrderByIdAsc(UserRole.DEPT_HEAD).stream()
+                .map(GetDepartmentCandidatesApiDto.Response::from)
+                .toList();
     }
 
     /**
