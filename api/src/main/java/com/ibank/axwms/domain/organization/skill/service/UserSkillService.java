@@ -45,36 +45,30 @@ public class UserSkillService {
     /** 특정 사용자에게 스킬을 등록한다. 조직 관리자만 자기 자신을 제외한 허용 범위 사용자에게 등록할 수 있다. */
     @Transactional
     public void createSkill(CustomUserPrincipal principal, Long userId, CreateSkillApiDto.Request request) {
-        validateOrganizationManagerRole(principal);
+        validateWritableTargetUser(principal, userId);
 
-        User targetUser = getUserOrThrow(userId);
-        validateWritable(principal, targetUser);
-        ensureSkillNameAvailable(userId, request.skillName());
+        String skillName = normalizeRequiredSkillName(request.skillName());
+        ensureSkillNameAvailable(userId, skillName);
 
-        userSkillRepository.save(UserSkill.create(userId, request.skillName(), request.skillLevel()));
+        userSkillRepository.save(UserSkill.create(userId, skillName, request.skillLevel()));
     }
 
     /** 특정 사용자의 스킬 정보를 부분 수정한다. 조직 관리자만 허용 범위 안에서 수정할 수 있다. */
     @Transactional
     public void updateSkill(CustomUserPrincipal principal, Long userId, Long skillId, UpdateSkillApiDto.Request request) {
-        validateOrganizationManagerRole(principal);
-
-        User targetUser = getUserOrThrow(userId);
-        validateWritable(principal, targetUser);
+        validateWritableTargetUser(principal, userId);
 
         UserSkill userSkill = getUserSkillOrThrow(skillId, userId);
-        ensureSkillNameAvailableForUpdate(userId, skillId, request.skillName());
+        String skillName = normalizeOptionalSkillName(request.skillName());
+        ensureSkillNameAvailableForUpdate(userId, skillId, skillName);
 
-        userSkill.updatePartial(request.skillName(), request.skillLevel());
+        userSkill.updatePartial(skillName, request.skillLevel());
     }
 
     /** 특정 사용자의 스킬을 삭제한다. 조직 관리자만 허용 범위 안에서 삭제할 수 있다. */
     @Transactional
     public void deleteSkill(CustomUserPrincipal principal, Long userId, Long skillId) {
-        validateOrganizationManagerRole(principal);
-
-        User targetUser = getUserOrThrow(userId);
-        validateWritable(principal, targetUser);
+        validateWritableTargetUser(principal, userId);
 
         UserSkill userSkill = getUserSkillOrThrow(skillId, userId);
         userSkillRepository.delete(userSkill);
@@ -100,9 +94,19 @@ public class UserSkillService {
         }
     }
 
-    /** 스킬 등록 권한과 DEPT_HEAD 의 부서 범위를 함께 검증한다. */
-    private void validateWritable(CustomUserPrincipal principal, User targetUser) {
-        if (!isOrganizationManager(principal) || principal.userId().equals(targetUser.getId())) {
+    /**
+     * 쓰기 요청의 공통 권한 검증 순서를 보존하며 대상 사용자를 조회한다.
+     */
+    private void validateWritableTargetUser(CustomUserPrincipal principal, Long userId) {
+        validateOrganizationManagerRole(principal);
+
+        User targetUser = getUserOrThrow(userId);
+        validateWritableScope(principal, targetUser);
+    }
+
+    /** 조직 관리자 쓰기 작업의 대상 사용자 범위를 검증한다. */
+    private void validateWritableScope(CustomUserPrincipal principal, User targetUser) {
+        if (principal.userId().equals(targetUser.getId())) {
             throw new BusinessException(ErrorCode.AUTH_ACCESS_DENIED);
         }
         if (UserRole.DIRECTOR.name().equals(principal.roleCode())) {
@@ -133,6 +137,19 @@ public class UserSkillService {
         if (userSkillRepository.existsByUserIdAndSkillNameAndIdNot(userId, skillName, skillId)) {
             throw new BusinessException(ErrorCode.USER_SKILL_DUPLICATE_NAME);
         }
+    }
+
+    /** 필수 스킬명은 저장 전 양끝 공백을 제거해 중복 검사와 저장 값을 일치시킨다. */
+    private String normalizeRequiredSkillName(String skillName) {
+        return skillName.trim();
+    }
+
+    /** 부분 수정 스킬명은 null 또는 blank 이면 기존 값 유지를 의미하는 null 로 정규화한다. */
+    private String normalizeOptionalSkillName(String skillName) {
+        if (skillName == null || skillName.isBlank()) {
+            return null;
+        }
+        return skillName.trim();
     }
 
     /** 조회는 성공시키되 목록을 비워야 하는 비노출 정책을 판별한다. */
