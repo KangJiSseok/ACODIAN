@@ -55,6 +55,7 @@ public class UserEvaluationController implements UserEvaluationControllerDocs {
 
     @Override
     @PatchMapping("/{id}")
+    @PreAuthorize("hasAnyRole('DIRECTOR','DEPT_HEAD')")
     public EmptyResponse updateUserEvaluation(
             @AuthenticationPrincipal CustomUserPrincipal principal,
             @PathVariable Long userId,
