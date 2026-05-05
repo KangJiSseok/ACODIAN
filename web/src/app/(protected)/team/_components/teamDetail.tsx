@@ -130,7 +130,7 @@ export default function TeamDetail({
                         </Badge>
                       </div>
                       <p className="mt-1 text-sm text-muted-foreground">
-                        팀 내 역할: {user.teamRole ?? "-"}
+                        {user.teamRole ?? "-"}
                       </p>
                     </div>
                   </div>

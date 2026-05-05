@@ -22,15 +22,16 @@ import { useTeamList, useTeamSummary } from "./_hooks";
 import type { TeamStatusCode, TeamSummary } from "./_types/team.types";
 
 type TeamFilter = "all" | "ACTIVE" | "INACTIVE";
+type TeamCount = number | null;
 
 const teamFilters: Array<{
   key: TeamFilter;
   label: string;
   getCount: (summary: {
-    total: number;
-    active: number;
-    inactive: number;
-  }) => number;
+    total: TeamCount;
+    active: TeamCount;
+    inactive: TeamCount;
+  }) => TeamCount;
 }> = [
   { key: "all", label: "전체 팀", getCount: (summary) => summary.total },
   {
@@ -52,13 +53,9 @@ export default function TeamPage() {
 
   const teams = useMemo(() => teamPage?.items ?? [], [teamPage?.items]);
   const counts = {
-    total: summary?.totalTeamCount ?? teams.length,
-    active:
-      summary?.activeTeamCount ??
-      teams.filter((team) => team.statusCode === "ACTIVE").length,
-    inactive:
-      summary?.inactiveTeamCount ??
-      teams.filter((team) => team.statusCode === "INACTIVE").length,
+    total: summary?.totalTeamCount ?? teamPage?.totalCount ?? null,
+    active: summary?.activeTeamCount ?? null,
+    inactive: summary?.inactiveTeamCount ?? null,
   };
 
   const filteredTeams = useMemo(() => {
@@ -91,6 +88,7 @@ export default function TeamPage() {
       <div className="grid gap-4 md:grid-cols-3">
         {teamFilters.map((item) => {
           const isSelected = filter === item.key;
+          const count = item.getCount(counts);
 
           return (
             <button
@@ -111,7 +109,7 @@ export default function TeamPage() {
                   {item.label}
                 </p>
                 <p className="mt-2 text-2xl font-semibold text-foreground transition-colors group-hover/card-spotlight:text-primary">
-                  {item.getCount(counts)}개
+                  {formatTeamCount(count)}
                 </p>
               </CardSpotlight>
             </button>
@@ -170,6 +168,10 @@ export default function TeamPage() {
   );
 }
 
+function formatTeamCount(count: TeamCount) {
+  return typeof count === "number" ? `${count}개` : "-";
+}
+
 function TeamCard({ team }: { team: TeamSummary }) {
   return (
     <CardSpotlight className="h-full rounded-[26px] transition-all duration-300 hover:-translate-y-1">
@@ -181,7 +183,7 @@ function TeamCard({ team }: { team: TeamSummary }) {
                 {team.teamName}
               </h3>
               {team.isPrimary ? (
-                <Badge variant="default">대표 소속</Badge>
+                <Badge variant="default">주 소속</Badge>
               ) : null}
               {team.myIsLeader ? <Badge variant="secondary">팀장</Badge> : null}
             </div>
@@ -217,14 +219,6 @@ function TeamCard({ team }: { team: TeamSummary }) {
           <div className="mt-3 grid gap-3 text-sm text-muted-foreground sm:grid-cols-2">
             <DateLine label="시작일" value={team.startDate} />
             <DateLine label="종료 예정일" value={team.expectedEndDate} />
-          </div>
-          <div className="mt-4 flex flex-wrap gap-2">
-            <Badge variant="outline">
-              {team.allocation ?? "배치 정보 없음"}
-            </Badge>
-            <Badge variant="outline">
-              {team.isPrimary ? "주 소속" : "겸임/참여"}
-            </Badge>
           </div>
         </div>
 

@@ -30,6 +30,8 @@ interface SelectedMember {
   isLeader: boolean;
 }
 
+const TEAM_ADMIN_TITLE_KEYWORDS = ["본부장", "사업부장"] as const;
+
 export default function TeamForm({
   initialTeam,
   initialUsers = [],
@@ -75,7 +77,7 @@ export default function TeamForm({
   const adminCandidates = useMemo(
     () =>
       candidates.filter((candidate) =>
-        ["본부장", "부서장", "이사"].some((keyword) =>
+        TEAM_ADMIN_TITLE_KEYWORDS.some((keyword) =>
           [candidate.titleName, candidate.positionName].some((value) =>
             value?.includes(keyword),
           ),
@@ -112,18 +114,7 @@ export default function TeamForm({
   }
 
   function removeMember(userId: number) {
-    setMembers((current) => {
-      const next = current.filter((member) => member.userId !== userId);
-
-      if (next.some((member) => member.isLeader) || next.length === 0) {
-        return next;
-      }
-
-      return next.map((member, index) => ({
-        ...member,
-        isLeader: index === 0,
-      }));
-    });
+    setMembers((current) => current.filter((member) => member.userId !== userId));
   }
 
   function updateMemberRole(userId: number, teamRole: string) {
