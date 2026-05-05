@@ -109,11 +109,13 @@ class UserEvaluationControllerTest {
     }
 
     @Test
-    @DisplayName("사용자 평가 수정 메서드는 controller role gate 를 두지 않는다")
-    void 사용자_평가_수정_메서드는_controller_role_gate를_두지_않는다() throws NoSuchMethodException {
+    @DisplayName("사용자 평가 수정 메서드는 DIRECTOR 와 DEPT_HEAD role 을 허용한다")
+    void 사용자_평가_수정_메서드는_DIRECTOR와_DEPT_HEAD_role을_허용한다() throws NoSuchMethodException {
         Method method = updateUserEvaluationMethod();
+        PreAuthorize preAuthorize = method.getAnnotation(PreAuthorize.class);
 
-        assertThat(method.getAnnotation(PreAuthorize.class)).isNull();
+        assertThat(preAuthorize).isNotNull();
+        assertThat(preAuthorize.value()).isEqualTo("hasAnyRole('DIRECTOR','DEPT_HEAD')");
     }
 
     @Test
