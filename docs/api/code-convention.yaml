@@ -225,6 +225,7 @@ springboot:
         - JPA/Redis 엔티티의 정적 팩토리 메서드(issue, create, of 등) — 생성 시 요구되는 invariant 와 호출 시점을 한 줄 Javadoc 으로 남긴다.
         - 로직이 있는 @Override 메서드 — 단순 1줄 위임이 아닌 경우 상위 계약의 이름·시그니처만으로는 추가된 책임/분기/예외 처리 전략을 파악하기 어려우므로 Javadoc 을 붙인다. OncePerRequestFilter.doFilterInternal 처럼 프레임워크가 호출 주체인 경우 특히 필수.
         - 분기/필터링/조립/try-catch 로직을 포함하는 private helper — 메서드명만으로는 걸러내는 케이스와 통과시키는 케이스, 호출 순서, 예외 흡수 정책을 재구성하기 어려우므로 Javadoc 을 붙인다. 위임 호출 체인의 각 단계 헬퍼도 여기에 포함된다.
+        - 신규·변경 helper/util/factory/normalization 메서드 — 길이나 접근 제어자와 무관하게 한 줄 Javadoc 을 기본 필수로 둔다. 예: Service private 권한 검증 helper(`validate*`), `*OrThrow` 존재성 조회 helper, DTO 기본값/정규화 helper, `from()`/`of()` 정적 팩토리, repository query/projection 조립 helper, JOOQ `Record` 변환 helper. "간단한 helper" 라는 이유만으로 생략하지 않는다.
         - 외부 라이브러리 객체를 가공/조립하는 빌더성 helper — 선택한 API 가 왜 필요한지, 비자명한 설계 결정이 있다면 그 맥락을 Javadoc 으로 함께 기록한다.
 
       Javadoc 생략 허용:
@@ -250,6 +251,7 @@ springboot:
         - 사내 ADR/컨벤션 식별자(예 - GEN-004, SB-007, SB-018, ADR-001) 를 주석에서 참조하지 않는다. reader 가 별도 문서를 열지 않아도 코드만 읽고 이해할 수 있도록, 식별자 대신 그 결정의 배경이나 제약을 한국어로 풀어 적는다. 외부 인용(라이브러리 이슈 번호, 법령 조항 등)은 이 규칙에서 제외한다.
 
       이번 컨벤션 도입은 신규·변경 코드에만 적용하며 기존 파일의 주석 소급 추가는 포함하지 않는다.
+      API 코드 변경 완료 전에는 diff 에 포함된 신규·변경 메서드를 훑어 위 Javadoc 필수 대상 누락 여부를 확인한다.
     stacks: [springboot]
   - id: SB-021
     rule: |

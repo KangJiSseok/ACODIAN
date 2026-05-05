@@ -445,3 +445,33 @@
     기존 `tb_user_team` unique 제약과 leader 단일성 규칙을 유지하면서 관리 권한을 독립적으로 확장할 수 있다.
     이미 반영된 `GET /teams` read path 는 admin grant 팀과 ACTIVE membership 팀의 합집합을 기준으로 visible scope 를 계산한다.
     후속 구현에서는 생성 시 grant 부여, grant 회수/관리 흐름, mutation 권한 gate, ADMIN-only 사용자 목록 제외 쿼리를 각 endpoint 범위에 맞게 추가해야 한다.
+
+- id: ADR-023
+  title: API 코드 주석 누락 방지 — 신규·변경 helper 까지 Javadoc 게이트 적용
+  status: adopted
+  date: 2026-05-05
+  stacks: [springboot]
+  context: |
+    평가 이력 조회 구현에서 `validateEvaluationReadAccess`, `validateDirectorTarget` 같은 짧은 권한 검증 helper 가 추가되었지만,
+    "간단한 helper" 라는 이유로 최초 작성 시 Javadoc 이 누락되었다.
+    기존 주석 컨벤션은 WHY 중심 원칙과 private helper Javadoc 기준을 이미 갖고 있었으나,
+    실제 작업자는 복잡한 메서드에만 적용되는 규칙으로 해석해 역할 분기, 권한 gate, DTO 기본값 보정,
+    repository query/projection 변환처럼 짧지만 계약을 형성하는 helper 를 놓칠 수 있었다.
+    특히 Service 내부 권한 helper 는 코드가 짧아도 실패 시 어떤 비즈니스 예외를 던지는지,
+    어떤 visible scope 를 통과시키는지, 왜 특정 대상을 제외하는지에 따라 API 보안 계약이 달라진다.
+  decision: |
+    API hand-written source 에서 신규 또는 변경되는 helper/util/factory/normalization 메서드는 길이나 접근 제어자와 무관하게
+    한 줄 Javadoc 을 기본 필수로 둔다.
+    대상에는 Service private helper, 권한/소유권 검증 helper, `*OrThrow` 존재성 조회 helper, DTO 기본값/정규화 helper,
+    `from`/`of` 정적 팩토리, repository query/projection 조립 helper, JOOQ alias/Record 변환 helper 가 포함된다.
+    Javadoc 은 코드가 이미 말하는 WHAT 을 반복하지 않고, 호출자가 알아야 하는 역할 범위, 통과/차단 기준,
+    기본값 선택 이유, 예외 변환, 경계 간 vocabulary 변환 이유 중 하나 이상을 한국어로 설명한다.
+    단순 getter/setter, Lombok 생성자, Controller 구현 메서드처럼 기존 주석 생략 허용 대상은 유지하되,
+    새로 작성하거나 수정한 메서드가 helper/util/factory/normalization 성격이면 "간단하다" 는 이유만으로 생략하지 않는다.
+    API 변경 완료 전에는 `docs/api/code-convention.yaml` 의 주석/Javadoc 규칙과 실제 diff 를 대조해
+    신규·변경 메서드 Javadoc 누락 여부를 확인한다.
+  consequence: |
+    짧은 helper 라도 권한, 기본값, 조회 경계, DTO/projection 변환 같은 계약을 형성하면 코드 옆에서 의도를 확인할 수 있다.
+    리뷰어는 구현 diff 와 함께 Javadoc 누락을 명시적으로 점검하게 되어 보안/권한 helper 의 해석 차이를 줄일 수 있다.
+    반대로 WHAT 재서술 주석은 계속 금지되므로, 주석 추가가 코드 설명 반복이나 장식성 문서화로 흐르지 않도록 유지한다.
+    신규·변경 API 코드에는 주석 점검 비용이 조금 늘지만, private helper 를 포함한 설계 의도 누락 가능성을 낮춘다.

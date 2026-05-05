@@ -46,6 +46,7 @@
 ## 5. 영역별 진입점
 
 - `api` 작업: `/api/AGENTS.md`
+  - API 코드 변경 시 `/api/AGENTS.md` 의 주석/Javadoc 게이트를 따른다. 신규·변경 helper/util/factory/normalization 메서드는 짧아도 Javadoc 누락 여부를 확인한다.
 - `infra` 작업: `/infra/AGENTS.md`
 
 `ai` 는 아직 하위 `AGENTS.md` 가 없으므로, 현재는 이 전역 규칙과 `docs/ai/*` 문서를 직접 따른다.
