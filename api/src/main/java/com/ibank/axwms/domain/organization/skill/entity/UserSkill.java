@@ -53,4 +53,14 @@ public class UserSkill {
         userSkill.skillLevel = skillLevel;
         return userSkill;
     }
+
+    /** null 이 아닌 요청 값만 반영해 사용자 스킬 정보를 부분 수정한다. */
+    public void updatePartial(String skillName, Short skillLevel) {
+        if (skillName != null) {
+            this.skillName = skillName;
+        }
+        if (skillLevel != null) {
+            this.skillLevel = skillLevel;
+        }
+    }
 }

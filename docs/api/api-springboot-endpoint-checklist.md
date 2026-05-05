@@ -44,7 +44,7 @@
 
 - [x] `GET /api/users/{userId}/skills`
 - [x] `POST /api/users/{userId}/skills`
-- [ ] `PATCH /api/users/{userId}/skills/{id}`
+- [x] `PATCH /api/users/{userId}/skills/{id}`
 - [ ] `DELETE /api/users/{userId}/skills/{id}`
 
 ## 6. `organization/evaluation` 도메인
