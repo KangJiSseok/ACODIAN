@@ -2,6 +2,7 @@ package com.ibank.axwms.domain.organization.evaluation.service;
 
 import com.ibank.axwms.domain.organization.evaluation.dto.CreateUserEvaluationApiDto;
 import com.ibank.axwms.domain.organization.evaluation.dto.GetUserEvaluationsApiDto;
+import com.ibank.axwms.domain.organization.evaluation.dto.UpdateUserEvaluationApiDto;
 import com.ibank.axwms.domain.organization.evaluation.entity.UserEvaluation;
 import com.ibank.axwms.domain.organization.evaluation.repository.UserEvaluationRepository;
 import com.ibank.axwms.domain.organization.evaluation.repository.jooq.query.UserEvaluationPageQuery;
@@ -48,6 +49,21 @@ public class UserEvaluationService {
         validateEvaluationWriteAccess(principal, targetUser);
 
         userEvaluationRepository.save(UserEvaluation.create(userId, principal.userId(), request.content()));
+    }
+
+    /** 평가 작성자 본인만 기존 평가 내용을 수정하며, path 사용자와 평가 소유 대상 불일치를 차단한다. */
+    @Transactional
+    public void updateUserEvaluation(
+            CustomUserPrincipal principal,
+            Long userId,
+            Long evaluationId,
+            UpdateUserEvaluationApiDto.Request request
+    ) {
+        getUserOrThrow(userId);
+        UserEvaluation evaluation = getEvaluationOrThrow(evaluationId);
+        validateEvaluationUpdateAccess(principal, userId, evaluation);
+
+        evaluation.updateContent(request.content());
     }
 
     /** 평가 이력 조회는 역할별 visible scope 가 다르므로 역할 분기와 대상 검증을 한 진입점에서 처리한다. */
@@ -100,9 +116,26 @@ public class UserEvaluationService {
         return targetUser.getRoleCode() == UserRole.TEAM_LEAD || targetUser.getRoleCode() == UserRole.MEMBER;
     }
 
+    /** path 사용자와 평가 소유 대상, 평가 작성자 본인 조건을 모두 만족한 경우에만 수정을 허용한다. */
+    private void validateEvaluationUpdateAccess(
+            CustomUserPrincipal principal,
+            Long userId,
+            UserEvaluation evaluation
+    ) {
+        if (!evaluation.getEvaluateeUserId().equals(userId) || !evaluation.getEvaluatorUserId().equals(principal.userId())) {
+            throw new BusinessException(ErrorCode.EVALUATION_ACCESS_DENIED);
+        }
+    }
+
     /** 사용자 존재성 검증 실패를 공통 비즈니스 예외로 변환한다. */
     private User getUserOrThrow(Long userId) {
         return userRepository.findById(userId)
                 .orElseThrow(() -> new BusinessException(ErrorCode.USER_NOT_FOUND));
+    }
+
+    /** 평가 수정 전에 존재하지 않는 평가 식별자를 도메인 전용 not-found 로 변환한다. */
+    private UserEvaluation getEvaluationOrThrow(Long evaluationId) {
+        return userEvaluationRepository.findById(evaluationId)
+                .orElseThrow(() -> new BusinessException(ErrorCode.EVALUATION_NOT_FOUND));
     }
 }
