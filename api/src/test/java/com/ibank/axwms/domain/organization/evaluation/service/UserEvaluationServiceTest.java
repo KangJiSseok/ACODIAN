@@ -5,7 +5,9 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.BDDMockito.given;
 import static org.mockito.BDDMockito.then;
 
+import com.ibank.axwms.domain.organization.evaluation.dto.CreateUserEvaluationApiDto;
 import com.ibank.axwms.domain.organization.evaluation.dto.GetUserEvaluationsApiDto;
+import com.ibank.axwms.domain.organization.evaluation.entity.UserEvaluation;
 import com.ibank.axwms.domain.organization.evaluation.repository.UserEvaluationRepository;
 import com.ibank.axwms.domain.organization.evaluation.repository.jooq.projection.UserEvaluationSummaryProjection;
 import com.ibank.axwms.domain.organization.evaluation.repository.jooq.query.UserEvaluationPageQuery;
@@ -28,6 +30,7 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.mockito.ArgumentCaptor;
 import org.springframework.data.domain.PageImpl;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.test.util.ReflectionTestUtils;
@@ -140,6 +143,115 @@ class UserEvaluationServiceTest {
                 .isInstanceOf(BusinessException.class)
                 .extracting(e -> ((BusinessException) e).getErrorCode())
                 .isEqualTo(ErrorCode.USER_NOT_FOUND);
+    }
+
+    @Test
+    @DisplayName("DIRECTOR 는 자기 자신이 아닌 사용자에게 평가를 등록한다")
+    void DIRECTOR는_자기_자신이_아닌_사용자에게_평가를_등록한다() {
+        CustomUserPrincipal principal = new CustomUserPrincipal(1L, "director@ibank.com", "DIRECTOR");
+        User target = createUser(101L, 10L, "홍길동", UserRole.MEMBER);
+        CreateUserEvaluationApiDto.Request request = new CreateUserEvaluationApiDto.Request("프로세스 정리가 우수합니다.");
+        given(userRepository.findById(101L)).willReturn(Optional.of(target));
+
+        userEvaluationService.createUserEvaluation(principal, 101L, request);
+
+        ArgumentCaptor<UserEvaluation> captor = ArgumentCaptor.forClass(UserEvaluation.class);
+        then(userEvaluationRepository).should().save(captor.capture());
+        assertThat(captor.getValue().getEvaluateeUserId()).isEqualTo(101L);
+        assertThat(captor.getValue().getEvaluatorUserId()).isEqualTo(1L);
+        assertThat(captor.getValue().getContent()).isEqualTo("프로세스 정리가 우수합니다.");
+    }
+
+    @Test
+    @DisplayName("DEPT_HEAD 는 같은 부서 MEMBER 에게 평가를 등록한다")
+    void DEPT_HEAD는_같은_부서_MEMBER에게_평가를_등록한다() {
+        CustomUserPrincipal principal = new CustomUserPrincipal(201L, "dept-head@ibank.com", "DEPT_HEAD");
+        User currentUser = createUser(201L, 10L, "박부서", UserRole.DEPT_HEAD);
+        User target = createUser(101L, 10L, "홍길동", UserRole.MEMBER);
+        CreateUserEvaluationApiDto.Request request = new CreateUserEvaluationApiDto.Request("협업이 안정적입니다.");
+        given(userRepository.findById(101L)).willReturn(Optional.of(target));
+        given(userRepository.findById(201L)).willReturn(Optional.of(currentUser));
+
+        userEvaluationService.createUserEvaluation(principal, 101L, request);
+
+        ArgumentCaptor<UserEvaluation> captor = ArgumentCaptor.forClass(UserEvaluation.class);
+        then(userEvaluationRepository).should().save(captor.capture());
+        assertThat(captor.getValue().getEvaluateeUserId()).isEqualTo(101L);
+        assertThat(captor.getValue().getEvaluatorUserId()).isEqualTo(201L);
+    }
+
+    @Test
+    @DisplayName("자기 자신에게 평가를 등록하면 EVALUATION_SELF_WRITE_FORBIDDEN 예외를 던진다")
+    void 자기_자신에게_평가를_등록하면_EVALUATION_SELF_WRITE_FORBIDDEN_예외를_던진다() {
+        CustomUserPrincipal principal = new CustomUserPrincipal(1L, "director@ibank.com", "DIRECTOR");
+        given(userRepository.findById(1L)).willReturn(Optional.of(createUser(1L, 10L, "김본부장", UserRole.DIRECTOR)));
+
+        assertThatThrownBy(() -> userEvaluationService.createUserEvaluation(
+                principal,
+                1L,
+                new CreateUserEvaluationApiDto.Request("셀프 평가")
+        ))
+                .isInstanceOf(BusinessException.class)
+                .extracting(e -> ((BusinessException) e).getErrorCode())
+                .isEqualTo(ErrorCode.EVALUATION_SELF_WRITE_FORBIDDEN);
+
+        then(userEvaluationRepository).shouldHaveNoInteractions();
+    }
+
+    @Test
+    @DisplayName("DEPT_HEAD 가 다른 부서 사용자에게 평가를 등록하면 권한 오류를 던진다")
+    void DEPT_HEAD가_다른_부서_사용자에게_평가를_등록하면_권한_오류를_던진다() {
+        CustomUserPrincipal principal = new CustomUserPrincipal(201L, "dept-head@ibank.com", "DEPT_HEAD");
+        given(userRepository.findById(101L)).willReturn(Optional.of(createUser(101L, 11L, "홍길동", UserRole.MEMBER)));
+        given(userRepository.findById(201L)).willReturn(Optional.of(createUser(201L, 10L, "박부서", UserRole.DEPT_HEAD)));
+
+        assertThatThrownBy(() -> userEvaluationService.createUserEvaluation(
+                principal,
+                101L,
+                new CreateUserEvaluationApiDto.Request("평가 내용")
+        ))
+                .isInstanceOf(BusinessException.class)
+                .extracting(e -> ((BusinessException) e).getErrorCode())
+                .isEqualTo(ErrorCode.EVALUATION_ACCESS_DENIED);
+
+        then(userEvaluationRepository).shouldHaveNoInteractions();
+    }
+
+    @Test
+    @DisplayName("DEPT_HEAD 가 DIRECTOR 에게 평가를 등록하면 권한 오류를 던진다")
+    void DEPT_HEAD가_DIRECTOR에게_평가를_등록하면_권한_오류를_던진다() {
+        CustomUserPrincipal principal = new CustomUserPrincipal(201L, "dept-head@ibank.com", "DEPT_HEAD");
+        given(userRepository.findById(101L)).willReturn(Optional.of(createUser(101L, 10L, "김본부장", UserRole.DIRECTOR)));
+        given(userRepository.findById(201L)).willReturn(Optional.of(createUser(201L, 10L, "박부서", UserRole.DEPT_HEAD)));
+
+        assertThatThrownBy(() -> userEvaluationService.createUserEvaluation(
+                principal,
+                101L,
+                new CreateUserEvaluationApiDto.Request("평가 내용")
+        ))
+                .isInstanceOf(BusinessException.class)
+                .extracting(e -> ((BusinessException) e).getErrorCode())
+                .isEqualTo(ErrorCode.EVALUATION_ACCESS_DENIED);
+
+        then(userEvaluationRepository).shouldHaveNoInteractions();
+    }
+
+    @Test
+    @DisplayName("평가 등록 대상 사용자가 없으면 USER_NOT_FOUND 예외를 던진다")
+    void 평가_등록_대상_사용자가_없으면_USER_NOT_FOUND_예외를_던진다() {
+        CustomUserPrincipal principal = new CustomUserPrincipal(1L, "director@ibank.com", "DIRECTOR");
+        given(userRepository.findById(404L)).willReturn(Optional.empty());
+
+        assertThatThrownBy(() -> userEvaluationService.createUserEvaluation(
+                principal,
+                404L,
+                new CreateUserEvaluationApiDto.Request("평가 내용")
+        ))
+                .isInstanceOf(BusinessException.class)
+                .extracting(e -> ((BusinessException) e).getErrorCode())
+                .isEqualTo(ErrorCode.USER_NOT_FOUND);
+
+        then(userEvaluationRepository).shouldHaveNoInteractions();
     }
 
     private User createUser(Long id, Long departmentId, String userName, UserRole roleCode) {
