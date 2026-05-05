@@ -68,6 +68,18 @@ public class UserSkillService {
         userSkill.updatePartial(request.skillName(), request.skillLevel());
     }
 
+    /** 특정 사용자의 스킬을 삭제한다. 조직 관리자만 허용 범위 안에서 삭제할 수 있다. */
+    @Transactional
+    public void deleteSkill(CustomUserPrincipal principal, Long userId, Long skillId) {
+        validateOrganizationManagerRole(principal);
+
+        User targetUser = getUserOrThrow(userId);
+        validateWritable(principal, targetUser);
+
+        UserSkill userSkill = getUserSkillOrThrow(skillId, userId);
+        userSkillRepository.delete(userSkill);
+    }
+
     /** 스킬 API 는 조직 관리자에게만 열어 둔다. */
     private void validateOrganizationManagerRole(CustomUserPrincipal principal) {
         if (isOrganizationManager(principal)) {

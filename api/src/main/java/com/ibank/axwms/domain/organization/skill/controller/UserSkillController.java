@@ -11,6 +11,7 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
+import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PatchMapping;
@@ -60,6 +61,18 @@ public class UserSkillController implements UserSkillControllerDocs {
             @Valid @RequestBody UpdateSkillApiDto.Request request
     ) {
         userSkillService.updateSkill(principal, userId, id, request);
+        return EmptyResponse.INSTANCE;
+    }
+
+    @Override
+    @DeleteMapping("/{id}")
+    @PreAuthorize("hasAnyRole('DIRECTOR','DEPT_HEAD')")
+    public EmptyResponse deleteSkill(
+            @AuthenticationPrincipal CustomUserPrincipal principal,
+            @PathVariable Long userId,
+            @PathVariable Long id
+    ) {
+        userSkillService.deleteSkill(principal, userId, id);
         return EmptyResponse.INSTANCE;
     }
 }
