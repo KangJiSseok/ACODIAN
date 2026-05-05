@@ -2,6 +2,7 @@ package com.ibank.axwms.domain.organization.skill.service;
 
 import com.ibank.axwms.domain.organization.skill.dto.CreateSkillApiDto;
 import com.ibank.axwms.domain.organization.skill.dto.GetSkillsApiDto;
+import com.ibank.axwms.domain.organization.skill.dto.UpdateSkillApiDto;
 import com.ibank.axwms.domain.organization.skill.entity.UserSkill;
 import com.ibank.axwms.domain.organization.skill.repository.UserSkillRepository;
 import com.ibank.axwms.domain.organization.skill.repository.jooq.projection.UserSkillListItemProjection;
@@ -53,6 +54,20 @@ public class UserSkillService {
         userSkillRepository.save(UserSkill.create(userId, request.skillName(), request.skillLevel()));
     }
 
+    /** 특정 사용자의 스킬 정보를 부분 수정한다. 조직 관리자만 허용 범위 안에서 수정할 수 있다. */
+    @Transactional
+    public void updateSkill(CustomUserPrincipal principal, Long userId, Long skillId, UpdateSkillApiDto.Request request) {
+        validateOrganizationManagerRole(principal);
+
+        User targetUser = getUserOrThrow(userId);
+        validateWritable(principal, targetUser);
+
+        UserSkill userSkill = getUserSkillOrThrow(skillId, userId);
+        ensureSkillNameAvailableForUpdate(userId, skillId, request.skillName());
+
+        userSkill.updatePartial(request.skillName(), request.skillLevel());
+    }
+
     /** 스킬 API 는 조직 관리자에게만 열어 둔다. */
     private void validateOrganizationManagerRole(CustomUserPrincipal principal) {
         if (isOrganizationManager(principal)) {
@@ -98,6 +113,16 @@ public class UserSkillService {
         }
     }
 
+    /** 스킬명 변경 요청이 있을 때 현재 레코드를 제외하고 중복을 확인한다. */
+    private void ensureSkillNameAvailableForUpdate(Long userId, Long skillId, String skillName) {
+        if (skillName == null) {
+            return;
+        }
+        if (userSkillRepository.existsByUserIdAndSkillNameAndIdNot(userId, skillName, skillId)) {
+            throw new BusinessException(ErrorCode.USER_SKILL_DUPLICATE_NAME);
+        }
+    }
+
     /** 조회는 성공시키되 목록을 비워야 하는 비노출 정책을 판별한다. */
     private boolean shouldHideSkills(CustomUserPrincipal principal, User targetUser) {
         return principal.userId().equals(targetUser.getId())
@@ -120,5 +145,11 @@ public class UserSkillService {
     private User getUserOrThrow(Long userId) {
         return userRepository.findById(userId)
                 .orElseThrow(() -> new BusinessException(ErrorCode.USER_NOT_FOUND));
+    }
+
+    /** path 의 사용자에게 속한 스킬 레코드를 조회한다. */
+    private UserSkill getUserSkillOrThrow(Long skillId, Long userId) {
+        return userSkillRepository.findByIdAndUserId(skillId, userId)
+                .orElseThrow(() -> new BusinessException(ErrorCode.USER_SKILL_NOT_FOUND));
     }
 }
