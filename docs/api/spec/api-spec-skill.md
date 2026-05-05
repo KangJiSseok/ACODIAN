@@ -132,10 +132,11 @@
 ### PATCH /api/users/{userId}/skills/{id}
 - 목적: 특정 사용자의 특정 스킬 정보를 수정한다.
 - 상태: `Documented`
-- 권한/접근 주체: 본인 수정 또는 조직 관리자 보정 작업으로 본다. [추론]
+- 권한/접근 주체: `DIRECTOR`, `DEPT_HEAD` 만 호출한다. `DIRECTOR` 는 자기 자신을 제외한 사용자를 대상으로 수정할 수 있고, `DEPT_HEAD` 는 자기 자신과 `DIRECTOR` 를 제외한 같은 부서 사용자만 대상으로 수정할 수 있다.
 - 요청
   - Path: `userId`, `id` (스킬 레코드 식별자)
   - Body: `skillName`, `skillLevel` (null 필드는 기존 값 유지)
+  - `skillName` 은 양끝 공백을 제거한 뒤 반영한다. blank 값은 기존 값 유지로 처리한다.
 - 응답 (`data` 기준)
   - 빈 객체 (`ApiResponse.empty()`)
 - 요청 JSON 예시
@@ -159,10 +160,12 @@
 }
 ```
 - 상태/에러
-  - 성공: `200 OK` [추론]
-  - 대표 오류: `USER_NOT_FOUND` [추론]
-  - 대표 오류: `SKILL_NOT_FOUND` [추론]
-  - 대표 오류: `SKILL_LEVEL_OUT_OF_RANGE` [추론]
+  - 성공: `200 OK`
+  - 대표 오류: `COMMON_VALIDATION_ERROR`
+  - 대표 오류: `AUTH_ACCESS_DENIED`
+  - 대표 오류: `USER_NOT_FOUND`
+  - 대표 오류: `USER_SKILL_NOT_FOUND`
+  - 대표 오류: `USER_SKILL_DUPLICATE_NAME`
 - ERD 연관
   - `tb_user_skill`
 - 근거
@@ -172,7 +175,7 @@
 ### DELETE /api/users/{userId}/skills/{id}
 - 목적: 특정 사용자의 특정 스킬을 삭제한다.
 - 상태: `Documented`
-- 권한/접근 주체: 본인 삭제 또는 조직 관리자 보정 작업으로 본다. [추론]
+- 권한/접근 주체: `DIRECTOR`, `DEPT_HEAD` 만 호출한다. `DIRECTOR` 는 자기 자신을 제외한 사용자를 대상으로 삭제할 수 있고, `DEPT_HEAD` 는 자기 자신과 `DIRECTOR` 를 제외한 같은 부서 사용자만 대상으로 삭제할 수 있다.
 - 요청
   - Path: `userId`, `id` (스킬 레코드 식별자)
 - 응답 (`data` 기준)
@@ -195,9 +198,10 @@
 }
 ```
 - 상태/에러
-  - 성공: `200 OK` [추론]
-  - 대표 오류: `USER_NOT_FOUND` [추론]
-  - 대표 오류: `SKILL_NOT_FOUND` [추론]
+  - 성공: `200 OK`
+  - 대표 오류: `AUTH_ACCESS_DENIED`
+  - 대표 오류: `USER_NOT_FOUND`
+  - 대표 오류: `USER_SKILL_NOT_FOUND`
 - ERD 연관
   - `tb_user_skill`
 - 근거
