@@ -2,7 +2,6 @@ package com.ibank.axwms.domain.organization.skill.dto;
 
 import com.ibank.axwms.domain.organization.skill.repository.jooq.projection.UserSkillListItemProjection;
 import io.swagger.v3.oas.annotations.media.Schema;
-import jakarta.validation.constraints.Max;
 import java.time.LocalDateTime;
 import java.util.List;
 import lombok.AccessLevel;
@@ -37,7 +36,6 @@ public final class GetSkillsApiDto {
             @Schema(description = "스킬명", example = "WMS")
             String skillName,
             @Schema(description = "스킬 레벨", example = "5")
-            @Max(value = 5, message = "skillLevel 은 5이하여야 합니다.")
             Short skillLevel,
             @Schema(description = "수정 일시", example = "2026-04-20T09:00:00")
             LocalDateTime updatedAt
