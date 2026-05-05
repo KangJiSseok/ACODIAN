@@ -127,4 +127,43 @@ public class User {
         this.titleName = titleName;
         this.joinDate = joinDate;
     }
+
+    /** null 이 아닌 요청 필드만 사용자 기본 정보에 반영한다. */
+    public void updatePartial(String userName,
+                              String email,
+                              String profileImageUrl,
+                              String positionName,
+                              String titleName,
+                              Long departmentId,
+                              String phone,
+                              EmploymentStatus employmentStatus,
+                              LocalDate joinDate) {
+        if (userName != null) {
+            this.userName = userName;
+        }
+        if (email != null) {
+            this.email = email;
+        }
+        if (profileImageUrl != null) {
+            this.profileImageUrl = profileImageUrl;
+        }
+        if (positionName != null) {
+            this.positionName = positionName;
+        }
+        if (titleName != null) {
+            this.titleName = titleName;
+        }
+        if (departmentId != null) {
+            this.departmentId = departmentId;
+        }
+        if (phone != null) {
+            this.phone = phone;
+        }
+        if (employmentStatus != null) {
+            this.employmentStatus = employmentStatus;
+        }
+        if (joinDate != null) {
+            this.joinDate = joinDate;
+        }
+    }
 }

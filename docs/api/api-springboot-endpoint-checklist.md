@@ -38,7 +38,7 @@
 - [x] `GET /api/users/admin-candidates`
 - [x] `GET /api/users`
 - [x] `GET /api/users/{id}`
-- [ ] `PATCH /api/users/{id}`
+- [x] `PATCH /api/users/{id}`
 
 ## 5. `organization/skill` 도메인
 

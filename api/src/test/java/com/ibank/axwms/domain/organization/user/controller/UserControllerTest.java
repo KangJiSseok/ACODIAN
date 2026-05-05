@@ -2,6 +2,9 @@ package com.ibank.axwms.domain.organization.user.controller;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.BDDMockito.given;
+import static org.mockito.BDDMockito.then;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.patch;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -11,7 +14,10 @@ import com.ibank.axwms.domain.organization.user.dto.GetAdminCandidatesApiDto;
 import com.ibank.axwms.domain.organization.user.dto.GetMyProfileApiDto;
 import com.ibank.axwms.domain.organization.user.dto.GetUserApiDto;
 import com.ibank.axwms.domain.organization.user.dto.GetUsersApiDto;
+import com.ibank.axwms.domain.organization.user.dto.UpdateUserApiDto;
 import com.ibank.axwms.domain.organization.user.service.UserService;
+import com.ibank.axwms.global.response.GlobalResponseAdvice;
+import com.ibank.axwms.global.response.EmptyResponse;
 import com.ibank.axwms.global.security.CustomUserPrincipal;
 import java.lang.reflect.Method;
 import java.time.LocalDate;
@@ -23,16 +29,23 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.http.MediaType;
 import org.springframework.security.access.prepost.PreAuthorize;
+import org.springframework.test.web.servlet.MockMvc;
+import org.springframework.test.web.servlet.MvcResult;
+import org.springframework.test.web.servlet.setup.MockMvcBuilders;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.ModelAttribute;
+import org.springframework.web.bind.annotation.PatchMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestBody;
 
 @ExtendWith(MockitoExtension.class)
 class UserControllerTest {
 
     private ObjectMapper objectMapper;
+    private MockMvc mockMvc;
 
     @Mock
     private UserService userService;
@@ -45,6 +58,9 @@ class UserControllerTest {
         objectMapper = new ObjectMapper()
                 .findAndRegisterModules()
                 .disable(SerializationFeature.WRITE_DATES_AS_TIMESTAMPS);
+        mockMvc = MockMvcBuilders.standaloneSetup(userController)
+                .setControllerAdvice(new GlobalResponseAdvice())
+                .build();
     }
 
     @Test
@@ -139,6 +155,35 @@ class UserControllerTest {
         Method method = UserController.class.getMethod("getUsers", CustomUserPrincipal.class, GetUsersApiDto.Request.class);
 
         assertThat(method.getParameters()[1].getAnnotation(ModelAttribute.class)).isNotNull();
+    }
+
+    @Test
+    @DisplayName("사용자 부분 수정 메서드는 /{id} PATCH 매핑을 사용한다")
+    void 사용자_부분_수정_메서드는_id_PATCH_매핑을_사용한다() throws NoSuchMethodException {
+        Method method = UserController.class.getMethod("updateUser", CustomUserPrincipal.class, Long.class, UpdateUserApiDto.Request.class);
+        PatchMapping patchMapping = method.getAnnotation(PatchMapping.class);
+
+        assertThat(patchMapping).isNotNull();
+        assertThat(patchMapping.value()).containsExactly("/{id}");
+    }
+
+    @Test
+    @DisplayName("사용자 부분 수정 메서드는 DIRECTOR 와 DEPT_HEAD role 을 허용한다")
+    void 사용자_부분_수정_메서드는_DIRECTOR와_DEPT_HEAD_role을_허용한다() throws NoSuchMethodException {
+        Method method = UserController.class.getMethod("updateUser", CustomUserPrincipal.class, Long.class, UpdateUserApiDto.Request.class);
+        PreAuthorize preAuthorize = method.getAnnotation(PreAuthorize.class);
+
+        assertThat(preAuthorize).isNotNull();
+        assertThat(preAuthorize.value()).isEqualTo("hasAnyRole('DIRECTOR','DEPT_HEAD')");
+    }
+
+    @Test
+    @DisplayName("사용자 부분 수정 요청은 PathVariable 과 RequestBody 로 바인딩한다")
+    void 사용자_부분_수정_요청은_PathVariable과_RequestBody로_바인딩한다() throws NoSuchMethodException {
+        Method method = UserController.class.getMethod("updateUser", CustomUserPrincipal.class, Long.class, UpdateUserApiDto.Request.class);
+
+        assertThat(method.getParameters()[1].getAnnotation(PathVariable.class)).isNotNull();
+        assertThat(method.getParameters()[2].getAnnotation(RequestBody.class)).isNotNull();
     }
 
     @Test
@@ -260,6 +305,63 @@ class UserControllerTest {
         assertThat(response).containsExactlyElementsOf(responseFromService);
         assertThat(json).contains("\"phone\":\"010-1234-1234\"");
         assertThat(json).doesNotContain("pageSize", "totalCount", "items");
+    }
+
+    @Test
+    @DisplayName("사용자 부분 수정 메서드는 서비스에 위임하고 빈 응답을 반환한다")
+    void 사용자_부분_수정_메서드는_서비스에_위임하고_빈_응답을_반환한다() {
+        CustomUserPrincipal principal = new CustomUserPrincipal(201L, "dept-head@ibank.com", "DEPT_HEAD");
+        UpdateUserApiDto.Request request = new UpdateUserApiDto.Request(
+                "홍길동",
+                "hong@axwms.com",
+                "https://cdn.axwms.com/profile/101.png",
+                "차장",
+                "팀장",
+                10L,
+                "010-1234-5678",
+                EmploymentStatus.ACTIVE,
+                LocalDate.of(2024, 3, 1),
+                21L
+        );
+
+        EmptyResponse response = userController.updateUser(principal, 101L, request);
+
+        assertThat(response).isEqualTo(EmptyResponse.INSTANCE);
+        then(userService).should().updateUser(principal, 101L, request);
+    }
+
+    @Test
+    @DisplayName("사용자 부분 수정 HTTP 응답은 빈 data 객체로 래핑된다")
+    void 사용자_부분_수정_HTTP_응답은_빈_data_객체로_래핑된다() throws Exception {
+        MvcResult result = mockMvc.perform(patch("/users/101")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {
+                                  "userName": "홍길동",
+                                  "primaryTeamId": 21
+                                }
+                                """))
+                .andExpect(status().isOk())
+                .andReturn();
+
+        JsonNode json = objectMapper.readTree(result.getResponse().getContentAsString());
+
+        assertThat(json.get("success").asBoolean()).isTrue();
+        assertThat(json.get("data").isObject()).isTrue();
+        assertThat(json.get("data").size()).isZero();
+        assertThat(json.get("timestamp").asText()).isNotBlank();
+        then(userService).should().updateUser(new CustomUserPrincipal(null, null, null), 101L, new UpdateUserApiDto.Request(
+                "홍길동",
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                21L
+        ));
     }
 
     @Test
