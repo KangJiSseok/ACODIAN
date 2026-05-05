@@ -18,6 +18,9 @@ public interface UserTeamRepository extends JpaRepository<UserTeam, Long>, UserT
     /** 로컬 시드가 기존 사용자-팀 관계를 찾아 멱등 보정할 때 사용한다. */
     Optional<UserTeam> findByUserIdAndTeamId(Long userId, Long teamId);
 
+    /** 사용자별 모든 팀 membership 을 조회한다. 대표 소속 팀 재지정 시 기존 대표 플래그 해제에 사용한다. */
+    List<UserTeam> findAllByUserId(Long userId);
+
     /** ACTIVE 리더 membership 을 조회한다. 리더 변경 시 기존 리더 강등에 사용한다. */
     List<UserTeam> findAllByTeamIdAndStatusCodeAndIsLeader(Long teamId, UserTeamStatus statusCode, boolean isLeader);
 

@@ -133,6 +133,16 @@ public class UserTeam {
         this.teamRole = teamRole;
     }
 
+    /** 사용자의 대표 소속 팀으로 지정한다. */
+    public void markAsPrimary() {
+        this.isPrimary = true;
+    }
+
+    /** 사용자의 대표 소속 팀 지정에서 제외한다. */
+    public void markAsSecondary() {
+        this.isPrimary = false;
+    }
+
     /** LEFT 처리된 membership 을 다시 활성화한다. */
     public void reactivate(boolean isLeader, String teamRole, String allocation, boolean isPrimary) {
         synchronizeMembershipProfile(isLeader, teamRole, allocation, isPrimary, UserTeamStatus.ACTIVE);

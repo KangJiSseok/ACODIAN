@@ -2,6 +2,8 @@ package com.ibank.axwms.domain.organization.user.service;
 
 import com.ibank.axwms.domain.organization.department.entity.Department;
 import com.ibank.axwms.domain.organization.department.repository.DepartmentRepository;
+import com.ibank.axwms.domain.organization.team.entity.UserTeam;
+import com.ibank.axwms.domain.organization.team.repository.TeamRepository;
 import com.ibank.axwms.domain.organization.team.repository.UserTeamRepository;
 import com.ibank.axwms.domain.organization.team.repository.jooq.projection.UserTeamSummaryProjection;
 import com.ibank.axwms.domain.organization.user.UserRole;
@@ -9,6 +11,7 @@ import com.ibank.axwms.domain.organization.user.dto.GetAdminCandidatesApiDto;
 import com.ibank.axwms.domain.organization.user.dto.GetMyProfileApiDto;
 import com.ibank.axwms.domain.organization.user.dto.GetUserApiDto;
 import com.ibank.axwms.domain.organization.user.dto.GetUsersApiDto;
+import com.ibank.axwms.domain.organization.user.dto.UpdateUserApiDto;
 import com.ibank.axwms.domain.organization.user.entity.User;
 import com.ibank.axwms.domain.organization.user.repository.UserRepository;
 import com.ibank.axwms.domain.organization.user.repository.jooq.query.UserListQuery;
@@ -27,6 +30,7 @@ public class UserService {
 
     private final UserRepository userRepository;
     private final DepartmentRepository departmentRepository;
+    private final TeamRepository teamRepository;
     private final UserTeamRepository userTeamRepository;
 
     /**
@@ -81,6 +85,61 @@ public class UserService {
     }
 
     /**
+     * 사용자 기본 정보와 대표 소속 팀을 부분 수정한다.
+     *
+     * @param principal 수정 요청을 보낸 인증 사용자
+     * @param userId 수정 대상 사용자 id
+     * @param request null 이 아닌 필드만 반영할 부분 수정 요청
+     * @throws BusinessException USER_NOT_FOUND 수정 대상 사용자가 없을 때
+     * @throws BusinessException AUTH_ACCESS_DENIED DEPT_HEAD 가 수정 가능한 부서/role 범위를 벗어났을 때
+     * @throws BusinessException DEPARTMENT_NOT_FOUND 요청 부서가 없을 때
+     * @throws BusinessException TEAM_NOT_FOUND 요청 팀이 없거나 대상 사용자의 membership 이 아닐 때
+     */
+    @Transactional
+    public void updateUser(CustomUserPrincipal principal, Long userId, UpdateUserApiDto.Request request) {
+        User user = getUserOrThrow(userId);
+        validateUpdateUserPermission(principal, user, request);
+        ensureDepartmentExistsOrThrow(request.departmentId());
+        updatePrimaryTeam(userId, request.primaryTeamId());
+
+        user.updatePartial(
+                request.userName(),
+                request.email(),
+                request.profileImageUrl(),
+                request.positionName(),
+                request.titleName(),
+                request.departmentId(),
+                request.phone(),
+                request.employmentStatus(),
+                request.joinDate()
+        );
+    }
+
+    /** DIRECTOR는 모두 평가 할 수 있다.
+     * DEPT_HEAD 는 자기 부서의 TEAM_LEAD 또는 MEMBER 만 수정할 수 있다. */
+    private void validateUpdateUserPermission(CustomUserPrincipal principal,
+                                              User targetUser,
+                                              UpdateUserApiDto.Request request) {
+        // DIRECTOR는 return
+        if (UserRole.DIRECTOR.name().equals(principal.roleCode())) {
+            return;
+        }
+
+        User actor = getUserOrThrow(principal.userId());
+        boolean targetBelongsToSameDepartment = actor.getDepartmentId().equals(targetUser.getDepartmentId());
+        boolean targetRoleEditable = targetUser.getRoleCode() == UserRole.TEAM_LEAD
+                || targetUser.getRoleCode() == UserRole.MEMBER;
+
+        // request 오는 변경하려는 부서가 자기랑 같거나, null일때. 즉 DEPT_HEAD는 타부서로 변경 못한다.
+        boolean requestedDepartmentStaysInScope = request.departmentId() == null
+                || actor.getDepartmentId().equals(request.departmentId());
+
+        if (!targetBelongsToSameDepartment || !targetRoleEditable || !requestedDepartmentStaysInScope) {
+            throw new BusinessException(ErrorCode.AUTH_ACCESS_DENIED);
+        }
+    }
+
+    /**
      * 사용자 id 에 해당하는 사용자의 소속 부서 id 를 조회한다.
      * 다른 모듈(worklog 가시 범위 정책 등) 이 organization 모듈을 service 경계로 우회하기 위한 진입점이다.
      *
@@ -106,6 +165,34 @@ public class UserService {
     private Department getDepartmentOrThrow(Long departmentId) {
         return departmentRepository.findById(departmentId)
                 .orElseThrow(() -> new BusinessException(ErrorCode.USER_NOT_FOUND));
+    }
+
+    /** 요청 부서 id 가 null 이 아니면 실제 존재 여부를 검증한다. */
+    private void ensureDepartmentExistsOrThrow(Long departmentId) {
+        if (departmentId != null && !departmentRepository.existsById(departmentId)) {
+            throw new BusinessException(ErrorCode.DEPARTMENT_NOT_FOUND);
+        }
+    }
+
+    /** 대표 소속 팀 요청이 있으면 기존 대표 플래그를 모두 해제하고 요청 membership 만 대표로 둔다. */
+    private void updatePrimaryTeam(Long userId, Long primaryTeamId) {
+        if (primaryTeamId == null) {
+            return;
+        }
+        if (!teamRepository.existsByIdAndDeletedAtIsNull(primaryTeamId)) {
+            throw new BusinessException(ErrorCode.TEAM_NOT_FOUND);
+        }
+
+        userTeamRepository.findByUserIdAndTeamId(userId, primaryTeamId)
+                .orElseThrow(() -> new BusinessException(ErrorCode.TEAM_NOT_FOUND));
+
+        for (UserTeam membership : userTeamRepository.findAllByUserId(userId)) {
+            if (primaryTeamId.equals(membership.getTeamId())) {
+                membership.markAsPrimary();
+            } else {
+                membership.markAsSecondary();
+            }
+        }
     }
 
     /**

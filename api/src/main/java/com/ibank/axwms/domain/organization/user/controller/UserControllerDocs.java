@@ -4,6 +4,8 @@ import com.ibank.axwms.domain.organization.user.dto.GetAdminCandidatesApiDto;
 import com.ibank.axwms.domain.organization.user.dto.GetMyProfileApiDto;
 import com.ibank.axwms.domain.organization.user.dto.GetUserApiDto;
 import com.ibank.axwms.domain.organization.user.dto.GetUsersApiDto;
+import com.ibank.axwms.domain.organization.user.dto.UpdateUserApiDto;
+import com.ibank.axwms.global.response.EmptyResponse;
 import com.ibank.axwms.global.security.CustomUserPrincipal;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
@@ -100,5 +102,28 @@ public interface UserControllerDocs {
     List<GetUsersApiDto.Response> getUsers(
             @Parameter(hidden = true) CustomUserPrincipal principal,
             @ParameterObject GetUsersApiDto.Request request
+    );
+
+    @Operation(
+            summary = "사용자 부분 수정",
+            description = "DIRECTOR 또는 DEPT_HEAD 가 사용자 기본 정보와 대표 소속 팀을 부분 수정한다. "
+                    + "요청 body 의 null 필드는 기존 값을 유지하고, primaryTeamId 는 대상 사용자의 기존 team membership 만 지정할 수 있다."
+    )
+    @SecurityRequirement(name = "bearerAuth")
+    @ApiResponses({
+            @ApiResponse(
+                    responseCode = "200",
+                    description = "사용자 정보를 부분 수정하고 빈 객체를 반환한다.",
+                    content = @Content(schema = @Schema(implementation = EmptyResponse.class))
+            ),
+            @ApiResponse(responseCode = "400", description = "요청 값이 올바르지 않다.", content = @Content),
+            @ApiResponse(responseCode = "401", description = "access token 이 없거나 유효하지 않다.", content = @Content),
+            @ApiResponse(responseCode = "403", description = "사용자 수정 권한이 없다.", content = @Content),
+            @ApiResponse(responseCode = "404", description = "사용자, 부서 또는 팀을 찾을 수 없다.", content = @Content)
+    })
+    EmptyResponse updateUser(
+            @Parameter(hidden = true) CustomUserPrincipal principal,
+            @Parameter(description = "사용자 ID", example = "101") Long id,
+            UpdateUserApiDto.Request request
     );
 }
