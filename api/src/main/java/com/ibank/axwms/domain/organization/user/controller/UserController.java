@@ -12,6 +12,8 @@ import com.ibank.axwms.global.security.CustomUserPrincipal;
 import jakarta.validation.Valid;
 import java.util.List;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
+import org.springframework.http.MediaType;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -19,8 +21,9 @@ import org.springframework.web.bind.annotation.ModelAttribute;
 import org.springframework.web.bind.annotation.PatchMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.RequestMapping;
-import org.springframework.web.bind.annotation.RequestBody;
+import org.springframework.web.bind.annotation.RequestPart;
 import org.springframework.web.bind.annotation.RestController;
+import org.springframework.web.multipart.MultipartFile;
 
 @RestController
 @RequestMapping("/users")
@@ -73,14 +76,15 @@ public class UserController implements UserControllerDocs {
     }
 
     @Override
-    @PatchMapping("/{id}")
+    @PatchMapping(value = "/{id}", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
     @PreAuthorize("hasAnyRole('DIRECTOR','DEPT_HEAD')")
     public EmptyResponse updateUser(
             @AuthenticationPrincipal CustomUserPrincipal principal,
             @PathVariable Long id,
-            @Valid @RequestBody UpdateUserApiDto.Request request
+            @Valid @RequestPart("request") UpdateUserApiDto.Request request,
+            @RequestPart(value = "profile_image", required = false) MultipartFile profileImage
     ) {
-        userService.updateUser(principal, id, request);
+        userService.updateUser(principal, id, request, profileImage);
         return EmptyResponse.INSTANCE;
     }
 }

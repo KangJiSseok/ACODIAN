@@ -7,7 +7,7 @@ import org.springframework.transaction.event.TransactionPhase;
 import org.springframework.transaction.event.TransactionalEventListener;
 
 /**
- * 회원가입 트랜잭션 커밋 후 temp 위치의 프로필 이미지를 final 위치로 복사한다.
+ * 트랜잭션 커밋 후 temp 위치의 프로필 이미지를 final 위치로 복사하고 교체 전 이미지를 정리한다.
  */
 @Component
 @RequiredArgsConstructor
@@ -17,6 +17,8 @@ public class ProfileImageCommitHandler {
 
     @TransactionalEventListener(phase = TransactionPhase.AFTER_COMMIT)
     public void onCommit(ProfileImageCommittedEvent event) {
-        profileImageStorageService.promote(event.tempKey(), event.finalKey());
+        if (profileImageStorageService.promote(event.tempKey(), event.finalKey())) {
+            profileImageStorageService.deleteBestEffort(event.oldKey());
+        }
     }
 }

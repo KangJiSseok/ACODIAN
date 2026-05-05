@@ -21,9 +21,6 @@ public final class UpdateUserApiDto {
             @Email(message = "email 형식이 올바르지 않습니다.")
             @Size(max = 100, message = "email 은 100자 이하여야 합니다.")
             String email,
-            @Schema(description = "프로필 이미지 URL", example = "https://cdn.axwms.com/profile/101.png")
-            @Size(max = 500, message = "profileImageUrl 은 500자 이하여야 합니다.")
-            String profileImageUrl,
             @Schema(description = "직급명", example = "차장")
             @Size(max = 50, message = "positionName 은 50자 이하여야 합니다.")
             String positionName,

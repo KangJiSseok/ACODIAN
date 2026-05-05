@@ -3,14 +3,14 @@ package com.ibank.axwms.domain.organization.user.service;
 import com.ibank.axwms.domain.file.external.ObjectStoragePort;
 import com.ibank.axwms.global.error.BusinessException;
 import com.ibank.axwms.global.error.ErrorCode;
+import java.time.LocalDate;
+import java.util.Optional;
+import java.util.UUID;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.stereotype.Service;
 import org.springframework.util.StringUtils;
 import org.springframework.web.multipart.MultipartFile;
-
-import java.time.LocalDate;
-import java.util.UUID;
 
 /**
  * 프로필 이미지의 임시 업로드 → DB 저장 → 서빙 위치 복사 흐름을 조율한다.
@@ -63,14 +63,45 @@ public class ProfileImageStorageService {
      * temp 위치의 프로필 이미지를 서빙 위치로 복사한다.
      * DB 커밋이 확정된 AFTER_COMMIT 단계에서 호출되며, 복사 실패는 log 만 남긴다.
      */
-    public void promote(String tempKey, String finalKey) {
+    public boolean promote(String tempKey, String finalKey) {
         if (!StringUtils.hasText(tempKey)) {
-            return;
+            return false;
         }
         try {
             objectStoragePort.copy(tempKey, finalKey);
+            return true;
         } catch (RuntimeException exception) {
             log.warn("프로필 이미지 S3 복사 실패 tempKey={}", tempKey, exception);
+            return false;
+        }
+    }
+
+    /**
+     * 공개 URL 이 현재 프로필 이미지 저장소가 관리하는 final key 이면 삭제 가능한 storage key 로 복원한다.
+     * 외부 URL 이나 temp URL 은 사용자가 보낸 값일 수 있으므로 삭제 대상에서 제외한다.
+     */
+    public String resolveDeletableProfileImageKey(String profileImageUrl) {
+        if (!StringUtils.hasText(profileImageUrl)) {
+            return null;
+        }
+        Optional<String> storageKey = objectStoragePort.toStorageKey(profileImageUrl);
+        return storageKey
+                .filter(key -> key.startsWith(PROFILE_PREFIX + "/"))
+                .orElse(null);
+    }
+
+    /**
+     * 기존 프로필 이미지 정리는 사용자 수정 성공 이후의 best-effort 후처리다.
+     * 삭제 실패가 이미 커밋된 사용자 정보 변경을 롤백하거나 사용자 응답을 실패로 바꾸지 않도록 예외를 흡수한다.
+     */
+    public void deleteBestEffort(String key) {
+        if (!StringUtils.hasText(key)) {
+            return;
+        }
+        try {
+            objectStoragePort.delete(key);
+        } catch (RuntimeException exception) {
+            log.warn("기존 프로필 이미지 S3 삭제 실패 key={}", key, exception);
         }
     }
 
