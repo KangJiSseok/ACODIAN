@@ -5,16 +5,22 @@ import static org.assertj.core.api.Assertions.assertThat;
 import com.ibank.axwms.domain.organization.department.entity.Department;
 import com.ibank.axwms.domain.organization.department.repository.DepartmentRepository;
 import com.ibank.axwms.domain.organization.evaluation.entity.UserEvaluation;
+import com.ibank.axwms.domain.organization.evaluation.repository.jooq.projection.UserEvaluationSummaryProjection;
+import com.ibank.axwms.domain.organization.evaluation.repository.jooq.query.UserEvaluationPageQuery;
 import com.ibank.axwms.domain.organization.user.EmploymentStatus;
 import com.ibank.axwms.domain.organization.user.UserRole;
 import com.ibank.axwms.domain.organization.user.entity.User;
 import com.ibank.axwms.domain.organization.user.repository.UserRepository;
 import com.ibank.axwms.testsupport.IntegrationTestSupport;
 import java.time.LocalDate;
+import java.time.LocalDateTime;
+import org.assertj.core.groups.Tuple;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.data.domain.Page;
+import org.springframework.jdbc.core.JdbcTemplate;
 
 class UserEvaluationRepositoryIntegrationTest extends IntegrationTestSupport {
 
@@ -26,6 +32,9 @@ class UserEvaluationRepositoryIntegrationTest extends IntegrationTestSupport {
 
     @Autowired
     private DepartmentRepository departmentRepository;
+
+    @Autowired
+    private JdbcTemplate jdbcTemplate;
 
     private User evaluatee;
     private User evaluator;
@@ -55,6 +64,58 @@ class UserEvaluationRepositoryIntegrationTest extends IntegrationTestSupport {
                     assertThat(evaluation.getEvaluatorUserId()).isEqualTo(evaluator.getId());
                     assertThat(evaluation.getContent()).isEqualTo("평가 내용");
                 });
+    }
+
+    @Test
+    @DisplayName("사용자 평가 이력 페이지는 대상/평가자 이름을 조인하고 createdAt DESC 로 정렬한다")
+    void 사용자_평가_이력_페이지는_대상_평가자_이름을_조인하고_createdAt_DESC로_정렬한다() {
+        insertEvaluation("오래된 평가", LocalDateTime.of(2026, 4, 20, 9, 0));
+        insertEvaluation("최신 평가", LocalDateTime.of(2026, 4, 21, 9, 0));
+
+        Page<UserEvaluationSummaryProjection> result = userEvaluationRepository.findEvaluationPage(
+                new UserEvaluationPageQuery(1, 20, evaluatee.getId(), "DESC")
+        );
+
+        assertThat(result.getTotalElements()).isEqualTo(2);
+        assertThat(result.getContent())
+                .extracting(UserEvaluationSummaryProjection::evaluateeUserId,
+                        UserEvaluationSummaryProjection::evaluateeUserName,
+                        UserEvaluationSummaryProjection::evaluatorUserId,
+                        UserEvaluationSummaryProjection::evaluatorUserName,
+                        UserEvaluationSummaryProjection::content)
+                .containsExactly(
+                        Tuple.tuple(evaluatee.getId(), "평가 대상", evaluator.getId(), "평가자", "최신 평가"),
+                        Tuple.tuple(evaluatee.getId(), "평가 대상", evaluator.getId(), "평가자", "오래된 평가")
+                );
+    }
+
+    @Test
+    @DisplayName("사용자 평가 이력 페이지는 pageSize 와 ASC 정렬 방향을 반영한다")
+    void 사용자_평가_이력_페이지는_pageSize와_ASC_정렬_방향을_반영한다() {
+        insertEvaluation("첫 번째 평가", LocalDateTime.of(2026, 4, 20, 9, 0));
+        insertEvaluation("두 번째 평가", LocalDateTime.of(2026, 4, 21, 9, 0));
+
+        Page<UserEvaluationSummaryProjection> result = userEvaluationRepository.findEvaluationPage(
+                new UserEvaluationPageQuery(1, 1, evaluatee.getId(), "ASC")
+        );
+
+        assertThat(result.getTotalElements()).isEqualTo(2);
+        assertThat(result.getTotalPages()).isEqualTo(2);
+        assertThat(result.getContent())
+                .extracting(UserEvaluationSummaryProjection::content)
+                .containsExactly("첫 번째 평가");
+    }
+
+    private void insertEvaluation(String content, LocalDateTime createdAt) {
+        jdbcTemplate.update("""
+                        INSERT INTO tb_user_evaluation (evaluatee_user_id, evaluator_user_id, content, created_at)
+                        VALUES (?, ?, ?, ?)
+                        """,
+                evaluatee.getId(),
+                evaluator.getId(),
+                content,
+                createdAt
+        );
     }
 
     private User createUser(Long departmentId, String userName, String email, UserRole role) {

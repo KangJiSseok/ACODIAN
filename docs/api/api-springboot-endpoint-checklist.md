@@ -49,7 +49,7 @@
 
 ## 6. `organization/evaluation` 도메인
 
-- [ ] `GET /api/users/{userId}/evaluations`
+- [x] `GET /api/users/{userId}/evaluations`
 - [ ] `POST /api/users/{userId}/evaluations`
 - [ ] `PATCH /api/users/{userId}/evaluations/{id}`
 - [ ] `DELETE /api/users/{userId}/evaluations/{id}`
