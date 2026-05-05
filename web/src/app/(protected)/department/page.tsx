@@ -121,8 +121,10 @@ function SummaryCard({
   value: string;
 }) {
   return (
-    <CardSpotlight className="rounded-[24px] p-4 transition-all duration-300 hover:-translate-y-1">
-      <p className="text-xs font-medium text-muted-foreground">{title}</p>
+    <CardSpotlight className="rounded-[24px] p-5 transition-all duration-300 hover:-translate-y-1">
+      <p className="text-xs font-medium uppercase tracking-[0.18em] text-muted-foreground">
+        {title}
+      </p>
       <p className="mt-2 text-2xl font-semibold text-foreground transition-colors group-hover/card-spotlight:text-primary">
         {value}
       </p>
