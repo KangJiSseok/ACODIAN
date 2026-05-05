@@ -3,7 +3,7 @@ package com.ibank.axwms.domain.organization.user.controller;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.BDDMockito.given;
 import static org.mockito.BDDMockito.then;
-import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.patch;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.multipart;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 import com.fasterxml.jackson.databind.JsonNode;
@@ -17,10 +17,11 @@ import com.ibank.axwms.domain.organization.user.dto.GetUserApiDto;
 import com.ibank.axwms.domain.organization.user.dto.GetUsersApiDto;
 import com.ibank.axwms.domain.organization.user.dto.UpdateUserApiDto;
 import com.ibank.axwms.domain.organization.user.service.UserService;
-import com.ibank.axwms.global.response.GlobalResponseAdvice;
 import com.ibank.axwms.global.response.EmptyResponse;
+import com.ibank.axwms.global.response.GlobalResponseAdvice;
 import com.ibank.axwms.global.security.CustomUserPrincipal;
 import java.lang.reflect.Method;
+import java.nio.charset.StandardCharsets;
 import java.time.LocalDate;
 import java.util.List;
 import org.junit.jupiter.api.BeforeEach;
@@ -31,6 +32,7 @@ import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.http.MediaType;
+import org.springframework.mock.web.MockMultipartFile;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.MvcResult;
@@ -40,7 +42,8 @@ import org.springframework.web.bind.annotation.ModelAttribute;
 import org.springframework.web.bind.annotation.PatchMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.RequestMapping;
-import org.springframework.web.bind.annotation.RequestBody;
+import org.springframework.web.bind.annotation.RequestPart;
+import org.springframework.web.multipart.MultipartFile;
 
 @ExtendWith(MockitoExtension.class)
 class UserControllerTest {
@@ -181,17 +184,18 @@ class UserControllerTest {
     @Test
     @DisplayName("사용자 부분 수정 메서드는 /{id} PATCH 매핑을 사용한다")
     void 사용자_부분_수정_메서드는_id_PATCH_매핑을_사용한다() throws NoSuchMethodException {
-        Method method = UserController.class.getMethod("updateUser", CustomUserPrincipal.class, Long.class, UpdateUserApiDto.Request.class);
+        Method method = UserController.class.getMethod("updateUser", CustomUserPrincipal.class, Long.class, UpdateUserApiDto.Request.class, MultipartFile.class);
         PatchMapping patchMapping = method.getAnnotation(PatchMapping.class);
 
         assertThat(patchMapping).isNotNull();
         assertThat(patchMapping.value()).containsExactly("/{id}");
+        assertThat(patchMapping.consumes()).containsExactly(MediaType.MULTIPART_FORM_DATA_VALUE);
     }
 
     @Test
     @DisplayName("사용자 부분 수정 메서드는 DIRECTOR 와 DEPT_HEAD role 을 허용한다")
     void 사용자_부분_수정_메서드는_DIRECTOR와_DEPT_HEAD_role을_허용한다() throws NoSuchMethodException {
-        Method method = UserController.class.getMethod("updateUser", CustomUserPrincipal.class, Long.class, UpdateUserApiDto.Request.class);
+        Method method = UserController.class.getMethod("updateUser", CustomUserPrincipal.class, Long.class, UpdateUserApiDto.Request.class, MultipartFile.class);
         PreAuthorize preAuthorize = method.getAnnotation(PreAuthorize.class);
 
         assertThat(preAuthorize).isNotNull();
@@ -199,12 +203,15 @@ class UserControllerTest {
     }
 
     @Test
-    @DisplayName("사용자 부분 수정 요청은 PathVariable 과 RequestBody 로 바인딩한다")
-    void 사용자_부분_수정_요청은_PathVariable과_RequestBody로_바인딩한다() throws NoSuchMethodException {
-        Method method = UserController.class.getMethod("updateUser", CustomUserPrincipal.class, Long.class, UpdateUserApiDto.Request.class);
+    @DisplayName("사용자 부분 수정 요청은 PathVariable 과 RequestPart 로 바인딩한다")
+    void 사용자_부분_수정_요청은_PathVariable과_RequestPart로_바인딩한다() throws NoSuchMethodException {
+        Method method = UserController.class.getMethod("updateUser", CustomUserPrincipal.class, Long.class, UpdateUserApiDto.Request.class, MultipartFile.class);
 
         assertThat(method.getParameters()[1].getAnnotation(PathVariable.class)).isNotNull();
-        assertThat(method.getParameters()[2].getAnnotation(RequestBody.class)).isNotNull();
+        assertThat(method.getParameters()[2].getAnnotation(RequestPart.class).value()).isEqualTo("request");
+        RequestPart profileImagePart = method.getParameters()[3].getAnnotation(RequestPart.class);
+        assertThat(profileImagePart.value()).isEqualTo("profile_image");
+        assertThat(profileImagePart.required()).isFalse();
     }
 
     @Test
@@ -347,10 +354,15 @@ class UserControllerTest {
     @DisplayName("사용자 부분 수정 메서드는 서비스에 위임하고 빈 응답을 반환한다")
     void 사용자_부분_수정_메서드는_서비스에_위임하고_빈_응답을_반환한다() {
         CustomUserPrincipal principal = new CustomUserPrincipal(201L, "dept-head@ibank.com", "DEPT_HEAD");
+        MockMultipartFile profileImage = new MockMultipartFile(
+                "profile_image",
+                "profile.png",
+                MediaType.IMAGE_PNG_VALUE,
+                "image".getBytes(StandardCharsets.UTF_8)
+        );
         UpdateUserApiDto.Request request = new UpdateUserApiDto.Request(
                 "홍길동",
                 "hong@axwms.com",
-                "https://cdn.axwms.com/profile/101.png",
                 "차장",
                 "팀장",
                 10L,
@@ -360,23 +372,33 @@ class UserControllerTest {
                 21L
         );
 
-        EmptyResponse response = userController.updateUser(principal, 101L, request);
+        EmptyResponse response = userController.updateUser(principal, 101L, request, profileImage);
 
         assertThat(response).isEqualTo(EmptyResponse.INSTANCE);
-        then(userService).should().updateUser(principal, 101L, request);
+        then(userService).should().updateUser(principal, 101L, request, profileImage);
     }
 
     @Test
     @DisplayName("사용자 부분 수정 HTTP 응답은 빈 data 객체로 래핑된다")
     void 사용자_부분_수정_HTTP_응답은_빈_data_객체로_래핑된다() throws Exception {
-        MvcResult result = mockMvc.perform(patch("/users/101")
-                        .contentType(MediaType.APPLICATION_JSON)
-                        .content("""
+        MockMultipartFile requestPart = new MockMultipartFile(
+                "request",
+                "",
+                MediaType.APPLICATION_JSON_VALUE,
+                """
                                 {
                                   "userName": "홍길동",
                                   "primaryTeamId": 21
                                 }
-                                """))
+                                """.getBytes(StandardCharsets.UTF_8)
+        );
+
+        MvcResult result = mockMvc.perform(multipart("/users/101")
+                        .file(requestPart)
+                        .with(request -> {
+                            request.setMethod("PATCH");
+                            return request;
+                        }))
                 .andExpect(status().isOk())
                 .andReturn();
 
@@ -395,9 +417,8 @@ class UserControllerTest {
                 null,
                 null,
                 null,
-                null,
                 21L
-        ));
+        ), null);
     }
 
     @Test
