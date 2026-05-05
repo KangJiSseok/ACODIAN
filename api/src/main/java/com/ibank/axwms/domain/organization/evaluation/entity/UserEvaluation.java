@@ -48,4 +48,9 @@ public class UserEvaluation {
         evaluation.content = content;
         return evaluation;
     }
+
+    /** 기존 평가의 작성 시각과 소유자 관계는 유지한 채 본문만 운영 수정한다. */
+    public void updateContent(String content) {
+        this.content = content;
+    }
 }

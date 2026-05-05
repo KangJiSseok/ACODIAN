@@ -6,6 +6,7 @@ import static org.mockito.BDDMockito.then;
 
 import com.ibank.axwms.domain.organization.evaluation.dto.CreateUserEvaluationApiDto;
 import com.ibank.axwms.domain.organization.evaluation.dto.GetUserEvaluationsApiDto;
+import com.ibank.axwms.domain.organization.evaluation.dto.UpdateUserEvaluationApiDto;
 import com.ibank.axwms.domain.organization.evaluation.repository.jooq.projection.UserEvaluationSummaryProjection;
 import com.ibank.axwms.domain.organization.evaluation.service.UserEvaluationService;
 import com.ibank.axwms.global.response.EmptyResponse;
@@ -29,6 +30,7 @@ import org.springframework.http.HttpStatus;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.ModelAttribute;
+import org.springframework.web.bind.annotation.PatchMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
@@ -97,6 +99,26 @@ class UserEvaluationControllerTest {
     }
 
     @Test
+    @DisplayName("사용자 평가 수정 메서드는 ID 하위 PATCH 매핑을 사용한다")
+    void 사용자_평가_수정_메서드는_ID_하위_PATCH_매핑을_사용한다() throws NoSuchMethodException {
+        Method method = updateUserEvaluationMethod();
+        PatchMapping patchMapping = method.getAnnotation(PatchMapping.class);
+
+        assertThat(patchMapping).isNotNull();
+        assertThat(patchMapping.value()).containsExactly("/{id}");
+    }
+
+    @Test
+    @DisplayName("사용자 평가 수정 메서드는 DIRECTOR 와 DEPT_HEAD role 을 허용한다")
+    void 사용자_평가_수정_메서드는_DIRECTOR와_DEPT_HEAD_role을_허용한다() throws NoSuchMethodException {
+        Method method = updateUserEvaluationMethod();
+        PreAuthorize preAuthorize = method.getAnnotation(PreAuthorize.class);
+
+        assertThat(preAuthorize).isNotNull();
+        assertThat(preAuthorize.value()).isEqualTo("hasAnyRole('DIRECTOR','DEPT_HEAD')");
+    }
+
+    @Test
     @DisplayName("사용자 평가 이력 조회 userId 는 PathVariable 로 바인딩한다")
     void 사용자_평가_이력_조회_userId는_PathVariable로_바인딩한다() throws NoSuchMethodException {
         Method method = getUserEvaluationsMethod();
@@ -120,6 +142,17 @@ class UserEvaluationControllerTest {
         assertThat(method.getParameters()[1].getAnnotation(PathVariable.class)).isNotNull();
         assertThat(method.getParameters()[2].getAnnotation(RequestBody.class)).isNotNull();
         assertThat(method.getParameters()[2].getAnnotation(Valid.class)).isNotNull();
+    }
+
+    @Test
+    @DisplayName("사용자 평가 수정 요청은 userId 와 id PathVariable 및 RequestBody 로 바인딩한다")
+    void 사용자_평가_수정_요청은_userId와_id_PathVariable_및_RequestBody로_바인딩한다() throws NoSuchMethodException {
+        Method method = updateUserEvaluationMethod();
+
+        assertThat(method.getParameters()[1].getAnnotation(PathVariable.class)).isNotNull();
+        assertThat(method.getParameters()[2].getAnnotation(PathVariable.class)).isNotNull();
+        assertThat(method.getParameters()[3].getAnnotation(RequestBody.class)).isNotNull();
+        assertThat(method.getParameters()[3].getAnnotation(Valid.class)).isNotNull();
     }
 
     @Test
@@ -162,6 +195,18 @@ class UserEvaluationControllerTest {
     }
 
     @Test
+    @DisplayName("사용자 평가 수정 메서드는 서비스에 위임하고 빈 응답을 반환한다")
+    void 사용자_평가_수정_메서드는_서비스에_위임하고_빈_응답을_반환한다() {
+        CustomUserPrincipal principal = new CustomUserPrincipal(301L, "evaluator@ibank.com", "DEPT_HEAD");
+        UpdateUserEvaluationApiDto.Request request = new UpdateUserEvaluationApiDto.Request("수정된 평가 내용입니다.");
+
+        EmptyResponse response = userEvaluationController.updateUserEvaluation(principal, 101L, 501L, request);
+
+        assertThat(response).isEqualTo(EmptyResponse.INSTANCE);
+        then(userEvaluationService).should().updateUserEvaluation(principal, 101L, 501L, request);
+    }
+
+    @Test
     @DisplayName("사용자 평가 이력 조회 문서 계약은 principal 을 숨김 처리한다")
     void 사용자_평가_이력_조회_문서_계약은_principal을_숨김_처리한다() throws NoSuchMethodException {
         Method method = UserEvaluationControllerDocs.class.getMethod(
@@ -189,6 +234,21 @@ class UserEvaluationControllerTest {
         assertThat(method.getParameters()[0].getAnnotation(Parameter.class).hidden()).isTrue();
     }
 
+    @Test
+    @DisplayName("사용자 평가 수정 문서 계약은 principal 을 숨김 처리한다")
+    void 사용자_평가_수정_문서_계약은_principal을_숨김_처리한다() throws NoSuchMethodException {
+        Method method = UserEvaluationControllerDocs.class.getMethod(
+                "updateUserEvaluation",
+                CustomUserPrincipal.class,
+                Long.class,
+                Long.class,
+                UpdateUserEvaluationApiDto.Request.class
+        );
+
+        assertThat(method.getAnnotation(Operation.class)).isNotNull();
+        assertThat(method.getParameters()[0].getAnnotation(Parameter.class).hidden()).isTrue();
+    }
+
     private Method getUserEvaluationsMethod() throws NoSuchMethodException {
         return UserEvaluationController.class.getMethod(
                 "getUserEvaluations",
@@ -204,6 +264,17 @@ class UserEvaluationControllerTest {
                 CustomUserPrincipal.class,
                 Long.class,
                 CreateUserEvaluationApiDto.Request.class
+        );
+    }
+
+    /** PATCH 계약 테스트가 구현 메서드 시그니처 drift 를 같은 기준으로 감지하도록 reflection 대상을 고정한다. */
+    private Method updateUserEvaluationMethod() throws NoSuchMethodException {
+        return UserEvaluationController.class.getMethod(
+                "updateUserEvaluation",
+                CustomUserPrincipal.class,
+                Long.class,
+                Long.class,
+                UpdateUserEvaluationApiDto.Request.class
         );
     }
 }

@@ -7,6 +7,7 @@ import static org.mockito.BDDMockito.then;
 
 import com.ibank.axwms.domain.organization.evaluation.dto.CreateUserEvaluationApiDto;
 import com.ibank.axwms.domain.organization.evaluation.dto.GetUserEvaluationsApiDto;
+import com.ibank.axwms.domain.organization.evaluation.dto.UpdateUserEvaluationApiDto;
 import com.ibank.axwms.domain.organization.evaluation.entity.UserEvaluation;
 import com.ibank.axwms.domain.organization.evaluation.repository.UserEvaluationRepository;
 import com.ibank.axwms.domain.organization.evaluation.repository.jooq.projection.UserEvaluationSummaryProjection;
@@ -254,6 +255,105 @@ class UserEvaluationServiceTest {
         then(userEvaluationRepository).shouldHaveNoInteractions();
     }
 
+    @Test
+    @DisplayName("평가 작성자 본인은 평가 내용을 수정한다")
+    void 평가_작성자_본인은_평가_내용을_수정한다() {
+        CustomUserPrincipal principal = new CustomUserPrincipal(301L, "evaluator@ibank.com", "DEPT_HEAD");
+        User target = createUser(101L, 10L, "홍길동", UserRole.MEMBER);
+        UserEvaluation evaluation = createEvaluation(501L, 101L, 301L, "기존 평가");
+        given(userRepository.findById(101L)).willReturn(Optional.of(target));
+        given(userEvaluationRepository.findById(501L)).willReturn(Optional.of(evaluation));
+
+        userEvaluationService.updateUserEvaluation(
+                principal,
+                101L,
+                501L,
+                new UpdateUserEvaluationApiDto.Request("수정된 평가 내용입니다.")
+        );
+
+        assertThat(evaluation.getContent()).isEqualTo("수정된 평가 내용입니다.");
+    }
+
+    @Test
+    @DisplayName("평가 작성자가 아니면 평가 수정 권한 오류를 던진다")
+    void 평가_작성자가_아니면_평가_수정_권한_오류를_던진다() {
+        CustomUserPrincipal principal = new CustomUserPrincipal(302L, "other@ibank.com", "DEPT_HEAD");
+        User target = createUser(101L, 10L, "홍길동", UserRole.MEMBER);
+        UserEvaluation evaluation = createEvaluation(501L, 101L, 301L, "기존 평가");
+        given(userRepository.findById(101L)).willReturn(Optional.of(target));
+        given(userEvaluationRepository.findById(501L)).willReturn(Optional.of(evaluation));
+
+        assertThatThrownBy(() -> userEvaluationService.updateUserEvaluation(
+                principal,
+                101L,
+                501L,
+                new UpdateUserEvaluationApiDto.Request("수정 시도")
+        ))
+                .isInstanceOf(BusinessException.class)
+                .extracting(e -> ((BusinessException) e).getErrorCode())
+                .isEqualTo(ErrorCode.EVALUATION_ACCESS_DENIED);
+
+        assertThat(evaluation.getContent()).isEqualTo("기존 평가");
+    }
+
+    @Test
+    @DisplayName("path 사용자와 평가 대상이 다르면 평가 수정 권한 오류를 던진다")
+    void path_사용자와_평가_대상이_다르면_평가_수정_권한_오류를_던진다() {
+        CustomUserPrincipal principal = new CustomUserPrincipal(301L, "evaluator@ibank.com", "DEPT_HEAD");
+        User target = createUser(102L, 10L, "다른대상", UserRole.MEMBER);
+        UserEvaluation evaluation = createEvaluation(501L, 101L, 301L, "기존 평가");
+        given(userRepository.findById(102L)).willReturn(Optional.of(target));
+        given(userEvaluationRepository.findById(501L)).willReturn(Optional.of(evaluation));
+
+        assertThatThrownBy(() -> userEvaluationService.updateUserEvaluation(
+                principal,
+                102L,
+                501L,
+                new UpdateUserEvaluationApiDto.Request("수정 시도")
+        ))
+                .isInstanceOf(BusinessException.class)
+                .extracting(e -> ((BusinessException) e).getErrorCode())
+                .isEqualTo(ErrorCode.EVALUATION_ACCESS_DENIED);
+    }
+
+    @Test
+    @DisplayName("평가 수정 대상 사용자가 없으면 USER_NOT_FOUND 예외를 던진다")
+    void 평가_수정_대상_사용자가_없으면_USER_NOT_FOUND_예외를_던진다() {
+        CustomUserPrincipal principal = new CustomUserPrincipal(301L, "evaluator@ibank.com", "DEPT_HEAD");
+        given(userRepository.findById(404L)).willReturn(Optional.empty());
+
+        assertThatThrownBy(() -> userEvaluationService.updateUserEvaluation(
+                principal,
+                404L,
+                501L,
+                new UpdateUserEvaluationApiDto.Request("수정 시도")
+        ))
+                .isInstanceOf(BusinessException.class)
+                .extracting(e -> ((BusinessException) e).getErrorCode())
+                .isEqualTo(ErrorCode.USER_NOT_FOUND);
+
+        then(userEvaluationRepository).shouldHaveNoInteractions();
+    }
+
+    @Test
+    @DisplayName("평가 수정 대상 평가가 없으면 EVALUATION_NOT_FOUND 예외를 던진다")
+    void 평가_수정_대상_평가가_없으면_EVALUATION_NOT_FOUND_예외를_던진다() {
+        CustomUserPrincipal principal = new CustomUserPrincipal(301L, "evaluator@ibank.com", "DEPT_HEAD");
+        User target = createUser(101L, 10L, "홍길동", UserRole.MEMBER);
+        given(userRepository.findById(101L)).willReturn(Optional.of(target));
+        given(userEvaluationRepository.findById(999L)).willReturn(Optional.empty());
+
+        assertThatThrownBy(() -> userEvaluationService.updateUserEvaluation(
+                principal,
+                101L,
+                999L,
+                new UpdateUserEvaluationApiDto.Request("수정 시도")
+        ))
+                .isInstanceOf(BusinessException.class)
+                .extracting(e -> ((BusinessException) e).getErrorCode())
+                .isEqualTo(ErrorCode.EVALUATION_NOT_FOUND);
+    }
+
     private User createUser(Long id, Long departmentId, String userName, UserRole roleCode) {
         User user = User.create(
                 departmentId,
@@ -270,6 +370,13 @@ class UserEvaluationServiceTest {
         );
         ReflectionTestUtils.setField(user, "id", id);
         return user;
+    }
+
+    /** 수정 권한 테스트가 DB 없이 평가 소유자와 피평가자 관계만 고정할 수 있게 평가 fixture 를 만든다. */
+    private UserEvaluation createEvaluation(Long id, Long evaluateeUserId, Long evaluatorUserId, String content) {
+        UserEvaluation evaluation = UserEvaluation.create(evaluateeUserId, evaluatorUserId, content);
+        ReflectionTestUtils.setField(evaluation, "id", id);
+        return evaluation;
     }
 }
 

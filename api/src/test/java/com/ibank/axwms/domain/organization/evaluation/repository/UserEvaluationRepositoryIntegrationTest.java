@@ -67,6 +67,25 @@ class UserEvaluationRepositoryIntegrationTest extends IntegrationTestSupport {
     }
 
     @Test
+    @DisplayName("사용자 평가는 수정 시 작성 시각을 유지하고 내용만 변경한다")
+    void 사용자_평가는_수정_시_작성_시각을_유지하고_내용만_변경한다() {
+        UserEvaluation saved = userEvaluationRepository.saveAndFlush(
+                UserEvaluation.create(evaluatee.getId(), evaluator.getId(), "기존 평가")
+        );
+        LocalDateTime createdAt = saved.getCreatedAt();
+
+        saved.updateContent("수정된 평가");
+        userEvaluationRepository.saveAndFlush(saved);
+
+        assertThat(userEvaluationRepository.findById(saved.getId()))
+                .get()
+                .satisfies(evaluation -> {
+                    assertThat(evaluation.getContent()).isEqualTo("수정된 평가");
+                    assertThat(evaluation.getCreatedAt()).isEqualTo(createdAt);
+                });
+    }
+
+    @Test
     @DisplayName("사용자 평가 이력 페이지는 대상/평가자 이름을 조인하고 createdAt DESC 로 정렬한다")
     void 사용자_평가_이력_페이지는_대상_평가자_이름을_조인하고_createdAt_DESC로_정렬한다() {
         insertEvaluation("오래된 평가", LocalDateTime.of(2026, 4, 20, 9, 0));

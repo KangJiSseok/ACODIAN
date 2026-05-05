@@ -2,6 +2,7 @@ package com.ibank.axwms.domain.organization.evaluation.controller;
 
 import com.ibank.axwms.domain.organization.evaluation.dto.CreateUserEvaluationApiDto;
 import com.ibank.axwms.domain.organization.evaluation.dto.GetUserEvaluationsApiDto;
+import com.ibank.axwms.domain.organization.evaluation.dto.UpdateUserEvaluationApiDto;
 import com.ibank.axwms.global.response.EmptyResponse;
 import com.ibank.axwms.global.response.PageResponse;
 import com.ibank.axwms.global.security.CustomUserPrincipal;
@@ -62,5 +63,29 @@ public interface UserEvaluationControllerDocs {
             @Parameter(hidden = true) CustomUserPrincipal principal,
             @Parameter(description = "사용자 ID", example = "101") Long userId,
             CreateUserEvaluationApiDto.Request request
+    );
+
+    @Operation(
+            summary = "사용자 평가 수정",
+            description = "평가를 등록한 본인만 특정 사용자의 평가 내용을 수정한다. "
+                    + "평가 레코드의 피평가자와 path 사용자 ID 가 다르면 접근 권한 오류로 처리한다."
+    )
+    @SecurityRequirement(name = "bearerAuth")
+    @ApiResponses({
+            @ApiResponse(
+                    responseCode = "200",
+                    description = "사용자 평가 수정에 성공한다.",
+                    content = @Content(schema = @Schema(implementation = EmptyResponse.class))
+            ),
+            @ApiResponse(responseCode = "400", description = "요청 값 검증에 실패했다.", content = @Content),
+            @ApiResponse(responseCode = "401", description = "access token 이 없거나 유효하지 않다.", content = @Content),
+            @ApiResponse(responseCode = "403", description = "평가 수정 권한 또는 path 사용자 접근 권한이 없다.", content = @Content),
+            @ApiResponse(responseCode = "404", description = "평가 대상 사용자 또는 평가 레코드를 찾을 수 없다.", content = @Content)
+    })
+    EmptyResponse updateUserEvaluation(
+            @Parameter(hidden = true) CustomUserPrincipal principal,
+            @Parameter(description = "사용자 ID", example = "101") Long userId,
+            @Parameter(description = "평가 ID", example = "501") Long id,
+            UpdateUserEvaluationApiDto.Request request
     );
 }
