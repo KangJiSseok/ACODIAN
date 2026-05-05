@@ -51,8 +51,7 @@
 
 - [x] `GET /api/users/{userId}/evaluations`
 - [x] `POST /api/users/{userId}/evaluations`
-- [ ] `PATCH /api/users/{userId}/evaluations/{id}`
-- [ ] `DELETE /api/users/{userId}/evaluations/{id}`
+- [x] `PATCH /api/users/{userId}/evaluations/{id}`
 
 ## 7. `worklog` 도메인
 
