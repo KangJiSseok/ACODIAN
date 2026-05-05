@@ -388,7 +388,7 @@
       <td><code>domain.organization.skill.controller.UserSkillController</code></td>
       <td><code>domain.organization.skill.service.UserSkillService</code></td>
       <td><code>domain.organization.skill.entity.UserSkill</code>, <code>domain.organization.skill.repository.UserSkillRepository</code></td>
-      <td>스킬 생성 ownership은 <code>organization/skill</code> feature에 둔다.</td>
+      <td><code>DIRECTOR</code> 는 자기 자신을 제외한 사용자를 대상으로 등록한다. <code>DEPT_HEAD</code> 는 자기 자신과 <code>DIRECTOR</code> 를 제외한 같은 부서 사용자만 대상으로 등록한다.</td>
     </tr>
     <tr>
       <td><code>PATCH /api/users/{userId}/skills/{id}</code></td>

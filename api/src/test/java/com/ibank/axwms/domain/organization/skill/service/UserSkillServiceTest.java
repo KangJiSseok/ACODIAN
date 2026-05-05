@@ -3,9 +3,12 @@ package com.ibank.axwms.domain.organization.skill.service;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.BDDMockito.given;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
 
+import com.ibank.axwms.domain.organization.skill.dto.CreateSkillApiDto;
 import com.ibank.axwms.domain.organization.skill.dto.GetSkillsApiDto;
+import com.ibank.axwms.domain.organization.skill.entity.UserSkill;
 import com.ibank.axwms.domain.organization.skill.repository.UserSkillRepository;
 import com.ibank.axwms.domain.organization.skill.repository.jooq.projection.UserSkillListItemProjection;
 import com.ibank.axwms.domain.organization.user.EmploymentStatus;
@@ -22,6 +25,7 @@ import java.util.Optional;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.ArgumentCaptor;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
@@ -119,6 +123,140 @@ class UserSkillServiceTest {
     }
 
     @Test
+    @DisplayName("본부장이 다른 사용자 스킬을 등록하면 저장한다")
+    void 본부장이_다른_사용자_스킬을_등록하면_저장한다() {
+        // given
+        given(userRepository.findById(OTHER_USER_ID)).willReturn(Optional.of(user(OTHER_USER_ID, UserRole.MEMBER)));
+        given(userSkillRepository.existsByUserIdAndSkillName(OTHER_USER_ID, "WMS")).willReturn(false);
+
+        // when
+        userSkillService.createSkill(
+                principal(USER_ID, UserRole.DIRECTOR),
+                OTHER_USER_ID,
+                request("WMS", (short) 5)
+        );
+
+        // then
+        ArgumentCaptor<UserSkill> captor = ArgumentCaptor.forClass(UserSkill.class);
+        verify(userSkillRepository).save(captor.capture());
+        assertThat(captor.getValue().getUserId()).isEqualTo(OTHER_USER_ID);
+        assertThat(captor.getValue().getSkillName()).isEqualTo("WMS");
+        assertThat(captor.getValue().getSkillLevel()).isEqualTo((short) 5);
+    }
+
+    @Test
+    @DisplayName("사업부장이 같은 부서 사용자 스킬을 등록하면 저장한다")
+    void 사업부장이_같은_부서_사용자_스킬을_등록하면_저장한다() {
+        // given
+        given(userRepository.findById(OTHER_USER_ID)).willReturn(Optional.of(user(OTHER_USER_ID, UserRole.MEMBER, 10L)));
+        given(userRepository.findById(USER_ID)).willReturn(Optional.of(user(USER_ID, UserRole.DEPT_HEAD, 10L)));
+        given(userSkillRepository.existsByUserIdAndSkillName(OTHER_USER_ID, "WMS")).willReturn(false);
+
+        // when
+        userSkillService.createSkill(
+                principal(USER_ID, UserRole.DEPT_HEAD),
+                OTHER_USER_ID,
+                request("WMS", (short) 5)
+        );
+
+        // then
+        ArgumentCaptor<UserSkill> captor = ArgumentCaptor.forClass(UserSkill.class);
+        verify(userSkillRepository).save(captor.capture());
+        assertThat(captor.getValue().getUserId()).isEqualTo(OTHER_USER_ID);
+    }
+
+    @Test
+    @DisplayName("사업부장이 다른 부서 사용자 스킬을 등록하면 접근 거부 예외를 던진다")
+    void 사업부장이_다른_부서_사용자_스킬을_등록하면_접근_거부_예외를_던진다() {
+        // given
+        given(userRepository.findById(OTHER_USER_ID)).willReturn(Optional.of(user(OTHER_USER_ID, UserRole.MEMBER, 20L)));
+        given(userRepository.findById(USER_ID)).willReturn(Optional.of(user(USER_ID, UserRole.DEPT_HEAD, 10L)));
+
+        // when & then
+        assertThatThrownBy(() -> userSkillService.createSkill(
+                principal(USER_ID, UserRole.DEPT_HEAD),
+                OTHER_USER_ID,
+                request("WMS", (short) 5)
+        ))
+                .isInstanceOf(BusinessException.class)
+                .extracting("errorCode")
+                .isEqualTo(ErrorCode.AUTH_ACCESS_DENIED);
+
+        verifyNoInteractions(userSkillRepository);
+    }
+
+    @Test
+    @DisplayName("사업부장이 본부장 스킬을 등록하면 접근 거부 예외를 던진다")
+    void 사업부장이_본부장_스킬을_등록하면_접근_거부_예외를_던진다() {
+        // given
+        given(userRepository.findById(OTHER_USER_ID)).willReturn(Optional.of(user(OTHER_USER_ID, UserRole.DIRECTOR, 10L)));
+
+        // when & then
+        assertThatThrownBy(() -> userSkillService.createSkill(
+                principal(USER_ID, UserRole.DEPT_HEAD),
+                OTHER_USER_ID,
+                request("WMS", (short) 5)
+        ))
+                .isInstanceOf(BusinessException.class)
+                .extracting("errorCode")
+                .isEqualTo(ErrorCode.AUTH_ACCESS_DENIED);
+
+        verifyNoInteractions(userSkillRepository);
+    }
+
+    @Test
+    @DisplayName("조직 관리자가 자기 스킬을 등록하면 접근 거부 예외를 던진다")
+    void 조직_관리자가_자기_스킬을_등록하면_접근_거부_예외를_던진다() {
+        // given
+        given(userRepository.findById(USER_ID)).willReturn(Optional.of(user(USER_ID, UserRole.DEPT_HEAD, 10L)));
+
+        // when & then
+        assertThatThrownBy(() -> userSkillService.createSkill(
+                principal(USER_ID, UserRole.DEPT_HEAD),
+                USER_ID,
+                request("WMS", (short) 5)
+        ))
+                .isInstanceOf(BusinessException.class)
+                .extracting("errorCode")
+                .isEqualTo(ErrorCode.AUTH_ACCESS_DENIED);
+
+        verifyNoInteractions(userSkillRepository);
+    }
+
+    @Test
+    @DisplayName("일반 사용자가 스킬을 등록하면 접근 거부 예외를 던진다")
+    void 일반_사용자가_스킬을_등록하면_접근_거부_예외를_던진다() {
+        assertThatThrownBy(() -> userSkillService.createSkill(
+                principal(USER_ID, UserRole.MEMBER),
+                OTHER_USER_ID,
+                request("WMS", (short) 5)
+        ))
+                .isInstanceOf(BusinessException.class)
+                .extracting("errorCode")
+                .isEqualTo(ErrorCode.AUTH_ACCESS_DENIED);
+
+        verifyNoInteractions(userRepository, userSkillRepository);
+    }
+
+    @Test
+    @DisplayName("같은 사용자에게 같은 스킬명이 있으면 중복 예외를 던진다")
+    void 같은_사용자에게_같은_스킬명이_있으면_중복_예외를_던진다() {
+        // given
+        given(userRepository.findById(OTHER_USER_ID)).willReturn(Optional.of(user(OTHER_USER_ID, UserRole.MEMBER)));
+        given(userSkillRepository.existsByUserIdAndSkillName(OTHER_USER_ID, "WMS")).willReturn(true);
+
+        // when & then
+        assertThatThrownBy(() -> userSkillService.createSkill(
+                principal(USER_ID, UserRole.DIRECTOR),
+                OTHER_USER_ID,
+                request("WMS", (short) 5)
+        ))
+                .isInstanceOf(BusinessException.class)
+                .extracting("errorCode")
+                .isEqualTo(ErrorCode.USER_SKILL_DUPLICATE_NAME);
+    }
+
+    @Test
     @DisplayName("일반 사용자가 다른 사용자 스킬 목록을 조회하면 접근 거부 예외를 던진다")
     void 일반_사용자가_다른_사용자_스킬_목록을_조회하면_접근_거부_예외를_던진다() {
         assertThatThrownBy(() -> userSkillService.getSkills(
@@ -176,4 +314,7 @@ class UserSkillServiceTest {
         return user;
     }
 
+    private static CreateSkillApiDto.Request request(String skillName, Short skillLevel) {
+        return new CreateSkillApiDto.Request(skillName, skillLevel);
+    }
 }

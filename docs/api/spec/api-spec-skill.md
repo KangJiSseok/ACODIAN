@@ -91,7 +91,7 @@
 ### POST /api/users/{userId}/skills
 - 목적: 특정 사용자에게 스킬을 추가한다.
 - 상태: `Documented`
-- 권한/접근 주체: 본인 추가 또는 조직 관리자 보정 작업으로 본다. [추론]
+- 권한/접근 주체: `DIRECTOR`, `DEPT_HEAD` 만 호출한다. `DIRECTOR` 는 자기 자신을 제외한 사용자를 대상으로 등록할 수 있고, `DEPT_HEAD` 는 자기 자신과 `DIRECTOR` 를 제외한 같은 부서 사용자만 대상으로 등록할 수 있다.
 - 요청
   - Path: `userId`
   - Body: `skillName`, `skillLevel`
@@ -118,9 +118,11 @@
 }
 ```
 - 상태/에러
-  - 성공: `201 Created` [추론]
-  - 대표 오류: `USER_NOT_FOUND` [추론]
-  - 대표 오류: `SKILL_LEVEL_OUT_OF_RANGE` [추론]
+  - 성공: `201 Created`
+  - 대표 오류: `COMMON_VALIDATION_ERROR`
+  - 대표 오류: `AUTH_ACCESS_DENIED`
+  - 대표 오류: `USER_NOT_FOUND`
+  - 대표 오류: `USER_SKILL_DUPLICATE_NAME`
 - ERD 연관
   - `tb_user_skill`
 - 근거
