@@ -2,7 +2,9 @@ package com.ibank.axwms.domain.organization.skill.service;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.BDDMockito.given;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
 
@@ -167,6 +169,26 @@ class UserSkillServiceTest {
     }
 
     @Test
+    @DisplayName("스킬명 양끝 공백을 제거한 뒤 등록한다")
+    void create_skill_trims_skill_name() {
+        // given
+        given(userRepository.findById(OTHER_USER_ID)).willReturn(Optional.of(user(OTHER_USER_ID, UserRole.MEMBER)));
+        given(userSkillRepository.existsByUserIdAndSkillName(OTHER_USER_ID, "WMS")).willReturn(false);
+
+        // when
+        userSkillService.createSkill(
+                principal(USER_ID, UserRole.DIRECTOR),
+                OTHER_USER_ID,
+                request("  WMS  ", (short) 5)
+        );
+
+        // then
+        ArgumentCaptor<UserSkill> captor = ArgumentCaptor.forClass(UserSkill.class);
+        verify(userSkillRepository).save(captor.capture());
+        assertThat(captor.getValue().getSkillName()).isEqualTo("WMS");
+    }
+
+    @Test
     @DisplayName("사업부장이 다른 부서 사용자 스킬을 등록하면 접근 거부 예외를 던진다")
     void 사업부장이_다른_부서_사용자_스킬을_등록하면_접근_거부_예외를_던진다() {
         // given
@@ -309,6 +331,50 @@ class UserSkillServiceTest {
         // then
         assertThat(userSkill.getSkillName()).isEqualTo("WMS");
         assertThat(userSkill.getSkillLevel()).isEqualTo((short) 5);
+    }
+
+    @Test
+    @DisplayName("스킬명 양끝 공백을 제거한 뒤 수정한다")
+    void update_skill_trims_skill_name() {
+        // given
+        UserSkill userSkill = userSkill(1L, OTHER_USER_ID, "SQL", (short) 3);
+        given(userRepository.findById(OTHER_USER_ID)).willReturn(Optional.of(user(OTHER_USER_ID, UserRole.MEMBER)));
+        given(userSkillRepository.findByIdAndUserId(1L, OTHER_USER_ID)).willReturn(Optional.of(userSkill));
+        given(userSkillRepository.existsByUserIdAndSkillNameAndIdNot(OTHER_USER_ID, "WMS", 1L)).willReturn(false);
+
+        // when
+        userSkillService.updateSkill(
+                principal(USER_ID, UserRole.DIRECTOR),
+                OTHER_USER_ID,
+                1L,
+                updateRequest("  WMS  ", null)
+        );
+
+        // then
+        assertThat(userSkill.getSkillName()).isEqualTo("WMS");
+        assertThat(userSkill.getSkillLevel()).isEqualTo((short) 3);
+    }
+
+    @Test
+    @DisplayName("스킬명 수정값이 blank 이면 기존 스킬명을 유지한다")
+    void update_skill_blank_name_keeps_existing_name() {
+        // given
+        UserSkill userSkill = userSkill(1L, OTHER_USER_ID, "SQL", (short) 3);
+        given(userRepository.findById(OTHER_USER_ID)).willReturn(Optional.of(user(OTHER_USER_ID, UserRole.MEMBER)));
+        given(userSkillRepository.findByIdAndUserId(1L, OTHER_USER_ID)).willReturn(Optional.of(userSkill));
+
+        // when
+        userSkillService.updateSkill(
+                principal(USER_ID, UserRole.DIRECTOR),
+                OTHER_USER_ID,
+                1L,
+                updateRequest("   ", (short) 4)
+        );
+
+        // then
+        assertThat(userSkill.getSkillName()).isEqualTo("SQL");
+        assertThat(userSkill.getSkillLevel()).isEqualTo((short) 4);
+        verify(userSkillRepository, never()).existsByUserIdAndSkillNameAndIdNot(any(), any(), any());
     }
 
     @Test
