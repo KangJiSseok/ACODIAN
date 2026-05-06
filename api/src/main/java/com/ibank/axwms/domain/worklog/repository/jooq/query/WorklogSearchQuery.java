@@ -1,8 +1,10 @@
 package com.ibank.axwms.domain.worklog.repository.jooq.query;
 
+import com.ibank.axwms.domain.organization.team.TeamStatus;
 import com.ibank.axwms.domain.worklog.WorklogImportance;
 import com.ibank.axwms.domain.worklog.WorklogStatus;
 import com.ibank.axwms.domain.worklog.dto.SearchWorklogsApiDto;
+
 import java.time.LocalDate;
 
 /**
@@ -13,6 +15,7 @@ import java.time.LocalDate;
 public record WorklogSearchQuery(
         String keyword,
         Long teamId,
+        TeamStatus teamStatus,
         WorklogStatus statusCode,
         WorklogImportance importanceCode,
         Long authorId,
@@ -26,16 +29,17 @@ public record WorklogSearchQuery(
      * API 요청 DTO 의 기본값과 기간 변환을 보정해 repository 전용 query 로 변환한다.
      *
      * @param request 검색 요청 DTO. null 이면 모든 필터 미지정으로 처리한다.
-     * @param today 기간 환산 기준 일자. service 가 LocalDate.now() 로 주입한다.
+     * @param today   기간 환산 기준 일자. service 가 LocalDate.now() 로 주입한다.
      */
     public static WorklogSearchQuery from(SearchWorklogsApiDto.Request request, LocalDate today) {
         SearchWorklogsApiDto.Request normalized = request == null
-                ? new SearchWorklogsApiDto.Request(null, null, null, null, null, null, null, null, null)
+                ? new SearchWorklogsApiDto.Request(null, null, null, null, null, null, null, null, null, null)
                 : request;
         LocalDate createdFrom = normalized.period() == null ? null : normalized.period().fromDate(today);
         return new WorklogSearchQuery(
                 trimToNull(normalized.keyword()),
                 normalized.teamId(),
+                normalized.teamStatus(),
                 normalized.statusCode(),
                 normalized.importanceCode(),
                 normalized.authorId(),

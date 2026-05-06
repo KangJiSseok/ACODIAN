@@ -198,6 +198,9 @@ public class WorklogJooqRepositoryImpl implements WorklogJooqRepository {
         if (query.teamId() != null) {
             condition = condition.and(TB_WORKLOG.TEAM_ID.eq(query.teamId()));
         }
+        if (query.teamStatus() != null) {
+            condition = condition.and(TB_TEAM.STATUS_CODE.eq(query.teamStatus().name()));
+        }
         if (query.statusCode() != null) {
             condition = condition.and(TB_WORKLOG.STATUS_CODE.eq(query.statusCode().name()));
         }

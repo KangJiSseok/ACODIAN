@@ -1,5 +1,6 @@
 package com.ibank.axwms.domain.worklog.dto;
 
+import com.ibank.axwms.domain.organization.team.TeamStatus;
 import com.ibank.axwms.domain.worklog.WorklogImportance;
 import com.ibank.axwms.domain.worklog.WorklogStatus;
 import com.ibank.axwms.domain.worklog.repository.jooq.projection.WorklogSearchProjection;
@@ -29,6 +30,8 @@ public final class SearchWorklogsApiDto {
             String keyword,
             @Schema(description = "팀 ID 필터 (단일). 가시 범위와 교집합으로 적용된다.")
             Long teamId,
+            @Schema(description = "팀 상태 필터 (단일). ACTIVE / INACTIVE.", example = "ACTIVE")
+            TeamStatus teamStatus,
             @Schema(description = "상태 코드 필터 (단일)")
             WorklogStatus statusCode,
             @Schema(description = "중요도 코드 필터 (단일)")
