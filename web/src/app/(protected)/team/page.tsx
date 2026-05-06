@@ -72,6 +72,7 @@ export default function TeamPage() {
     <section className="space-y-6">
       <PageHeader
         title="팀 관리"
+        description="관리 가능한 팀과 소속 구성원을 확인합니다."
         actions={
           <Button
             asChild
@@ -123,6 +124,9 @@ export default function TeamPage() {
               <h2 className="text-[20px] font-semibold tracking-[-0.04em] text-foreground">
                 {filter === "all" ? "팀 목록" : `${getTeamStatusLabel(filter)} 팀`}
               </h2>
+              <p className="mt-2 text-sm leading-6 text-muted-foreground">
+                팀 상태, 팀장, 관리자, 구성원 수를 한눈에 확인합니다.
+              </p>
             </div>
             <p className="text-sm font-medium text-muted-foreground">
               표시 {filteredTeams.length}개

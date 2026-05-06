@@ -7,6 +7,18 @@ const selectComponent = readFileSync(
   new URL("../src/components/ui/select.tsx", import.meta.url),
   "utf8",
 );
+const departmentForm = readFileSync(
+  new URL("../src/app/(protected)/department/_components/departmentForm.tsx", import.meta.url),
+  "utf8",
+);
+const teamForm = readFileSync(
+  new URL("../src/app/(protected)/team/_components/teamForm.tsx", import.meta.url),
+  "utf8",
+);
+const teamMemberSearchDialog = readFileSync(
+  new URL("../src/app/(protected)/team/_components/teamMemberSearchDialog.tsx", import.meta.url),
+  "utf8",
+);
 
 test("native select options keep readable contrast in browser popup menus", () => {
   assert.match(globalsCss, /select\s+option\s*{[^}]*color:\s*#0f172a/i);
@@ -27,4 +39,14 @@ test("native select popup menus use a stable light palette across themes", () =>
 
 test("shared Select options do not force dark theme foreground into native popup menus", () => {
   assert.doesNotMatch(selectComponent, /option[^]*var\(--foreground\)/);
+});
+
+test("organization forms use the same shared select sizing as worklog form", () => {
+  for (const source of [departmentForm, teamForm, teamMemberSearchDialog]) {
+    assert.match(source, /from "@\/components\/ui\/select"/);
+    assert.match(source, /h-11 rounded-2xl px-4 text-sm/);
+  }
+
+  assert.doesNotMatch(teamForm, /<select/);
+  assert.doesNotMatch(teamMemberSearchDialog, /<select/);
 });

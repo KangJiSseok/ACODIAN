@@ -32,11 +32,14 @@ test("team list cards navigate to detail without inline actions", () => {
   assert.doesNotMatch(teamPage, /href=\{`\/team\/edit\/\$\{team\.teamId\}`\}/);
 });
 
-test("team management page omits helper description copy", () => {
+test("team management page shows helper description copy", () => {
+  assert.match(teamPage, /관리 가능한 팀/);
+  assert.match(teamPage, /소속 구성원/);
+  assert.match(teamPage, /팀 상태, 팀장, 관리자/);
+  assert.match(teamPage, /구성원 수/);
   assert.doesNotMatch(teamPage, /역할에 따라/);
   assert.doesNotMatch(teamPage, /올바른 범위/);
   assert.doesNotMatch(teamPage, /팀 상태, 책임자/);
-  assert.doesNotMatch(teamPage, /한 화면에서 확인/);
 });
 
 test("team detail owns edit and delete actions", () => {

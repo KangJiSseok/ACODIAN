@@ -6,6 +6,7 @@ import { getApiErrorMessage } from "@/app/_common/service/api-client";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
+import { Select } from "@/components/ui/select";
 import { cn } from "@/lib/utils";
 import { useTeamUserCandidates } from "../_hooks";
 import type {
@@ -225,16 +226,18 @@ export default function TeamForm({
 
               <div className="grid gap-4 md:grid-cols-3">
                 <Field label="상태">
-                  <select
+                  <Select
                     value={statusCode}
                     onChange={(event) => setStatusCode(event.target.value)}
-                    className={inputClassName}
-                  >
-                    <option value="ACTIVE">{getTeamStatusLabel("ACTIVE")}</option>
-                    <option value="INACTIVE">
-                      {getTeamStatusLabel("INACTIVE")}
-                    </option>
-                  </select>
+                    className={selectClassName}
+                    options={[
+                      { value: "ACTIVE", label: getTeamStatusLabel("ACTIVE") },
+                      {
+                        value: "INACTIVE",
+                        label: getTeamStatusLabel("INACTIVE"),
+                      },
+                    ]}
+                  />
                 </Field>
                 <DatePickerField
                   id="team-start-date"
@@ -253,25 +256,26 @@ export default function TeamForm({
               </div>
 
               <Field label="팀 관리자">
-                <select
+                <Select
                   value={adminId}
                   onChange={(event) => setAdminId(event.target.value)}
-                  className={inputClassName}
-                >
-                  <option value="">팀 관리자를 선택하세요</option>
-                  {(adminCandidates.length > 0
-                    ? adminCandidates
-                    : candidates
-                  ).map((candidate) => (
-                    <option key={candidate.userId} value={candidate.userId}>
-                      {candidate.userName} /{" "}
-                      {candidate.titleName ??
+                  className={selectClassName}
+                  options={[
+                    { value: "", label: "팀 관리자를 선택하세요" },
+                    ...(adminCandidates.length > 0
+                      ? adminCandidates
+                      : candidates
+                    ).map((candidate) => ({
+                      value: String(candidate.userId),
+                      label: `${candidate.userName} / ${
+                        candidate.titleName ??
                         candidate.positionName ??
                         candidate.departmentName ??
-                        "-"}
-                    </option>
-                  ))}
-                </select>
+                        "-"
+                      }`,
+                    })),
+                  ]}
+                />
               </Field>
             </div>
 
@@ -413,6 +417,7 @@ export default function TeamForm({
 
 const inputClassName =
   "h-14 w-full rounded-2xl border border-input bg-background/70 px-4 text-base text-foreground shadow-sm outline-none transition placeholder:text-muted-foreground focus-visible:border-ring focus-visible:ring-2 focus-visible:ring-ring/20";
+const selectClassName = "h-11 rounded-2xl px-4 text-sm";
 
 function Field({
   label,

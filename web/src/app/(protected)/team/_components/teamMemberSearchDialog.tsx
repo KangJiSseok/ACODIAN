@@ -4,6 +4,7 @@ import { useMemo, useState } from "react";
 import { Check, Search, SlidersHorizontal, UserPlus, X } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { Select } from "@/components/ui/select";
 import {
   Dialog,
   DialogContent,
@@ -149,32 +150,32 @@ export default function TeamMemberSearchDialog({
                     placeholder="이름으로 검색"
                   />
                 </div>
-                <select
+                <Select
                   value={departmentName}
                   onChange={(event) => setDepartmentName(event.target.value)}
-                  className={dialogInputClassName}
+                  className={dialogSelectClassName}
                   aria-label="부서 필터"
-                >
-                  <option value={ALL_MEMBER_FILTER_VALUE}>전체 부서</option>
-                  {departmentOptions.map((option) => (
-                    <option key={option} value={option}>
-                      {option}
-                    </option>
-                  ))}
-                </select>
-                <select
+                  options={[
+                    { value: ALL_MEMBER_FILTER_VALUE, label: "전체 부서" },
+                    ...departmentOptions.map((option) => ({
+                      value: option,
+                      label: option,
+                    })),
+                  ]}
+                />
+                <Select
                   value={rankName}
                   onChange={(event) => setRankName(event.target.value)}
-                  className={dialogInputClassName}
+                  className={dialogSelectClassName}
                   aria-label="직급 필터"
-                >
-                  <option value={ALL_MEMBER_FILTER_VALUE}>전체 직급</option>
-                  {rankOptions.map((option) => (
-                    <option key={option} value={option}>
-                      {option}
-                    </option>
-                  ))}
-                </select>
+                  options={[
+                    { value: ALL_MEMBER_FILTER_VALUE, label: "전체 직급" },
+                    ...rankOptions.map((option) => ({
+                      value: option,
+                      label: option,
+                    })),
+                  ]}
+                />
               </div>
 
               <div className="rounded-2xl border border-border/70 bg-muted/15 p-4">
@@ -329,6 +330,7 @@ export default function TeamMemberSearchDialog({
 
 const dialogInputClassName =
   "h-14 w-full rounded-2xl border border-input bg-background/80 px-4 text-base text-foreground shadow-sm outline-none transition placeholder:text-muted-foreground focus-visible:border-ring focus-visible:ring-2 focus-visible:ring-ring/20";
+const dialogSelectClassName = "h-11 rounded-2xl px-4 text-sm";
 
 function getUniqueSortedValues(values: Array<string | null>) {
   return Array.from(new Set(values.filter((value): value is string => !!value)))

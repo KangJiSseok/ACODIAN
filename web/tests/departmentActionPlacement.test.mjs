@@ -25,12 +25,13 @@ test("department list cards navigate to detail without inline actions", () => {
   );
 });
 
-test("department management page omits helper description copy", () => {
+test("department management page shows helper description copy", () => {
+  assert.match(departmentPage, /관리 가능한 부서/);
+  assert.match(departmentPage, /운영 현황/);
+  assert.match(departmentPage, /활성 팀이 남아 있는 부서/);
+  assert.match(departmentPage, /삭제할 수 없습니다/);
   assert.doesNotMatch(departmentPage, /권한 범위/);
-  assert.doesNotMatch(departmentPage, /운영 규모/);
-  assert.doesNotMatch(departmentPage, /한 화면에서 확인/);
   assert.doesNotMatch(departmentPage, /부서 삭제는 비활성화/);
-  assert.doesNotMatch(departmentPage, /활성 팀이 남아/);
   assert.doesNotMatch(departmentPage, /부서 생성과 삭제 정책/);
   assert.doesNotMatch(departmentPage, /본부장 전용/);
   assert.doesNotMatch(departmentPage, /삭제 제약/);

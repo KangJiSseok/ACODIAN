@@ -18,6 +18,7 @@ export default function DepartmentPage() {
     <section className="space-y-6">
       <PageHeader
         title="부서 관리"
+        description="관리 가능한 부서와 운영 현황을 확인합니다."
         actions={
           <Button
             asChild
@@ -52,6 +53,9 @@ export default function DepartmentPage() {
               <h2 className="text-[20px] font-semibold tracking-[-0.04em] text-foreground">
                 부서 목록
               </h2>
+              <p className="mt-2 text-sm leading-6 text-muted-foreground">
+                활성 팀이 남아 있는 부서는 삭제할 수 없습니다.
+              </p>
             </div>
             <p className="text-sm font-medium text-muted-foreground">
               총 {departments.length}개
