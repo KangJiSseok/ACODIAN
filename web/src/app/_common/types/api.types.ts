@@ -17,3 +17,16 @@ export interface ApiResponse<T> {
 
 // body가 비어 있는 성공 응답을 표현할 때 사용하는 타입입니다.
 export type EmptyResponse = Record<string, never>;
+
+// 백엔드 공통 페이지네이션 응답입니다.
+export interface PageResponse<T> {
+  items: T[];
+  page: number;
+  pageSize: number;
+  totalCount: number;
+  totalPages: number;
+  isFirst: boolean;
+  isLast: boolean;
+  hasNext: boolean;
+  hasPrevious: boolean;
+}
