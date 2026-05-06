@@ -8,7 +8,6 @@ import {
   RefreshCw,
   Search,
   SlidersHorizontal,
-  Trash2,
 } from "lucide-react";
 import { files } from "@/app/(protected)/worklog/_mock/worklog.mock";
 import PageHeader from "@/app/_common/components/layout/pageHeader";
@@ -178,15 +177,6 @@ export default function FilePage() {
               >
                 <Download className="size-4" />
                 다운로드
-              </Button>
-              <Button
-                variant="default"
-                className="h-11 min-w-28 px-5 text-sm font-semibold"
-                type="button"
-                disabled={!selected}
-              >
-                <Trash2 className="size-4" />
-                삭제
               </Button>
             </div>
           </div>
