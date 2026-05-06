@@ -28,7 +28,6 @@ export const Select = React.forwardRef<HTMLSelectElement, SelectProps>(
             <option
               key={option.value}
               value={option.value}
-              style={{ color: "var(--foreground)", backgroundColor: "var(--background)" }}
             >
               {option.label}
             </option>
