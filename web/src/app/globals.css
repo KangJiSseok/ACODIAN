@@ -164,6 +164,30 @@ select {
   font: inherit;
 }
 
+select option {
+  color: #0f172a;
+  background-color: #fff;
+}
+
+select option,
+select optgroup {
+  color-scheme: light;
+}
+
+select optgroup {
+  color: #0f172a;
+  background-color: #fff;
+}
+
+select option:checked {
+  color: #ffffff;
+  background-color: #2563eb;
+}
+
+select option:disabled {
+  color: #94a3b8;
+}
+
 code,
 kbd,
 pre {

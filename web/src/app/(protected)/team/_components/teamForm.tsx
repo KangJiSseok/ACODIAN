@@ -1,11 +1,12 @@
 "use client";
 
-import { FormEvent, type ReactNode, useMemo, useState } from "react";
-import { Search, ShieldCheck, UserPlus, X } from "lucide-react";
+import { FormEvent, type ReactNode, useMemo, useRef, useState } from "react";
+import { CalendarDays, ShieldCheck, UserPlus, X } from "lucide-react";
 import { getApiErrorMessage } from "@/app/_common/service/api-client";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
+import { Select } from "@/components/ui/select";
 import { cn } from "@/lib/utils";
 import { useTeamUserCandidates } from "../_hooks";
 import type {
@@ -15,6 +16,9 @@ import type {
   TeamUserSummary,
   UpdateTeamRequest,
 } from "../_types/team.types";
+import { getTeamStatusLabel } from "../_utils/teamStatus.utils";
+import TeamMemberSearchDialog from "./teamMemberSearchDialog";
+import type { TeamMemberSelection } from "./teamForm.utils";
 
 interface TeamFormProps {
   initialTeam?: TeamDetail;
@@ -22,12 +26,6 @@ interface TeamFormProps {
   onSubmit: (payload: CreateTeamRequest | UpdateTeamRequest) => Promise<void>;
   submitLabel: string;
   isSubmitting: boolean;
-}
-
-interface SelectedMember {
-  userId: number;
-  teamRole: string;
-  isLeader: boolean;
 }
 
 const TEAM_ADMIN_TITLE_KEYWORDS = ["본부장", "사업부장"] as const;
@@ -56,8 +54,8 @@ export default function TeamForm({
       ? String(initialTeam.deptHeadAdminUserId)
       : "",
   );
-  const [query, setQuery] = useState("");
-  const [members, setMembers] = useState<SelectedMember[]>(
+  const [isMemberSearchOpen, setIsMemberSearchOpen] = useState(false);
+  const [members, setMembers] = useState<TeamMemberSelection[]>(
     initialUsers.map((user) => ({
       userId: user.userId,
       teamRole: user.teamRole ?? "",
@@ -85,34 +83,6 @@ export default function TeamForm({
       ),
     [candidates],
   );
-  const filteredCandidates = useMemo(() => {
-    const normalizedQuery = query.trim().toLowerCase();
-
-    return candidates.filter((candidate) => {
-      if (!normalizedQuery) return true;
-
-      return [
-        candidate.userName,
-        candidate.email,
-        candidate.departmentName,
-        candidate.positionName,
-        candidate.titleName,
-      ]
-        .join(" ")
-        .toLowerCase()
-        .includes(normalizedQuery);
-    });
-  }, [candidates, query]);
-
-  function addMember(userId: number) {
-    if (selectedIds.has(userId)) return;
-
-    setMembers((current) => [
-      ...current,
-      { userId, teamRole: "", isLeader: current.length === 0 },
-    ]);
-  }
-
   function removeMember(userId: number) {
     setMembers((current) => current.filter((member) => member.userId !== userId));
   }
@@ -256,110 +226,94 @@ export default function TeamForm({
 
               <div className="grid gap-4 md:grid-cols-3">
                 <Field label="상태">
-                  <select
+                  <Select
                     value={statusCode}
                     onChange={(event) => setStatusCode(event.target.value)}
-                    className={inputClassName}
-                  >
-                    <option value="ACTIVE">운영중</option>
-                    <option value="INACTIVE">비활성</option>
-                  </select>
-                </Field>
-                <Field label="시작일">
-                  <input
-                    type="date"
-                    value={startDate}
-                    onChange={(event) => setStartDate(event.target.value)}
-                    className={inputClassName}
+                    className={selectClassName}
+                    options={[
+                      { value: "ACTIVE", label: getTeamStatusLabel("ACTIVE") },
+                      {
+                        value: "INACTIVE",
+                        label: getTeamStatusLabel("INACTIVE"),
+                      },
+                    ]}
                   />
                 </Field>
-                <Field label="종료 예정일">
-                  <input
-                    type="date"
-                    value={expectedEndDate}
-                    onChange={(event) =>
-                      setExpectedEndDate(event.target.value)
-                    }
-                    className={inputClassName}
-                  />
-                </Field>
+                <DatePickerField
+                  id="team-start-date"
+                  label="시작일"
+                  value={startDate}
+                  onChange={setStartDate}
+                  pickerLabel="시작일 선택 달력 열기"
+                />
+                <DatePickerField
+                  id="team-expected-end-date"
+                  label="종료 예정일"
+                  value={expectedEndDate}
+                  onChange={setExpectedEndDate}
+                  pickerLabel="종료 예정일 선택 달력 열기"
+                />
               </div>
 
               <Field label="팀 관리자">
-                <select
+                <Select
                   value={adminId}
                   onChange={(event) => setAdminId(event.target.value)}
-                  className={inputClassName}
-                >
-                  <option value="">팀 관리자를 선택하세요</option>
-                  {(adminCandidates.length > 0
-                    ? adminCandidates
-                    : candidates
-                  ).map((candidate) => (
-                    <option key={candidate.userId} value={candidate.userId}>
-                      {candidate.userName} /{" "}
-                      {candidate.titleName ??
+                  className={selectClassName}
+                  options={[
+                    { value: "", label: "팀 관리자를 선택하세요" },
+                    ...(adminCandidates.length > 0
+                      ? adminCandidates
+                      : candidates
+                    ).map((candidate) => ({
+                      value: String(candidate.userId),
+                      label: `${candidate.userName} / ${
+                        candidate.titleName ??
                         candidate.positionName ??
                         candidate.departmentName ??
-                        "-"}
-                    </option>
-                  ))}
-                </select>
+                        "-"
+                      }`,
+                    })),
+                  ]}
+                />
               </Field>
             </div>
 
             <aside className="space-y-5 xl:border-l xl:border-border/70 xl:pl-8">
-              <div>
-                <p className="text-xs uppercase tracking-[0.2em] text-muted-foreground">
-                  MEMBERS
-                </p>
-                <p className="mt-2 text-sm leading-6 text-muted-foreground">
-                  구성원을 추가하고 팀장을 한 명 지정합니다.
-                </p>
+              <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between xl:flex-col 2xl:flex-row">
+                <div>
+                  <p className="text-xs uppercase tracking-[0.2em] text-muted-foreground">
+                    MEMBERS
+                  </p>
+                  <p className="mt-2 text-sm leading-6 text-muted-foreground">
+                    사용자 검색/추가 모달에서 구성원을 선택한 뒤 팀장과 역할을
+                    지정합니다.
+                  </p>
+                </div>
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={() => setIsMemberSearchOpen(true)}
+                  className="h-11 shrink-0 rounded-2xl px-4 font-semibold"
+                >
+                  <UserPlus className="size-4" />
+                  사용자 검색/추가
+                </Button>
               </div>
 
-              <div className="relative">
-                <Search className="pointer-events-none absolute left-4 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
-                <input
-                  value={query}
-                  onChange={(event) => setQuery(event.target.value)}
-                  className={cn(inputClassName, "pl-11")}
-                  placeholder="이름, 이메일, 부서로 검색"
-                />
-              </div>
-
-              <div className="max-h-64 space-y-2 overflow-y-auto pr-1">
-                {isLoading ? (
-                  <div className="workspace-empty rounded-2xl px-4 py-6 text-center text-sm">
-                    사용자 목록을 불러오는 중입니다.
-                  </div>
-                ) : null}
-                {filteredCandidates.map((candidate) => (
-                  <button
-                    key={candidate.userId}
-                    type="button"
-                    onClick={() => addMember(candidate.userId)}
-                    disabled={selectedIds.has(candidate.userId)}
-                    className="flex w-full items-center justify-between rounded-2xl border border-border/70 bg-muted/20 px-4 py-3 text-left transition hover:bg-muted/40 disabled:cursor-not-allowed disabled:opacity-45"
-                  >
-                    <span className="min-w-0">
-                      <span className="block truncate text-sm font-semibold text-foreground">
-                        {candidate.userName}
-                      </span>
-                      <span className="mt-1 block truncate text-xs text-muted-foreground">
-                        {candidate.departmentName ?? "-"} ·{" "}
-                        {candidate.positionName ?? "-"}
-                      </span>
-                    </span>
-                    <UserPlus className="size-4 shrink-0 text-muted-foreground" />
-                  </button>
-                ))}
+              <div className="rounded-2xl border border-border/70 bg-muted/20 px-4 py-3">
+                <div className="flex items-center justify-between gap-3">
+                  <p className="text-sm font-semibold text-foreground">
+                    추가된 구성원
+                  </p>
+                  <Badge variant="outline">{members.length}명</Badge>
+                </div>
               </div>
 
               <div className="space-y-3">
                 {members.length === 0 ? (
                   <div className="workspace-empty rounded-2xl px-4 py-6 text-center text-sm">
-                    추가된 팀 구성원이 없습니다.
+                    사용자 검색/추가 버튼을 눌러 구성원을 추가하세요.
                   </div>
                 ) : null}
 
@@ -387,7 +341,11 @@ export default function TeamForm({
                             ) : null}
                           </div>
                           <p className="mt-1 text-xs text-muted-foreground">
-                            {candidate?.positionName ?? "-"}
+                            {candidate?.positionName ??
+                              initialUsers.find(
+                                (user) => user.userId === member.userId,
+                              )?.positionName ??
+                              "-"}
                           </p>
                         </div>
                         <button
@@ -441,12 +399,25 @@ export default function TeamForm({
           </div>
         </div>
       </Card>
+
+      {isMemberSearchOpen ? (
+        <TeamMemberSearchDialog
+          open={isMemberSearchOpen}
+          onOpenChange={setIsMemberSearchOpen}
+          candidates={candidates}
+          initialUsers={initialUsers}
+          isLoading={isLoading}
+          members={members}
+          onSave={setMembers}
+        />
+      ) : null}
     </form>
   );
 }
 
 const inputClassName =
   "h-14 w-full rounded-2xl border border-input bg-background/70 px-4 text-base text-foreground shadow-sm outline-none transition placeholder:text-muted-foreground focus-visible:border-ring focus-visible:ring-2 focus-visible:ring-ring/20";
+const selectClassName = "h-11 rounded-2xl px-4 text-sm";
 
 function Field({
   label,
@@ -462,5 +433,65 @@ function Field({
       </span>
       {children}
     </label>
+  );
+}
+
+function DatePickerField({
+  id,
+  label,
+  value,
+  onChange,
+  pickerLabel,
+}: {
+  id: string;
+  label: string;
+  value: string;
+  onChange: (value: string) => void;
+  pickerLabel: string;
+}) {
+  const inputRef = useRef<HTMLInputElement>(null);
+
+  function openPicker() {
+    const input = inputRef.current;
+
+    if (!input) {
+      return;
+    }
+
+    if (typeof input.showPicker === "function") {
+      input.showPicker();
+      return;
+    }
+
+    input.focus();
+  }
+
+  return (
+    <div className="block space-y-3">
+      <label
+        htmlFor={id}
+        className="inline-flex items-center gap-2 text-[15px] font-semibold text-foreground"
+      >
+        {label}
+      </label>
+      <div className="relative">
+        <input
+          ref={inputRef}
+          id={id}
+          type="date"
+          value={value}
+          onChange={(event) => onChange(event.target.value)}
+          className={cn(inputClassName, "pr-12")}
+        />
+        <button
+          type="button"
+          onClick={openPicker}
+          className="absolute right-3 top-1/2 flex size-9 -translate-y-1/2 items-center justify-center rounded-xl text-muted-foreground transition hover:bg-muted hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/30"
+          aria-label={pickerLabel}
+        >
+          <CalendarDays className="size-4" />
+        </button>
+      </div>
+    </div>
   );
 }

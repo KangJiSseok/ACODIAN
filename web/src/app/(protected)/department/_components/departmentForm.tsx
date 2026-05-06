@@ -12,6 +12,8 @@ import { useAdminCandidates } from "../_hooks";
 import type { AdminCandidate } from "../_types/admin-candidate.types";
 import type { DepartmentFormValues } from "../_types/department.types";
 
+const selectClassName = "h-11 rounded-2xl px-4 text-sm";
+
 const emptyValues: DepartmentFormValues = {
   departmentName: "",
   description: "",
@@ -126,7 +128,7 @@ export function DepartmentForm({
               </label>
               <Select
                 id="departmentHeadUserId"
-                className="h-12"
+                className={selectClassName}
                 value={
                   values.departmentHeadUserId === null
                     ? ""

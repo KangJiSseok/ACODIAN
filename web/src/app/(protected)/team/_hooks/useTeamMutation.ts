@@ -28,3 +28,14 @@ export function useUpdateTeam(teamId: number) {
     },
   });
 }
+
+export function useDeleteTeam() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: teamService.deleteTeam,
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: teamKeys.all });
+    },
+  });
+}
