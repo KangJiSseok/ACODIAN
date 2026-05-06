@@ -1,0 +1,21 @@
+- query: "야간 배치가 겹치면서 운영이 흔들린 사례"
+  expected_team_ids: [101, 105, 106]
+- query: "매장에서 주문 취소 뒤 정산 숫자가 안 맞은 일"
+  expected_team_ids: [102, 107]
+- query: "권한은 맞는데 실제 접근은 실패한 건"
+  expected_team_ids: [103]
+- query: "3개월 전 비슷한 재고 불일치 대응"
+  expected_team_ids: [106]
+- query: "이전에 닫았는데 다시 열린 운영 이슈"
+  expected_team_ids: [102, 107]
+- query: "팀장이 후속 조치까지 같이 검토한 기록"
+  expected_team_ids: [101, 102, 103, 104, 105, 106, 107, 108, 109, 110]
+- query: "사업부장이 리스크를 보고 승인 기준을 남긴 업무"
+  expected_team_ids: [101, 103, 105, 108, 110]
+- query: "임베딩 품질과 RAG 응답 흔들림을 같이 본 실험"
+  expected_team_ids: [109]
+- query: "릴리즈 트레인 결과가 대시보드 보고로 이어진 흐름"
+  expected_team_ids: [105, 110]
+- query: "마감일을 넘겨서 완료된 업무"
+  expected_team_ids: []
+  note: "현재 AI 검색 DTO는 completion_date > due_date 비교 필터를 직접 받지 않는다."
