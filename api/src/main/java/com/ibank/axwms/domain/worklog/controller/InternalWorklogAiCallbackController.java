@@ -1,5 +1,6 @@
 package com.ibank.axwms.domain.worklog.controller;
 
+import com.ibank.axwms.domain.worklog.dto.ApplyWorklogTagsAiApiDto;
 import com.ibank.axwms.domain.worklog.dto.UpdateWorklogAiApiDto;
 import com.ibank.axwms.domain.worklog.service.InternalWorklogAiCallbackService;
 import com.ibank.axwms.global.response.EmptyResponse;
@@ -24,6 +25,16 @@ public class InternalWorklogAiCallbackController implements InternalWorklogAiCal
 
         internalWorklogAiCallbackService.updateAiResult(worklogId, request);
 
+        return EmptyResponse.INSTANCE;
+    }
+
+    @Override
+    @PatchMapping("/{worklogId}/tags")
+    public EmptyResponse applyAiGeneratedTags(
+            @PathVariable Long worklogId,
+            @Valid @RequestBody ApplyWorklogTagsAiApiDto.Request request
+    ) {
+        internalWorklogAiCallbackService.applyAiGeneratedTags(worklogId, request);
         return EmptyResponse.INSTANCE;
     }
 }

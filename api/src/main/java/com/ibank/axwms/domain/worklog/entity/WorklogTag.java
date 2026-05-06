@@ -39,4 +39,15 @@ public class WorklogTag {
     @CreationTimestamp
     @Column(name = "created_at", nullable = false, updatable = false)
     private LocalDateTime createdAt;
+
+    /**
+     * AI가 선택하거나 제안한 태그를 업무일지에 연결하는 관계 엔티티를 생성한다.
+     */
+    public static WorklogTag createAiGenerated(Long worklogId, Long tagId) {
+        WorklogTag worklogTag = new WorklogTag();
+        worklogTag.worklogId = worklogId;
+        worklogTag.tagId = tagId;
+        worklogTag.isAiGenerated = Boolean.TRUE;
+        return worklogTag;
+    }
 }

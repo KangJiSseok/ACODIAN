@@ -1,13 +1,13 @@
 package com.ibank.axwms.domain.worklog.repository.jooq;
 
-import static com.ibank.axwms.global.jooq.Tables.TB_META_TAG;
-import static com.ibank.axwms.global.jooq.Tables.TB_WORKLOG_TAG;
-
 import lombok.RequiredArgsConstructor;
 import org.jooq.DSLContext;
 import org.springframework.stereotype.Repository;
 
 import java.util.List;
+
+import static com.ibank.axwms.global.jooq.Tables.TB_META_TAG;
+import static com.ibank.axwms.global.jooq.Tables.TB_WORKLOG_TAG;
 
 @Repository
 @RequiredArgsConstructor
