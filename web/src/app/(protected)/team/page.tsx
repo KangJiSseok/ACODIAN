@@ -3,11 +3,10 @@
 import Link from "next/link";
 import { useMemo, useState } from "react";
 import {
-  ArrowRight,
   CalendarDays,
   Crown,
-  Pencil,
   ShieldCheck,
+  UserCog,
   Users,
 } from "lucide-react";
 import { Pagination } from "@/app/_common/components/data-display/pagination";
@@ -20,6 +19,7 @@ import { CardSpotlight } from "@/components/ui/card-spotlight";
 import { cn } from "@/lib/utils";
 import { useTeamList, useTeamSummary } from "./_hooks";
 import type { TeamStatusCode, TeamSummary } from "./_types/team.types";
+import { getTeamStatusLabel } from "./_utils/teamStatus.utils";
 
 type TeamFilter = "all" | "ACTIVE" | "INACTIVE";
 type TeamCount = number | null;
@@ -72,7 +72,6 @@ export default function TeamPage() {
     <section className="space-y-6">
       <PageHeader
         title="팀 관리"
-        description="역할에 따라 팀 목록과 소속 구성원을 올바른 범위로 확인합니다."
         actions={
           <Button
             asChild
@@ -122,11 +121,8 @@ export default function TeamPage() {
           <div className="flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
             <div>
               <h2 className="text-[20px] font-semibold tracking-[-0.04em] text-foreground">
-                {filter === "all" ? "팀 목록" : `${getStatusLabel(filter)} 팀`}
+                {filter === "all" ? "팀 목록" : `${getTeamStatusLabel(filter)} 팀`}
               </h2>
-              <p className="mt-2 text-sm leading-6 text-muted-foreground">
-                팀 상태, 책임자, 구성원 규모와 내 역할을 한 화면에서 확인합니다.
-              </p>
             </div>
             <p className="text-sm font-medium text-muted-foreground">
               표시 {filteredTeams.length}개
@@ -172,82 +168,73 @@ function formatTeamCount(count: TeamCount) {
   return typeof count === "number" ? `${count}개` : "-";
 }
 
-function TeamCard({ team }: { team: TeamSummary }) {
+function TeamCard({
+  team,
+}: {
+  team: TeamSummary;
+}) {
   return (
-    <CardSpotlight className="h-full rounded-[26px] transition-all duration-300 hover:-translate-y-1">
-      <CardContent className="flex h-full min-h-[23rem] flex-col gap-5 p-6">
-        <div className="flex items-start justify-between gap-4">
-          <div className="min-w-0 space-y-2">
-            <div className="flex flex-wrap items-center gap-2">
-              <h3 className="max-w-full truncate text-lg font-semibold tracking-[-0.04em] text-foreground transition-colors group-hover/card-spotlight:text-primary">
-                {team.teamName}
-              </h3>
-              {team.isPrimary ? (
-                <Badge variant="default">주 소속</Badge>
-              ) : null}
-              {team.myIsLeader ? <Badge variant="secondary">팀장</Badge> : null}
+    <Link
+      href={`/team/detail/${team.teamId}`}
+      className="block h-full rounded-[26px] outline-none transition-transform focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background"
+    >
+      <CardSpotlight className="h-full cursor-pointer rounded-[26px] transition-all duration-300 hover:-translate-y-1">
+        <CardContent className="flex h-full min-h-[20rem] flex-col gap-5 p-6">
+          <div className="flex items-start justify-between gap-4">
+            <div className="min-w-0 space-y-2">
+              <div className="flex flex-wrap items-center gap-2">
+                <h3 className="max-w-full truncate text-lg font-semibold tracking-[-0.04em] text-foreground transition-colors group-hover/card-spotlight:text-primary">
+                  {team.teamName}
+                </h3>
+                {team.isPrimary ? (
+                  <Badge variant="default">주 소속</Badge>
+                ) : null}
+                {team.myIsLeader ? (
+                  <Badge variant="secondary">팀장</Badge>
+                ) : null}
+              </div>
+              <p className="line-clamp-2 min-h-12 text-sm leading-6 text-muted-foreground">
+                {team.description ?? "팀 설명이 없습니다."}
+              </p>
             </div>
-            <p className="line-clamp-2 min-h-12 text-sm leading-6 text-muted-foreground">
-              {team.description ?? "팀 설명이 없습니다."}
+            <StatusBadge status={team.statusCode} />
+          </div>
+
+          <div className="grid gap-3 sm:grid-cols-2">
+            <InfoBox
+              icon={Crown}
+              label="팀장"
+              value={team.teamLeaderName ?? "미지정"}
+            />
+            <InfoBox
+              icon={UserCog}
+              label="관리자"
+              value={team.deptHeadAdminUsername ?? "미지정"}
+            />
+            <InfoBox
+              icon={Users}
+              label="구성원"
+              value={`${team.memberCount}명`}
+            />
+            <InfoBox
+              icon={ShieldCheck}
+              label="내 역할"
+              value={team.teamRole ?? "-"}
+            />
+          </div>
+
+          <div className="rounded-2xl border border-border/60 bg-muted/25 p-4">
+            <p className="text-xs font-semibold uppercase tracking-[0.16em] text-muted-foreground">
+              운영 범위
             </p>
+            <div className="mt-3 grid gap-3 text-sm text-muted-foreground sm:grid-cols-2">
+              <DateLine label="시작일" value={team.startDate} />
+              <DateLine label="종료 예정일" value={team.expectedEndDate} />
+            </div>
           </div>
-          <StatusBadge status={team.statusCode} />
-        </div>
-
-        <div className="grid gap-3 sm:grid-cols-3">
-          <InfoBox
-            icon={Crown}
-            label="팀장"
-            value={team.teamLeaderName ?? "미지정"}
-          />
-          <InfoBox
-            icon={Users}
-            label="구성원"
-            value={`${team.memberCount}명`}
-          />
-          <InfoBox
-            icon={ShieldCheck}
-            label="내 역할"
-            value={team.teamRole ?? "-"}
-          />
-        </div>
-
-        <div className="rounded-2xl border border-border/60 bg-muted/25 p-4">
-          <p className="text-xs font-semibold uppercase tracking-[0.16em] text-muted-foreground">
-            운영 범위
-          </p>
-          <div className="mt-3 grid gap-3 text-sm text-muted-foreground sm:grid-cols-2">
-            <DateLine label="시작일" value={team.startDate} />
-            <DateLine label="종료 예정일" value={team.expectedEndDate} />
-          </div>
-        </div>
-
-        <div className="mt-auto flex justify-end gap-3 pt-1">
-          <Button
-            asChild
-            type="button"
-            variant="secondary"
-            className="h-11 min-w-28 px-5 text-sm font-semibold"
-          >
-            <Link href={`/team/detail/${team.teamId}`}>
-              상세
-              <ArrowRight className="size-4" />
-            </Link>
-          </Button>
-          <Button
-            asChild
-            type="button"
-            variant="default"
-            className="h-11 min-w-28 px-5 text-sm font-semibold !text-primary-foreground hover:!text-primary-foreground [&_svg]:!text-primary-foreground"
-          >
-            <Link href={`/team/edit/${team.teamId}`}>
-              <Pencil className="size-4" />
-              수정
-            </Link>
-          </Button>
-        </div>
-      </CardContent>
-    </CardSpotlight>
+        </CardContent>
+      </CardSpotlight>
+    </Link>
   );
 }
 
@@ -256,7 +243,7 @@ function StatusBadge({ status }: { status: TeamStatusCode }) {
 
   return (
     <Badge variant={isActive ? "success" : "outline"} className="shrink-0">
-      {getStatusLabel(status)}
+      {getTeamStatusLabel(status)}
     </Badge>
   );
 }
@@ -291,18 +278,6 @@ function DateLine({ label, value }: { label: string; value: string | null }) {
       <span className="truncate">{value ? formatDate(value) : "-"}</span>
     </div>
   );
-}
-
-function getStatusLabel(status: TeamStatusCode) {
-  if (status === "ACTIVE") {
-    return "운영중";
-  }
-
-  if (status === "INACTIVE") {
-    return "비활성";
-  }
-
-  return status;
 }
 
 function formatDate(value: string) {
