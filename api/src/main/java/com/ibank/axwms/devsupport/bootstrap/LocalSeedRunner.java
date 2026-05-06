@@ -100,7 +100,7 @@ public class LocalSeedRunner implements ApplicationRunner {
         Map<String, Long> departmentIdsByName = seedDepartmentShells(DEPARTMENT_SEEDS);
         Map<String, Long> userIdsByEmail = seedUsers(USER_SEEDS, departmentIdsByName);
         synchronizeDepartments(DEPARTMENT_SEEDS, departmentIdsByName, userIdsByEmail);
-        Map<String, Long> teamIdsByKey = seedTeams(TEAM_SEEDS);
+        Map<String, Long> teamIdsByKey = seedTeams(TEAM_SEEDS, departmentIdsByName);
         seedUserTeams(USER_TEAM_SEEDS, userIdsByEmail, teamIdsByKey);
         seedTeamAdmins(TEAM_ADMIN_SEEDS, userIdsByEmail, teamIdsByKey);
         seedDirectorTeamAdmins(userIdsByEmail, teamIdsByKey);
@@ -226,10 +226,10 @@ public class LocalSeedRunner implements ApplicationRunner {
     /**
      * 팀 시드 목록을 순회하며 ACTIVE/INACTIVE 상태와 legacy 이름 치환을 함께 보장한다.
      */
-    private Map<String, Long> seedTeams(List<TeamSeedSpec> specs) {
+    private Map<String, Long> seedTeams(List<TeamSeedSpec> specs, Map<String, Long> departmentIdsByName) {
         Map<String, Long> teamIdsByKey = new LinkedHashMap<>();
         for (TeamSeedSpec spec : specs) {
-            teamIdsByKey.put(teamKey(spec.departmentName(), spec.teamName()), ensureTeam(spec));
+            teamIdsByKey.put(teamKey(spec.departmentName(), spec.teamName()), ensureTeam(spec, departmentIdsByName));
         }
         return teamIdsByKey;
     }
@@ -238,10 +238,12 @@ public class LocalSeedRunner implements ApplicationRunner {
      * 로컬 검증용 팀이 없으면 생성하고, 있으면 이름/상태/설명을 목표값으로 보정한다.
      * legacy 팀명이 남아 있으면 같은 row 를 재사용해 현재 스펙 이름으로 수렴시킨다.
      */
-    private Long ensureTeam(TeamSeedSpec spec) {
+    private Long ensureTeam(TeamSeedSpec spec, Map<String, Long> departmentIdsByName) {
+        Long departmentId = departmentIdsByName.get(spec.departmentName());
         return findTeamByNames(spec.teamName(), spec.legacyTeamNames())
                 .map(team -> {
                     team.synchronizeSeedProfile(
+                            departmentId,
                             spec.teamName(),
                             spec.statusCode(),
                             spec.description(),
@@ -254,6 +256,7 @@ public class LocalSeedRunner implements ApplicationRunner {
                 })
                 .orElseGet(() -> {
                     Team saved = teamRepository.save(Team.create(
+                            departmentId,
                             spec.teamName(),
                             spec.statusCode(),
                             spec.description(),

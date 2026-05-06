@@ -5,13 +5,15 @@ import static org.mockito.BDDMockito.given;
 import static org.mockito.BDDMockito.then;
 
 import com.ibank.axwms.domain.organization.department.dto.CreateDepartmentApiDto;
+import com.ibank.axwms.domain.organization.department.dto.GetDepartmentDetailApiDto;
 import com.ibank.axwms.domain.organization.department.dto.GetDepartmentsApiDto;
 import com.ibank.axwms.domain.organization.department.dto.UpdateDepartmentApiDto;
 import com.ibank.axwms.domain.organization.department.service.DepartmentService;
 import com.ibank.axwms.global.response.EmptyResponse;
 import jakarta.validation.Valid;
-import java.lang.reflect.Parameter;
 import java.lang.reflect.Method;
+import java.lang.reflect.Parameter;
+import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.List;
 import org.junit.jupiter.api.DisplayName;
@@ -85,6 +87,46 @@ class DepartmentControllerTest {
         assertThat(response.activeTeamCount()).isEqualTo(5);
         assertThat(response.activeUserCount()).isEqualTo(18);
         assertThat(response.departments()).containsExactlyElementsOf(responseFromService.departments());
+    }
+
+    @Test
+    @DisplayName("부서 상세 조회 메서드는 GET detail 경로와 DIRECTOR 권한을 사용한다")
+    void 부서_상세_조회_메서드는_get_detail_경로와_director_권한을_사용한다() throws NoSuchMethodException {
+        Method method = DepartmentController.class.getMethod("getDepartmentDetail", Long.class);
+        GetMapping getMapping = method.getAnnotation(GetMapping.class);
+        PreAuthorize preAuthorize = method.getAnnotation(PreAuthorize.class);
+
+        assertThat(getMapping).isNotNull();
+        assertThat(getMapping.value()).containsExactly("/{id}/detail");
+        assertThat(preAuthorize).isNotNull();
+        assertThat(preAuthorize.value()).isEqualTo("hasRole('DIRECTOR')");
+    }
+
+    @Test
+    @DisplayName("부서 상세 조회 메서드는 서비스 결과를 그대로 반환한다")
+    void 부서_상세_조회_메서드는_서비스_결과를_그대로_반환한다() {
+        GetDepartmentDetailApiDto.Response responseFromService = GetDepartmentDetailApiDto.Response.of(
+                10L,
+                "물류본부",
+                1001L,
+                "박본부",
+                List.of(new GetDepartmentDetailApiDto.Response.TeamSummary(
+                        21L,
+                        "플랫폼개발팀",
+                        2001L,
+                        "류팀장",
+                        LocalDate.of(2026, 4, 1),
+                        null,
+                        3
+                ))
+        );
+        given(departmentService.getDepartmentDetail(10L)).willReturn(responseFromService);
+
+        GetDepartmentDetailApiDto.Response response = departmentController.getDepartmentDetail(10L);
+
+        then(departmentService).should().getDepartmentDetail(10L);
+        assertThat(response).isSameAs(responseFromService);
+        assertThat(response.teams()).hasSize(1);
     }
 
     @Test

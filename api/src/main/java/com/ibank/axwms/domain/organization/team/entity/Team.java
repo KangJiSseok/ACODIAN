@@ -31,6 +31,9 @@ public class Team {
     @Column(name = "team_name", nullable = false, length = 100)
     private String teamName;
 
+    @Column(name = "department_id")
+    private Long departmentId;
+
     @Enumerated(EnumType.STRING)
     @Column(name = "status_code", nullable = false, length = 20)
     private TeamStatus statusCode;
@@ -64,7 +67,21 @@ public class Team {
                               String description,
                               LocalDate startDate,
                               LocalDate expectedEndDate) {
+        return create(null, teamName, statusCode, description, startDate, expectedEndDate);
+    }
+
+    /**
+     * 부서 상세/list/delete 기준이 되는 nullable 소유 부서와 함께 신규 팀을 생성한다.
+     * Team API 생성 계약은 부서 입력을 받지 않으므로 일반 요청 경로는 null 을 전달한다.
+     */
+    public static Team create(Long departmentId,
+                              String teamName,
+                              TeamStatus statusCode,
+                              String description,
+                              LocalDate startDate,
+                              LocalDate expectedEndDate) {
         Team team = new Team();
+        team.departmentId = departmentId;
         team.teamName = teamName;
         team.statusCode = statusCode;
         team.description = description;
@@ -80,6 +97,17 @@ public class Team {
                                        String description,
                                        LocalDate startDate,
                                        LocalDate expectedEndDate) {
+        synchronizeSeedProfile(null, teamName, statusCode, description, startDate, expectedEndDate);
+    }
+
+    /** 로컬 시드 팀을 부서 ownership 까지 목표값으로 맞춰 상세 화면 검증 데이터를 안정화한다. */
+    public void synchronizeSeedProfile(Long departmentId,
+                                       String teamName,
+                                       TeamStatus statusCode,
+                                       String description,
+                                       LocalDate startDate,
+                                       LocalDate expectedEndDate) {
+        this.departmentId = departmentId;
         updateProfile(teamName, statusCode, description, startDate, expectedEndDate);
         this.deletedAt = null;
     }

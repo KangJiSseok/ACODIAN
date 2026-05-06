@@ -5,11 +5,11 @@
 
 ## 1. 도메인 목적 / 개요
 부서 기준 정보와 부서 접근 수명주기 계약을 정의한다. 본 문서는 normalized path 인 `/api/departments/*` 를 기준으로 하며,
-부서 문맥은 `tb_user.department_id` 기준의 **주 소속 부서** 를 뜻한다.
-`tb_user_team` 으로 표현되는 교차 부서 팀 참여/팀장 여부는 team spec 에서 별도 관리한다.
+부서 문맥은 `tb_user.department_id` 기준의 **주 소속 부서** 와 `tb_team.department_id` 기준의 **nullable 팀 소유 부서** 를 구분한다.
+`tb_user_team` 으로 표현되는 교차 부서 팀 참여/팀장 여부와 Team API visible scope 는 team spec 에서 별도 관리한다.
 
 이번 계약에서 department 삭제는 hard delete 가 아니라 `status_code = INACTIVE` 로 전환하는 soft-delete 이다.
-부서 비활성화는 **소속 ACTIVE 팀이 0개일 때만** 허용하며, 사용자 `employment_status` / `department_id` 는 자동 변경하지 않는다.
+부서 비활성화는 `tb_team.department_id = {departmentId}` 로 직접 소유한 ACTIVE/non-deleted 팀이 0개일 때만 허용하며, 사용자 `employment_status` / `department_id` 는 자동 변경하지 않는다.
 
 ## 2. 주요 ERD 연관
 - `tb_department`
@@ -27,11 +27,12 @@
 | Method | Path | Status | 목적 |
 |---|---|---|---|
 | `GET` | `/api/departments` | `Documented` | 활성 부서 목록과 활성 부서/팀/사용자 집계를 조회한다. |
+| `GET` | `/api/departments/{id}/detail` | `Documented` | ACTIVE 부서 header 와 소유 ACTIVE/non-deleted 팀 목록을 조회한다. |
 | `POST` | `/api/departments` | `Documented` | 새 부서를 등록한다. |
 | `PUT` | `/api/departments/{id}` | `Documented` | 활성 부서 기본 정보를 수정한다. |
 | `DELETE` | `/api/departments/{id}` | `Documented` | 부서를 비활성화한다. |
 
-> 범위 제외: `GET /api/departments/{id}`, `GET /api/departments/{id}/users`
+> 범위 제외: `GET /api/departments/{id}/users`
 
 ## 5. 엔드포인트 상세
 
@@ -85,6 +86,56 @@
   - 성공: `200 OK`
   - 인증 없음/유효하지 않음: `AUTH_UNAUTHORIZED`
   - DIRECTOR 권한 없음: `AUTH_ACCESS_DENIED`
+
+### GET /api/departments/{id}/detail
+- 목적: ACTIVE 부서의 top-level header 와 해당 부서가 직접 소유한 팀 목록을 조회한다.
+- 권한/접근 주체: `DIRECTOR` 전용
+- 요청
+  - Path: `id`
+  - Bearer access token 필수
+- 응답 (`data` 기준)
+  - `departmentId`, `departmentName`
+  - `departmentHeadUserId`, `departmentHeadUserName`: 부서 header 에서 head user left join 으로 조회하며 없으면 null
+  - `teams[]`: 페이지네이션 wrapper 없이 반환하며 팀이 없으면 빈 배열
+    - `teamId`, `teamName`, `leaderId`, `leaderName`, `startDate`, `expectedEndDate`, `memberCount`
+- 팀 포함 기준
+  - `tb_team.department_id = {id}`
+  - `tb_team.status_code = ACTIVE`
+  - `tb_team.deleted_at IS NULL`
+  - `department_id IS NULL`, 타 부서 소유, INACTIVE, soft-deleted 팀은 제외한다.
+- 집계/리더 기준
+  - leader 는 ACTIVE membership 중 `is_leader = true` 인 단일 사용자다.
+  - `memberCount` 는 leader join 과 분리해 계산한 ACTIVE membership 의 DISTINCT user 수 기준이다.
+  - 정렬은 `teamId ASC` 다.
+- 응답 예시
+```json
+{
+  "success": true,
+  "data": {
+    "departmentId": 10,
+    "departmentName": "물류본부",
+    "departmentHeadUserId": 1001,
+    "departmentHeadUserName": "박본부",
+    "teams": [
+      {
+        "teamId": 21,
+        "teamName": "플랫폼개발팀",
+        "leaderId": 2001,
+        "leaderName": "류팀장",
+        "startDate": "2026-04-01",
+        "expectedEndDate": null,
+        "memberCount": 3
+      }
+    ]
+  },
+  "timestamp": "2026-05-06T12:00:00Z"
+}
+```
+- 상태/에러
+  - 성공: `200 OK`
+  - 인증 없음/유효하지 않음: `AUTH_UNAUTHORIZED`
+  - DIRECTOR 권한 없음: `AUTH_ACCESS_DENIED`
+  - ACTIVE 부서 없음: `DEPARTMENT_NOT_FOUND`
 
 ### POST /api/departments
 - 목적: 새 부서를 등록한다.
@@ -141,8 +192,8 @@
 - 목적: 부서를 soft-delete 한다.
 - 권한/접근 주체: `DIRECTOR` 전용
 - 동작
-  - 소속 ACTIVE 팀이 하나라도 있으면 실패한다.
-  - 소속 팀이 0개이거나 전부 `INACTIVE` 이면 department 상태만 `INACTIVE` 로 바꾼다.
+  - 직접 소유한 ACTIVE/non-deleted 팀이 하나라도 있으면 실패한다.
+  - 직접 소유한 팀이 0개이거나 전부 `INACTIVE`/soft-deleted 이거나 `department_id IS NULL` 팀뿐이면 department 상태만 `INACTIVE` 로 바꾼다.
   - 이미 `INACTIVE` 인 department 에 대한 DELETE 는 no-op 성공이다.
   - 사용자 재직 상태/주 소속 부서/팀 membership 은 자동 변경하지 않는다.
 - 상태/에러
@@ -151,10 +202,10 @@
   - ACTIVE 팀 존재: `DEPARTMENT_HAS_ACTIVE_TEAMS`
 
 ## 6. 수동 검증용 로컬 시드 시나리오
-- `개발본부`: ACTIVE + ACTIVE 팀 존재 → DELETE 실패
-- `운영지원본부`: ACTIVE + 모든 팀 INACTIVE → DELETE 성공
+- `솔루션개발사업부`: ACTIVE + 직접 소유 ACTIVE 팀 존재 → DETAIL teams 노출 / DELETE 실패
+- `솔루션사업부`: ACTIVE + 직접 소유 팀이 모두 INACTIVE → DELETE 성공
 - `휴면본부`: INACTIVE → DELETE no-op 성공
-- `비상대응본부`: ACTIVE + 팀 0개 + head 없음 → 목록 null head / DELETE 허용
+- `비상대응본부`: ACTIVE + 직접 소유 팀 0개 + head 없음 → 목록/detail null head / 빈 teams / DELETE 허용
 - `member@ibank.com`: ACTIVE 사용자지만 INACTIVE 팀에만 소속 → `activeUserCount` 제외
 
 ## 7. 메모

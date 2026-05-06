@@ -99,15 +99,62 @@ class DepartmentControllerE2eTest extends E2eTestSupport {
     }
 
     @Test
-    @DisplayName("팀은 부서에 직접 귀속되지 않으므로 활성 팀 존재 여부와 무관하게 부서를 INACTIVE 로 변경한다")
-    void 팀은_부서에_직접_귀속되지_않으므로_활성_팀_존재_여부와_무관하게_부서를_inactive로_변경한다() throws Exception {
-        mockMvc.perform(apiDelete("/departments/" + logisticsDepartmentId)
+    @DisplayName("DIRECTOR 가 활성 부서 상세를 조회하면 header와 소유 팀 목록을 반환한다")
+    void director_가_활성_부서_상세를_조회하면_header와_소유_팀_목록을_반환한다() throws Exception {
+        mockMvc.perform(apiGet("/departments/" + logisticsDepartmentId + "/detail")
                         .with(user("director@ibank.com").roles("DIRECTOR")))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.success", is(true)));
+                .andExpect(jsonPath("$.success", is(true)))
+                .andExpect(jsonPath("$.data.departmentId", is(logisticsDepartmentId.intValue())))
+                .andExpect(jsonPath("$.data.departmentName", is("물류본부")))
+                .andExpect(jsonPath("$.data.departmentHeadUserId", is(logisticsHeadUserId.intValue())))
+                .andExpect(jsonPath("$.data.departmentHeadUserName", is("박본부")))
+                .andExpect(jsonPath("$.data.teams", hasSize(2)))
+                .andExpect(jsonPath("$.data.teams[0].teamName", is("플랫폼개발팀")))
+                .andExpect(jsonPath("$.data.teams[0].memberCount", is(1)))
+                .andExpect(jsonPath("$.data.teams[0].leaderId", nullValue()))
+                .andExpect(jsonPath("$.data.teams[1].teamName", is("아키텍처TF")));
+    }
+
+    @Test
+    @DisplayName("DIRECTOR 가 팀이 없는 활성 부서 상세를 조회하면 빈 teams를 반환한다")
+    void director_가_팀이_없는_활성_부서_상세를_조회하면_빈_teams를_반환한다() throws Exception {
+        mockMvc.perform(apiGet("/departments/" + headlessDepartmentId + "/detail")
+                        .with(user("director@ibank.com").roles("DIRECTOR")))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.success", is(true)))
+                .andExpect(jsonPath("$.data.teams", hasSize(0)));
+    }
+
+    @Test
+    @DisplayName("DIRECTOR 가 inactive 부서 상세를 조회하면 DEPARTMENT_NOT_FOUND 응답을 반환한다")
+    void director_가_inactive_부서_상세를_조회하면_department_not_found_응답을_반환한다() throws Exception {
+        mockMvc.perform(apiGet("/departments/" + dormantDepartmentId + "/detail")
+                        .with(user("director@ibank.com").roles("DIRECTOR")))
+                .andExpect(status().isNotFound())
+                .andExpect(jsonPath("$.error.code", is("DEPARTMENT_NOT_FOUND")));
+    }
+
+    @Test
+    @DisplayName("DIRECTOR 권한이 아니면 부서 상세 조회를 AUTH_ACCESS_DENIED로 거부한다")
+    void director_권한이_아니면_부서_상세_조회를_auth_access_denied로_거부한다() throws Exception {
+        mockMvc.perform(apiGet("/departments/" + logisticsDepartmentId + "/detail")
+                        .with(user("member@ibank.com").roles("MEMBER")))
+                .andExpect(status().isForbidden())
+                .andExpect(jsonPath("$.error.code", is("AUTH_ACCESS_DENIED")));
+    }
+
+    @Test
+    @DisplayName("소유한 ACTIVE 팀이 있으면 부서 삭제를 DEPARTMENT_HAS_ACTIVE_TEAMS 로 거부한다")
+    void 소유한_active_팀이_있으면_부서_삭제를_department_has_active_teams로_거부한다() throws Exception {
+        mockMvc.perform(apiDelete("/departments/" + logisticsDepartmentId)
+                        .with(user("director@ibank.com").roles("DIRECTOR")))
+                .andExpect(status().isConflict())
+                .andExpect(jsonPath("$.success", is(false)))
+                .andExpect(jsonPath("$.error.code", is("DEPARTMENT_HAS_ACTIVE_TEAMS")));
 
         Department updated = departmentRepository.findById(logisticsDepartmentId).orElseThrow();
-        assertThat(updated.getStatusCode()).isEqualTo(DepartmentStatus.INACTIVE);
+        assertThat(updated.getStatusCode()).isEqualTo(DepartmentStatus.ACTIVE);
     }
 
     @Test
@@ -694,6 +741,7 @@ class DepartmentControllerE2eTest extends E2eTestSupport {
     /** 테스트용 팀 엔티티를 부서와 상태 기준으로 생성한다. */
     private Team createTeam(Long departmentId, String teamName, TeamStatus status) {
         return Team.create(
+                departmentId,
                 teamName,
                 status,
                 teamName + " 설명",

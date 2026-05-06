@@ -1,6 +1,7 @@
 package com.ibank.axwms.domain.organization.department.controller;
 
 import com.ibank.axwms.domain.organization.department.dto.CreateDepartmentApiDto;
+import com.ibank.axwms.domain.organization.department.dto.GetDepartmentDetailApiDto;
 import com.ibank.axwms.domain.organization.department.dto.GetDepartmentsApiDto;
 import com.ibank.axwms.domain.organization.department.dto.UpdateDepartmentApiDto;
 import com.ibank.axwms.domain.organization.department.service.DepartmentService;
@@ -31,6 +32,13 @@ public class DepartmentController implements DepartmentControllerDocs {
     @PreAuthorize("hasRole('DIRECTOR')")
     public GetDepartmentsApiDto.Response getDepartments() {
         return departmentService.getDepartments();
+    }
+
+    @Override
+    @GetMapping("/{id}/detail")
+    @PreAuthorize("hasRole('DIRECTOR')")
+    public GetDepartmentDetailApiDto.Response getDepartmentDetail(@PathVariable Long id) {
+        return departmentService.getDepartmentDetail(id);
     }
 
     @Override

@@ -261,16 +261,17 @@ class TeamServiceTest {
     }
 
     @Test
-    @DisplayName("createTeam 은 팀과 요청 관리자 및 DIRECTOR grant 와 ACTIVE membership 을 생성한다")
-    void createTeam_은_팀과_요청_관리자_및_director_grant와_active_membership을_생성한다() {
+    @DisplayName("createTeam 은 요청 관리자 부서로 팀과 admin grant 및 ACTIVE membership 을 생성한다")
+    void createTeam_은_요청_관리자_부서로_팀과_admin_grant_및_active_membership을_생성한다() {
         CreateTeamApiDto.Request request = createTeamRequest();
         Team savedTeam = createTeam(501L);
-        User requestedAdmin = createUser(201L, UserRole.MEMBER);
+        User requestedAdmin = createUser(201L, UserRole.MEMBER, 10L);
         User leader = createUser(202L, UserRole.MEMBER);
         User member = createUser(203L, UserRole.MEMBER);
         User director = createUser(301L, UserRole.DIRECTOR);
         given(teamRepository.existsByTeamNameAndDeletedAtIsNull("물류혁신TF")).willReturn(false);
-        given(userRepository.findAllById(any())).willReturn(List.of(requestedAdmin, leader, member));
+        given(userRepository.findById(201L)).willReturn(Optional.of(requestedAdmin));
+        given(userRepository.findAllById(any())).willReturn(List.of(leader, member));
         given(userRepository.findAllByRoleCode(UserRole.DIRECTOR)).willReturn(List.of(director));
         given(teamRepository.save(any(Team.class))).willReturn(savedTeam);
 
@@ -279,8 +280,16 @@ class TeamServiceTest {
         ArgumentCaptor<Team> teamCaptor = ArgumentCaptor.forClass(Team.class);
         then(teamRepository).should().save(teamCaptor.capture());
         assertThat(teamCaptor.getValue())
-                .extracting(Team::getTeamName, Team::getStatusCode, Team::getDescription, Team::getStartDate, Team::getExpectedEndDate)
+                .extracting(
+                        Team::getDepartmentId,
+                        Team::getTeamName,
+                        Team::getStatusCode,
+                        Team::getDescription,
+                        Team::getStartDate,
+                        Team::getExpectedEndDate
+                )
                 .containsExactly(
+                        10L,
                         "물류혁신TF",
                         TeamStatus.ACTIVE,
                         "창고 자동화 및 운영 고도화",
@@ -478,7 +487,8 @@ class TeamServiceTest {
     void createTeam_은_요청_사용자_중_존재하지_않는_사용자가_있으면_user_not_found_예외를_던진다() {
         CreateTeamApiDto.Request request = createTeamRequest();
         given(teamRepository.existsByTeamNameAndDeletedAtIsNull("물류혁신TF")).willReturn(false);
-        given(userRepository.findAllById(any())).willReturn(List.of(createUser(201L, UserRole.MEMBER)));
+        given(userRepository.findById(201L)).willReturn(Optional.of(createUser(201L, UserRole.MEMBER)));
+        given(userRepository.findAllById(any())).willReturn(List.of());
 
         assertThatThrownBy(() -> teamService.createTeam(request))
                 .isInstanceOf(BusinessException.class)
@@ -631,8 +641,12 @@ class TeamServiceTest {
     }
 
     private User createUser(Long id, UserRole role) {
+        return createUser(id, role, 1L);
+    }
+
+    private User createUser(Long id, UserRole role, Long departmentId) {
         User user = User.create(
-                1L,
+                departmentId,
                 "테스트사용자",
                 "user-" + id + "@ibank.com",
                 "$2a$10$abcdefghijklmnopqrstuv",

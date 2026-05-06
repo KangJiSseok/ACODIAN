@@ -2,10 +2,12 @@ package com.ibank.axwms.domain.organization.department.service;
 
 import com.ibank.axwms.domain.organization.department.DepartmentStatus;
 import com.ibank.axwms.domain.organization.department.dto.CreateDepartmentApiDto;
+import com.ibank.axwms.domain.organization.department.dto.GetDepartmentDetailApiDto;
 import com.ibank.axwms.domain.organization.department.dto.GetDepartmentsApiDto;
 import com.ibank.axwms.domain.organization.department.dto.UpdateDepartmentApiDto;
 import com.ibank.axwms.domain.organization.department.entity.Department;
 import com.ibank.axwms.domain.organization.department.repository.DepartmentRepository;
+import com.ibank.axwms.domain.organization.department.repository.jooq.projection.DepartmentDetailHeaderProjection;
 import com.ibank.axwms.domain.organization.department.repository.jooq.projection.DepartmentListItemProjection;
 import com.ibank.axwms.domain.organization.department.repository.jooq.projection.DepartmentOverviewProjection;
 import com.ibank.axwms.domain.organization.user.UserRole;
@@ -44,6 +46,24 @@ public class DepartmentService {
         );
     }
 
+    /** ACTIVE 부서 header 와 nullable ownership 팀 목록을 조립해 상세 화면 응답을 반환한다. */
+    public GetDepartmentDetailApiDto.Response getDepartmentDetail(Long departmentId) {
+        DepartmentDetailHeaderProjection header = departmentRepository.findActiveDepartmentDetailHeader(departmentId)
+                .orElseThrow(() -> new BusinessException(ErrorCode.DEPARTMENT_NOT_FOUND));
+        List<GetDepartmentDetailApiDto.Response.TeamSummary> teams = departmentRepository.findActiveDepartmentDetailTeams(departmentId)
+                .stream()
+                .map(GetDepartmentDetailApiDto.Response.TeamSummary::from)
+                .toList();
+
+        return GetDepartmentDetailApiDto.Response.of(
+                header.departmentId(),
+                header.departmentName(),
+                header.departmentHeadUserId(),
+                header.departmentHeadUserName(),
+                teams
+        );
+    }
+
     /** 활성 부서의 기본 정보와 부서장을 수정한다. null head 또는 필드 생략은 부서장 해제로 처리한다. */
     @Transactional
     public void updateDepartment(Long departmentId, UpdateDepartmentApiDto.Request request) {
@@ -66,6 +86,7 @@ public class DepartmentService {
             return;
         }
 
+        ensureNoActiveOwnedTeam(departmentId);
         department.changeStatus(DepartmentStatus.INACTIVE);
     }
 
@@ -103,6 +124,13 @@ public class DepartmentService {
     private Department getActiveDepartment(Long departmentId) {
         return departmentRepository.findByIdAndStatusCode(departmentId, DepartmentStatus.ACTIVE)
                 .orElseThrow(() -> new BusinessException(ErrorCode.DEPARTMENT_NOT_FOUND));
+    }
+
+    /** 부서가 직접 소유한 ACTIVE/non-deleted 팀이 남아 있으면 삭제를 차단한다. */
+    private void ensureNoActiveOwnedTeam(Long departmentId) {
+        if (departmentRepository.existsActiveOwnedTeam(departmentId)) {
+            throw new BusinessException(ErrorCode.DEPARTMENT_HAS_ACTIVE_TEAMS);
+        }
     }
 
     /** 신규 등록 전에 department_name UNIQUE 충돌을 확인한다. */

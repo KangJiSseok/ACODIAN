@@ -205,8 +205,8 @@ class TeamControllerE2eTest extends E2eTestSupport {
     }
 
     @Test
-    @DisplayName("DEPT_HEAD 가 팀을 생성하면 admin grant 와 ACTIVE 팀원이 함께 저장된다")
-    void dept_head가_팀을_생성하면_admin_grant와_active_팀원이_함께_저장된다() throws Exception {
+    @DisplayName("DEPT_HEAD 가 팀을 생성하면 요청 관리자 부서와 admin grant 및 ACTIVE 팀원이 함께 저장된다")
+    void dept_head가_팀을_생성하면_요청_관리자_부서와_admin_grant_및_active_팀원이_함께_저장된다() throws Exception {
         Department department = departmentRepository.findAll().getFirst();
         User creator = userRepository.save(createUser(department.getId(), "생성자", "team-create-owner", UserRole.DEPT_HEAD));
         User director = userRepository.save(createUser(department.getId(), "디렉터", "team-create-director", UserRole.DIRECTOR));
@@ -239,8 +239,16 @@ class TeamControllerE2eTest extends E2eTestSupport {
 
         Team createdTeam = teamRepository.findFirstByTeamNameOrderByDeletedAtDesc(teamName).orElseThrow();
         assertThat(createdTeam)
-                .extracting(Team::getTeamName, Team::getStatusCode, Team::getDescription, Team::getStartDate, Team::getExpectedEndDate)
+                .extracting(
+                        Team::getDepartmentId,
+                        Team::getTeamName,
+                        Team::getStatusCode,
+                        Team::getDescription,
+                        Team::getStartDate,
+                        Team::getExpectedEndDate
+                )
                 .containsExactly(
+                        requestedAdmin.getDepartmentId(),
                         teamName,
                         TeamStatus.ACTIVE,
                         "창고 자동화 및 운영 고도화",

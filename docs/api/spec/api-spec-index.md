@@ -42,7 +42,7 @@
 | `auth` | `POST` | `/api/auth/refresh`               | `Documented` | checklist → class mapping → ERD/ADR | [api-spec-auth.md](./api-spec-auth.md) |
 | `auth` | `POST` | `/api/auth/change-password`       | `Proposed-risk-closure` | checklist → class mapping → ERD/ADR | [api-spec-auth.md](./api-spec-auth.md) |
 | `department` | `GET` | `/api/departments`                | `Documented` | checklist → class mapping → ERD/ADR | [api-spec-department.md](./api-spec-department.md) |
-| `department` | `GET` | `/api/departments/{id}`           | `Documented` | checklist → class mapping → ERD/ADR | [api-spec-department.md](./api-spec-department.md) |
+| `department` | `GET` | `/api/departments/{id}/detail`    | `Documented` | checklist → class mapping → ERD/ADR | [api-spec-department.md](./api-spec-department.md) |
 | `department` | `POST` | `/api/departments`                | `Documented` | checklist → class mapping → ERD/ADR | [api-spec-department.md](./api-spec-department.md) |
 | `department` | `PUT` | `/api/departments/{id}`           | `Documented` | checklist → class mapping → ERD/ADR | [api-spec-department.md](./api-spec-department.md) |
 | `department` | `DELETE` | `/api/departments/{id}`           | `Documented` | checklist → class mapping → ERD/ADR | [api-spec-department.md](./api-spec-department.md) |

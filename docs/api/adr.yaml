@@ -475,3 +475,26 @@
     리뷰어는 구현 diff 와 함께 Javadoc 누락을 명시적으로 점검하게 되어 보안/권한 helper 의 해석 차이를 줄일 수 있다.
     반대로 WHAT 재서술 주석은 계속 금지되므로, 주석 추가가 코드 설명 반복이나 장식성 문서화로 흐르지 않도록 유지한다.
     신규·변경 API 코드에는 주석 점검 비용이 조금 늘지만, private helper 를 포함한 설계 의도 누락 가능성을 낮춘다.
+
+- id: ADR-024
+  title: Nullable team department ownership 복구와 부서 상세 조회
+  status: adopted
+  date: 2026-05-06
+  stacks: [springboot]
+  context: |
+    부서 상세 화면은 특정 부서가 직접 소유한 팀 목록을 보여줘야 하지만, 기존 Team API visible scope 는
+    `tb_team_admin` grant 와 ACTIVE membership 합집합 기준이라 부서 ownership 요구와 다르다.
+    또한 V9 migration 에서 `tb_team.department_id` 가 제거되어 department detail/list/delete 가 같은 소유 기준을 공유할 수 없었다.
+  decision: |
+    `tb_team.department_id` 를 nullable FK 로 복구하고, Team 생성/수정 request/query/filter/visible scope 계약에는 departmentId 를 추가하지 않는다.
+    `POST /teams` 는 request 에 departmentId 를 받지 않고, `addAdmin` 으로 지정된 사용자의 `department_id` 를 생성 팀의 ownership 으로 저장한다.
+    `GET /departments/{id}/detail` 은 ACTIVE department header 를 top-level 로 반환하고, `teams[]` 는
+    `tb_team.department_id = {id}`, `status_code = ACTIVE`, `deleted_at IS NULL` 기준의 직접 소유 팀만 포함한다.
+    부서장 이름은 department header projection 에서 head user 를 left join 해 조회하고, team row 집계와 섞지 않는다.
+    팀 leader 는 ACTIVE membership 의 단일 `is_leader = true` row 를 직접 join 하고, memberCount 는 leader join 과 분리된 팀별 ACTIVE membership count subquery 로 계산한다.
+    Department list 의 activeTeamCount 와 DELETE 차단 정책도 같은 직접 소유 ACTIVE/non-deleted 팀 기준으로 맞춘다.
+  consequence: |
+    `department_id IS NULL` 팀은 department detail/list activeTeamCount/delete ownership 판단에서 제외된다.
+    신규 Team API 생성 팀은 `addAdmin` 사용자가 부서를 가지고 있으면 해당 department detail/list/delete ownership 판단에 즉시 포함된다.
+    `addAdmin` 사용자의 `department_id` 가 null 이면 생성 팀도 미배정 팀으로 남으며, 별도 assignment/backfill 흐름은 후속 과제로 남긴다.
+    기존 데이터 backfill, Team assignment API, `(department_id, team_name)` unique 복구, Team API visible scope 변경은 이번 결정 범위가 아니다.

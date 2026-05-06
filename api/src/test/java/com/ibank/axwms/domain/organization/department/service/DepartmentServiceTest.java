@@ -9,10 +9,13 @@ import static org.mockito.Mockito.never;
 
 import com.ibank.axwms.domain.organization.department.DepartmentStatus;
 import com.ibank.axwms.domain.organization.department.dto.CreateDepartmentApiDto;
+import com.ibank.axwms.domain.organization.department.dto.GetDepartmentDetailApiDto;
 import com.ibank.axwms.domain.organization.department.dto.GetDepartmentsApiDto;
 import com.ibank.axwms.domain.organization.department.dto.UpdateDepartmentApiDto;
 import com.ibank.axwms.domain.organization.department.entity.Department;
 import com.ibank.axwms.domain.organization.department.repository.DepartmentRepository;
+import com.ibank.axwms.domain.organization.department.repository.jooq.projection.DepartmentDetailHeaderProjection;
+import com.ibank.axwms.domain.organization.department.repository.jooq.projection.DepartmentDetailTeamProjection;
 import com.ibank.axwms.domain.organization.department.repository.jooq.projection.DepartmentListItemProjection;
 import com.ibank.axwms.domain.organization.department.repository.jooq.projection.DepartmentOverviewProjection;
 import com.ibank.axwms.domain.organization.user.EmploymentStatus;
@@ -88,6 +91,63 @@ class DepartmentServiceTest {
                         Tuple.tuple(10L, "물류본부", 1001L, "박본부"),
                         Tuple.tuple(11L, "무부장본부", null, null)
                 );
+    }
+
+    @Test
+    @DisplayName("활성 부서 상세 header가 없으면 DEPARTMENT_NOT_FOUND 예외를 던진다")
+    void 활성_부서_상세_header가_없으면_department_not_found_예외를_던진다() {
+        assertThatThrownBy(() -> departmentService.getDepartmentDetail(10L))
+                .isInstanceOf(BusinessException.class)
+                .extracting(ex -> ((BusinessException) ex).getErrorCode())
+                .isEqualTo(ErrorCode.DEPARTMENT_NOT_FOUND);
+        then(departmentRepository).should(never()).findActiveDepartmentDetailTeams(10L);
+    }
+
+    @Test
+    @DisplayName("활성 부서 상세 header와 팀 목록이 있으면 detail DTO로 조립한다")
+    void 활성_부서_상세_header와_팀_목록이_있으면_detail_dto로_조립한다() {
+        given(departmentRepository.findActiveDepartmentDetailHeader(10L))
+                .willReturn(java.util.Optional.of(new DepartmentDetailHeaderProjection(10L, "물류본부", 1001L, "박본부")));
+        given(departmentRepository.findActiveDepartmentDetailTeams(10L))
+                .willReturn(List.of(new DepartmentDetailTeamProjection(
+                        21L,
+                        "플랫폼개발팀",
+                        2001L,
+                        "류팀장",
+                        LocalDate.of(2026, 4, 1),
+                        LocalDate.of(2026, 12, 31),
+                        3
+                )));
+
+        GetDepartmentDetailApiDto.Response response = departmentService.getDepartmentDetail(10L);
+
+        assertThat(response.departmentId()).isEqualTo(10L);
+        assertThat(response.departmentName()).isEqualTo("물류본부");
+        assertThat(response.departmentHeadUserId()).isEqualTo(1001L);
+        assertThat(response.departmentHeadUserName()).isEqualTo("박본부");
+        assertThat(response.teams())
+                .extracting(
+                        GetDepartmentDetailApiDto.Response.TeamSummary::teamId,
+                        GetDepartmentDetailApiDto.Response.TeamSummary::teamName,
+                        GetDepartmentDetailApiDto.Response.TeamSummary::leaderId,
+                        GetDepartmentDetailApiDto.Response.TeamSummary::leaderName,
+                        GetDepartmentDetailApiDto.Response.TeamSummary::memberCount
+                )
+                .containsExactly(Tuple.tuple(21L, "플랫폼개발팀", 2001L, "류팀장", 3L));
+    }
+
+    @Test
+    @DisplayName("활성 부서 상세 팀이 없으면 빈 teams를 반환한다")
+    void 활성_부서_상세_팀이_없으면_빈_teams를_반환한다() {
+        given(departmentRepository.findActiveDepartmentDetailHeader(10L))
+                .willReturn(java.util.Optional.of(new DepartmentDetailHeaderProjection(10L, "무부장본부", null, null)));
+        given(departmentRepository.findActiveDepartmentDetailTeams(10L)).willReturn(List.of());
+
+        GetDepartmentDetailApiDto.Response response = departmentService.getDepartmentDetail(10L);
+
+        assertThat(response.departmentHeadUserId()).isNull();
+        assertThat(response.departmentHeadUserName()).isNull();
+        assertThat(response.teams()).isEmpty();
     }
 
     @Test
@@ -256,14 +316,18 @@ class DepartmentServiceTest {
     }
 
     @Test
-    @DisplayName("팀은 부서에 직접 귀속되지 않으므로 부서 삭제를 차단하지 않는다")
-    void 팀은_부서에_직접_귀속되지_않으므로_부서_삭제를_차단하지_않는다() {
+    @DisplayName("소유한 ACTIVE 팀이 있으면 DEPARTMENT_HAS_ACTIVE_TEAMS 예외를 던진다")
+    void 소유한_active_팀이_있으면_department_has_active_teams_예외를_던진다() {
         Department department = Department.create("개발본부", "설명");
         given(departmentRepository.findById(10L)).willReturn(java.util.Optional.of(department));
+        given(departmentRepository.existsActiveOwnedTeam(10L)).willReturn(true);
 
-        departmentService.deleteDepartment(10L);
+        assertThatThrownBy(() -> departmentService.deleteDepartment(10L))
+                .isInstanceOf(BusinessException.class)
+                .extracting(ex -> ((BusinessException) ex).getErrorCode())
+                .isEqualTo(ErrorCode.DEPARTMENT_HAS_ACTIVE_TEAMS);
 
-        assertThat(department.getStatusCode()).isEqualTo(DepartmentStatus.INACTIVE);
+        assertThat(department.getStatusCode()).isEqualTo(DepartmentStatus.ACTIVE);
     }
 
     @Test
@@ -276,6 +340,7 @@ class DepartmentServiceTest {
         departmentService.deleteDepartment(10L);
 
         assertThat(department.getStatusCode()).isEqualTo(DepartmentStatus.INACTIVE);
+        then(departmentRepository).should(never()).existsActiveOwnedTeam(10L);
     }
 
     @Test

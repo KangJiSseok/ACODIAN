@@ -30,9 +30,9 @@
 - `deletedAt` 은 soft-delete lifecycle 전용이다.
 - `PATCH /api/teams/{id}` 는 null 이 아닌 필드만 반영하는 부분 업데이트 endpoint 다.
 - `DELETE /api/teams/{id}` 는 `deletedAt` 만 변경한다.
-- `tb_team.department_id` 는 제거 대상으로 계획한다.
-- `departmentId` 기반 request/query/example/filter/권한 검증 문구는 Team API 계약에서 제거한다.
-- 기존 `(department_id, team_name)` uniqueness 규칙은 `department_id` 제거와 함께 폐기한다.
+- `tb_team.department_id` 는 nullable 소유 부서 FK 로 복구되며, `POST /api/teams` 생성 시 `addAdmin` 사용자의 `department_id` 로 저장하고 Department detail/list/delete ownership 판단에서 사용한다.
+- Team API request/query/example/filter/visible scope/권한 검증 계약에는 `departmentId` 입력이나 필터를 추가하지 않는다.
+- 기존 `(department_id, team_name)` uniqueness 규칙은 복구하지 않는다.
 - 대체 uniqueness 규칙은 이번 문서 수정에서 임의 확정하지 않고 후속 ADR/구현 계획에서 결정한다.
 
 ### 4.2 `tb_user_team`
@@ -334,6 +334,7 @@
 - 요청 규칙
   - `addAdmin` 은 단일 `userId` 숫자 필드이다.
   - `addAdmin` 으로 지정된 사용자는 생성된 팀의 `tb_team_admin` grant 로 추가된다.
+  - 생성된 팀의 `department_id` 는 `addAdmin` 으로 지정된 사용자의 `department_id` 를 사용한다. `addAdmin` 사용자의 `department_id` 가 null 이면 팀도 미배정 상태로 생성된다.
   - 생성된 팀의 `tb_team_admin` grant 로 추가되면서 DIRECTOR들도 grant로 추가되어야한다. 
   - `addUsers[*]` 는 `userId`, `isLeader`, `teamRole` 을 받는다.
   - `addUsers[*].isLeader = true` 로 온 사용자는 `tb_user_team.is_leader = true` 로 추가된다.
@@ -521,10 +522,11 @@
 - 기존 팀을 대상으로 하는 `PATCH /api/teams/{id}`, `DELETE` 의 Service authorization 이 대상 팀 `tb_team_admin` grant 기준으로 명시되어 있는가.
 - `POST /api/teams` 와 `PATCH /api/teams/{id}` request 에 `isAdmin` 필드가 없는가.
 - `POST /api/teams` 와 `PATCH /api/teams/{id}` request 에 `addAdmin` 이 단일 `userId` 숫자 필드로 설명되어 있는가.
+- `POST /api/teams` 가 `addAdmin` 사용자의 `department_id` 를 생성 팀의 `department_id` 로 저장한다고 설명되어 있는가.
 - `PATCH /api/teams/{id}` request 에 `removeAdmin` 이 단일 `userId` 숫자 필드로 설명되어 있는가.
 - `POST /api/teams` 와 `PATCH /api/teams/{id}` 의 `addUsers[*].isLeader` 가 `tb_user_team.is_leader` 로 반영됨이 명시되어 있는가.
 - `PATCH /api/teams/{id}` 가 null 필드는 업데이트하지 않는 부분 업데이트 endpoint 로 설명되어 있는가.
-- `departmentId` 기반 request/query/example/filter/권한 검증 문구가 endpoint 상세에서 제거되어 있는가.
+- `departmentId` 기반 request/query/example/filter/visible scope/권한 검증 문구가 Team API endpoint 상세에서 제거되어 있고, DB nullable ownership 복구와 혼동되지 않는가.
 - `(department_id, team_name)` uniqueness 제거 이후 대체 uniqueness 규칙을 임의 확정하지 않고 후속 결정으로 분리했는가.
 - `GET /api/teams` 가 순수 `PageResponse<TeamSummary>` 로 설명되어 있는가.
 - `GET /api/teams/summary` 가 `activeTeamCount`, `inactiveTeamCount`, `totalTeamCount` 를 반환하는가.

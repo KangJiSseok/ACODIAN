@@ -113,13 +113,13 @@
       <td><code>organization</code>만 feature-first 구조를 사용한다.</td>
     </tr>
     <tr>
-      <td><code>GET /api/departments/{id}</code></td>
+      <td><code>GET /api/departments/{id}/detail</code></td>
       <td><code>Documented</code></td>
-      <td>단일 부서 상세와 집계 정보를 조회한다.</td>
+      <td>ACTIVE 부서 header와 직접 소유한 ACTIVE/non-deleted 팀 목록을 조회한다.</td>
       <td><code>domain.organization.department.controller.DepartmentController</code></td>
       <td><code>domain.organization.department.service.DepartmentService</code></td>
       <td><code>domain.organization.department.entity.Department</code>, <code>domain.organization.department.repository.DepartmentRepository</code>, <code>domain.organization.department.repository.jooq.DepartmentJooqRepository</code></td>
-      <td>부서 기준 정보는 <code>department</code> feature가 소유한다.</td>
+      <td>부서 상세는 header projection과 단일 leader join 기반 team projection을 분리한다.</td>
     </tr>
     <tr>
       <td><code>GET /api/departments/{id}/users</code></td>
@@ -155,7 +155,7 @@
       <td><code>domain.organization.department.controller.DepartmentController</code></td>
       <td><code>domain.organization.department.service.DepartmentService</code></td>
       <td><code>domain.organization.department.entity.Department</code>, <code>domain.organization.department.repository.DepartmentRepository</code></td>
-      <td>하위 팀 존재 여부 검증은 서비스 정책으로 처리한다.</td>
+      <td>직접 소유한 ACTIVE/non-deleted 팀 존재 여부 검증은 JOOQ repository 계약으로 처리한다.</td>
     </tr>
   </tbody>
 </table>
