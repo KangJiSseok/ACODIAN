@@ -106,10 +106,12 @@ public class TeamService {
         validateCreateTeamRequest(request);
         validateTeamNameUnique(request.teamName());
 
-        Set<Long> requestedUserIds = requestedUserIdsForCreate(request);
-        ensureUsersExist(requestedUserIds);
+        User requestedAdmin = getUserOrThrow(request.addAdmin());
+        ensureUsersExist(requestedMemberUserIdsForCreate(request));
+        Long departmentId = requestedAdmin.getDepartmentId();
 
         Team team = teamRepository.save(Team.create(
+                departmentId,
                 request.teamName(),
                 request.statusCode(),
                 request.description(),
@@ -291,10 +293,9 @@ public class TeamService {
         }
     }
 
-    /** 팀 생성 요청이 참조하는 모든 사용자 ID 집합을 만든다. */
-    private Set<Long> requestedUserIdsForCreate(CreateTeamApiDto.Request request) {
+    /** 팀 생성 요청의 member 사용자 ID만 모아 admin 단건 조회와 membership 검증 책임을 분리한다. */
+    private Set<Long> requestedMemberUserIdsForCreate(CreateTeamApiDto.Request request) {
         Set<Long> userIds = new HashSet<>();
-        userIds.add(request.addAdmin());
         request.addUsers().forEach(addUser -> userIds.add(addUser.userId()));
         return userIds;
     }
@@ -321,6 +322,12 @@ public class TeamService {
         if (!existingUserIds.containsAll(requestedUserIds)) {
             throw new BusinessException(ErrorCode.USER_NOT_FOUND);
         }
+    }
+
+    /** 생성 팀 ownership 기준이 되는 요청 admin 을 단건 조회하고 누락 시 참조 오류로 변환한다. */
+    private User getUserOrThrow(Long userId) {
+        return userRepository.findById(userId)
+                .orElseThrow(() -> new BusinessException(ErrorCode.USER_NOT_FOUND));
     }
 
     /** 요청 admin 과 모든 DIRECTOR 사용자에게 생성 팀의 관리 grant 를 부여한다. */

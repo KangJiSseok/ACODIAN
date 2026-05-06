@@ -68,6 +68,18 @@ public class DepartmentJooqRepositoryImpl implements DepartmentJooqRepository {
                 ));
     }
 
+    /** 삭제 차단은 list/detail 과 같은 nullable ownership 및 ACTIVE/non-deleted 팀 기준을 재사용한다. */
+    @Override
+    public boolean existsActiveOwnedTeam(Long departmentId) {
+        return dsl.fetchExists(
+                dsl.selectOne()
+                        .from(TB_TEAM)
+                        .where(TB_TEAM.DEPARTMENT_ID.eq(departmentId))
+                        .and(TB_TEAM.STATUS_CODE.eq(ACTIVE_TEAM_STATUS))
+                        .and(TB_TEAM.DELETED_AT.isNull())
+        );
+    }
+
     /** 현재 부서에 속하고 ACTIVE membership 으로 연결된 사용자 수를 조회한다. */
     @Override
     public int fetchActiveUserCount(Long departmentId) {
@@ -90,12 +102,14 @@ public class DepartmentJooqRepositoryImpl implements DepartmentJooqRepository {
                 .longValue();
     }
 
-    /** ACTIVE team 수를 계산한다. 팀은 더 이상 부서에 직접 귀속되지 않는다. */
+    /** ACTIVE 부서가 직접 소유한 ACTIVE/non-deleted team 수만 계산해 detail/delete ownership 과 맞춘다. */
     private long fetchActiveTeamCount() {
         return dsl.selectCount()
                 .from(TB_TEAM)
+                .join(TB_DEPARTMENT).on(TB_TEAM.DEPARTMENT_ID.eq(TB_DEPARTMENT.DEPARTMENT_ID))
                 .where(TB_TEAM.STATUS_CODE.eq(ACTIVE_TEAM_STATUS))
                 .and(TB_TEAM.DELETED_AT.isNull())
+                .and(TB_DEPARTMENT.STATUS_CODE.eq(ACTIVE_DEPARTMENT_STATUS))
                 .fetchSingle(0, Integer.class)
                 .longValue();
     }

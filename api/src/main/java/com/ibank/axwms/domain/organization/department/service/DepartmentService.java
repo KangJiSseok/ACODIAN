@@ -66,6 +66,7 @@ public class DepartmentService {
             return;
         }
 
+        ensureNoActiveOwnedTeam(departmentId);
         department.changeStatus(DepartmentStatus.INACTIVE);
     }
 
@@ -103,6 +104,13 @@ public class DepartmentService {
     private Department getActiveDepartment(Long departmentId) {
         return departmentRepository.findByIdAndStatusCode(departmentId, DepartmentStatus.ACTIVE)
                 .orElseThrow(() -> new BusinessException(ErrorCode.DEPARTMENT_NOT_FOUND));
+    }
+
+    /** 부서가 직접 소유한 ACTIVE/non-deleted 팀이 남아 있으면 삭제를 차단한다. */
+    private void ensureNoActiveOwnedTeam(Long departmentId) {
+        if (departmentRepository.existsActiveOwnedTeam(departmentId)) {
+            throw new BusinessException(ErrorCode.DEPARTMENT_HAS_ACTIVE_TEAMS);
+        }
     }
 
     /** 신규 등록 전에 department_name UNIQUE 충돌을 확인한다. */
