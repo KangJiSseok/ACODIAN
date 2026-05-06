@@ -34,6 +34,7 @@ from __future__ import annotations
 import asyncio
 
 from google import genai
+from google.genai import types
 
 from app.config.settings import settings
 
@@ -99,6 +100,9 @@ class GeminiClient:
             self._client.models.embed_content,
             model=target_model,
             contents=texts,
+            config=types.EmbedContentConfig(
+                output_dimensionality=settings.embedding_dim,
+            ),
         )
         return [list(item.values) for item in response.embeddings]
 
