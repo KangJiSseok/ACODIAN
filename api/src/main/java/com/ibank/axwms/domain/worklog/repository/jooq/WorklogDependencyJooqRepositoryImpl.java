@@ -1,8 +1,6 @@
 package com.ibank.axwms.domain.worklog.repository.jooq;
 
-import static com.ibank.axwms.global.jooq.Tables.TB_WORKLOG;
-import static com.ibank.axwms.global.jooq.Tables.TB_WORKLOG_DEPENDENCY;
-
+import com.ibank.axwms.domain.worklog.repository.jooq.projection.BlockedPredecessorRowProjection;
 import com.ibank.axwms.domain.worklog.repository.jooq.projection.WorklogDependencyProjection;
 import lombok.RequiredArgsConstructor;
 import org.jooq.DSLContext;
@@ -12,6 +10,9 @@ import org.springframework.stereotype.Repository;
 import java.util.Collection;
 import java.util.List;
 import java.util.Map;
+
+import static com.ibank.axwms.global.jooq.Tables.TB_WORKLOG;
+import static com.ibank.axwms.global.jooq.Tables.TB_WORKLOG_DEPENDENCY;
 
 @Repository
 @RequiredArgsConstructor
@@ -44,5 +45,36 @@ public class WorklogDependencyJooqRepositoryImpl implements WorklogDependencyJoo
                 .where(TB_WORKLOG_DEPENDENCY.WORKLOG_ID.in(worklogIds))
                 .groupBy(TB_WORKLOG_DEPENDENCY.WORKLOG_ID)
                 .fetchMap(TB_WORKLOG_DEPENDENCY.WORKLOG_ID, record -> record.get(DSL.count()).longValue());
+    }
+
+    @Override
+    public List<BlockedPredecessorRowProjection> findIncompletePredecessorsByWorklogIds(Collection<Long> worklogIds) {
+        if (worklogIds == null || worklogIds.isEmpty()) {
+            return List.of();
+        }
+        var my = TB_WORKLOG.as("my");
+        var pred = TB_WORKLOG.as("pred");
+
+        return dsl.select(
+                        my.WORKLOG_ID,
+                        my.TITLE,
+                        pred.WORKLOG_ID,
+                        pred.TITLE,
+                        pred.STATUS_CODE
+                )
+                .from(my)
+                .join(TB_WORKLOG_DEPENDENCY).on(TB_WORKLOG_DEPENDENCY.WORKLOG_ID.eq(my.WORKLOG_ID))
+                .join(pred).on(pred.WORKLOG_ID.eq(TB_WORKLOG_DEPENDENCY.DEPENDS_ON_WORKLOG_ID))
+                .where(my.WORKLOG_ID.in(worklogIds))
+                .and(pred.IS_DELETED.isFalse())
+                .and(pred.STATUS_CODE.ne("COMPLETED"))
+                .orderBy(my.WORKLOG_ID.asc(), pred.WORKLOG_ID.asc())
+                .fetch(record -> new BlockedPredecessorRowProjection(
+                        record.get(my.WORKLOG_ID),
+                        record.get(my.TITLE),
+                        record.get(pred.WORKLOG_ID),
+                        record.get(pred.TITLE),
+                        record.get(pred.STATUS_CODE)
+                ));
     }
 }

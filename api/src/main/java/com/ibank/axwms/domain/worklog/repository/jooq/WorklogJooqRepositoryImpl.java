@@ -1,6 +1,7 @@
 package com.ibank.axwms.domain.worklog.repository.jooq;
 
 import com.ibank.axwms.domain.worklog.policy.WorklogVisibilityScope;
+import com.ibank.axwms.domain.worklog.repository.jooq.projection.WorklogBriefProjection;
 import com.ibank.axwms.domain.worklog.repository.jooq.projection.WorklogDetailProjection;
 import com.ibank.axwms.domain.worklog.repository.jooq.projection.WorklogListProjection;
 import com.ibank.axwms.domain.worklog.repository.jooq.projection.WorklogSearchProjection;
@@ -18,6 +19,7 @@ import org.springframework.data.domain.PageImpl;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.stereotype.Repository;
 
+import java.time.LocalDate;
 import java.util.List;
 import java.util.Optional;
 
@@ -261,5 +263,105 @@ public class WorklogJooqRepositoryImpl implements WorklogJooqRepository {
                                     .and(TB_TEAM.DELETED_AT.isNull())
                     ));
         };
+    }
+
+    // ===== 대시보드 ME 위젯 =====
+
+    private static final String STATUS_IN_PROGRESS = "IN_PROGRESS";
+    private static final String STATUS_COMPLETED   = "COMPLETED";
+    private static final String AI_STATUS_FAILED   = "FAILED";
+
+    @Override
+    public int countAuthorInProgress(Long authorId) {
+        return dsl.selectCount()
+                .from(TB_WORKLOG)
+                .where(TB_WORKLOG.AUTHOR_ID.eq(authorId))
+                .and(TB_WORKLOG.IS_DELETED.isFalse())
+                .and(TB_WORKLOG.STATUS_CODE.eq(STATUS_IN_PROGRESS))
+                .fetchSingle(0, Integer.class);
+    }
+
+    @Override
+    public int countAuthorCompletedSince(Long authorId, LocalDate from) {
+        return dsl.selectCount()
+                .from(TB_WORKLOG)
+                .where(TB_WORKLOG.AUTHOR_ID.eq(authorId))
+                .and(TB_WORKLOG.IS_DELETED.isFalse())
+                .and(TB_WORKLOG.STATUS_CODE.eq(STATUS_COMPLETED))
+                .and(TB_WORKLOG.COMPLETION_DATE.ge(from))
+                .fetchSingle(0, Integer.class);
+    }
+
+    @Override
+    public int countAuthorAiFailed(Long authorId) {
+        return dsl.selectCount()
+                .from(TB_WORKLOG)
+                .where(TB_WORKLOG.AUTHOR_ID.eq(authorId))
+                .and(TB_WORKLOG.IS_DELETED.isFalse())
+                .and(TB_WORKLOG.AI_PROCESSING_STATUS.eq(AI_STATUS_FAILED))
+                .fetchSingle(0, Integer.class);
+    }
+
+    @Override
+    public List<WorklogBriefProjection> findAuthorThisWeekDue(Long authorId, LocalDate today, int limit) {
+        return dsl.select(TB_WORKLOG.WORKLOG_ID, TB_WORKLOG.TITLE, TB_WORKLOG.STATUS_CODE, TB_WORKLOG.DUE_DATE)
+                .from(TB_WORKLOG)
+                .where(TB_WORKLOG.AUTHOR_ID.eq(authorId))
+                .and(TB_WORKLOG.IS_DELETED.isFalse())
+                .and(TB_WORKLOG.STATUS_CODE.ne(STATUS_COMPLETED))
+                .and(TB_WORKLOG.DUE_DATE.between(today, today.plusDays(7)))
+                .orderBy(TB_WORKLOG.DUE_DATE.asc().nullsLast(), TB_WORKLOG.WORKLOG_ID.asc())
+                .limit(limit)
+                .fetch(WorklogBriefProjection::from);
+    }
+
+    @Override
+    public List<WorklogBriefProjection> findAuthorTodayItems(Long authorId, int limit) {
+        Field<Integer> inProgressPriority =
+                DSL.when(TB_WORKLOG.STATUS_CODE.eq(STATUS_IN_PROGRESS), 0).otherwise(1);
+        return dsl.select(TB_WORKLOG.WORKLOG_ID, TB_WORKLOG.TITLE, TB_WORKLOG.STATUS_CODE, TB_WORKLOG.DUE_DATE)
+                .from(TB_WORKLOG)
+                .where(TB_WORKLOG.AUTHOR_ID.eq(authorId))
+                .and(TB_WORKLOG.IS_DELETED.isFalse())
+                .and(TB_WORKLOG.STATUS_CODE.ne(STATUS_COMPLETED))
+                .orderBy(inProgressPriority.asc(),
+                        TB_WORKLOG.DUE_DATE.asc().nullsLast(),
+                        TB_WORKLOG.WORKLOG_ID.asc())
+                .limit(limit)
+                .fetch(WorklogBriefProjection::from);
+    }
+
+    @Override
+    public List<WorklogBriefProjection> findAuthorImminentAndOverdue(Long authorId, LocalDate today, int limit) {
+        return dsl.select(TB_WORKLOG.WORKLOG_ID, TB_WORKLOG.TITLE, TB_WORKLOG.STATUS_CODE, TB_WORKLOG.DUE_DATE)
+                .from(TB_WORKLOG)
+                .where(TB_WORKLOG.AUTHOR_ID.eq(authorId))
+                .and(TB_WORKLOG.IS_DELETED.isFalse())
+                .and(TB_WORKLOG.STATUS_CODE.ne(STATUS_COMPLETED))
+                .and(TB_WORKLOG.DUE_DATE.le(today.plusDays(3)))
+                .orderBy(TB_WORKLOG.DUE_DATE.asc().nullsLast(), TB_WORKLOG.WORKLOG_ID.asc())
+                .limit(limit)
+                .fetch(WorklogBriefProjection::from);
+    }
+
+    @Override
+    public List<Long> findIncompleteAuthorWorklogIdsBlockedByPredecessor(Long authorId, int limit) {
+        var pred = TB_WORKLOG.as("pred");
+        return dsl.select(TB_WORKLOG.WORKLOG_ID)
+                .from(TB_WORKLOG)
+                .where(TB_WORKLOG.AUTHOR_ID.eq(authorId))
+                .and(TB_WORKLOG.IS_DELETED.isFalse())
+                .and(TB_WORKLOG.STATUS_CODE.ne(STATUS_COMPLETED))
+                .and(DSL.exists(
+                        DSL.selectOne()
+                                .from(TB_WORKLOG_DEPENDENCY)
+                                .join(pred).on(pred.WORKLOG_ID.eq(TB_WORKLOG_DEPENDENCY.DEPENDS_ON_WORKLOG_ID))
+                                .where(TB_WORKLOG_DEPENDENCY.WORKLOG_ID.eq(TB_WORKLOG.WORKLOG_ID))
+                                .and(pred.IS_DELETED.isFalse())
+                                .and(pred.STATUS_CODE.ne(STATUS_COMPLETED))
+                ))
+                .orderBy(TB_WORKLOG.DUE_DATE.asc().nullsLast(), TB_WORKLOG.WORKLOG_ID.asc())
+                .limit(limit)
+                .fetch(record -> record.get(TB_WORKLOG.WORKLOG_ID));
     }
 }
