@@ -44,4 +44,8 @@ export const teamService = {
       `/teams/${teamId}`,
       payload,
     ),
+
+  // 팀을 삭제합니다.
+  deleteTeam: (teamId: number) =>
+    apiClient.delete<EmptyResponse>(`/teams/${teamId}`),
 };
