@@ -7,6 +7,8 @@ import static org.mockito.BDDMockito.given;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 
+import com.ibank.axwms.domain.organization.team.repository.TeamRepository;
+import com.ibank.axwms.domain.tag.repository.TagRepository;
 import com.ibank.axwms.domain.worklog.WorklogImportance;
 import com.ibank.axwms.domain.worklog.WorklogStatus;
 import com.ibank.axwms.domain.worklog.dto.SearchWorklogsApiDto;
@@ -37,6 +39,8 @@ class KeywordWorklogSearchServiceTest {
 
     @Mock private WorklogRepository worklogRepository;
     @Mock private WorklogVisibilityPolicy worklogVisibilityPolicy;
+    @Mock private TeamRepository teamRepository;
+    @Mock private TagRepository tagRepository;
 
     @InjectMocks private KeywordWorklogSearchService keywordWorklogSearchService;
 
@@ -61,6 +65,7 @@ class KeywordWorklogSearchServiceTest {
             SearchWorklogsApiDto.Request request = new SearchWorklogsApiDto.Request(
                     "결산",
                     TEAM_ID,
+                    null,
                     WorklogStatus.IN_PROGRESS,
                     WorklogImportance.HIGH,
                     AUTHOR_ID,
@@ -128,6 +133,7 @@ class KeywordWorklogSearchServiceTest {
             WorklogSearchQuery captured = captureQuery(scope);
             assertThat(captured.keyword()).isNull();
             assertThat(captured.teamId()).isNull();
+            assertThat(captured.teamStatus()).isNull();
             assertThat(captured.statusCode()).isNull();
             assertThat(captured.importanceCode()).isNull();
             assertThat(captured.authorId()).isNull();
@@ -187,7 +193,7 @@ class KeywordWorklogSearchServiceTest {
             CustomUserPrincipal principal = principal();
             WorklogVisibilityScope scope = new WorklogVisibilityScope.MyTeams(USER_ID);
             SearchWorklogsApiDto.Request request = new SearchWorklogsApiDto.Request(
-                    null, null, null, null, null, null, PeriodOption.LAST_7, null, null
+                    null, null, null, null, null, null, null, PeriodOption.LAST_7, null, null
             );
 
             given(worklogVisibilityPolicy.resolve(principal)).willReturn(scope);
@@ -217,7 +223,7 @@ class KeywordWorklogSearchServiceTest {
 
     private static SearchWorklogsApiDto.Request requestWithKeyword(String keyword) {
         return new SearchWorklogsApiDto.Request(
-                keyword, null, null, null, null, null, null, null, null
+                keyword, null, null, null, null, null, null, null, null, null
         );
     }
 
