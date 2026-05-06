@@ -73,7 +73,13 @@ public enum ErrorCode {
     /** 로그인 사용자가 대상 팀 소속이 아니어서 업무를 등록/변경할 수 없는 경우 사용한다. */
     WORKLOG_TEAM_FORBIDDEN(HttpStatus.FORBIDDEN, "해당 팀에 대한 권한이 없습니다."),
     /** 업무일지가 존재하지 않는 경우 사용한다. */
-    WORKLOG_NOT_FOUND(HttpStatus.NOT_FOUND, "존재하지 않는 업무일지입니다.");
+    WORKLOG_NOT_FOUND(HttpStatus.NOT_FOUND, "존재하지 않는 업무일지입니다."),
+    /** 대시보드 scope 와 함께 들어온 파라미터가 누락되었거나 형식이 올바르지 않을 때 사용한다. */
+    DASHBOARD_INVALID_REQUEST(HttpStatus.BAD_REQUEST, "대시보드 요청 파라미터가 올바르지 않습니다."),
+    /** 사용자 role 자체로 해당 dashboard scope 를 조회할 수 없을 때 사용한다. */
+    DASHBOARD_FORBIDDEN(HttpStatus.FORBIDDEN, "대시보드를 조회할 권한이 없습니다."),
+    /** role 은 허용되지만 특정 부서/팀 자원에 대한 접근 권한이 없거나 자원이 없을 때 사용한다. */
+    DASHBOARD_NOT_FOUND(HttpStatus.NOT_FOUND, "대시보드를 찾을 수 없습니다.");
 
     private final HttpStatus status;
     private final String message;

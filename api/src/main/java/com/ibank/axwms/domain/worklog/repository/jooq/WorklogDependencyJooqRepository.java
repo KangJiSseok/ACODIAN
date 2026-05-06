@@ -1,5 +1,6 @@
 package com.ibank.axwms.domain.worklog.repository.jooq;
 
+import com.ibank.axwms.domain.worklog.repository.jooq.projection.BlockedPredecessorRowProjection;
 import com.ibank.axwms.domain.worklog.repository.jooq.projection.WorklogDependencyProjection;
 
 import java.util.Collection;
@@ -16,4 +17,11 @@ public interface WorklogDependencyJooqRepository {
      * 의존이 없는 worklog 는 맵에 포함되지 않으므로 호출 측에서 0 으로 보정한다.
      */
     Map<Long, Long> countByWorklogIds(Collection<Long> worklogIds);
+
+    /**
+     * 주어진 worklog id 들의 미완료 선행 worklog 쌍을 조회한다.
+     * (myWorklogId, myTitle, predWorklogId, predTitle, predStatusCode) 행으로 반환되며
+     * service 가 myWorklogId 로 그룹핑한다.
+     */
+    List<BlockedPredecessorRowProjection> findIncompletePredecessorsByWorklogIds(Collection<Long> worklogIds);
 }
