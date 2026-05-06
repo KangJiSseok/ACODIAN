@@ -5,6 +5,7 @@ import com.ibank.axwms.domain.organization.user.dto.GetDepartmentCandidatesApiDt
 import com.ibank.axwms.domain.organization.user.dto.GetMyProfileApiDto;
 import com.ibank.axwms.domain.organization.user.dto.GetUserApiDto;
 import com.ibank.axwms.domain.organization.user.dto.GetUsersApiDto;
+import com.ibank.axwms.domain.organization.user.dto.UpdateMyProfileApiDto;
 import com.ibank.axwms.domain.organization.user.dto.UpdateUserApiDto;
 import com.ibank.axwms.domain.organization.user.service.UserService;
 import com.ibank.axwms.global.response.EmptyResponse;
@@ -36,6 +37,17 @@ public class UserController implements UserControllerDocs {
     @GetMapping("/me")
     public GetMyProfileApiDto.Response getMyProfile(@AuthenticationPrincipal CustomUserPrincipal principal) {
         return userService.getMyProfile(principal);
+    }
+
+    @Override
+    @PatchMapping(value = "/me", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
+    public EmptyResponse updateMyProfile(
+            @AuthenticationPrincipal CustomUserPrincipal principal,
+            @Valid @RequestPart("request") UpdateMyProfileApiDto.Request request,
+            @RequestPart(value = "profile_image", required = false) MultipartFile profileImage
+    ) {
+        userService.updateMyProfile(principal, request, profileImage);
+        return EmptyResponse.INSTANCE;
     }
 
     @Override
