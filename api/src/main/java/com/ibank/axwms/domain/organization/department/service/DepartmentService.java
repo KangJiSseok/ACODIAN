@@ -2,10 +2,12 @@ package com.ibank.axwms.domain.organization.department.service;
 
 import com.ibank.axwms.domain.organization.department.DepartmentStatus;
 import com.ibank.axwms.domain.organization.department.dto.CreateDepartmentApiDto;
+import com.ibank.axwms.domain.organization.department.dto.GetDepartmentDetailApiDto;
 import com.ibank.axwms.domain.organization.department.dto.GetDepartmentsApiDto;
 import com.ibank.axwms.domain.organization.department.dto.UpdateDepartmentApiDto;
 import com.ibank.axwms.domain.organization.department.entity.Department;
 import com.ibank.axwms.domain.organization.department.repository.DepartmentRepository;
+import com.ibank.axwms.domain.organization.department.repository.jooq.projection.DepartmentDetailHeaderProjection;
 import com.ibank.axwms.domain.organization.department.repository.jooq.projection.DepartmentListItemProjection;
 import com.ibank.axwms.domain.organization.department.repository.jooq.projection.DepartmentOverviewProjection;
 import com.ibank.axwms.domain.organization.user.UserRole;
@@ -41,6 +43,24 @@ public class DepartmentService {
                 overview.activeTeamCount(),
                 overview.activeUserCount(),
                 departments
+        );
+    }
+
+    /** ACTIVE 부서 header 와 nullable ownership 팀 목록을 조립해 상세 화면 응답을 반환한다. */
+    public GetDepartmentDetailApiDto.Response getDepartmentDetail(Long departmentId) {
+        DepartmentDetailHeaderProjection header = departmentRepository.findActiveDepartmentDetailHeader(departmentId)
+                .orElseThrow(() -> new BusinessException(ErrorCode.DEPARTMENT_NOT_FOUND));
+        List<GetDepartmentDetailApiDto.Response.TeamSummary> teams = departmentRepository.findActiveDepartmentDetailTeams(departmentId)
+                .stream()
+                .map(GetDepartmentDetailApiDto.Response.TeamSummary::from)
+                .toList();
+
+        return GetDepartmentDetailApiDto.Response.of(
+                header.departmentId(),
+                header.departmentName(),
+                header.departmentHeadUserId(),
+                header.departmentHeadUserName(),
+                teams
         );
     }
 

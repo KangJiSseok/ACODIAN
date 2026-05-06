@@ -7,15 +7,21 @@ import static com.ibank.axwms.global.jooq.Tables.TB_USER_TEAM;
 import static org.jooq.impl.DSL.countDistinct;
 
 import com.ibank.axwms.domain.organization.department.DepartmentStatus;
+import com.ibank.axwms.domain.organization.department.repository.jooq.projection.DepartmentDetailHeaderProjection;
+import com.ibank.axwms.domain.organization.department.repository.jooq.projection.DepartmentDetailTeamProjection;
 import com.ibank.axwms.domain.organization.department.repository.jooq.projection.DepartmentListItemProjection;
 import com.ibank.axwms.domain.organization.department.repository.jooq.projection.DepartmentOverviewProjection;
 import com.ibank.axwms.domain.organization.team.TeamStatus;
 import com.ibank.axwms.domain.organization.team.UserTeamStatus;
 import com.ibank.axwms.domain.organization.user.EmploymentStatus;
 import com.ibank.axwms.global.jooq.tables.TbUser;
+import com.ibank.axwms.global.jooq.tables.TbUserTeam;
 import java.util.List;
+import java.util.Optional;
 import lombok.RequiredArgsConstructor;
 import org.jooq.DSLContext;
+import org.jooq.Field;
+import org.jooq.impl.DSL;
 import org.springframework.stereotype.Repository;
 
 @Repository
@@ -66,6 +72,54 @@ public class DepartmentJooqRepositoryImpl implements DepartmentJooqRepository {
                         record.get(TB_DEPARTMENT.CREATED_AT),
                         record.get(TB_DEPARTMENT.UPDATED_AT)
                 ));
+    }
+
+    /** ACTIVE 부서 상세 header 를 팀 row 와 분리해 팀이 없는 부서도 단건 응답을 만들 수 있게 한다. */
+    @Override
+    public Optional<DepartmentDetailHeaderProjection> findActiveDepartmentDetailHeader(Long departmentId) {
+        TbUser headUser = TB_USER.as("head_user");
+
+        return dsl.select(
+                        TB_DEPARTMENT.DEPARTMENT_ID,
+                        TB_DEPARTMENT.DEPARTMENT_NAME,
+                        TB_DEPARTMENT.DEPARTMENT_HEAD_USER_ID,
+                        headUser.USER_NAME
+                )
+                .from(TB_DEPARTMENT)
+                .leftJoin(headUser).on(TB_DEPARTMENT.DEPARTMENT_HEAD_USER_ID.eq(headUser.USER_ID))
+                .where(TB_DEPARTMENT.DEPARTMENT_ID.eq(departmentId))
+                .and(TB_DEPARTMENT.STATUS_CODE.eq(ACTIVE_DEPARTMENT_STATUS))
+                .fetchOptional(record -> DepartmentDetailHeaderProjection.from(record, headUser));
+    }
+
+    /** 부서 직접 소유 팀에 단일 ACTIVE leader join 과 member count subquery 를 붙여 상세 목록으로 반환한다. */
+    @Override
+    public List<DepartmentDetailTeamProjection> findActiveDepartmentDetailTeams(Long departmentId) {
+        TbUserTeam leaderMembership = TB_USER_TEAM.as("leader_membership");
+        TbUserTeam activeMembership = TB_USER_TEAM.as("active_membership");
+        TbUser leaderUser = TB_USER.as("leader_user");
+        Field<Long> leaderId = leaderMembership.USER_ID.as("leader_id");
+        Field<Long> memberCount = memberCountField(activeMembership);
+
+        return dsl.select(
+                        TB_TEAM.TEAM_ID,
+                        TB_TEAM.TEAM_NAME,
+                        leaderId,
+                        leaderUser.USER_NAME,
+                        TB_TEAM.START_DATE,
+                        TB_TEAM.EXPECTED_END_DATE,
+                        memberCount
+                )
+                .from(TB_TEAM)
+                .leftJoin(leaderMembership).on(leaderMembership.TEAM_ID.eq(TB_TEAM.TEAM_ID))
+                .and(leaderMembership.STATUS_CODE.eq(ACTIVE_USER_TEAM_STATUS))
+                .and(leaderMembership.IS_LEADER.isTrue())
+                .leftJoin(leaderUser).on(leaderUser.USER_ID.eq(leaderMembership.USER_ID))
+                .where(TB_TEAM.DEPARTMENT_ID.eq(departmentId))
+                .and(TB_TEAM.STATUS_CODE.eq(ACTIVE_TEAM_STATUS))
+                .and(TB_TEAM.DELETED_AT.isNull())
+                .orderBy(TB_TEAM.TEAM_ID.asc())
+                .fetch(record -> DepartmentDetailTeamProjection.from(record, leaderId, leaderUser, memberCount));
     }
 
     /** 삭제 차단은 list/detail 과 같은 nullable ownership 및 ACTIVE/non-deleted 팀 기준을 재사용한다. */
@@ -129,5 +183,15 @@ public class DepartmentJooqRepositoryImpl implements DepartmentJooqRepository {
                         )))
                 .fetchSingle(0, Integer.class)
                 .longValue();
+    }
+
+    /** leader 단일 join 에 영향받지 않도록 ACTIVE membership 수는 팀별 상관 subquery 로 계산한다. */
+    private Field<Long> memberCountField(TbUserTeam activeMembership) {
+        return DSL.field(
+                dsl.select(countDistinct(activeMembership.USER_ID).cast(Long.class))
+                        .from(activeMembership)
+                        .where(activeMembership.TEAM_ID.eq(TB_TEAM.TEAM_ID))
+                        .and(activeMembership.STATUS_CODE.eq(ACTIVE_USER_TEAM_STATUS))
+        ).as("member_count");
     }
 }

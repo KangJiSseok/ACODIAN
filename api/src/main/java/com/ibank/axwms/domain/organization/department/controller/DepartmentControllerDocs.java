@@ -1,6 +1,7 @@
 package com.ibank.axwms.domain.organization.department.controller;
 
 import com.ibank.axwms.domain.organization.department.dto.CreateDepartmentApiDto;
+import com.ibank.axwms.domain.organization.department.dto.GetDepartmentDetailApiDto;
 import com.ibank.axwms.domain.organization.department.dto.GetDepartmentsApiDto;
 import com.ibank.axwms.domain.organization.department.dto.UpdateDepartmentApiDto;
 import com.ibank.axwms.global.response.EmptyResponse;
@@ -31,6 +32,23 @@ public interface DepartmentControllerDocs {
             @ApiResponse(responseCode = "403", description = "DIRECTOR 권한이 없어 접근할 수 없다.", content = @Content)
     })
     GetDepartmentsApiDto.Response getDepartments();
+
+    @Operation(
+            summary = "부서 상세 조회",
+            description = "ACTIVE 부서의 header 와 해당 부서가 직접 소유한 ACTIVE/non-deleted 팀 목록을 반환한다. 팀이 없으면 teams 는 빈 배열이다."
+    )
+    @SecurityRequirement(name = "bearerAuth")
+    @ApiResponses({
+            @ApiResponse(
+                    responseCode = "200",
+                    description = "부서 상세와 소유 팀 목록을 반환한다.",
+                    content = @Content(schema = @Schema(implementation = GetDepartmentDetailApiDto.Response.class))
+            ),
+            @ApiResponse(responseCode = "401", description = "access token 이 없거나 유효하지 않다.", content = @Content),
+            @ApiResponse(responseCode = "403", description = "DIRECTOR 권한이 없어 접근할 수 없다.", content = @Content),
+            @ApiResponse(responseCode = "404", description = "ACTIVE 부서를 찾지 못했다.", content = @Content)
+    })
+    GetDepartmentDetailApiDto.Response getDepartmentDetail(@Parameter(description = "부서 ID", example = "10") Long id);
 
     @Operation(
             summary = "부서 수정",
