@@ -1,23 +1,30 @@
 "use client";
 
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import {
   ArrowLeft,
   CalendarDays,
   Crown,
   Pencil,
   ShieldCheck,
+  Trash2,
   UserRound,
   Users,
 } from "lucide-react";
+import { useAuth } from "@/app/_common/hooks/useAuth";
+import { getApiErrorMessage } from "@/app/_common/service/api-client";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
+import { useDeleteTeam } from "../_hooks";
 import type {
   TeamDetail as TeamDetailType,
   TeamStatusCode,
   TeamUserSummary,
 } from "../_types/team.types";
+import { canManageTeam } from "../_utils/teamAccess.utils";
+import { getTeamStatusLabel } from "../_utils/teamStatus.utils";
 
 export default function TeamDetail({
   team,
@@ -26,6 +33,24 @@ export default function TeamDetail({
   team: TeamDetailType;
   users: TeamUserSummary[];
 }) {
+  const router = useRouter();
+  const { user } = useAuth();
+  const canEdit = canManageTeam(user, team);
+  const deleteTeam = useDeleteTeam();
+
+  async function handleDelete() {
+    if (!confirm(`${team.teamName} 팀을 삭제하시겠습니까?`)) {
+      return;
+    }
+
+    try {
+      await deleteTeam.mutateAsync(team.teamId);
+      router.push("/team");
+    } catch (deleteError) {
+      alert(getApiErrorMessage(deleteError, "팀 삭제에 실패했습니다."));
+    }
+  }
+
   return (
     <section className="space-y-6">
       <div className="flex flex-wrap items-center justify-between gap-3">
@@ -35,16 +60,42 @@ export default function TeamDetail({
             팀 목록
           </Link>
         </Button>
-        <Button
-          asChild
-          variant="default"
-          className="h-10 min-w-28 !text-primary-foreground hover:!text-primary-foreground [&_svg]:!text-primary-foreground"
-        >
-          <Link href={`/team/edit/${team.teamId}`}>
-            <Pencil className="size-4" />
-            수정
-          </Link>
-        </Button>
+        <div className="flex flex-wrap justify-end gap-3">
+          {canEdit ? (
+            <Button
+              asChild
+              variant="default"
+              className="h-10 min-w-28 !text-primary-foreground hover:!text-primary-foreground [&_svg]:!text-primary-foreground"
+            >
+              <Link href={`/team/edit/${team.teamId}`}>
+                <Pencil className="size-4" />
+                수정
+              </Link>
+            </Button>
+          ) : (
+            <Button
+              type="button"
+              variant="default"
+              disabled
+              title="팀 관리자만 수정할 수 있습니다."
+              className="h-10 min-w-28 !text-primary-foreground hover:!text-primary-foreground [&_svg]:!text-primary-foreground"
+            >
+              <Pencil className="size-4" />
+              수정
+            </Button>
+          )}
+          <Button
+            type="button"
+            variant="destructive"
+            className="h-10 min-w-28 !text-destructive hover:!text-destructive [&_svg]:!text-destructive"
+            disabled={!canEdit || deleteTeam.isPending}
+            title={canEdit ? "팀 삭제" : "팀 관리자만 삭제할 수 있습니다."}
+            onClick={handleDelete}
+          >
+            <Trash2 className="size-4" />
+            삭제
+          </Button>
+        </div>
       </div>
 
       <Card className="rounded-[28px]">
@@ -172,7 +223,7 @@ function InfoCard({
 function StatusBadge({ status }: { status: TeamStatusCode }) {
   return (
     <Badge variant={status === "ACTIVE" ? "success" : "outline"}>
-      {status === "ACTIVE" ? "운영중" : "비활성"}
+      {getTeamStatusLabel(status)}
     </Badge>
   );
 }
