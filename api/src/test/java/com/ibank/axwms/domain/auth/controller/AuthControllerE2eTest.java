@@ -33,6 +33,7 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.http.HttpHeaders;
 import org.springframework.http.MediaType;
 import org.springframework.test.context.TestPropertySource;
 import org.springframework.test.web.servlet.MvcResult;
@@ -263,6 +264,67 @@ class AuthControllerE2eTest extends E2eTestSupport {
                 .andExpect(cookie().doesNotExist(refreshCookieProperties.name()));
     }
 
+    @Test
+    @DisplayName("인증된 사용자가 현재 비밀번호를 검증하면 본인 비밀번호를 변경한다")
+    void 인증된_사용자가_현재_비밀번호를_검증하면_본인_비밀번호를_변경한다() throws Exception {
+        String accessTokenHeader = loginAccessTokenHeader(EMAIL, RAW_PASSWORD);
+        String newPassword = "newPassword1!";
+
+        mockMvc.perform(authPost("/change-password")
+                        .header(HttpHeaders.AUTHORIZATION, accessTokenHeader)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"currentPassword":"%s","newPassword":"%s"}
+                                """.formatted(RAW_PASSWORD, newPassword)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.success", is(true)))
+                .andExpect(jsonPath("$.timestamp").exists());
+
+        mockMvc.perform(authPost("/login")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"email":"%s","password":"%s"}
+                                """.formatted(EMAIL, RAW_PASSWORD)))
+                .andExpect(status().isUnauthorized());
+
+        mockMvc.perform(authPost("/login")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"email":"%s","password":"%s"}
+                                """.formatted(EMAIL, newPassword)))
+                .andExpect(status().isOk())
+                .andExpect(header().string("Authorization", startsWith("Bearer ")));
+    }
+
+    @Test
+    @DisplayName("인증 없이 비밀번호 변경을 요청하면 401 표준 에러 응답을 반환한다")
+    void 인증_없이_비밀번호_변경을_요청하면_401_표준_에러_응답을_반환한다() throws Exception {
+        mockMvc.perform(authPost("/change-password")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"currentPassword":"%s","newPassword":"newPassword1!"}
+                                """.formatted(RAW_PASSWORD)))
+                .andExpect(status().isUnauthorized())
+                .andExpect(jsonPath("$.success", is(false)))
+                .andExpect(jsonPath("$.error.code", is("AUTH_UNAUTHORIZED")));
+    }
+
+    @Test
+    @DisplayName("현재 비밀번호가 틀리면 비밀번호 변경을 거부한다")
+    void 현재_비밀번호가_틀리면_비밀번호_변경을_거부한다() throws Exception {
+        String accessTokenHeader = loginAccessTokenHeader(EMAIL, RAW_PASSWORD);
+
+        mockMvc.perform(authPost("/change-password")
+                        .header(HttpHeaders.AUTHORIZATION, accessTokenHeader)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"currentPassword":"wrongPassword1!","newPassword":"newPassword1!"}
+                                """))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.success", is(false)))
+                .andExpect(jsonPath("$.error.code", is("AUTH_PASSWORD_MISMATCH")));
+    }
+
     private User createUser(String email, EmploymentStatus employmentStatus) {
         Department department = departmentRepository.save(Department.create(
                 "E2E 사용자 부서 " + System.nanoTime(),
@@ -309,6 +371,17 @@ class AuthControllerE2eTest extends E2eTestSupport {
                 .claim("tokenType", "REFRESH")
                 .signWith(secretKey)
                 .compact();
+    }
+
+    private String loginAccessTokenHeader(String email, String password) throws Exception {
+        MvcResult loginResult = mockMvc.perform(authPost("/login")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"email":"%s","password":"%s"}
+                                """.formatted(email, password)))
+                .andExpect(status().isOk())
+                .andReturn();
+        return loginResult.getResponse().getHeader(HttpHeaders.AUTHORIZATION);
     }
 
     private MockHttpServletRequestBuilder authPost(String path) {
