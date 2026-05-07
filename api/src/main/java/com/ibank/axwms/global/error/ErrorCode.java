@@ -58,6 +58,10 @@ public enum ErrorCode {
     TEAM_LEADER_COUNT_INVALID(HttpStatus.BAD_REQUEST, "리더는 1명이어야 합니다."),
     /** access token 으로 복원한 현재 사용자 문맥이 DB 에 존재하지 않을 때 사용한다. */
     USER_NOT_FOUND(HttpStatus.NOT_FOUND, "사용자를 찾을 수 없습니다."),
+    /** 현재 사용자 프로필 수정 시 지원하지 않는 title_name 으로 role 매핑을 만들 수 없을 때 사용한다. */
+    USER_INVALID_TITLE_NAME(HttpStatus.BAD_REQUEST, "지원하지 않는 직책명입니다."),
+    /** 현재 사용자 프로필 이미지 final 업로드를 스토리지 장애로 처리할 수 없을 때 사용한다. */
+    USER_PROFILE_IMAGE_UPLOAD_FAILED(HttpStatus.SERVICE_UNAVAILABLE, "프로필 이미지 업로드를 처리할 수 없습니다. 잠시 후 다시 시도해 주세요."),
     /** 같은 사용자가 이미 보유한 스킬명을 다시 등록하려 할 때 사용한다. */
     USER_SKILL_DUPLICATE_NAME(HttpStatus.CONFLICT, "이미 등록된 사용자 스킬입니다."),
     /** 사용자 path 에 속한 스킬 레코드를 찾을 수 없을 때 사용한다. */

@@ -15,6 +15,7 @@ import com.ibank.axwms.domain.organization.user.dto.GetDepartmentCandidatesApiDt
 import com.ibank.axwms.domain.organization.user.dto.GetMyProfileApiDto;
 import com.ibank.axwms.domain.organization.user.dto.GetUserApiDto;
 import com.ibank.axwms.domain.organization.user.dto.GetUsersApiDto;
+import com.ibank.axwms.domain.organization.user.dto.UpdateMyProfileApiDto;
 import com.ibank.axwms.domain.organization.user.dto.UpdateUserApiDto;
 import com.ibank.axwms.domain.organization.user.service.UserService;
 import com.ibank.axwms.global.response.EmptyResponse;
@@ -102,6 +103,36 @@ class UserControllerTest {
         Method method = UserController.class.getMethod("getUser", CustomUserPrincipal.class, Long.class);
 
         assertThat(method.getParameters()[1].getAnnotation(PathVariable.class)).isNotNull();
+    }
+
+    @Test
+    @DisplayName("현재 사용자 부분 수정 메서드는 /me PATCH 매핑을 사용한다")
+    void 현재_사용자_부분_수정_메서드는_me_PATCH_매핑을_사용한다() throws NoSuchMethodException {
+        Method method = UserController.class.getMethod("updateMyProfile", CustomUserPrincipal.class, UpdateMyProfileApiDto.Request.class, MultipartFile.class);
+        PatchMapping patchMapping = method.getAnnotation(PatchMapping.class);
+
+        assertThat(patchMapping).isNotNull();
+        assertThat(patchMapping.value()).containsExactly("/me");
+        assertThat(patchMapping.consumes()).containsExactly(MediaType.MULTIPART_FORM_DATA_VALUE);
+    }
+
+    @Test
+    @DisplayName("현재 사용자 부분 수정 메서드는 별도 role gate 를 선언하지 않는다")
+    void 현재_사용자_부분_수정_메서드는_별도_role_gate를_선언하지_않는다() throws NoSuchMethodException {
+        Method method = UserController.class.getMethod("updateMyProfile", CustomUserPrincipal.class, UpdateMyProfileApiDto.Request.class, MultipartFile.class);
+
+        assertThat(method.getAnnotation(PreAuthorize.class)).isNull();
+    }
+
+    @Test
+    @DisplayName("현재 사용자 부분 수정 요청은 RequestPart 로 바인딩한다")
+    void 현재_사용자_부분_수정_요청은_RequestPart로_바인딩한다() throws NoSuchMethodException {
+        Method method = UserController.class.getMethod("updateMyProfile", CustomUserPrincipal.class, UpdateMyProfileApiDto.Request.class, MultipartFile.class);
+
+        assertThat(method.getParameters()[1].getAnnotation(RequestPart.class).value()).isEqualTo("request");
+        RequestPart profileImagePart = method.getParameters()[2].getAnnotation(RequestPart.class);
+        assertThat(profileImagePart.value()).isEqualTo("profile_image");
+        assertThat(profileImagePart.required()).isFalse();
     }
 
     @Test
@@ -379,6 +410,33 @@ class UserControllerTest {
     }
 
     @Test
+    @DisplayName("현재 사용자 부분 수정 메서드는 서비스에 위임하고 빈 응답을 반환한다")
+    void 현재_사용자_부분_수정_메서드는_서비스에_위임하고_빈_응답을_반환한다() {
+        CustomUserPrincipal principal = new CustomUserPrincipal(101L, "member@ibank.com", "MEMBER");
+        MockMultipartFile profileImage = new MockMultipartFile(
+                "profile_image",
+                "profile.png",
+                MediaType.IMAGE_PNG_VALUE,
+                "image".getBytes(StandardCharsets.UTF_8)
+        );
+        UpdateMyProfileApiDto.Request request = new UpdateMyProfileApiDto.Request(
+                10L,
+                "홍길동",
+                "hong@axwms.com",
+                "차장",
+                "팀장",
+                LocalDate.of(2024, 3, 1),
+                "010-1234-5678",
+                EmploymentStatus.ACTIVE
+        );
+
+        EmptyResponse response = userController.updateMyProfile(principal, request, profileImage);
+
+        assertThat(response).isEqualTo(EmptyResponse.INSTANCE);
+        then(userService).should().updateMyProfile(principal, request, profileImage);
+    }
+
+    @Test
     @DisplayName("사용자 부분 수정 HTTP 응답은 빈 data 객체로 래핑된다")
     void 사용자_부분_수정_HTTP_응답은_빈_data_객체로_래핑된다() throws Exception {
         MockMultipartFile requestPart = new MockMultipartFile(
@@ -418,6 +476,50 @@ class UserControllerTest {
                 null,
                 null,
                 21L
+        ), null);
+    }
+
+    @Test
+    @DisplayName("현재 사용자 부분 수정 HTTP 응답은 빈 data 객체로 래핑된다")
+    void 현재_사용자_부분_수정_HTTP_응답은_빈_data_객체로_래핑된다() throws Exception {
+        MockMultipartFile requestPart = new MockMultipartFile(
+                "request",
+                "",
+                MediaType.APPLICATION_JSON_VALUE,
+                """
+                                {
+                                  "department_id": 10,
+                                  "user_name": "홍길동",
+                                  "title_name": "본부장",
+                                  "employment_status": "LEAVE"
+                                }
+                                """.getBytes(StandardCharsets.UTF_8)
+        );
+
+        MvcResult result = mockMvc.perform(multipart("/users/me")
+                        .file(requestPart)
+                        .with(request -> {
+                            request.setMethod("PATCH");
+                            return request;
+                        }))
+                .andExpect(status().isOk())
+                .andReturn();
+
+        JsonNode json = objectMapper.readTree(result.getResponse().getContentAsString());
+
+        assertThat(json.get("success").asBoolean()).isTrue();
+        assertThat(json.get("data").isObject()).isTrue();
+        assertThat(json.get("data").size()).isZero();
+        assertThat(json.get("timestamp").asText()).isNotBlank();
+        then(userService).should().updateMyProfile(new CustomUserPrincipal(null, null, null), new UpdateMyProfileApiDto.Request(
+                10L,
+                "홍길동",
+                null,
+                null,
+                "본부장",
+                null,
+                null,
+                EmploymentStatus.LEAVE
         ), null);
     }
 

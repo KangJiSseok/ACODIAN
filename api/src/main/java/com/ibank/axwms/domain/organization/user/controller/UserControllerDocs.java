@@ -5,6 +5,7 @@ import com.ibank.axwms.domain.organization.user.dto.GetDepartmentCandidatesApiDt
 import com.ibank.axwms.domain.organization.user.dto.GetMyProfileApiDto;
 import com.ibank.axwms.domain.organization.user.dto.GetUserApiDto;
 import com.ibank.axwms.domain.organization.user.dto.GetUsersApiDto;
+import com.ibank.axwms.domain.organization.user.dto.UpdateMyProfileApiDto;
 import com.ibank.axwms.domain.organization.user.dto.UpdateUserApiDto;
 import com.ibank.axwms.global.response.EmptyResponse;
 import com.ibank.axwms.global.security.CustomUserPrincipal;
@@ -41,6 +42,37 @@ public interface UserControllerDocs {
     })
     GetMyProfileApiDto.Response getMyProfile(
             @Parameter(hidden = true) CustomUserPrincipal principal
+    );
+
+    @Operation(
+            summary = "현재 로그인 사용자 부분 수정",
+            description = "JWT access token 으로 인증된 현재 사용자만 principal.userId 기준으로 부분 수정한다. "
+                    + "multipart/form-data 요청의 JSON part(`request`) null 필드는 기존 값을 유지하고, "
+                    + "선택 file part(`profile_image`)가 있으면 프로필 이미지를 final key 로 직접 업로드해 교체한다. "
+                    + "department_id, title_name, employment_status 는 현재 정책상 self mutation 으로 허용하며, "
+                    + "title_name 은 signup 과 같은 매핑으로 roleCode 를 동기화해 다음 토큰 발급부터 roleCode claim 에 반영될 수 있다."
+    )
+    @SecurityRequirement(name = "bearerAuth")
+    @ApiResponses({
+            @ApiResponse(
+                    responseCode = "200",
+                    description = "현재 사용자 정보를 부분 수정하고 빈 객체를 반환한다.",
+                    content = @Content(schema = @Schema(implementation = EmptyResponse.class))
+            ),
+            @ApiResponse(responseCode = "400", description = "요청 값이 올바르지 않거나 지원하지 않는 직책명이다.", content = @Content),
+            @ApiResponse(responseCode = "413", description = "multipart 업로드 크기 제한을 초과했다.", content = @Content),
+            @ApiResponse(responseCode = "401", description = "access token 이 없거나 유효하지 않다.", content = @Content),
+            @ApiResponse(responseCode = "404", description = "현재 사용자 또는 활성 부서를 찾을 수 없다.", content = @Content),
+            @ApiResponse(responseCode = "503", description = "프로필 이미지 업로드를 처리할 수 없다. 잠시 후 다시 시도해야 한다.", content = @Content)
+    })
+    EmptyResponse updateMyProfile(
+            @Parameter(hidden = true) CustomUserPrincipal principal,
+            @Parameter(description = "현재 사용자 부분 수정 JSON part. multipart part name 은 `request` 이다.")
+            @RequestPart("request")
+            UpdateMyProfileApiDto.Request request,
+            @Parameter(description = "선택 프로필 이미지 file part. multipart part name 은 `profile_image` 이다. 미첨부 시 기존 이미지를 유지한다.")
+            @RequestPart(value = "profile_image", required = false)
+            MultipartFile profileImage
     );
 
     @Operation(

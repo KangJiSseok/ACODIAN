@@ -2,6 +2,7 @@ package com.ibank.axwms.domain.organization.user.service;
 
 import com.ibank.axwms.domain.organization.department.entity.Department;
 import com.ibank.axwms.domain.organization.department.repository.DepartmentRepository;
+import com.ibank.axwms.domain.organization.department.service.DepartmentService;
 import com.ibank.axwms.domain.organization.team.entity.UserTeam;
 import com.ibank.axwms.domain.organization.team.repository.TeamRepository;
 import com.ibank.axwms.domain.organization.team.repository.UserTeamRepository;
@@ -12,11 +13,13 @@ import com.ibank.axwms.domain.organization.user.dto.GetDepartmentCandidatesApiDt
 import com.ibank.axwms.domain.organization.user.dto.GetMyProfileApiDto;
 import com.ibank.axwms.domain.organization.user.dto.GetUserApiDto;
 import com.ibank.axwms.domain.organization.user.dto.GetUsersApiDto;
+import com.ibank.axwms.domain.organization.user.dto.UpdateMyProfileApiDto;
 import com.ibank.axwms.domain.organization.user.dto.UpdateUserApiDto;
 import com.ibank.axwms.domain.organization.user.entity.User;
 import com.ibank.axwms.domain.organization.user.event.ProfileImageCommittedEvent;
 import com.ibank.axwms.domain.organization.user.repository.UserRepository;
 import com.ibank.axwms.domain.organization.user.repository.jooq.query.UserListQuery;
+import com.ibank.axwms.domain.organization.user.service.ProfileImageStorageService.FinalUploadResult;
 import com.ibank.axwms.domain.organization.user.service.ProfileImageStorageService.TempUploadResult;
 import com.ibank.axwms.global.error.BusinessException;
 import com.ibank.axwms.global.error.ErrorCode;
@@ -26,6 +29,9 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.support.TransactionSynchronization;
+import org.springframework.transaction.support.TransactionSynchronizationManager;
+import org.springframework.util.StringUtils;
 import org.springframework.web.multipart.MultipartFile;
 
 @Service
@@ -35,6 +41,7 @@ public class UserService {
 
     private final UserRepository userRepository;
     private final DepartmentRepository departmentRepository;
+    private final DepartmentService departmentService;
     private final TeamRepository teamRepository;
     private final UserTeamRepository userTeamRepository;
     private final ProfileImageStorageService profileImageStorageService;
@@ -99,6 +106,48 @@ public class UserService {
         return userRepository.findUsers(UserListQuery.from(request)).stream()
                 .map(GetUsersApiDto.Response::from)
                 .toList();
+    }
+
+    /**
+     * 현재 로그인 사용자 본인의 프로필을 principal.userId 경계 안에서만 부분 수정한다.
+     *
+     * @param principal 수정 대상 사용자를 고정하는 인증 사용자
+     * @param request null 이 아닌 필드만 반영할 self 부분 수정 요청
+     * @param profileImage 새 프로필 이미지 파일. null 또는 empty 이면 기존 이미지를 유지한다.
+     * @throws BusinessException USER_NOT_FOUND principal 사용자가 없을 때
+     * @throws BusinessException DEPARTMENT_NOT_FOUND 요청 부서가 없거나 활성 상태가 아닐 때
+     * @throws BusinessException USER_INVALID_TITLE_NAME 지원하지 않는 직책명을 요청했을 때
+     * @throws BusinessException USER_PROFILE_IMAGE_UPLOAD_FAILED final 이미지 업로드에 실패했을 때
+     */
+    @Transactional
+    public void updateMyProfile(CustomUserPrincipal principal,
+                                UpdateMyProfileApiDto.Request request,
+                                MultipartFile profileImage) {
+        User user = getUserOrThrow(principal.userId());
+        validateActiveDepartmentIfPresent(request.departmentId());
+        UserRole roleCode = resolveSelfRoleCode(request.titleName());
+
+        FinalUploadResult finalUpload = uploadFinalProfileImage(profileImage);
+        String oldProfileImageKey = finalUpload != null
+                ? profileImageStorageService.resolveDeletableProfileImageKey(user.getProfileImageUrl())
+                : null;
+        if (finalUpload != null) {
+            registerFinalProfileImageSynchronization(finalUpload.finalKey(), oldProfileImageKey);
+        }
+
+        user.updateMyProfile(
+                request.departmentId(),
+                request.userName(),
+                request.email(),
+                finalUpload != null ? finalUpload.finalUrl() : null,
+                request.positionName(),
+                request.titleName(),
+                roleCode,
+                request.joinDate(),
+                request.phone(),
+                request.employmentStatus()
+        );
+        userRepository.flush();
     }
 
     /**
@@ -212,6 +261,53 @@ public class UserService {
         if (departmentId != null && !departmentRepository.existsById(departmentId)) {
             throw new BusinessException(ErrorCode.DEPARTMENT_NOT_FOUND);
         }
+    }
+
+    /** 부서 변경은 활성 부서 정책으로만 통과시킨다. */
+    private void validateActiveDepartmentIfPresent(Long departmentId) {
+        if (departmentId != null) {
+            departmentService.validateActiveDepartment(departmentId);
+        }
+    }
+
+    /** self titleName 이 실제 role 매핑을 바꾸는 요청일 때만 UserRole 로 해석하고, 실패하면 self 전용 코드로 차단한다. */
+    private UserRole resolveSelfRoleCode(String titleName) {
+        if (!StringUtils.hasText(titleName)) {
+            return null;
+        }
+        return UserRole.findByTitleName(titleName)
+                .orElseThrow(() -> new BusinessException(ErrorCode.USER_INVALID_TITLE_NAME));
+    }
+
+    /** 파일이 있을 때만 final 직접 업로드를 수행해 self API 의 ADR-021 예외 수명주기를 시작한다. */
+    private FinalUploadResult uploadFinalProfileImage(MultipartFile profileImage) {
+        if (profileImage == null || profileImage.isEmpty()) {
+            return null;
+        }
+        return profileImageStorageService.uploadFinal(profileImage);
+    }
+
+    /** 새 final object 는 rollback 때 보상 삭제하고 기존 object 는 commit 성공 뒤에만 best-effort 삭제한다.
+     *  트랜잭션 성공 전에는 기존 이미지를 절대 지우지 않고, 실패하면 새 이미지를 정리 */
+    private void registerFinalProfileImageSynchronization(String newFinalKey, String oldProfileImageKey) {
+        TransactionSynchronizationManager.registerSynchronization(new TransactionSynchronization() {
+
+            // 트랜잭션 성공하면 S3에 있는 이전 이미지 삭제
+            @Override
+            public void afterCommit() {
+                if (!newFinalKey.equals(oldProfileImageKey)) {
+                    profileImageStorageService.deleteBestEffort(oldProfileImageKey);
+                }
+            }
+
+            // 트랜잭션이 실패해서 롤백해야한다면, S3에 업로드한 파일 삭제
+            @Override
+            public void afterCompletion(int status) {
+                if (status == STATUS_ROLLED_BACK) {
+                    profileImageStorageService.deleteBestEffort(newFinalKey);
+                }
+            }
+        });
     }
 
     /** 대표 소속 팀 요청이 있으면 기존 대표 플래그를 모두 해제하고 요청 membership 만 대표로 둔다. */

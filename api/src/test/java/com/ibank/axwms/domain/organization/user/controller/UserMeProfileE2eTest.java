@@ -2,6 +2,7 @@ package com.ibank.axwms.domain.organization.user.controller;
 
 import static org.hamcrest.Matchers.is;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.multipart;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
@@ -18,7 +19,10 @@ import com.ibank.axwms.domain.organization.user.EmploymentStatus;
 import com.ibank.axwms.domain.organization.user.UserRole;
 import com.ibank.axwms.domain.organization.user.entity.User;
 import com.ibank.axwms.domain.organization.user.repository.UserRepository;
+import com.ibank.axwms.global.security.JwtTokenProvider;
 import com.ibank.axwms.testsupport.E2eTestSupport;
+import io.jsonwebtoken.Claims;
+import java.nio.charset.StandardCharsets;
 import java.time.LocalDate;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
@@ -26,6 +30,7 @@ import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.MediaType;
+import org.springframework.mock.web.MockMultipartFile;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.test.web.servlet.MvcResult;
 import org.springframework.test.util.ReflectionTestUtils;
@@ -52,6 +57,9 @@ class UserMeProfileE2eTest extends E2eTestSupport {
 
     @Autowired
     private PasswordEncoder passwordEncoder;
+
+    @Autowired
+    private JwtTokenProvider jwtTokenProvider;
 
     @BeforeEach
     void seedUserContext() {
@@ -139,6 +147,82 @@ class UserMeProfileE2eTest extends E2eTestSupport {
                 .andExpect(jsonPath("$.timestamp").exists());
     }
 
+    @Test
+    @DisplayName("로그인한 사용자가 이미지 없이 현재 사용자 프로필을 수정하면 조직성 필드를 포함해 반영한다")
+    void 로그인한_사용자가_이미지_없이_현재_사용자_프로필을_수정하면_조직성_필드를_포함해_반영한다() throws Exception {
+        String authorizationHeader = loginAndGetAuthorizationHeader();
+        Department changedDepartment = departmentRepository.save(Department.create(
+                "E2E 변경부서",
+                "현재 사용자 self update 검증용 부서"
+        ));
+        MockMultipartFile requestPart = new MockMultipartFile(
+                "request",
+                "",
+                MediaType.APPLICATION_JSON_VALUE,
+                """
+                        {
+                          "department_id": %d,
+                          "user_name": "E2E 수정 사용자",
+                          "title_name": "본부장",
+                          "employment_status": "LEAVE"
+                        }
+                        """.formatted(changedDepartment.getId()).getBytes(StandardCharsets.UTF_8)
+        );
+
+        mockMvc.perform(multipart("/api/users/me")
+                        .file(requestPart)
+                        .contextPath(API_CONTEXT_PATH)
+                        .servletPath("/users/me")
+                        .with(request -> {
+                            request.setMethod("PATCH");
+                            return request;
+                        })
+                        .header(HttpHeaders.AUTHORIZATION, authorizationHeader))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.success", is(true)))
+                .andExpect(jsonPath("$.data").isMap())
+                .andExpect(jsonPath("$.timestamp").exists());
+
+        User updated = userRepository.findByEmail(EMAIL).orElseThrow();
+        assertThatUserWasSelfUpdated(updated, changedDepartment.getId(), EmploymentStatus.LEAVE);
+    }
+
+    @Test
+    @DisplayName("현재 사용자 titleName 을 본부장으로 수정하면 다음 로그인 access token roleCode claim 은 DIRECTOR 다")
+    void 현재_사용자_titleName을_본부장으로_수정하면_다음_로그인_access_token_roleCode_claim은_DIRECTOR다() throws Exception {
+        String authorizationHeader = loginAndGetAuthorizationHeader();
+        MockMultipartFile requestPart = new MockMultipartFile(
+                "request",
+                "",
+                MediaType.APPLICATION_JSON_VALUE,
+                """
+                        {
+                          "title_name": "본부장",
+                          "employment_status": "ACTIVE"
+                        }
+                        """.getBytes(StandardCharsets.UTF_8)
+        );
+
+        mockMvc.perform(multipart("/api/users/me")
+                        .file(requestPart)
+                        .contextPath(API_CONTEXT_PATH)
+                        .servletPath("/users/me")
+                        .with(request -> {
+                            request.setMethod("PATCH");
+                            return request;
+                        })
+                        .header(HttpHeaders.AUTHORIZATION, authorizationHeader))
+                .andExpect(status().isOk());
+
+        User updated = userRepository.findByEmail(EMAIL).orElseThrow();
+        org.assertj.core.api.Assertions.assertThat(updated.getRoleCode()).isEqualTo(UserRole.DIRECTOR);
+
+        String nextAuthorizationHeader = loginAndGetAuthorizationHeader();
+        Claims claims = jwtTokenProvider.parseClaims(nextAuthorizationHeader.substring("Bearer ".length()));
+
+        org.assertj.core.api.Assertions.assertThat(claims.get("roleCode", String.class)).isEqualTo(UserRole.DIRECTOR.name());
+    }
+
     private String loginAndGetAuthorizationHeader() throws Exception {
         String body = """
                 {"email":"%s","password":"%s"}
@@ -153,5 +237,14 @@ class UserMeProfileE2eTest extends E2eTestSupport {
                 .andReturn();
 
         return result.getResponse().getHeader(HttpHeaders.AUTHORIZATION);
+    }
+
+    /** self update 정책상 조직성 필드와 roleCode 동기화까지 함께 허용되는지 확인한다. */
+    private void assertThatUserWasSelfUpdated(User updated, Long changedDepartmentId, EmploymentStatus employmentStatus) {
+        org.assertj.core.api.Assertions.assertThat(updated.getDepartmentId()).isEqualTo(changedDepartmentId);
+        org.assertj.core.api.Assertions.assertThat(updated.getUserName()).isEqualTo("E2E 수정 사용자");
+        org.assertj.core.api.Assertions.assertThat(updated.getTitleName()).isEqualTo("본부장");
+        org.assertj.core.api.Assertions.assertThat(updated.getRoleCode()).isEqualTo(UserRole.DIRECTOR);
+        org.assertj.core.api.Assertions.assertThat(updated.getEmploymentStatus()).isEqualTo(employmentStatus);
     }
 }

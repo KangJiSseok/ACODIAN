@@ -40,6 +40,12 @@ public class ProfileImageStorageService {
     public record TempUploadResult(String tempKey, String finalKey, String finalUrl) {}
 
     /**
+     * @param finalKey final 위치에 직접 저장된 S3 오브젝트 키
+     * @param finalUrl DB 에 저장되는 공개 접근 URL
+     */
+    public record FinalUploadResult(String finalKey, String finalUrl) {}
+
+    /**
      * 프로필 이미지를 temp 위치에 업로드하고 서빙 URL 을 미리 반환한다.
      * DB 저장 성공 후 promote() 로 temp → 서빙 위치 복사가 이루어지며,
      * DB 저장 실패 시 temp 파일은 스케줄러가 주기적으로 정리한다.
@@ -56,6 +62,24 @@ public class ProfileImageStorageService {
             return new TempUploadResult(tempKey, finalKey, finalUrl);
         } catch (RuntimeException exception) {
             throw new BusinessException(ErrorCode.AUTH_SIGNUP_PROFILE_IMAGE_UPLOAD_FAILED);
+        }
+    }
+
+    /**
+     * 현재 사용자 프로필 이미지를 final 위치에 직접 업로드한다.
+     * DB 롤백 보상 삭제는 호출 트랜잭션이 담당하므로, 여기서는 final key 와 URL 계산까지만 반환한다.
+     */
+    public FinalUploadResult uploadFinal(MultipartFile profileImage) {
+        if (profileImage == null || profileImage.isEmpty()) {
+            return null;
+        }
+        String finalKey = generateStorageKey(profileImage.getOriginalFilename());
+        try {
+            objectStoragePort.upload(profileImage, finalKey);
+            String finalUrl = objectStoragePort.toPublicUrl(finalKey);
+            return new FinalUploadResult(finalKey, finalUrl);
+        } catch (RuntimeException exception) {
+            throw new BusinessException(ErrorCode.USER_PROFILE_IMAGE_UPLOAD_FAILED);
         }
     }
 

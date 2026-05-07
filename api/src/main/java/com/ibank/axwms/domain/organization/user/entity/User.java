@@ -166,4 +166,45 @@ public class User {
             this.joinDate = joinDate;
         }
     }
+
+    /** 현재 사용자 self 수정 정책에 따라 titleName 과 roleCode 를 같은 매핑 단위로 동기화한다. */
+    public void updateMyProfile(Long departmentId,
+                                String userName,
+                                String email,
+                                String profileImageUrl,
+                                String positionName,
+                                String titleName,
+                                UserRole roleCode,
+                                LocalDate joinDate,
+                                String phone,
+                                EmploymentStatus employmentStatus) {
+        if (departmentId != null) {
+            this.departmentId = departmentId;
+        }
+        if (userName != null && !userName.isBlank()) {
+            this.userName = userName;
+        }
+        if (email != null && !email.isBlank()) {
+            this.email = email;
+        }
+        if (profileImageUrl != null) {
+            this.profileImageUrl = profileImageUrl;
+        }
+        if (positionName != null && !positionName.isBlank()) {
+            this.positionName = positionName;
+        }
+        if (titleName != null && !titleName.isBlank()) {
+            this.titleName = titleName;
+            this.roleCode = roleCode;
+        }
+        if (joinDate != null) {
+            this.joinDate = joinDate;
+        }
+        if (phone != null && !phone.isBlank()) {
+            this.phone = phone;
+        }
+        if (employmentStatus != null) {
+            this.employmentStatus = employmentStatus;
+        }
+    }
 }

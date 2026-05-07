@@ -193,6 +193,20 @@ class AuthServiceTest {
     }
 
     @Test
+    void 회원가입_titleName_매핑이_실패하면_signup_전용_AUTH_SIGNUP_INVALID_TITLE_NAME을_던진다() {
+        SignupApiDto.Request signupRequest = invalidTitleSignupRequest();
+        given(userRepository.existsByEmail(signupRequest.email())).willReturn(false);
+
+        assertThatThrownBy(() -> authService.signup(signupRequest, null))
+                .isInstanceOf(BusinessException.class)
+                .extracting(e -> ((BusinessException) e).getErrorCode())
+                .isEqualTo(ErrorCode.AUTH_SIGNUP_INVALID_TITLE_NAME);
+
+        verify(profileImageStorageService, never()).uploadTemp(any());
+        verify(userRepository, never()).save(any(User.class));
+    }
+
+    @Test
     void 유효한_refresh_token_이면_새_access_token_과_rotation_결과를_반환한다() {
         User user = activeUser();
         TokenService.ValidatedRefreshToken validatedRefreshToken =
@@ -253,6 +267,20 @@ class AuthServiceTest {
                 RAW_PASSWORD,
                 "사원",
                 "팀원",
+                LocalDate.of(2025, 1, 1),
+                "010-1234-5678",
+                EmploymentStatus.ACTIVE
+        );
+    }
+
+    private SignupApiDto.Request invalidTitleSignupRequest() {
+        return new SignupApiDto.Request(
+                1L,
+                "신규 사용자",
+                EMAIL,
+                RAW_PASSWORD,
+                "사원",
+                "대표",
                 LocalDate.of(2025, 1, 1),
                 "010-1234-5678",
                 EmploymentStatus.ACTIVE

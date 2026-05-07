@@ -8,6 +8,7 @@ import static org.mockito.Mockito.never;
 
 import com.ibank.axwms.domain.organization.department.entity.Department;
 import com.ibank.axwms.domain.organization.department.repository.DepartmentRepository;
+import com.ibank.axwms.domain.organization.department.service.DepartmentService;
 import com.ibank.axwms.domain.organization.team.UserTeamStatus;
 import com.ibank.axwms.domain.organization.team.entity.UserTeam;
 import com.ibank.axwms.domain.organization.team.repository.TeamRepository;
@@ -20,6 +21,7 @@ import com.ibank.axwms.domain.organization.user.dto.GetDepartmentCandidatesApiDt
 import com.ibank.axwms.domain.organization.user.dto.GetMyProfileApiDto;
 import com.ibank.axwms.domain.organization.user.dto.GetUserApiDto;
 import com.ibank.axwms.domain.organization.user.dto.GetUsersApiDto;
+import com.ibank.axwms.domain.organization.user.dto.UpdateMyProfileApiDto;
 import com.ibank.axwms.domain.organization.user.dto.UpdateUserApiDto;
 import com.ibank.axwms.domain.organization.user.entity.User;
 import com.ibank.axwms.domain.organization.user.event.ProfileImageCommittedEvent;
@@ -55,6 +57,9 @@ class UserServiceTest {
 
     @Mock
     private DepartmentRepository departmentRepository;
+
+    @Mock
+    private DepartmentService departmentService;
 
     @Mock
     private TeamRepository teamRepository;
@@ -440,6 +445,125 @@ class UserServiceTest {
                         "물류혁신TF",
                         EmploymentStatus.ACTIVE
                 ));
+    }
+
+    @Test
+    @DisplayName("현재 사용자 부분 수정은 principal 사용자만 수정하고 titleName 으로 roleCode 를 동기화한다")
+    void 현재_사용자_부분_수정은_principal_사용자만_수정하고_titleName으로_roleCode를_동기화한다() {
+        CustomUserPrincipal principal = new CustomUserPrincipal(101L, "member@ibank.com", "MEMBER");
+        User user = createUser(101L, 10L, "홍길동", "과장", "팀원", "https://old.example/profile.png", "010-0000-0000", LocalDate.of(2024, 1, 1));
+        UpdateMyProfileApiDto.Request request = new UpdateMyProfileApiDto.Request(
+                20L,
+                "김수정",
+                "updated@axwms.com",
+                "차장",
+                "본부장",
+                LocalDate.of(2025, 2, 3),
+                "010-1111-2222",
+                EmploymentStatus.LEAVE
+        );
+        given(userRepository.findById(101L)).willReturn(Optional.of(user));
+
+        userService.updateMyProfile(principal, request, null);
+
+        assertThat(user)
+                .extracting(User::getDepartmentId,
+                        User::getUserName,
+                        User::getEmail,
+                        User::getProfileImageUrl,
+                        User::getPositionName,
+                        User::getTitleName,
+                        User::getRoleCode,
+                        User::getJoinDate,
+                        User::getPhone,
+                        User::getEmploymentStatus)
+                .containsExactly(
+                        20L,
+                        "김수정",
+                        "updated@axwms.com",
+                        "https://old.example/profile.png",
+                        "차장",
+                        "본부장",
+                        UserRole.DIRECTOR,
+                        LocalDate.of(2025, 2, 3),
+                        "010-1111-2222",
+                        EmploymentStatus.LEAVE
+                );
+        then(departmentService).should().validateActiveDepartment(20L);
+        then(userRepository).should().flush();
+        then(profileImageStorageService).should(never()).uploadFinal(org.mockito.ArgumentMatchers.any());
+    }
+
+    @Test
+    @DisplayName("현재 사용자 부분 수정에서 titleName 이 없으면 기존 roleCode 를 유지한다")
+    void 현재_사용자_부분_수정에서_titleName이_없으면_기존_roleCode를_유지한다() {
+        CustomUserPrincipal principal = new CustomUserPrincipal(101L, "member@ibank.com", "MEMBER");
+        User user = createUser(101L, 10L, "홍길동", "과장", "팀원", null, null, LocalDate.of(2024, 1, 1), UserRole.MEMBER, "member@ibank.com");
+        UpdateMyProfileApiDto.Request request = new UpdateMyProfileApiDto.Request(null, "홍수정", null, null, " ", null, null, null);
+        given(userRepository.findById(101L)).willReturn(Optional.of(user));
+
+        userService.updateMyProfile(principal, request, null);
+
+        assertThat(user.getUserName()).isEqualTo("홍수정");
+        assertThat(user.getTitleName()).isEqualTo("팀원");
+        assertThat(user.getRoleCode()).isEqualTo(UserRole.MEMBER);
+        then(departmentService).should(never()).validateActiveDepartment(org.mockito.ArgumentMatchers.any());
+        then(userRepository).should().flush();
+    }
+
+    @Test
+    @DisplayName("현재 사용자 부분 수정에서 팀장 titleName 은 TEAM_LEAD 로 동기화한다")
+    void 현재_사용자_부분_수정에서_팀장_titleName은_TEAM_LEAD로_동기화한다() {
+        CustomUserPrincipal principal = new CustomUserPrincipal(101L, "member@ibank.com", "MEMBER");
+        User user = createUser(101L, 10L, "홍길동", "과장", "팀원", null, null, LocalDate.of(2024, 1, 1), UserRole.MEMBER, "member@ibank.com");
+        UpdateMyProfileApiDto.Request request = new UpdateMyProfileApiDto.Request(null, null, null, null, "팀장", null, null, null);
+        given(userRepository.findById(101L)).willReturn(Optional.of(user));
+
+        userService.updateMyProfile(principal, request, null);
+
+        assertThat(user.getTitleName()).isEqualTo("팀장");
+        assertThat(user.getRoleCode()).isEqualTo(UserRole.TEAM_LEAD);
+        then(userRepository).should().flush();
+    }
+
+    @Test
+    @DisplayName("현재 사용자 부분 수정에서 지원하지 않는 titleName 이면 USER_INVALID_TITLE_NAME 예외를 던진다")
+    void 현재_사용자_부분_수정에서_지원하지_않는_titleName이면_USER_INVALID_TITLE_NAME_예외를_던진다() {
+        CustomUserPrincipal principal = new CustomUserPrincipal(101L, "member@ibank.com", "MEMBER");
+        User user = createUser(101L, 10L, "홍길동", "과장", "팀원", null, null, LocalDate.of(2024, 1, 1));
+        UpdateMyProfileApiDto.Request request = new UpdateMyProfileApiDto.Request(null, null, null, null, "대표", null, null, null);
+        given(userRepository.findById(101L)).willReturn(Optional.of(user));
+
+        assertThatThrownBy(() -> userService.updateMyProfile(principal, request, null))
+                .isInstanceOf(BusinessException.class)
+                .extracting(error -> ((BusinessException) error).getErrorCode())
+                .isEqualTo(ErrorCode.USER_INVALID_TITLE_NAME);
+        then(profileImageStorageService).should(never()).uploadFinal(org.mockito.ArgumentMatchers.any());
+        then(userRepository).should(never()).flush();
+    }
+
+    @Test
+    @DisplayName("현재 사용자 부분 수정에서 프로필 이미지 업로드가 실패하면 USER_PROFILE_IMAGE_UPLOAD_FAILED 예외를 유지한다")
+    void 현재_사용자_부분_수정에서_프로필_이미지_업로드가_실패하면_USER_PROFILE_IMAGE_UPLOAD_FAILED_예외를_유지한다() {
+        CustomUserPrincipal principal = new CustomUserPrincipal(101L, "member@ibank.com", "MEMBER");
+        User user = createUser(101L, 10L, "홍길동", "과장", "팀원", null, null, LocalDate.of(2024, 1, 1));
+        UpdateMyProfileApiDto.Request request = new UpdateMyProfileApiDto.Request(null, null, null, null, null, null, null, null);
+        MockMultipartFile profileImage = new MockMultipartFile(
+                "profile_image",
+                "new.png",
+                MediaType.IMAGE_PNG_VALUE,
+                "image".getBytes(StandardCharsets.UTF_8)
+        );
+        given(userRepository.findById(101L)).willReturn(Optional.of(user));
+        org.mockito.BDDMockito.willThrow(new BusinessException(ErrorCode.USER_PROFILE_IMAGE_UPLOAD_FAILED))
+                .given(profileImageStorageService)
+                .uploadFinal(profileImage);
+
+        assertThatThrownBy(() -> userService.updateMyProfile(principal, request, profileImage))
+                .isInstanceOf(BusinessException.class)
+                .extracting(error -> ((BusinessException) error).getErrorCode())
+                .isEqualTo(ErrorCode.USER_PROFILE_IMAGE_UPLOAD_FAILED);
+        then(userRepository).should(never()).flush();
     }
 
     @Test
