@@ -1,0 +1,7 @@
+interface:
+  display_name: "iBank Worklog Enrichment"
+  short_description: "Generate iBank tags, evaluations, and skills."
+  default_prompt: "Use $ibank-worklog-enrichment to create worklog tags, team-scoped evaluations, and current user skills from iBank dummy data."
+
+policy:
+  allow_implicit_invocation: true

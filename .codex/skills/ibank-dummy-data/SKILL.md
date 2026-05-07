@@ -44,6 +44,12 @@ Read only the files needed for the current step.
   - `1`: 데이터컨설팅사업부
   - `2`: 솔루션사업부
   - `3`: 솔루션개발사업부
+- `tb_user.position_name` and `tb_user.title_name` are separate concepts:
+  - `position_name` must be one of `사원`, `대리`, `과장`, `차장`, `부장`, `상무`, `이사`.
+  - `title_name` must be `본부장` for user `1`, `사업부장` for users `2~4`, and `팀원` for users `5~35`.
+  - Never put organization titles such as `본부장` or `사업부장` in `position_name`.
+  - Team leadership belongs in `tb_user_team.is_leader` and `team_role`; it does not change `title_name`.
+  - For staff users `5~35`, keep ranks realistic and conservative: mostly `사원`/`대리`/`과장`, only a few `차장`, and avoid `부장` unless the user explicitly asks for a more senior organization.
 - `tb_user.password_hash` uses the shared BCrypt hash from `.codex/guides/ibank-dummy-data-preferences.md`
 - Excluded tables:
   - `tb_meta_tag`
