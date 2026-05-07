@@ -1,0 +1,4 @@
+version: 1
+display_name: iBank Worklog History Sync
+short_description: Regenerate and validate iBank status-history SQL against a chosen worklog seed version.
+default_prompt: Rebuild tb_worklog_status_history from the selected iBank worklog SQL and verify status and timestamp consistency.

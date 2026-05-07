@@ -1,0 +1,4 @@
+version: 1
+display_name: iBank Worklog Generator
+short_description: Generate versioned iBank worklog seed SQL and matching predecessor dependency SQL.
+default_prompt: Generate or regenerate iBank tb_worklog seed SQL from team MDs and persona files, then generate matching tb_worklog_dependency output for the same version.
