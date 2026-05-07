@@ -188,6 +188,60 @@ public class WorklogJooqRepositoryImpl implements WorklogJooqRepository {
     }
 
     /**
+     * AI ranking 결과의 업무 ID 목록을 최신 업무/팀/작성자 정보로 다시 조회한다.
+     */
+    @Override
+    public List<WorklogSearchProjection> findSearchWorklogsByIds(WorklogVisibilityScope scope, List<Long> worklogIds) {
+        if (worklogIds == null || worklogIds.isEmpty()) {
+            return List.of();
+        }
+
+        Field<Integer> predecessorCountField = DSL.selectCount()
+                .from(TB_WORKLOG_DEPENDENCY)
+                .where(TB_WORKLOG_DEPENDENCY.WORKLOG_ID.eq(TB_WORKLOG.WORKLOG_ID))
+                .asField("predecessor_count");
+
+        Condition condition = TB_WORKLOG.WORKLOG_ID.in(worklogIds)
+                .and(TB_WORKLOG.IS_DELETED.isFalse())
+                .and(TB_TEAM.DELETED_AT.isNull())
+                .and(toCondition(scope));
+
+        return dsl.select(
+                        TB_WORKLOG.WORKLOG_ID,
+                        TB_WORKLOG.TITLE,
+                        TB_WORKLOG.AI_SUMMARY,
+                        TB_WORKLOG.STATUS_CODE,
+                        TB_WORKLOG.IMPORTANCE_CODE,
+                        TB_WORKLOG.AI_PROCESSING_STATUS,
+                        predecessorCountField,
+                        TB_WORKLOG.TEAM_ID,
+                        TB_TEAM.TEAM_NAME,
+                        TB_WORKLOG.AUTHOR_ID,
+                        TB_USER.USER_NAME,
+                        TB_USER.PROFILE_IMAGE_URL,
+                        TB_WORKLOG.INSTRUCTION_DATE,
+                        TB_WORKLOG.DUE_DATE
+                )
+                .from(TB_WORKLOG)
+                .join(TB_TEAM).on(TB_WORKLOG.TEAM_ID.eq(TB_TEAM.TEAM_ID))
+                .join(TB_USER).on(TB_WORKLOG.AUTHOR_ID.eq(TB_USER.USER_ID))
+                .where(condition)
+                .fetch(record -> WorklogSearchProjection.from(record, predecessorCountField));
+    }
+
+    /**
+     * WorklogVisibilityScope 를 AI 서버 권한 필터용 팀 ID 목록으로 풀어낸다.
+     */
+    @Override
+    public List<Long> findVisibleTeamIds(WorklogVisibilityScope scope) {
+        Condition condition = TB_TEAM.DELETED_AT.isNull().and(toTeamCondition(scope));
+        return dsl.select(TB_TEAM.TEAM_ID)
+                .from(TB_TEAM)
+                .where(condition)
+                .fetch(TB_TEAM.TEAM_ID);
+    }
+
+    /**
      * 검색 query 의 각 필터를 base condition 에 누적한다.
      * keyword 는 제목 ILIKE substring 매칭, 상태/중요도는 enum name() 으로 String 비교한다.
      * tagId 는 worklog_tag exists 서브쿼리로 매핑한다.
@@ -232,36 +286,10 @@ public class WorklogJooqRepositoryImpl implements WorklogJooqRepository {
     private Condition toCondition(WorklogVisibilityScope scope) {
         return switch (scope) {
             case WorklogVisibilityScope.All ignored -> DSL.noCondition();
-            case WorklogVisibilityScope.Department department -> TB_WORKLOG.TEAM_ID.in(
-                            DSL.select(TB_USER_TEAM.TEAM_ID)
-                                    .from(TB_USER_TEAM)
-                                    .join(TB_TEAM).on(TB_USER_TEAM.TEAM_ID.eq(TB_TEAM.TEAM_ID))
-                                    .where(TB_USER_TEAM.USER_ID.eq(department.userId()))
-                                    .and(TB_USER_TEAM.STATUS_CODE.eq(ACTIVE_USER_TEAM_STATUS))
-                                    .and(TB_TEAM.DELETED_AT.isNull())
-                    )
-                    .or(TB_WORKLOG.TEAM_ID.in(
-                            DSL.select(TB_TEAM_ADMIN.TEAM_ID)
-                                    .from(TB_TEAM_ADMIN)
-                                    .join(TB_TEAM).on(TB_TEAM_ADMIN.TEAM_ID.eq(TB_TEAM.TEAM_ID))
-                                    .where(TB_TEAM_ADMIN.USER_ID.eq(department.userId()))
-                                    .and(TB_TEAM.DELETED_AT.isNull())
-                    ));
-            case WorklogVisibilityScope.MyTeams myTeams -> TB_WORKLOG.TEAM_ID.in(
-                            DSL.select(TB_USER_TEAM.TEAM_ID)
-                                    .from(TB_USER_TEAM)
-                                    .join(TB_TEAM).on(TB_USER_TEAM.TEAM_ID.eq(TB_TEAM.TEAM_ID))
-                                    .where(TB_USER_TEAM.USER_ID.eq(myTeams.userId()))
-                                    .and(TB_USER_TEAM.STATUS_CODE.eq(ACTIVE_USER_TEAM_STATUS))
-                                    .and(TB_TEAM.DELETED_AT.isNull())
-                    )
-                    .or(TB_WORKLOG.TEAM_ID.in(
-                            DSL.select(TB_TEAM_ADMIN.TEAM_ID)
-                                    .from(TB_TEAM_ADMIN)
-                                    .join(TB_TEAM).on(TB_TEAM_ADMIN.TEAM_ID.eq(TB_TEAM.TEAM_ID))
-                                    .where(TB_TEAM_ADMIN.USER_ID.eq(myTeams.userId()))
-                                    .and(TB_TEAM.DELETED_AT.isNull())
-                    ));
+            case WorklogVisibilityScope.Department department ->
+                    TB_WORKLOG.TEAM_ID.in(visibleNonDeletedTeamIds(department.userId()));
+            case WorklogVisibilityScope.MyTeams myTeams ->
+                    TB_WORKLOG.TEAM_ID.in(visibleNonDeletedTeamIds(myTeams.userId()));
         };
     }
 
@@ -363,5 +391,28 @@ public class WorklogJooqRepositoryImpl implements WorklogJooqRepository {
                 .orderBy(TB_WORKLOG.DUE_DATE.asc().nullsLast(), TB_WORKLOG.WORKLOG_ID.asc())
                 .limit(limit)
                 .fetch(record -> record.get(TB_WORKLOG.WORKLOG_ID));
+    }
+
+    /**
+     * 팀 테이블을 기준으로 같은 visible scope 를 적용할 수 있게 변환한다.
+     */
+    private Condition toTeamCondition(WorklogVisibilityScope scope) {
+        return switch (scope) {
+            case WorklogVisibilityScope.All ignored -> DSL.noCondition();
+            case WorklogVisibilityScope.Department department ->
+                    TB_TEAM.TEAM_ID.in(visibleTeamIds(department.userId()));
+            case WorklogVisibilityScope.MyTeams myTeams ->
+                    TB_TEAM.TEAM_ID.in(visibleTeamIds(myTeams.userId()));
+        };
+    }
+
+    /**
+     * 업무 검색 scope 에서 삭제된 팀의 업무가 함께 노출되지 않도록 팀 삭제 조건을 subquery 안에 묶는다.
+     */
+    private Select<Record1<Long>> visibleNonDeletedTeamIds(Long userId) {
+        return DSL.select(TB_TEAM.TEAM_ID)
+                .from(TB_TEAM)
+                .where(TB_TEAM.DELETED_AT.isNull())
+                .and(TB_TEAM.TEAM_ID.in(visibleTeamIds(userId)));
     }
 }

@@ -47,4 +47,14 @@ public interface WorklogJooqRepository {
      * 선행 쌍 자체는 WorklogDependencyJooqRepository.findIncompletePredecessorsByWorklogIds 로 조회한다.
      */
     List<Long> findIncompleteAuthorWorklogIdsBlockedByPredecessor(Long authorId, int limit);
+
+    /**
+     * 시맨틱 검색 결과 ID 목록을 기존 검색 응답 projection 으로 재조회한다.
+     */
+    List<WorklogSearchProjection> findSearchWorklogsByIds(WorklogVisibilityScope scope, List<Long> worklogIds);
+
+    /**
+     * AI 서버에 넘길 수 있도록 현재 검색 가시 범위의 팀 ID 목록만 조회한다.
+     */
+    List<Long> findVisibleTeamIds(WorklogVisibilityScope scope);
 }
