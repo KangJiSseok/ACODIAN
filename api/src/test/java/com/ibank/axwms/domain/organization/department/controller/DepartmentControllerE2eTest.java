@@ -107,7 +107,7 @@ class DepartmentControllerE2eTest extends E2eTestSupport {
     @Test
     @DisplayName("DIRECTOR 가 부서 선택 후보를 조회하면 모든 활성 부서를 최소 필드로 반환한다")
     void director_가_부서_선택_후보를_조회하면_모든_활성_부서를_최소_필드로_반환한다() throws Exception {
-        mockMvc.perform(apiGet("/departments/department-candidates")
+        mockMvc.perform(apiGet("/departments/candidates")
                         .with(principal(1L, "director@ibank.com", UserRole.DIRECTOR)))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.success", is(true)))
@@ -120,7 +120,7 @@ class DepartmentControllerE2eTest extends E2eTestSupport {
     @Test
     @DisplayName("DEPT_HEAD 가 부서 선택 후보를 조회하면 자기 소속 활성 부서만 반환한다")
     void dept_head_가_부서_선택_후보를_조회하면_자기_소속_활성_부서만_반환한다() throws Exception {
-        mockMvc.perform(apiGet("/departments/department-candidates")
+        mockMvc.perform(apiGet("/departments/candidates")
                         .with(principal(logisticsCandidateUserId, "dept-head@ibank.com", UserRole.DEPT_HEAD)))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.success", is(true)))
@@ -132,7 +132,7 @@ class DepartmentControllerE2eTest extends E2eTestSupport {
     @Test
     @DisplayName("MEMBER 는 부서 선택 후보 조회를 AUTH_ACCESS_DENIED 로 거부한다")
     void member_는_부서_선택_후보_조회를_auth_access_denied로_거부한다() throws Exception {
-        mockMvc.perform(apiGet("/departments/department-candidates")
+        mockMvc.perform(apiGet("/departments/candidates")
                         .with(user("member@ibank.com").roles("MEMBER")))
                 .andExpect(status().isForbidden())
                 .andExpect(jsonPath("$.error.code", is("AUTH_ACCESS_DENIED")));

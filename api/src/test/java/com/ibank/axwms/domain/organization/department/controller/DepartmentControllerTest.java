@@ -99,7 +99,7 @@ class DepartmentControllerTest {
         PreAuthorize preAuthorize = method.getAnnotation(PreAuthorize.class);
 
         assertThat(getMapping).isNotNull();
-        assertThat(getMapping.value()).containsExactly("/department-candidates");
+        assertThat(getMapping.value()).containsExactly("/candidates");
         assertThat(preAuthorize).isNotNull();
         assertThat(preAuthorize.value()).isEqualTo("hasAnyRole('DIRECTOR','DEPT_HEAD')");
     }

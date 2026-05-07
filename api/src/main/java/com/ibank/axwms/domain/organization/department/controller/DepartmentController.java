@@ -38,7 +38,7 @@ public class DepartmentController implements DepartmentControllerDocs {
     }
 
     @Override
-    @GetMapping("/department-candidates")
+    @GetMapping("/candidates")
     @PreAuthorize("hasAnyRole('DIRECTOR','DEPT_HEAD')")
     public GetDepartmentCandidatesApiDto.Response getDepartmentCandidates(
             @AuthenticationPrincipal CustomUserPrincipal principal
