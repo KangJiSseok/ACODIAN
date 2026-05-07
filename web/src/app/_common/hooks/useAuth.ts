@@ -13,8 +13,10 @@ import {
   logout as logoutRequest,
   refreshSession as refreshSessionRequest,
   signup as signupRequest,
+  updateMyProfile as updateMyProfileRequest,
   type LoginCredentials,
   type SignupPayload,
+  type UpdateMyProfilePayload,
 } from "@/app/_common/service/auth";
 
 /* 인증 hook */
@@ -58,6 +60,11 @@ export function useAuth() {
     return signupRequest(payload);
   }, []);
 
+  /* 내 프로필 수정 */
+  const updateMyProfile = useCallback((payload: UpdateMyProfilePayload) => {
+    return updateMyProfileRequest(payload);
+  }, []);
+
   /* 7. 화면에서 사용할 값 반환 */
   return {
     status,
@@ -68,6 +75,7 @@ export function useAuth() {
     logout,
     refreshSession,
     signup,
+    updateMyProfile,
     setStatus,
     setAccessToken,
     setUser,

@@ -34,6 +34,14 @@ export interface SignupPayload {
 }
 // 회원가입 요청 데이터
 
+export interface UpdateMyProfilePayload {
+  userName: string;
+  email: string;
+  phone: string;
+  profileImage: File | null;
+}
+// 현재 로그인한 사용자 프로필 수정 데이터
+
 /* 3. 로그인 */
 export async function login(credentials: LoginCredentials) {
   useAuthStore.getState().setStatus("loading");
@@ -148,6 +156,32 @@ export async function signup(payload: SignupPayload) {
   });
   // 회원가입은 응답 헤더를 직접 읽을 필요가 없으므로 apiClient를 사용
   // apiClient는 ApiResponse<T>에서 data만 꺼내 반환합니다.
+}
+
+/* 7. 내 프로필 수정 */
+export async function updateMyProfile(payload: UpdateMyProfilePayload) {
+  const request = {
+    user_name: payload.userName,
+    email: payload.email,
+    phone: payload.phone || null,
+  };
+
+  const formData = new FormData();
+  formData.append(
+    "request",
+    new Blob([JSON.stringify(request)], { type: "application/json" }),
+  );
+
+  if (payload.profileImage) {
+    formData.append("profile_image", payload.profileImage);
+  }
+
+  await apiClient.patch<EmptyResponse, FormData>("/users/me", formData);
+
+  const user = await fetchCurrentUser();
+  useAuthStore.getState().setUser(user);
+
+  return user;
 }
 
 /* 7. 현재 사용자 조회 helper */
