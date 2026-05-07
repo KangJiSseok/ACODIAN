@@ -11,7 +11,7 @@
 - [x] `POST /api/auth/signup`
 - [x] `POST /api/auth/logout`
 - [x] `POST /api/auth/refresh`
-- [ ] `POST /api/auth/change-password`
+- [x] `PATCH /api/auth/change-password`
 
 ## 2. `organization/department` 도메인
 
