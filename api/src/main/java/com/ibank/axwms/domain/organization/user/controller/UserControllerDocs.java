@@ -148,8 +148,7 @@ public interface UserControllerDocs {
     @ApiResponses({
             @ApiResponse(
                     responseCode = "200",
-                    description = "사용자 목록을 PageResponse 로 반환한다.",
-                    content = @Content(schema = @Schema(implementation = PageResponse.class))
+                    description = "사용자 목록을 PageResponse 로 반환한다."
             ),
             @ApiResponse(responseCode = "400", description = "요청 값이 올바르지 않다.", content = @Content),
             @ApiResponse(responseCode = "401", description = "access token 이 없거나 유효하지 않다.", content = @Content),
