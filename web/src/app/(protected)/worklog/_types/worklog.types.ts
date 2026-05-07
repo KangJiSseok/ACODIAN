@@ -64,3 +64,46 @@ export interface WorklogFormValues {
   aiSummaryEdited?: boolean
   aiRegenerateRequested?: boolean
 }
+
+export interface GetWorklogsParams {
+  page?: number
+  pageSize?: number
+}
+
+export interface WorklogListApiItem {
+  worklogId: number
+  title: string
+  statusCode: string
+  workContent: string
+  actualHours: number
+  importanceCode: string
+  aiSummary: string
+  aiProcessingStatus: string
+  aiSummaryEdited: boolean
+  teamId: number
+  teamName: string
+  authorId: number
+  authorName: string
+  instructionDate: string
+  dueDate: string
+  predecessorCount: number
+}
+
+export interface WorklogListItem {
+  id: number
+  title: string
+  status: WorklogStatus
+  workContent: string
+  actualHours: number
+  importance: ImportanceLevel
+  aiSummary: string
+  aiStatus: AiProcessingStatus
+  aiSummaryEdited: boolean
+  teamId: number
+  teamName: string
+  authorId: number
+  authorName: string
+  instructionDate: string
+  dueDate: string
+  predecessorCount: number
+}

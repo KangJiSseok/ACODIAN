@@ -12,11 +12,66 @@ import {
   type FileRecord,
   worklogs,
 } from "../_mock/worklog.mock"
+import { apiClient } from "@/app/_common/service/api-client"
+import type { PageResponse } from "@/app/_common/types/api.types"
+
 import type {
+  AiProcessingStatus,
+  GetWorklogsParams,
+  ImportanceLevel,
   Worklog,
   WorklogFormValues,
+  WorklogListApiItem,
+  WorklogListItem,
   WorklogRecord,
+  WorklogStatus,
 } from "../_types/worklog.types"
+
+const worklogStatusCodeMap: Record<string, WorklogStatus> = {
+  PENDING: "PENDING",
+  IN_PROGRESS: "IN_PROGRESS",
+  COMPLETED: "DONE",
+  DONE: "DONE",
+  ON_HOLD: "ON_HOLD",
+  FAILED: "FAILED",
+  CANCELLED: "CANCELLED",
+}
+
+const importanceCodeMap: Record<string, ImportanceLevel> = {
+  URGENT: "URGENT",
+  HIGH: "HIGH",
+  NORMAL: "NORMAL",
+  LOW: "LOW",
+}
+
+const aiProcessingStatusCodeMap: Record<string, AiProcessingStatus> = {
+  PENDING: "PENDING",
+  PROCESSING: "PROCESSING",
+  COMPLETED: "DONE",
+  DONE: "DONE",
+  FAILED: "FAILED",
+}
+
+function toWorklogListItem(item: WorklogListApiItem): WorklogListItem {
+  return {
+    id: item.worklogId,
+    title: item.title,
+    status: worklogStatusCodeMap[item.statusCode] ?? "PENDING",
+    workContent: item.workContent,
+    actualHours: Number(item.actualHours),
+    importance: importanceCodeMap[item.importanceCode] ?? "NORMAL",
+    aiSummary: item.aiSummary,
+    aiStatus: aiProcessingStatusCodeMap[item.aiProcessingStatus] ?? "PENDING",
+    aiSummaryEdited: item.aiSummaryEdited,
+    teamId: item.teamId,
+    teamName: item.teamName,
+    authorId: item.authorId,
+    authorName: item.authorName,
+    instructionDate: item.instructionDate,
+    dueDate: item.dueDate,
+    predecessorCount: item.predecessorCount,
+  }
+}
 
 const nextMap: Record<WorklogRecord["status"], WorklogRecord["status"][]> = {
   PENDING: ["IN_PROGRESS"],
@@ -208,6 +263,22 @@ function addUrgentNotifications(created: WorklogRecord) {
 }
 
 export const worklogService = {
+  async getWorklogs({
+    page = 1,
+    pageSize = 20,
+  }: GetWorklogsParams = {}): Promise<PageResponse<WorklogListItem>> {
+    const response = await apiClient.get<PageResponse<WorklogListApiItem>>(
+      "/worklogs",
+      {
+        params: { page, pageSize },
+      }
+    )
+
+    return {
+      ...response,
+      items: response.items.map(toWorklogListItem),
+    }
+  },
   async list(): Promise<Worklog[]> {
     return worklogs.filter((worklog) => !worklog.isDeleted).map((worklog) => ({ ...worklog }))
   },
