@@ -36,6 +36,10 @@ public enum ErrorCode {
     AUTH_ACCESS_DENIED(HttpStatus.FORBIDDEN, "접근 권한이 없습니다."),
     /** refresh token 이 없거나 서명/형식/저장소 정합성이 맞지 않아 재발급을 진행할 수 없을 때 사용한다. */
     AUTH_INVALID_REFRESH_TOKEN(HttpStatus.UNAUTHORIZED, "유효하지 않은 refresh token 입니다."),
+    /** 본인 비밀번호 변경 요청에서 현재 비밀번호가 일치하지 않을 때 사용한다. */
+    AUTH_PASSWORD_MISMATCH(HttpStatus.BAD_REQUEST, "비밀번호가 일치하지 않습니다."),
+    /** 본인 비밀번호 변경 요청의 새 비밀번호가 보안 정책을 만족하지 못할 때 사용한다. */
+    AUTH_PASSWORD_POLICY_VIOLATION(HttpStatus.BAD_REQUEST, "비밀번호는 8~100자이며 영문, 숫자, 특수문자를 포함해야 합니다."),
     /** 같은 이름의 부서가 이미 존재해 부서를 생성하거나 수정할 수 없을 때 사용한다. */
     DEPARTMENT_DUPLICATE_NAME(HttpStatus.CONFLICT, "같은 이름의 부서가 이미 존재합니다."),
     /** 이미 다른 부서의 부서장으로 지정된 사용자를 다시 지정하려 할 때 사용한다. */

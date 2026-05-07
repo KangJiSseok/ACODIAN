@@ -7,6 +7,7 @@ import static org.mockito.BDDMockito.given;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 
+import com.ibank.axwms.domain.auth.dto.ChangePasswordApiDto;
 import com.ibank.axwms.domain.auth.dto.LoginApiDto;
 import com.ibank.axwms.domain.auth.dto.RefreshAccessTokenApiDto;
 import com.ibank.axwms.domain.auth.dto.SignupApiDto;
@@ -20,6 +21,7 @@ import com.ibank.axwms.domain.organization.user.service.ProfileImageStorageServi
 import com.ibank.axwms.domain.organization.user.service.ProfileImageStorageService.TempUploadResult;
 import com.ibank.axwms.global.error.BusinessException;
 import com.ibank.axwms.global.error.ErrorCode;
+import com.ibank.axwms.global.security.CustomUserPrincipal;
 import java.time.LocalDate;
 import java.util.Optional;
 import org.springframework.context.ApplicationEventPublisher;
@@ -259,6 +261,34 @@ class AuthServiceTest {
         verify(tokenService).revokeRefreshToken("refresh-token");
     }
 
+    @Test
+    void 현재_비밀번호가_일치하지_않으면_AUTH_PASSWORD_MISMATCH를_던진다() {
+        User user = activeUser();
+        ChangePasswordApiDto.Request changeRequest = changePasswordRequest("newPassword1!");
+        given(userRepository.findById(1L)).willReturn(Optional.of(user));
+        given(passwordEncoder.matches(RAW_PASSWORD, HASHED_PASSWORD)).willReturn(false);
+
+        assertThatThrownBy(() -> authService.changePassword(principal(), changeRequest))
+                .isInstanceOf(BusinessException.class)
+                .extracting(e -> ((BusinessException) e).getErrorCode())
+                .isEqualTo(ErrorCode.AUTH_PASSWORD_MISMATCH);
+
+        verify(passwordEncoder, never()).encode(any());
+    }
+
+    @Test
+    void 비밀번호_변경에_성공하면_새_해시로_교체한다() {
+        User user = activeUser();
+        ChangePasswordApiDto.Request changeRequest = changePasswordRequest("newPassword1!");
+        given(userRepository.findById(1L)).willReturn(Optional.of(user));
+        given(passwordEncoder.matches(RAW_PASSWORD, HASHED_PASSWORD)).willReturn(true);
+        given(passwordEncoder.encode("newPassword1!")).willReturn("new-hashed-password");
+
+        authService.changePassword(principal(), changeRequest);
+
+        assertThat(user.getPasswordHash()).isEqualTo("new-hashed-password");
+    }
+
     private SignupApiDto.Request signupRequest() {
         return new SignupApiDto.Request(
                 1L,
@@ -285,6 +315,14 @@ class AuthServiceTest {
                 "010-1234-5678",
                 EmploymentStatus.ACTIVE
         );
+    }
+
+    private ChangePasswordApiDto.Request changePasswordRequest(String newPassword) {
+        return new ChangePasswordApiDto.Request(RAW_PASSWORD, newPassword);
+    }
+
+    private CustomUserPrincipal principal() {
+        return new CustomUserPrincipal(1L, EMAIL, UserRole.MEMBER.name());
     }
 
     private User activeUser() {

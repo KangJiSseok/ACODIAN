@@ -1,8 +1,10 @@
 package com.ibank.axwms.domain.auth.controller;
 
+import com.ibank.axwms.domain.auth.dto.ChangePasswordApiDto;
 import com.ibank.axwms.domain.auth.dto.LoginApiDto;
 import com.ibank.axwms.domain.auth.dto.SignupApiDto;
 import com.ibank.axwms.global.response.EmptyResponse;
+import com.ibank.axwms.global.security.CustomUserPrincipal;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.headers.Header;
@@ -10,9 +12,11 @@ import io.swagger.v3.oas.annotations.media.Content;
 import io.swagger.v3.oas.annotations.media.Schema;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.responses.ApiResponses;
+import io.swagger.v3.oas.annotations.security.SecurityRequirement;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
+import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestPart;
 import org.springframework.web.multipart.MultipartFile;
@@ -127,5 +131,26 @@ public interface AuthControllerDocs {
     EmptyResponse logout(
             HttpServletRequest request,
             HttpServletResponse response
+    );
+
+    @Operation(
+            summary = "본인 비밀번호 변경",
+            description = "JWT access token 으로 인증된 현재 사용자의 비밀번호만 변경한다. "
+                    + "현재 비밀번호를 다시 검증하고, 새 비밀번호가 정책을 만족할 때만 저장된 해시를 교체한다."
+    )
+    @SecurityRequirement(name = "bearerAuth")
+    @ApiResponses({
+            @ApiResponse(
+                    responseCode = "200",
+                    description = "비밀번호 변경에 성공하고 빈 객체를 반환한다.",
+                    content = @Content(schema = @Schema(implementation = EmptyResponse.class))
+            ),
+            @ApiResponse(responseCode = "400", description = "요청 값이 올바르지 않거나 현재 비밀번호가 일치하지 않거나 정책을 만족하지 못한다.", content = @Content),
+            @ApiResponse(responseCode = "401", description = "access token 이 없거나 유효하지 않다.", content = @Content),
+            @ApiResponse(responseCode = "404", description = "현재 사용자 문맥에 해당하는 사용자를 찾을 수 없다.", content = @Content)
+    })
+    EmptyResponse changePassword(
+            @Parameter(hidden = true) CustomUserPrincipal principal,
+            @RequestBody ChangePasswordApiDto.Request request
     );
 }
