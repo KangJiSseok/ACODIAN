@@ -14,7 +14,6 @@ import {
   SlidersHorizontal,
 } from "lucide-react";
 import { Pagination } from "@/app/_common/components/data-display/pagination";
-import { usePagination } from "@/app/_common/hooks/usePagination";
 import PageHeader from "@/app/_common/components/layout/pageHeader";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -24,7 +23,7 @@ import { Input } from "@/components/ui/input";
 import { Select } from "@/components/ui/select";
 import { cn } from "@/lib/utils";
 import { useUserList } from "./_hooks";
-import type { UserSummary } from "./_types/user.types";
+import type { GetUsersParams, UserSummary } from "./_types/user.types";
 import {
   getEmploymentStatusBadgeVariant,
   getEmploymentStatusLabel,
@@ -34,31 +33,69 @@ const ALL_FILTER_VALUE = "all";
 const USER_PAGE_SIZE = 4;
 
 export default function UserPage() {
-  const { data: users = [], isLoading, error, refetch } = useUserList();
   const [query, setQuery] = useState("");
   const [showFilters, setShowFilters] = useState(false);
   const [departmentId, setDepartmentId] = useState(ALL_FILTER_VALUE);
   const [positionName, setPositionName] = useState(ALL_FILTER_VALUE);
   const [employmentStatus, setEmploymentStatus] = useState(ALL_FILTER_VALUE);
+  const [page, setPage] = useState(1);
 
-  const filterOptions = useMemo(() => buildFilterOptions(users), [users]);
-  const filteredUsers = useMemo(
-    () =>
-      filterUsers(users, {
-        query,
-        departmentId,
-        positionName,
-        employmentStatus,
-      }),
-    [departmentId, employmentStatus, positionName, query, users],
+  const userListParams = useMemo<GetUsersParams>(
+    () => ({
+      page,
+      pageSize: USER_PAGE_SIZE,
+      userName: query.trim() || undefined,
+      departmentId:
+        departmentId === ALL_FILTER_VALUE ? undefined : Number(departmentId),
+      positionName:
+        positionName === ALL_FILTER_VALUE ? undefined : positionName,
+      employmentStatus:
+        employmentStatus === ALL_FILTER_VALUE ? undefined : employmentStatus,
+    }),
+    [departmentId, employmentStatus, page, positionName, query],
   );
-  const pagination = usePagination(filteredUsers, USER_PAGE_SIZE);
+
+  const {
+    data: userPage,
+    isLoading,
+    error,
+    refetch,
+  } = useUserList(userListParams);
+  const { data: filterUserPage } = useUserList({ pageSize: 100 });
+  const users = userPage?.items ?? [];
+  const filterSourceUsers = filterUserPage?.items ?? users;
+
+  const filterOptions = useMemo(
+    () => buildFilterOptions(filterSourceUsers),
+    [filterSourceUsers],
+  );
 
   function resetFilters() {
     setQuery("");
     setDepartmentId(ALL_FILTER_VALUE);
     setPositionName(ALL_FILTER_VALUE);
     setEmploymentStatus(ALL_FILTER_VALUE);
+    setPage(1);
+  }
+
+  function updateQuery(value: string) {
+    setQuery(value);
+    setPage(1);
+  }
+
+  function updateDepartmentId(value: string) {
+    setDepartmentId(value);
+    setPage(1);
+  }
+
+  function updatePositionName(value: string) {
+    setPositionName(value);
+    setPage(1);
+  }
+
+  function updateEmploymentStatus(value: string) {
+    setEmploymentStatus(value);
+    setPage(1);
   }
 
   return (
@@ -79,8 +116,8 @@ export default function UserPage() {
               <Search className="pointer-events-none absolute left-4 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
               <Input
                 value={query}
-                onChange={(event) => setQuery(event.target.value)}
-                placeholder="이름, 이메일, 부서, 직급으로 검색하세요"
+                onChange={(event) => updateQuery(event.target.value)}
+                placeholder="이름으로 검색하세요"
                 className="h-12 pl-11"
                 aria-label="사용자 검색"
               />
@@ -135,7 +172,9 @@ export default function UserPage() {
                     <Select
                       aria-label="부서 필터"
                       value={departmentId}
-                      onChange={(event) => setDepartmentId(event.target.value)}
+                      onChange={(event) =>
+                        updateDepartmentId(event.target.value)
+                      }
                       options={[
                         { label: "전체 부서", value: ALL_FILTER_VALUE },
                         ...filterOptions.departments,
@@ -146,7 +185,9 @@ export default function UserPage() {
                     <Select
                       aria-label="직급 필터"
                       value={positionName}
-                      onChange={(event) => setPositionName(event.target.value)}
+                      onChange={(event) =>
+                        updatePositionName(event.target.value)
+                      }
                       options={[
                         { label: "전체 직급", value: ALL_FILTER_VALUE },
                         ...filterOptions.positions,
@@ -158,7 +199,7 @@ export default function UserPage() {
                       aria-label="재직 상태 필터"
                       value={employmentStatus}
                       onChange={(event) =>
-                        setEmploymentStatus(event.target.value)
+                        updateEmploymentStatus(event.target.value)
                       }
                       options={[
                         { label: "전체 상태", value: ALL_FILTER_VALUE },
@@ -185,9 +226,9 @@ export default function UserPage() {
               </p>
             </div>
             <p className="text-sm font-medium text-muted-foreground">
-              표시 중인 사용자{" "}
+              조회된 사용자{" "}
               <span className="text-lg font-semibold text-foreground">
-                {filteredUsers.length}명
+                {userPage?.totalCount ?? 0}명
               </span>
             </p>
           </div>
@@ -212,22 +253,22 @@ export default function UserPage() {
           </div>
         ) : null}
 
-        {!isLoading && !error && filteredUsers.length === 0 ? (
+        {!isLoading && !error && users.length === 0 ? (
           <div className="workspace-empty rounded-2xl px-6 py-10 text-center text-sm">
             조건에 맞는 사용자가 없습니다.
           </div>
         ) : null}
 
         <div className="grid gap-4">
-          {pagination.items.map((user) => (
+          {users.map((user) => (
             <UserCard key={user.userId} user={user} />
           ))}
         </div>
 
         <Pagination
-          page={pagination.page}
-          totalPages={pagination.totalPages}
-          onPageChange={pagination.setPage}
+          page={userPage?.page ?? page}
+          totalPages={userPage?.totalPages ?? 1}
+          onPageChange={setPage}
         />
       </section>
     </section>
@@ -391,48 +432,6 @@ function uniqueOptions(options: Array<{ label: string; value: string }>) {
 
     seen.add(option.value);
     return true;
-  });
-}
-
-function filterUsers(
-  users: UserSummary[],
-  filters: {
-    query: string;
-    departmentId: string;
-    positionName: string;
-    employmentStatus: string;
-  },
-) {
-  const normalizedQuery = filters.query.trim().toLowerCase();
-
-  return users.filter((user) => {
-    const queryMatches =
-      !normalizedQuery ||
-      [
-        user.userName,
-        user.email,
-        user.departmentName,
-        user.positionName,
-        user.titleName,
-        user.teamName,
-      ]
-        .filter(Boolean)
-        .join(" ")
-        .toLowerCase()
-        .includes(normalizedQuery);
-    const departmentMatches =
-      filters.departmentId === ALL_FILTER_VALUE ||
-      String(user.departmentId) === filters.departmentId;
-    const positionMatches =
-      filters.positionName === ALL_FILTER_VALUE ||
-      user.positionName === filters.positionName;
-    const statusMatches =
-      filters.employmentStatus === ALL_FILTER_VALUE ||
-      user.employmentStatus === filters.employmentStatus;
-
-    return (
-      queryMatches && departmentMatches && positionMatches && statusMatches
-    );
   });
 }
 

@@ -1,5 +1,10 @@
+"use client";
+
 import Link from "next/link";
+import { useMemo } from "react";
 import ScaffoldPage from "@/app/_common/components/layout/scaffoldPage";
+import { useAuth } from "@/app/_common/hooks/useAuth";
+import { canAccessOrganizationPath } from "@/app/_common/utils/organizationAccess.utils";
 
 // 초기 스캐폴드 단계에서 주요 도메인으로 이동할 수 있는 진입 링크를 둡니다.
 const dashboardLinks = [
@@ -11,13 +16,22 @@ const dashboardLinks = [
 ];
 
 export default function DashboardPage() {
+  const { user } = useAuth();
+  const visibleDashboardLinks = useMemo(
+    () =>
+      dashboardLinks.filter((item) =>
+        canAccessOrganizationPath(user, item.href),
+      ),
+    [user],
+  );
+
   return (
     <ScaffoldPage
       title="AX-WMS 대시보드"
       description="도메인별 라우트와 기본 레이아웃이 연결된 상태입니다."
     >
       <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
-        {dashboardLinks.map((item) => (
+        {visibleDashboardLinks.map((item) => (
           <Link
             key={item.href}
             href={item.href}

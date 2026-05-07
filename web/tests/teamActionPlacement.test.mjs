@@ -42,12 +42,19 @@ test("team management page shows helper description copy", () => {
   assert.doesNotMatch(teamPage, /팀 상태, 책임자/);
 });
 
+test("team create action is exposed only to organization managers", () => {
+  assert.match(teamPage, /useAuth\(\)/);
+  assert.match(teamPage, /canCreateTeams\(user\)/);
+  assert.match(teamPage, /actions=\{canCreateTeam \?/);
+});
+
 test("team detail owns edit and delete actions", () => {
   assert.match(teamDetail, /href=\{`\/team\/edit\/\$\{team\.teamId\}`\}/);
   assert.match(teamDetail, /Pencil/);
   assert.match(teamDetail, /useDeleteTeam/);
   assert.match(teamDetail, /Trash2/);
   assert.match(teamDetail, /handleDelete/);
+  assert.doesNotMatch(teamDetail, /disabled\s*\{/);
 });
 
 test("team manage actions use frontend access utility without changing api shape", () => {

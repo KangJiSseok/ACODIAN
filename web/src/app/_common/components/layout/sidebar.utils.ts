@@ -1,4 +1,5 @@
 import { navItems } from "./sidebar.config";
+import type { NavItem } from "./sidebar.config";
 
 export function getNestedCreateSubmenu(href: string, currentPath: string) {
   if (href === "/department" && currentPath.startsWith("/department/create")) {
@@ -16,8 +17,8 @@ export function getNestedCreateSubmenu(href: string, currentPath: string) {
   return null;
 }
 
-export function getActiveGroupLabel(pathname: string) {
-  const activeGroup = navItems.find((item) =>
+export function getActiveGroupLabel(pathname: string, items: NavItem[] = navItems) {
+  const activeGroup = items.find((item) =>
     item.submenus?.some(
       (sub) => pathname === sub.href || pathname.startsWith(`${sub.href}/`),
     ),

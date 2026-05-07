@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
+import { useMemo } from "react";
 
 import { ChevronDown, LogOut, PanelLeftClose } from "lucide-react";
 import { cn } from "@/lib/utils";
@@ -10,12 +11,17 @@ import { type NavItem, navItems } from "./sidebar.config";
 import { getActiveGroupLabel, getNestedCreateSubmenu } from "./sidebar.utils";
 import { useAuth } from "@/app/_common/hooks/useAuth";
 import { useUiStore } from "@/app/_common/store/ui.store";
+import { filterNavItemsForUser } from "@/app/_common/utils/organizationAccess.utils";
 
 export default function Sidebar() {
   const pathname = usePathname();
   const router = useRouter();
-  const activeGroupLabel = getActiveGroupLabel(pathname);
   const { user, logout } = useAuth();
+  const visibleNavItems = useMemo(
+    () => filterNavItemsForUser(user, navItems),
+    [user],
+  );
+  const activeGroupLabel = getActiveGroupLabel(pathname, visibleNavItems);
   const sidebarCollapsed = useUiStore((state) => state.sidebarCollapsed);
   const toggleSidebarCollapsed = useUiStore(
     (state) => state.toggleSidebarCollapsed,
@@ -98,7 +104,7 @@ export default function Sidebar() {
             sidebarCollapsed ? "w-[3.75rem]" : "w-full",
           )}
         >
-          {navItems.map((item) => {
+          {visibleNavItems.map((item) => {
             if (item.submenus) {
               const shouldOpen = activeGroupLabel === item.label;
               return (

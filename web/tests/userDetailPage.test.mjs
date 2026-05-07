@@ -69,3 +69,29 @@ test("사용자 목록 검색 필터는 파일 탭과 같은 컨트롤 패턴을
   assert.doesNotMatch(page, /ChevronUp/);
   assert.doesNotMatch(page, /h-14 rounded-2xl pl-12/);
 });
+
+test("사용자 목록은 백엔드 PageResponse와 query params로 페이지네이션한다", () => {
+  const page = readUserFile("page.tsx");
+  const service = readUserFile("_service/user.service.ts");
+  const types = readUserFile("_types/user.types.ts");
+
+  assert.match(types, /page\?: number/);
+  assert.match(types, /pageSize\?: number/);
+  assert.match(service, /apiClient\.get<PageResponse<UserSummary>>\("\/users"/);
+  assert.doesNotMatch(service, /apiClient\.get<UserSummary\[]>/);
+  assert.match(page, /const \[page, setPage\] = useState\(1\)/);
+  assert.match(page, /useUserList\(userListParams\)/);
+  assert.match(page, /userPage\?\.items \?\? \[\]/);
+  assert.match(page, /totalPages=\{userPage\?\.totalPages \?\? 1\}/);
+  assert.doesNotMatch(page, /usePagination/);
+});
+
+test("팀 사용자 후보 조회도 사용자 PageResponse의 items를 사용한다", () => {
+  const service = readFileSync(
+    new URL("../src/app/(protected)/team/_service/team.service.ts", import.meta.url),
+    "utf8",
+  );
+
+  assert.match(service, /apiClient\.get<PageResponse<TeamUserCandidate>>\("\/users"/);
+  assert.match(service, /return page\.items/);
+});

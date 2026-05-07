@@ -29,10 +29,13 @@ export const teamService = {
     apiClient.get<TeamUsersResponse>(`/teams/${teamId}/users`),
 
   // 팀 생성/수정 폼에서 선택할 활성 사용자를 조회합니다.
-  getUserCandidates: () =>
-    apiClient.get<TeamUserCandidate[]>("/users", {
-      params: { employmentStatus: "ACTIVE" },
-    }),
+  getUserCandidates: async () => {
+    const page = await apiClient.get<PageResponse<TeamUserCandidate>>("/users", {
+      params: { employmentStatus: "ACTIVE", pageSize: 100 },
+    });
+
+    return page.items;
+  },
 
   // 새 팀을 등록합니다.
   createTeam: (payload: CreateTeamRequest) =>
