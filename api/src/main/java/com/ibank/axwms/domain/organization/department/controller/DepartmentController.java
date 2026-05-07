@@ -1,15 +1,18 @@
 package com.ibank.axwms.domain.organization.department.controller;
 
 import com.ibank.axwms.domain.organization.department.dto.CreateDepartmentApiDto;
+import com.ibank.axwms.domain.organization.department.dto.GetDepartmentCandidatesApiDto;
 import com.ibank.axwms.domain.organization.department.dto.GetDepartmentDetailApiDto;
 import com.ibank.axwms.domain.organization.department.dto.GetDepartmentsApiDto;
 import com.ibank.axwms.domain.organization.department.dto.UpdateDepartmentApiDto;
 import com.ibank.axwms.domain.organization.department.service.DepartmentService;
 import com.ibank.axwms.global.response.EmptyResponse;
+import com.ibank.axwms.global.security.CustomUserPrincipal;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
 import org.springframework.security.access.prepost.PreAuthorize;
+import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
@@ -32,6 +35,15 @@ public class DepartmentController implements DepartmentControllerDocs {
     @PreAuthorize("hasRole('DIRECTOR')")
     public GetDepartmentsApiDto.Response getDepartments() {
         return departmentService.getDepartments();
+    }
+
+    @Override
+    @GetMapping("/department-candidates")
+    @PreAuthorize("hasAnyRole('DIRECTOR','DEPT_HEAD')")
+    public GetDepartmentCandidatesApiDto.Response getDepartmentCandidates(
+            @AuthenticationPrincipal CustomUserPrincipal principal
+    ) {
+        return departmentService.getDepartmentCandidates(principal);
     }
 
     @Override

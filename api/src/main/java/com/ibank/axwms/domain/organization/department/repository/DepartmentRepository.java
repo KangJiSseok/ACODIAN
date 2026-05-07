@@ -3,6 +3,7 @@ package com.ibank.axwms.domain.organization.department.repository;
 import com.ibank.axwms.domain.organization.department.DepartmentStatus;
 import com.ibank.axwms.domain.organization.department.entity.Department;
 import com.ibank.axwms.domain.organization.department.repository.jooq.DepartmentJooqRepository;
+import java.util.List;
 import java.util.Optional;
 import org.springframework.data.jpa.repository.JpaRepository;
 
@@ -19,6 +20,12 @@ public interface DepartmentRepository extends JpaRepository<Department, Long>, D
 
     /** 활성 부서 수정 유스케이스에서 대상 부서를 찾는다. */
     Optional<Department> findByIdAndStatusCode(Long id, DepartmentStatus statusCode);
+
+    /** 부서 선택 후보처럼 단순 엔티티 조회로 충분한 화면에서 ACTIVE 부서를 ID 오름차순으로 찾는다. */
+    List<Department> findAllByStatusCodeOrderByIdAsc(DepartmentStatus statusCode);
+
+    /** 부서 선택 후보처럼 단순 엔티티 조회로 충분한 화면에서 지정 ACTIVE 부서만 ID 오름차순으로 찾는다. */
+    List<Department> findAllByIdAndStatusCodeOrderByIdAsc(Long id, DepartmentStatus statusCode);
 
     /** 자기 자신을 제외한 동일 부서명 존재 여부를 확인한다. */
     boolean existsByDepartmentNameAndIdNot(String departmentName, Long id);

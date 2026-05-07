@@ -2,6 +2,7 @@ package com.ibank.axwms.domain.organization.department.service;
 
 import com.ibank.axwms.domain.organization.department.DepartmentStatus;
 import com.ibank.axwms.domain.organization.department.dto.CreateDepartmentApiDto;
+import com.ibank.axwms.domain.organization.department.dto.GetDepartmentCandidatesApiDto;
 import com.ibank.axwms.domain.organization.department.dto.GetDepartmentDetailApiDto;
 import com.ibank.axwms.domain.organization.department.dto.GetDepartmentsApiDto;
 import com.ibank.axwms.domain.organization.department.dto.UpdateDepartmentApiDto;
@@ -15,6 +16,7 @@ import com.ibank.axwms.domain.organization.user.entity.User;
 import com.ibank.axwms.domain.organization.user.repository.UserRepository;
 import com.ibank.axwms.global.error.BusinessException;
 import com.ibank.axwms.global.error.ErrorCode;
+import com.ibank.axwms.global.security.CustomUserPrincipal;
 import java.util.List;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
@@ -43,6 +45,35 @@ public class DepartmentService {
                 overview.activeTeamCount(),
                 overview.activeUserCount(),
                 departments
+        );
+    }
+
+    /**
+     * 권한별 부서 선택 후보를 최소 필드로 반환한다.
+     * DIRECTOR 는 전체 ACTIVE 부서를, DEPT_HEAD 는 자기 주 소속 ACTIVE 부서만 후보로 볼 수 있다.
+     */
+    public GetDepartmentCandidatesApiDto.Response getDepartmentCandidates(CustomUserPrincipal principal) {
+        if (isDirector(principal)) {
+            return GetDepartmentCandidatesApiDto.Response.of(
+                    departmentRepository.findAllByStatusCodeOrderByIdAsc(DepartmentStatus.ACTIVE).stream()
+                            .map(GetDepartmentCandidatesApiDto.Response.DepartmentCandidate::from)
+                            .toList()
+            );
+        }
+
+        User currentUser = getUserOrThrow(principal.userId());
+        if (currentUser.getDepartmentId() == null) {
+            return GetDepartmentCandidatesApiDto.Response.of(List.of());
+        }
+
+        return GetDepartmentCandidatesApiDto.Response.of(
+                departmentRepository.findAllByIdAndStatusCodeOrderByIdAsc(
+                                currentUser.getDepartmentId(),
+                                DepartmentStatus.ACTIVE
+                        )
+                        .stream()
+                        .map(GetDepartmentCandidatesApiDto.Response.DepartmentCandidate::from)
+                        .toList()
         );
     }
 
@@ -118,6 +149,17 @@ public class DepartmentService {
                 department.createdAt(),
                 department.updatedAt()
         );
+    }
+
+    /** Controller role gate 를 통과한 principal 중 전사 후보 범위를 가진 DIRECTOR 인지 확인한다. */
+    private boolean isDirector(CustomUserPrincipal principal) {
+        return UserRole.DIRECTOR.name().equals(principal.roleCode());
+    }
+
+    /** principal 의 사용자 문맥이 DB 에 남아 있는지 확인하고 DEPT_HEAD 부서 범위 산정에 사용한다. */
+    private User getUserOrThrow(Long userId) {
+        return userRepository.findById(userId)
+                .orElseThrow(() -> new BusinessException(ErrorCode.USER_NOT_FOUND));
     }
 
     /** 수정 대상은 ACTIVE 부서만 허용한다. */

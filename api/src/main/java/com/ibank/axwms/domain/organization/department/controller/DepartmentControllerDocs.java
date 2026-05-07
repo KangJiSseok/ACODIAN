@@ -1,10 +1,12 @@
 package com.ibank.axwms.domain.organization.department.controller;
 
 import com.ibank.axwms.domain.organization.department.dto.CreateDepartmentApiDto;
+import com.ibank.axwms.domain.organization.department.dto.GetDepartmentCandidatesApiDto;
 import com.ibank.axwms.domain.organization.department.dto.GetDepartmentDetailApiDto;
 import com.ibank.axwms.domain.organization.department.dto.GetDepartmentsApiDto;
 import com.ibank.axwms.domain.organization.department.dto.UpdateDepartmentApiDto;
 import com.ibank.axwms.global.response.EmptyResponse;
+import com.ibank.axwms.global.security.CustomUserPrincipal;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.media.Content;
@@ -32,6 +34,25 @@ public interface DepartmentControllerDocs {
             @ApiResponse(responseCode = "403", description = "DIRECTOR 권한이 없어 접근할 수 없다.", content = @Content)
     })
     GetDepartmentsApiDto.Response getDepartments();
+
+    @Operation(
+            summary = "부서 선택 후보 조회",
+            description = "DIRECTOR 는 모든 ACTIVE 부서를, DEPT_HEAD 는 현재 로그인 사용자의 주 소속 ACTIVE 부서만 departmentId, departmentName 으로 반환한다."
+    )
+    @SecurityRequirement(name = "bearerAuth")
+    @ApiResponses({
+            @ApiResponse(
+                    responseCode = "200",
+                    description = "권한 범위에 맞는 부서 선택 후보 목록을 반환한다.",
+                    content = @Content(schema = @Schema(implementation = GetDepartmentCandidatesApiDto.Response.class))
+            ),
+            @ApiResponse(responseCode = "401", description = "access token 이 없거나 유효하지 않다.", content = @Content),
+            @ApiResponse(responseCode = "403", description = "DIRECTOR 또는 DEPT_HEAD 권한이 없어 접근할 수 없다.", content = @Content),
+            @ApiResponse(responseCode = "404", description = "현재 사용자 문맥에 해당하는 사용자를 찾을 수 없다.", content = @Content)
+    })
+    GetDepartmentCandidatesApiDto.Response getDepartmentCandidates(
+            @Parameter(hidden = true) CustomUserPrincipal principal
+    );
 
     @Operation(
             summary = "부서 상세 조회",
