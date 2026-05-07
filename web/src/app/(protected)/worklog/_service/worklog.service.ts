@@ -19,11 +19,14 @@ import type {
   AiProcessingStatus,
   GetWorklogsParams,
   ImportanceLevel,
+  SearchWorklogsParams,
   Worklog,
+  WorklogFilterOptions,
   WorklogFormValues,
   WorklogListApiItem,
   WorklogListItem,
   WorklogRecord,
+  WorklogSearchApiItem,
   WorklogStatus,
 } from "../_types/worklog.types"
 
@@ -72,6 +75,36 @@ function toWorklogListItem(item: WorklogListApiItem): WorklogListItem {
     instructionDate: item.instructionDate,
     dueDate: item.dueDate,
     predecessorCount: item.predecessorCount,
+  }
+}
+
+function toSearchedWorklogListItem(item: WorklogSearchApiItem): WorklogListItem {
+  const aiSummary = item.aiSummary?.trim() || "AI 요약을 생성 중입니다."
+
+  return {
+    id: item.worklogId,
+    title: item.title,
+    status: worklogStatusCodeMap[item.statusCode] ?? "PENDING",
+    workContent: "",
+    actualHours: 0,
+    importance: importanceCodeMap[item.importanceCode] ?? "NORMAL",
+    aiSummary,
+    aiStatus: aiProcessingStatusCodeMap[item.aiProcessingStatus] ?? "PENDING",
+    aiSummaryEdited: false,
+    teamId: item.teamId,
+    teamName: item.teamName,
+    authorId: item.authorId,
+    authorName: item.authorName,
+    instructionDate: item.instructionDate,
+    dueDate: item.dueDate,
+    predecessorCount: item.predecessorCount ?? 0,
+  }
+}
+
+function normalizeSearchParams(params: SearchWorklogsParams) {
+  return {
+    ...params,
+    keyword: params.keyword?.trim() || undefined,
   }
 }
 
@@ -281,8 +314,25 @@ export const worklogService = {
       items: response.items.map(toWorklogListItem),
     }
   },
-  async list(): Promise<Worklog[]> {
-    return worklogs.filter((worklog) => !worklog.isDeleted).map((worklog) => ({ ...worklog }))
+  async searchWorklogs({
+    page = 1,
+    pageSize = 20,
+    ...params
+  }: SearchWorklogsParams = {}): Promise<PageResponse<WorklogListItem>> {
+    const response = await apiClient.get<PageResponse<WorklogSearchApiItem>>(
+      "/worklogs/search",
+      {
+        params: normalizeSearchParams({ ...params, page, pageSize }),
+      }
+    )
+
+    return {
+      ...response,
+      items: response.items.map(toSearchedWorklogListItem),
+    }
+  },
+  async getFilterOptions(): Promise<WorklogFilterOptions> {
+    return apiClient.get<WorklogFilterOptions>("/worklogs/filter-options")
   },
   async getById(id: number): Promise<Worklog | undefined> {
     const target = worklogs.find((worklog) => worklog.id === id && !worklog.isDeleted)

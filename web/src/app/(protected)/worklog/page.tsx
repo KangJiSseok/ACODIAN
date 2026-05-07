@@ -1,7 +1,8 @@
 "use client"
 
 import Link from "next/link"
-import { useState } from "react"
+import { useMemo, useState } from "react"
+import { ChevronDown, RefreshCw, Search, SlidersHorizontal } from "lucide-react"
 import { canCreateWorklog } from "./_utils/accessControl"
 import PageHeader from "@/app/_common/components/layout/pageHeader"
 import { Pagination } from "@/app/_common/components/data-display/pagination"
@@ -9,26 +10,97 @@ import { LegendHelpDialog } from "./_components/legendHelpDialog"
 import { useAuth } from "./_hooks/useAuth"
 import { ImportanceBadge } from "./_components/importanceBadge"
 import { StatusBadge } from "./_components/statusBadge"
-import { useWorklogList } from "./_hooks/useWorklogList"
+import {
+  useWorklogFilterOptions,
+  useWorklogSearch,
+} from "./_hooks/useWorklogList"
 import { WorklogList } from "./_components/worklogList"
 import {
   worklogImportanceLegendOrder,
   worklogStatusLegendOrder,
 } from "./_components/worklogBadgeConfig"
 import { Button } from "@/components/ui/button"
+import { Input } from "@/components/ui/input"
+import { Select } from "@/components/ui/select"
+import { cn } from "@/lib/utils"
+import {
+  getImportanceLabel,
+  getWorklogStatusLabel,
+} from "./_utils/worklogFormat"
+import type {
+  ImportanceLevel,
+  SearchWorklogsParams,
+  WorklogStatus,
+} from "./_types/worklog.types"
 
 const WORKLOG_PAGE_SIZE = 10
+
+const DEFAULT_FILTERS = {
+  teamId: "all",
+  status: "all",
+  importance: "all",
+  authorId: "all",
+  tagId: "all",
+  period: "ALL",
+}
+
+type WorklogFilterState = typeof DEFAULT_FILTERS
 
 export default function WorklogPage() {
   const { user } = useAuth()
   const [page, setPage] = useState(1)
+  const [query, setQuery] = useState("")
+  const [showFilters, setShowFilters] = useState(false)
+  const [filters, setFilters] = useState<WorklogFilterState>(DEFAULT_FILTERS)
+  const canCreate = canCreateWorklog(user)
+  const { data: filterOptions } = useWorklogFilterOptions()
+  const memberOptions = useMemo(() => {
+    const indexed = new Map<number, string>()
+
+    filterOptions?.teams.forEach((team) => {
+      team.members.forEach((member) => {
+        indexed.set(member.userId, member.userName)
+      })
+    })
+
+    return Array.from(indexed, ([userId, userName]) => ({ userId, userName }))
+  }, [filterOptions])
+  const searchParams = useMemo<SearchWorklogsParams>(
+    () => ({
+      page,
+      pageSize: WORKLOG_PAGE_SIZE,
+      keyword: query.trim() || undefined,
+      teamId: filters.teamId === "all" ? undefined : Number(filters.teamId),
+      statusCode:
+        filters.status === "all" ? undefined : (filters.status as WorklogStatus),
+      importanceCode:
+        filters.importance === "all"
+          ? undefined
+          : (filters.importance as ImportanceLevel),
+      authorId:
+        filters.authorId === "all" ? undefined : Number(filters.authorId),
+      tagId: filters.tagId === "all" ? undefined : Number(filters.tagId),
+      period:
+        filters.period === "ALL"
+          ? undefined
+          : (filters.period as SearchWorklogsParams["period"]),
+    }),
+    [filters, page, query]
+  )
   const {
     data: worklogPage,
     isLoading,
     isError,
-  } = useWorklogList({ page, pageSize: WORKLOG_PAGE_SIZE })
-  const canCreate = canCreateWorklog(user)
+  } = useWorklogSearch(searchParams)
   const worklogs = worklogPage?.items ?? []
+  const activeFilterCount = Object.values(filters).filter(
+    (value) => value !== "all" && value !== "ALL"
+  ).length
+
+  function updateFilters(nextFilters: WorklogFilterState) {
+    setFilters(nextFilters)
+    setPage(1)
+  }
 
   return (
     <div className="flex flex-col gap-6">
@@ -38,6 +110,191 @@ export default function WorklogPage() {
           <h2 className="text-[20px] font-semibold tracking-[-0.04em] text-foreground">
             업무 탐색
           </h2>
+        </div>
+
+        <div className="flex flex-col gap-4">
+          <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
+            <div className="relative flex-1">
+              <Search className="pointer-events-none absolute left-4 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
+              <Input
+                value={query}
+                onChange={(event) => {
+                  setQuery(event.target.value)
+                  setPage(1)
+                }}
+                className="h-12 pl-11"
+                placeholder="업무 제목으로 검색하세요"
+              />
+            </div>
+            <div className="flex w-full items-center gap-2 sm:w-auto">
+              <Button
+                variant="outline"
+                className="h-10 justify-center"
+                onClick={() => setShowFilters((prev) => !prev)}
+              >
+                <SlidersHorizontal className="size-4" />
+                필터
+                {activeFilterCount > 0 ? (
+                  <span className="ml-1 rounded-full bg-primary px-2 py-0.5 text-[11px] font-semibold text-primary-foreground">
+                    {activeFilterCount}
+                  </span>
+                ) : null}
+                <ChevronDown
+                  className={cn(
+                    "ml-1 size-4 transition-transform duration-300 ease-out",
+                    showFilters && "rotate-180"
+                  )}
+                />
+              </Button>
+            </div>
+          </div>
+
+          <div
+            className={cn(
+              "grid overflow-hidden transition-[grid-template-rows,opacity,margin] duration-300 ease-out",
+              showFilters
+                ? "mt-0 grid-rows-[1fr] opacity-100"
+                : "mt-[-4px] grid-rows-[0fr] opacity-0"
+            )}
+          >
+            <div className="overflow-hidden">
+              <div className="space-y-4 pt-3">
+                <div className="flex items-center justify-between gap-3">
+                  <p className="text-[11px] font-bold uppercase tracking-[0.16em] text-muted-foreground">
+                    Worklog Filters
+                  </p>
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    className="h-9 w-9"
+                    aria-label="필터 초기화"
+                    onClick={() => {
+                      setQuery("")
+                      updateFilters(DEFAULT_FILTERS)
+                    }}
+                  >
+                    <RefreshCw className="size-4" />
+                  </Button>
+                </div>
+                <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+                  <div className="space-y-2">
+                    <p className="text-[11px] font-bold uppercase tracking-[0.16em] text-muted-foreground">
+                      팀
+                    </p>
+                    <Select
+                      value={filters.teamId}
+                      options={[
+                        { label: "전체 팀", value: "all" },
+                        ...(filterOptions?.teams ?? []).map((team) => ({
+                          label: team.teamName,
+                          value: String(team.teamId),
+                        })),
+                      ]}
+                      onChange={(event) =>
+                        updateFilters({
+                          ...filters,
+                          teamId: event.target.value,
+                          authorId: "all",
+                        })
+                      }
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <p className="text-[11px] font-bold uppercase tracking-[0.16em] text-muted-foreground">
+                      상태
+                    </p>
+                    <Select
+                      value={filters.status}
+                      options={[
+                        { label: "전체 상태", value: "all" },
+                        ...worklogStatusLegendOrder.map((status) => ({
+                          label: getWorklogStatusLabel(status),
+                          value: status,
+                        })),
+                      ]}
+                      onChange={(event) =>
+                        updateFilters({ ...filters, status: event.target.value })
+                      }
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <p className="text-[11px] font-bold uppercase tracking-[0.16em] text-muted-foreground">
+                      중요도
+                    </p>
+                    <Select
+                      value={filters.importance}
+                      options={[
+                        { label: "전체 중요도", value: "all" },
+                        { label: getImportanceLabel("URGENT"), value: "URGENT" },
+                        { label: getImportanceLabel("HIGH"), value: "HIGH" },
+                        { label: getImportanceLabel("NORMAL"), value: "NORMAL" },
+                        { label: getImportanceLabel("LOW"), value: "LOW" },
+                      ]}
+                      onChange={(event) =>
+                        updateFilters({
+                          ...filters,
+                          importance: event.target.value,
+                        })
+                      }
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <p className="text-[11px] font-bold uppercase tracking-[0.16em] text-muted-foreground">
+                      작성자
+                    </p>
+                    <Select
+                      value={filters.authorId}
+                      options={[
+                        { label: "전체 작성자", value: "all" },
+                        ...memberOptions.map((member) => ({
+                          label: member.userName,
+                          value: String(member.userId),
+                        })),
+                      ]}
+                      onChange={(event) =>
+                        updateFilters({ ...filters, authorId: event.target.value })
+                      }
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <p className="text-[11px] font-bold uppercase tracking-[0.16em] text-muted-foreground">
+                      태그
+                    </p>
+                    <Select
+                      value={filters.tagId}
+                      options={[
+                        { label: "전체 태그", value: "all" },
+                        ...(filterOptions?.tags ?? []).map((tag) => ({
+                          label: `#${tag.tagName}`,
+                          value: String(tag.tagId),
+                        })),
+                      ]}
+                      onChange={(event) =>
+                        updateFilters({ ...filters, tagId: event.target.value })
+                      }
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <p className="text-[11px] font-bold uppercase tracking-[0.16em] text-muted-foreground">
+                      기간
+                    </p>
+                    <Select
+                      value={filters.period}
+                      options={[
+                        { label: "전체 기간", value: "ALL" },
+                        { label: "최근 7일", value: "LAST_7" },
+                        { label: "최근 30일", value: "LAST_30" },
+                        { label: "최근 90일", value: "LAST_90" },
+                      ]}
+                      onChange={(event) =>
+                        updateFilters({ ...filters, period: event.target.value })
+                      }
+                    />
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
         </div>
 
         <div className="pt-2">
