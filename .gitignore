@@ -8,6 +8,12 @@
 !.codex/agents/**
 !.codex/skills/
 !.codex/skills/**
+!.codex/guides/
+!.codex/guides/**
+!.codex/scripts/
+!.codex/scripts/**
+!.codex/templates/
+!.codex/templates/**
 .claude/
 
 # Generated working notes / local review artifacts

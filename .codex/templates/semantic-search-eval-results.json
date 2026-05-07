@@ -1,0 +1,42 @@
+[
+  {
+    "query_id": "Q-EX-01",
+    "query_text": "P0 회귀 대응 이력",
+    "query_type": "exact",
+    "top_k": 10,
+    "returned_worklog_ids": [],
+    "returned_team_ids": [],
+    "expected_team_ids": [101],
+    "expected_role_hint": ["MEMBER", "DEPT_HEAD"],
+    "expected_status_hint": ["COMPLETED", "IN_PROGRESS"],
+    "team_hit_at_3": null,
+    "team_hit_at_5": null,
+    "linked_pair_hit_at_5": null,
+    "linked_pair_hit_at_10": null,
+    "role_hit_at_5": null,
+    "status_hit_at_5": null,
+    "persona_hit_at_5": null,
+    "primary_team_rank": null,
+    "notes": ""
+  },
+  {
+    "query_id": "Q-PARA-03",
+    "query_text": "권한은 있는데 실제로는 접근이 막혔던 건",
+    "query_type": "paraphrase",
+    "top_k": 10,
+    "returned_worklog_ids": [],
+    "returned_team_ids": [],
+    "expected_team_ids": [103],
+    "expected_role_hint": ["MEMBER", "DEPT_HEAD"],
+    "expected_status_hint": [],
+    "team_hit_at_3": null,
+    "team_hit_at_5": null,
+    "linked_pair_hit_at_5": null,
+    "linked_pair_hit_at_10": null,
+    "role_hit_at_5": null,
+    "status_hit_at_5": null,
+    "persona_hit_at_5": null,
+    "primary_team_rank": null,
+    "notes": ""
+  }
+]
