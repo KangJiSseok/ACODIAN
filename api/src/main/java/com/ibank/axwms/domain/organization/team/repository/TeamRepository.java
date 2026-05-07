@@ -7,9 +7,7 @@ import org.springframework.data.jpa.repository.JpaRepository;
 
 public interface TeamRepository extends JpaRepository<Team, Long>, TeamJooqRepository {
 
-    /**
-     * 로컬 시드가 현재/legacy 팀명을 찾아 재사용할 때 사용한다.
-     */
+    /** 동일 팀명 후보를 soft-delete 최신순으로 조회해 생성 검증 후속 확인에 사용한다. */
     Optional<Team> findFirstByTeamNameOrderByDeletedAtDesc(String teamName);
 
     /** soft-delete 되지 않은 팀을 ID로 조회한다. */
