@@ -84,15 +84,3 @@ auth:
     allowed-origins: ${AUTH_CORS_ALLOWED_ORIGINS:}
     allowed-origin-patterns: ${AUTH_CORS_ALLOWED_ORIGIN_PATTERNS:}
 
----
-spring:
-  config:
-    activate:
-      on-profile: local
-
-auth:
-  refresh-cookie:
-    secure: false
-    same-site: Lax
-  cors:
-    allowed-origin-patterns: "http://localhost:*"
