@@ -74,7 +74,7 @@
       <td>응답 바디는 비우고 <code>Authorization</code> 헤더와 조건부 <code>Set-Cookie</code> 로만 토큰을 전달한다.</td>
     </tr>
     <tr>
-      <td><code>POST /api/auth/change-password</code></td>
+      <td><code>PATCH /api/auth/change-password</code></td>
       <td><code>Proposed-risk-closure</code></td>
       <td>계정 운영 보안을 위한 비밀번호 변경 보강 API다.</td>
       <td><code>domain.auth.controller.AuthController</code></td>

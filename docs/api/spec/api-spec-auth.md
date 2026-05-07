@@ -23,7 +23,7 @@
 | `POST` | `/api/auth/signup` | `Documented` | 비인증 사용자의 셀프 회원가입 요청을 처리한다. |
 | `POST` | `/api/auth/logout` | `Documented` | 현재 세션을 종료하고 refresh cookie 를 만료시킨다. |
 | `POST` | `/api/auth/refresh` | `Documented` | refresh cookie 검증 후 access token 재발급을 수행한다. |
-| `POST` | `/api/auth/change-password` | `Proposed-risk-closure` | 본인 비밀번호를 변경한다. |
+| `PATCH` | `/api/auth/change-password` | `Proposed-risk-closure` | 본인 비밀번호를 변경한다. |
 
 ## 5. 엔드포인트 상세
 
@@ -195,7 +195,7 @@ Set-Cookie: <configured-refresh-cookie-name>=refresh-token-rotated; Max-Age=1209
   - source: `domain.auth.controller.AuthController#refresh`
   - source: `domain.auth.service.AuthService#refresh`
 
-### POST /api/auth/change-password
+### PATCH /api/auth/change-password
 - 목적: 본인 비밀번호를 변경한다.
 - 상태: `Proposed-risk-closure`
 - 권한/접근 주체: 인증된 사용자만 호출한다.

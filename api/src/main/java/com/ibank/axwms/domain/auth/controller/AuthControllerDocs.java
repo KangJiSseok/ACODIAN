@@ -16,6 +16,7 @@ import io.swagger.v3.oas.annotations.security.SecurityRequirement;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
+import org.springframework.web.bind.annotation.PatchMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestPart;
@@ -149,6 +150,7 @@ public interface AuthControllerDocs {
             @ApiResponse(responseCode = "401", description = "access token 이 없거나 유효하지 않다.", content = @Content),
             @ApiResponse(responseCode = "404", description = "현재 사용자 문맥에 해당하는 사용자를 찾을 수 없다.", content = @Content)
     })
+    @PatchMapping("/change-password")
     EmptyResponse changePassword(
             @Parameter(hidden = true) CustomUserPrincipal principal,
             @RequestBody ChangePasswordApiDto.Request request
