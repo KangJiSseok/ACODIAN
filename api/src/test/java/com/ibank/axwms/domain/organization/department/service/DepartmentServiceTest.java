@@ -9,6 +9,7 @@ import static org.mockito.Mockito.never;
 
 import com.ibank.axwms.domain.organization.department.DepartmentStatus;
 import com.ibank.axwms.domain.organization.department.dto.CreateDepartmentApiDto;
+import com.ibank.axwms.domain.organization.department.dto.GetDepartmentCandidatesApiDto;
 import com.ibank.axwms.domain.organization.department.dto.GetDepartmentDetailApiDto;
 import com.ibank.axwms.domain.organization.department.dto.GetDepartmentsApiDto;
 import com.ibank.axwms.domain.organization.department.dto.UpdateDepartmentApiDto;
@@ -24,6 +25,7 @@ import com.ibank.axwms.domain.organization.user.entity.User;
 import com.ibank.axwms.domain.organization.user.repository.UserRepository;
 import com.ibank.axwms.global.error.BusinessException;
 import com.ibank.axwms.global.error.ErrorCode;
+import com.ibank.axwms.global.security.CustomUserPrincipal;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.List;
@@ -35,6 +37,7 @@ import org.mockito.ArgumentCaptor;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.test.util.ReflectionTestUtils;
 
 @ExtendWith(MockitoExtension.class)
 class DepartmentServiceTest {
@@ -91,6 +94,71 @@ class DepartmentServiceTest {
                         Tuple.tuple(10L, "물류본부", 1001L, "박본부"),
                         Tuple.tuple(11L, "무부장본부", null, null)
                 );
+    }
+
+    @Test
+    @DisplayName("DIRECTOR 는 모든 활성 부서 후보를 조회한다")
+    void director_는_모든_활성_부서_후보를_조회한다() {
+        CustomUserPrincipal principal = new CustomUserPrincipal(1L, "director@ibank.com", "DIRECTOR");
+        given(departmentRepository.findAllByStatusCodeOrderByIdAsc(DepartmentStatus.ACTIVE))
+                .willReturn(List.of(
+                        createDepartment(10L, "물류본부"),
+                        createDepartment(11L, "솔루션사업부")
+                ));
+
+        GetDepartmentCandidatesApiDto.Response response = departmentService.getDepartmentCandidates(principal);
+
+        then(userRepository).should(never()).findById(1L);
+        assertThat(response.departments())
+                .extracting(
+                        GetDepartmentCandidatesApiDto.Response.DepartmentCandidate::departmentId,
+                        GetDepartmentCandidatesApiDto.Response.DepartmentCandidate::departmentName
+                )
+                .containsExactly(
+                        Tuple.tuple(10L, "물류본부"),
+                        Tuple.tuple(11L, "솔루션사업부")
+                );
+    }
+
+    @Test
+    @DisplayName("DEPT_HEAD 는 자기 소속 활성 부서 후보만 조회한다")
+    void dept_head_는_자기_소속_활성_부서_후보만_조회한다() {
+        CustomUserPrincipal principal = new CustomUserPrincipal(201L, "dept-head@ibank.com", "DEPT_HEAD");
+        User deptHead = createUser(10L, 201L, UserRole.DEPT_HEAD);
+        given(userRepository.findById(201L)).willReturn(java.util.Optional.of(deptHead));
+        given(departmentRepository.findAllByIdAndStatusCodeOrderByIdAsc(10L, DepartmentStatus.ACTIVE))
+                .willReturn(List.of(createDepartment(10L, "물류본부")));
+
+        GetDepartmentCandidatesApiDto.Response response = departmentService.getDepartmentCandidates(principal);
+
+        then(departmentRepository).should(never()).findAllByStatusCodeOrderByIdAsc(DepartmentStatus.ACTIVE);
+        assertThat(response.departments())
+                .extracting(GetDepartmentCandidatesApiDto.Response.DepartmentCandidate::departmentName)
+                .containsExactly("물류본부");
+    }
+
+    @Test
+    @DisplayName("DEPT_HEAD 소속 부서가 없으면 빈 후보 목록을 반환한다")
+    void dept_head_소속_부서가_없으면_빈_후보_목록을_반환한다() {
+        CustomUserPrincipal principal = new CustomUserPrincipal(201L, "dept-head@ibank.com", "DEPT_HEAD");
+        User deptHead = createUser(null, 201L, UserRole.DEPT_HEAD);
+        given(userRepository.findById(201L)).willReturn(java.util.Optional.of(deptHead));
+
+        GetDepartmentCandidatesApiDto.Response response = departmentService.getDepartmentCandidates(principal);
+
+        then(departmentRepository).should(never()).findAllByIdAndStatusCodeOrderByIdAsc(any(), any());
+        assertThat(response.departments()).isEmpty();
+    }
+
+    @Test
+    @DisplayName("DEPT_HEAD 사용자 문맥이 없으면 USER_NOT_FOUND 예외를 던진다")
+    void dept_head_사용자_문맥이_없으면_user_not_found_예외를_던진다() {
+        CustomUserPrincipal principal = new CustomUserPrincipal(404L, "missing@ibank.com", "DEPT_HEAD");
+
+        assertThatThrownBy(() -> departmentService.getDepartmentCandidates(principal))
+                .isInstanceOf(BusinessException.class)
+                .extracting(ex -> ((BusinessException) ex).getErrorCode())
+                .isEqualTo(ErrorCode.USER_NOT_FOUND);
     }
 
     @Test
@@ -493,5 +561,12 @@ class DepartmentServiceTest {
                 null,
                 null
         );
+    }
+
+    /** Service 단위 테스트에서 JPA 저장 없이 응답 매핑용 ID 를 가진 부서 엔티티를 만든다. */
+    private Department createDepartment(Long departmentId, String departmentName) {
+        Department department = Department.create(departmentName, departmentName + " 설명");
+        ReflectionTestUtils.setField(department, "id", departmentId);
+        return department;
     }
 }

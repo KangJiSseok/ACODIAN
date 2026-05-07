@@ -113,6 +113,15 @@
       <td><code>organization</code>만 feature-first 구조를 사용한다.</td>
     </tr>
     <tr>
+      <td><code>GET /api/departments/department-candidates</code></td>
+      <td><code>Documented</code></td>
+      <td>부서 선택 후보를 권한 범위에 맞춰 페이지네이션 없이 조회한다.</td>
+      <td><code>domain.organization.department.controller.DepartmentController</code></td>
+      <td><code>domain.organization.department.service.DepartmentService</code></td>
+      <td><code>domain.organization.department.entity.Department</code>, <code>domain.organization.department.repository.DepartmentRepository</code>, <code>domain.organization.department.repository.jooq.DepartmentJooqRepository</code>, <code>domain.organization.user.entity.User</code>, <code>domain.organization.user.repository.UserRepository</code></td>
+      <td><code>DIRECTOR</code> 는 모든 ACTIVE 부서를, <code>DEPT_HEAD</code> 는 자기 주 소속 ACTIVE 부서만 <code>departmentId</code>, <code>departmentName</code> 으로 반환한다.</td>
+    </tr>
+    <tr>
       <td><code>GET /api/departments/{id}/detail</code></td>
       <td><code>Documented</code></td>
       <td>ACTIVE 부서 header와 직접 소유한 ACTIVE/non-deleted 팀 목록을 조회한다.</td>

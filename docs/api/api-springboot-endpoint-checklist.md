@@ -16,6 +16,7 @@
 ## 2. `organization/department` 도메인
 
 - [x] `GET /api/departments`
+- [x] `GET /api/departments/department-candidates`
 - [x] `GET /api/departments/{id}/detail`
 - [x] `GET /api/departments/{id}/users`
 - [x] `POST /api/departments`

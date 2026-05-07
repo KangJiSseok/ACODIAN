@@ -5,11 +5,13 @@ import static org.mockito.BDDMockito.given;
 import static org.mockito.BDDMockito.then;
 
 import com.ibank.axwms.domain.organization.department.dto.CreateDepartmentApiDto;
+import com.ibank.axwms.domain.organization.department.dto.GetDepartmentCandidatesApiDto;
 import com.ibank.axwms.domain.organization.department.dto.GetDepartmentDetailApiDto;
 import com.ibank.axwms.domain.organization.department.dto.GetDepartmentsApiDto;
 import com.ibank.axwms.domain.organization.department.dto.UpdateDepartmentApiDto;
 import com.ibank.axwms.domain.organization.department.service.DepartmentService;
 import com.ibank.axwms.global.response.EmptyResponse;
+import com.ibank.axwms.global.security.CustomUserPrincipal;
 import jakarta.validation.Valid;
 import java.lang.reflect.Method;
 import java.lang.reflect.Parameter;
@@ -87,6 +89,37 @@ class DepartmentControllerTest {
         assertThat(response.activeTeamCount()).isEqualTo(5);
         assertThat(response.activeUserCount()).isEqualTo(18);
         assertThat(response.departments()).containsExactlyElementsOf(responseFromService.departments());
+    }
+
+    @Test
+    @DisplayName("부서 선택 후보 조회 메서드는 GET department-candidates 경로와 DIRECTOR DEPT_HEAD 권한을 사용한다")
+    void 부서_선택_후보_조회_메서드는_get_department_candidates_경로와_director_dept_head_권한을_사용한다() throws NoSuchMethodException {
+        Method method = DepartmentController.class.getMethod("getDepartmentCandidates", CustomUserPrincipal.class);
+        GetMapping getMapping = method.getAnnotation(GetMapping.class);
+        PreAuthorize preAuthorize = method.getAnnotation(PreAuthorize.class);
+
+        assertThat(getMapping).isNotNull();
+        assertThat(getMapping.value()).containsExactly("/candidates");
+        assertThat(preAuthorize).isNotNull();
+        assertThat(preAuthorize.value()).isEqualTo("hasAnyRole('DIRECTOR','DEPT_HEAD')");
+    }
+
+    @Test
+    @DisplayName("부서 선택 후보 조회 메서드는 인증 주체로 서비스를 호출하고 결과를 그대로 반환한다")
+    void 부서_선택_후보_조회_메서드는_인증_주체로_서비스를_호출하고_결과를_그대로_반환한다() {
+        CustomUserPrincipal principal = new CustomUserPrincipal(201L, "dept-head@ibank.com", "DEPT_HEAD");
+        GetDepartmentCandidatesApiDto.Response responseFromService = GetDepartmentCandidatesApiDto.Response.of(
+                List.of(new GetDepartmentCandidatesApiDto.Response.DepartmentCandidate(10L, "물류본부"))
+        );
+        given(departmentService.getDepartmentCandidates(principal)).willReturn(responseFromService);
+
+        GetDepartmentCandidatesApiDto.Response response = departmentController.getDepartmentCandidates(principal);
+
+        then(departmentService).should().getDepartmentCandidates(principal);
+        assertThat(response).isSameAs(responseFromService);
+        assertThat(response.departments())
+                .extracting(GetDepartmentCandidatesApiDto.Response.DepartmentCandidate::departmentName)
+                .containsExactly("물류본부");
     }
 
     @Test
