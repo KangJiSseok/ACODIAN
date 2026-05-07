@@ -64,3 +64,95 @@ export interface WorklogFormValues {
   aiSummaryEdited?: boolean
   aiRegenerateRequested?: boolean
 }
+
+export interface GetWorklogsParams {
+  page?: number
+  pageSize?: number
+}
+
+export interface SearchWorklogsParams extends GetWorklogsParams {
+  keyword?: string
+  teamId?: number
+  teamStatus?: "ACTIVE" | "INACTIVE"
+  statusCode?: WorklogStatus
+  importanceCode?: ImportanceLevel
+  authorId?: number
+  tagId?: number
+  period?: "LAST_7" | "LAST_30" | "LAST_90"
+}
+
+export interface WorklogListApiItem {
+  worklogId: number
+  title: string
+  statusCode: string
+  workContent: string
+  actualHours: number
+  importanceCode: string
+  aiSummary: string | null
+  aiProcessingStatus: string
+  aiSummaryEdited: boolean | null
+  teamId: number
+  teamName: string
+  authorId: number
+  authorName: string
+  instructionDate: string
+  dueDate: string
+  predecessorCount: number
+}
+
+export interface WorklogSearchApiItem {
+  worklogId: number
+  title: string
+  aiSummary: string | null
+  statusCode: string
+  importanceCode: string
+  aiProcessingStatus: string
+  predecessorCount: number | null
+  teamId: number
+  teamName: string
+  authorId: number
+  authorName: string
+  profileImageUrl: string | null
+  instructionDate: string
+  dueDate: string
+}
+
+export interface WorklogListItem {
+  id: number
+  title: string
+  status: WorklogStatus
+  workContent: string
+  actualHours: number
+  importance: ImportanceLevel
+  aiSummary: string
+  aiStatus: AiProcessingStatus
+  aiSummaryEdited: boolean
+  teamId: number
+  teamName: string
+  authorId: number
+  authorName: string
+  instructionDate: string
+  dueDate: string
+  predecessorCount: number
+}
+
+export interface WorklogFilterOptions {
+  teams: WorklogFilterTeam[]
+  tags: WorklogFilterTag[]
+}
+
+export interface WorklogFilterTeam {
+  teamId: number
+  teamName: string
+  members: WorklogFilterMember[]
+}
+
+export interface WorklogFilterMember {
+  userId: number
+  userName: string
+}
+
+export interface WorklogFilterTag {
+  tagId: number
+  tagName: string
+}

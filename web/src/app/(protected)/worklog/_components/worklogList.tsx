@@ -2,30 +2,29 @@
 
 import Link from "next/link"
 import { useState } from "react"
-import { canEditWorklog } from "../_utils/accessControl"
-import { useAuth } from "../_hooks/useAuth"
-import { teams, users } from "../_mock/worklog.mock"
-import type { Worklog } from "../_types/worklog.types"
+import type { WorklogListItem } from "../_types/worklog.types"
 import { ImportanceBadge } from "./importanceBadge"
 import { StatusBadge } from "./statusBadge"
-import { WorklogPreviewDialog } from "./worklogPreviewDialog"
-import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
+import { useAuth } from "@/app/_common/hooks/useAuth"
 import { Button } from "@/components/ui/button"
 import { CardContent } from "@/components/ui/card"
 import { CardSpotlight } from "@/components/ui/card-spotlight"
 import { getAiStatusLabel } from "../_utils/worklogFormat"
+import { WorklogPreviewDialog } from "./worklogPreviewDialog"
 
 export function WorklogList({
   worklogs,
   selectedWorklogId,
   onSelect,
 }: {
-  worklogs: Worklog[]
+  worklogs: WorklogListItem[]
   selectedWorklogId?: number | null
   onSelect?: (worklogId: number) => void
 }) {
   const { user } = useAuth()
-  const [previewWorklogId, setPreviewWorklogId] = useState<number | null>(null)
+  const [previewWorklog, setPreviewWorklog] = useState<WorklogListItem | null>(
+    null
+  )
 
   return (
     <>
@@ -35,86 +34,80 @@ export function WorklogList({
             조건에 맞는 업무가 없습니다.
           </div>
         ) : (
-          worklogs.map((worklog) => {
-            const author = users.find((user) => user.id === worklog.authorId)
-            const team = teams.find((item) => item.id === worklog.teamId)
-
-            return (
-              <CardSpotlight
-                key={worklog.id}
-                role="button"
-                tabIndex={0}
-                onClick={() => {
+          worklogs.map((worklog) => (
+            <CardSpotlight
+              key={worklog.id}
+              role="button"
+              tabIndex={0}
+              onClick={() => {
+                if (onSelect) {
+                  onSelect(worklog.id)
+                  return
+                }
+                setPreviewWorklog(worklog)
+              }}
+              onKeyDown={(event) => {
+                if (event.key === "Enter" || event.key === " ") {
+                  event.preventDefault()
                   if (onSelect) {
                     onSelect(worklog.id)
                     return
                   }
-                  setPreviewWorklogId(worklog.id)
-                }}
-                onKeyDown={(event) => {
-                  if (event.key === "Enter" || event.key === " ") {
-                    event.preventDefault()
-                    // 카드 전체를 버튼처럼 쓰기 때문에 키보드 접근도 동일한 선택 흐름으로 맞춥니다.
-                    if (onSelect) {
-                      onSelect(worklog.id)
-                      return
-                    }
-                    setPreviewWorklogId(worklog.id)
-                  }
-                }}
-                className={`group cursor-pointer rounded-[24px] transition-all duration-300 hover:-translate-y-1 ${
-                  selectedWorklogId === worklog.id ? "ring-2 ring-primary/40" : ""
-                }`}
-              >
-                <CardContent className="flex flex-col gap-5 p-5 lg:flex-row lg:items-start lg:justify-between">
-                  <div className="min-w-0 flex-1 space-y-4">
-                    <div className="space-y-2">
-                      <div className="flex flex-wrap items-center gap-2">
-                        <p className="text-[18px] font-semibold tracking-[-0.03em] text-foreground transition-colors group-hover/card-spotlight:text-primary">
-                          {worklog.title}
-                        </p>
-                        <StatusBadge status={worklog.status} />
-                        <ImportanceBadge importance={worklog.importance} />
-                      </div>
-                      <p className="line-clamp-2 max-w-4xl text-sm leading-6 text-muted-foreground">
-                        {worklog.aiSummary}
+                  setPreviewWorklog(worklog)
+                }
+              }}
+              className={`group cursor-pointer rounded-[24px] transition-all duration-300 hover:-translate-y-1 ${
+                selectedWorklogId === worklog.id ? "ring-2 ring-primary/40" : ""
+              }`}
+            >
+              <CardContent className="flex flex-col gap-5 p-5 lg:flex-row lg:items-stretch lg:justify-between">
+                <div className="min-w-0 flex-1 space-y-4">
+                  <div className="space-y-2">
+                    <div className="flex flex-wrap items-center gap-2">
+                      <p className="text-[18px] font-semibold tracking-[-0.03em] text-foreground transition-colors group-hover/card-spotlight:text-primary">
+                        {worklog.title}
                       </p>
-                      <p className="text-xs text-muted-foreground">
-                        AI 상태 {getAiStatusLabel(worklog.aiStatus)} · 선행 업무{" "}
-                        {worklog.dependencyIds.length}건
-                      </p>
+                      <StatusBadge status={worklog.status} />
+                      <ImportanceBadge importance={worklog.importance} />
                     </div>
-
-                    <div className="flex flex-wrap items-center gap-x-4 gap-y-2 text-sm">
-                      <div className="flex min-w-0 items-center gap-2">
-                        <span className="text-[11px] font-semibold uppercase tracking-[0.16em] text-muted-foreground">
-                          팀
-                        </span>
-                        <span className="truncate font-medium text-foreground">
-                          {team?.name}
-                        </span>
-                      </div>
-                      {author ? (
-                        <>
-                          <span className="hidden h-4 w-px bg-border/80 md:block" />
-                          <div className="flex items-center gap-2">
-                            <Avatar className="size-6">
-                              <AvatarImage src={author.profileImage} alt={author.name} />
-                              <AvatarFallback className="bg-primary/20 text-[10px] font-bold text-primary">
-                                {author.name.slice(0, 1)}
-                              </AvatarFallback>
-                            </Avatar>
-                            <span className="text-[13px] font-medium text-foreground">
-                              {author.name}
-                            </span>
-                          </div>
-                        </>
-                      ) : null}
-                    </div>
+                    <p className="line-clamp-2 max-w-4xl text-sm leading-6 text-muted-foreground">
+                      {worklog.aiSummary}
+                    </p>
+                    <p className="text-xs text-muted-foreground">
+                      AI 상태 {getAiStatusLabel(worklog.aiStatus)} · 선행 업무{" "}
+                      {worklog.predecessorCount}건
+                    </p>
                   </div>
 
-                  <div className="flex shrink-0 flex-col items-start gap-4 text-sm lg:items-end">
-                    <div className="text-left lg:text-right">
+                  <div className="flex flex-wrap items-center gap-x-4 gap-y-2 text-sm">
+                    <div className="flex min-w-0 items-center gap-2">
+                      <span className="text-[11px] font-semibold uppercase tracking-[0.16em] text-muted-foreground">
+                        팀
+                      </span>
+                      <span className="truncate font-medium text-foreground">
+                        {worklog.teamName}
+                      </span>
+                    </div>
+                    <span className="hidden h-4 w-px bg-border/80 md:block" />
+                    <div className="flex items-center gap-2">
+                      <span className="text-[13px] font-medium text-foreground">
+                        {worklog.authorName}
+                      </span>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="flex shrink-0 flex-col items-start justify-between gap-4 text-sm lg:w-[250px] lg:border-l lg:border-border/70 lg:pl-5">
+                  <div className="grid w-full grid-cols-2 gap-5 text-left lg:text-right">
+                    <div>
+                      <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-muted-foreground">
+                        지시일
+                      </p>
+                      <p className="mt-1 font-semibold text-foreground">
+                        {worklog.instructionDate}
+                      </p>
+                    </div>
+                    <div>
                       <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-muted-foreground">
                         마감일
                       </p>
@@ -122,47 +115,47 @@ export function WorklogList({
                         {worklog.dueDate}
                       </p>
                     </div>
-                    <div className="flex items-center gap-3">
+                  </div>
+                  <div className="grid w-full gap-3">
+                    <Button
+                      variant="secondary"
+                      className="h-11 w-full px-5 text-sm font-semibold"
+                      asChild
+                    >
+                      <Link
+                        href={`/worklog/detail/${worklog.id}`}
+                        onClick={(event) => event.stopPropagation()}
+                      >
+                        상세
+                      </Link>
+                    </Button>
+                    {user?.userId === worklog.authorId ? (
                       <Button
-                        variant="secondary"
-                        className="h-11 min-w-28 px-5 text-sm font-semibold"
+                        variant="default"
+                        className="h-11 w-full px-5 text-sm font-semibold"
                         asChild
                       >
                         <Link
-                          href={`/worklog/detail/${worklog.id}`}
+                          href={`/worklog/edit/${worklog.id}`}
                           onClick={(event) => event.stopPropagation()}
                         >
-                          상세
+                          수정
                         </Link>
                       </Button>
-                      {canEditWorklog(user, worklog) ? (
-                        <Button
-                          variant="default"
-                          className="h-11 min-w-28 px-5 text-sm font-semibold"
-                          asChild
-                        >
-                          <Link
-                            href={`/worklog/edit/${worklog.id}`}
-                            onClick={(event) => event.stopPropagation()}
-                          >
-                            수정
-                          </Link>
-                        </Button>
-                      ) : null}
-                    </div>
+                    ) : null}
                   </div>
-                </CardContent>
-              </CardSpotlight>
-            )
-          })
+                </div>
+              </CardContent>
+            </CardSpotlight>
+          ))
         )}
       </div>
       <WorklogPreviewDialog
-        open={previewWorklogId !== null}
+        open={previewWorklog !== null}
         onOpenChange={(open) => {
-          if (!open) setPreviewWorklogId(null)
+          if (!open) setPreviewWorklog(null)
         }}
-        worklogId={previewWorklogId}
+        worklog={previewWorklog}
       />
     </>
   )
