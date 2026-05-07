@@ -6,7 +6,6 @@ import { useMemo, useState } from "react";
 import {
   BriefcaseBusiness,
   ChevronDown,
-  ChevronUp,
   type LucideIcon,
   Mail,
   Phone,
@@ -37,7 +36,7 @@ const USER_PAGE_SIZE = 4;
 export default function UserPage() {
   const { data: users = [], isLoading, error, refetch } = useUserList();
   const [query, setQuery] = useState("");
-  const [isFilterOpen, setIsFilterOpen] = useState(false);
+  const [showFilters, setShowFilters] = useState(false);
   const [departmentId, setDepartmentId] = useState(ALL_FILTER_VALUE);
   const [positionName, setPositionName] = useState(ALL_FILTER_VALUE);
   const [employmentStatus, setEmploymentStatus] = useState(ALL_FILTER_VALUE);
@@ -69,90 +68,109 @@ export default function UserPage() {
         description="조직 구성원의 소속, 직급, 재직 상태를 확인합니다."
       />
 
-      <section className="space-y-5">
-        <h2 className="text-[17px] font-semibold tracking-[-0.03em] text-foreground">
+      <section className="space-y-4">
+        <h2 className="text-[20px] font-semibold tracking-[-0.04em] text-foreground">
           사용자 탐색
         </h2>
 
-        <div className="flex flex-col gap-3 lg:flex-row">
-          <div className="relative min-w-0 flex-1">
-            <Search className="pointer-events-none absolute left-4 top-1/2 size-5 -translate-y-1/2 text-muted-foreground" />
-            <Input
-              value={query}
-              onChange={(event) => setQuery(event.target.value)}
-              placeholder="이름, 이메일, 부서, 직급으로 검색하세요"
-              className="h-14 rounded-2xl pl-12 text-base"
-            />
-          </div>
-          <Button
-            type="button"
-            variant="secondary"
-            className="h-14 min-w-32 justify-center rounded-2xl px-6 text-sm font-semibold"
-            onClick={() => setIsFilterOpen((current) => !current)}
-          >
-            <SlidersHorizontal className="size-4" />
-            필터
-            {isFilterOpen ? (
-              <ChevronUp className="size-4" />
-            ) : (
-              <ChevronDown className="size-4" />
-            )}
-          </Button>
-        </div>
-
-        {isFilterOpen ? (
-          <div className="space-y-5 pt-5">
-            <div className="flex items-center justify-between gap-4">
-              <p className="text-xs font-semibold uppercase tracking-[0.22em] text-muted-foreground">
-                User Filters
-              </p>
-              <button
+        <div className="flex flex-col gap-4">
+          <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
+            <div className="relative flex-1">
+              <Search className="pointer-events-none absolute left-4 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
+              <Input
+                value={query}
+                onChange={(event) => setQuery(event.target.value)}
+                placeholder="이름, 이메일, 부서, 직급으로 검색하세요"
+                className="h-12 pl-11"
+                aria-label="사용자 검색"
+              />
+            </div>
+            <div className="flex items-center gap-2">
+              <Button
+                variant="outline"
+                className="h-10"
                 type="button"
-                className="inline-flex size-9 items-center justify-center rounded-xl text-muted-foreground transition-colors hover:bg-accent hover:text-accent-foreground"
-                onClick={resetFilters}
-                aria-label="필터 초기화"
+                onClick={() => setShowFilters((prev) => !prev)}
               >
-                <RefreshCw className="size-4" />
-              </button>
-            </div>
-
-            <div className="grid gap-4 lg:grid-cols-3">
-              <FilterField label="부서">
-                <Select
-                  value={departmentId}
-                  onChange={(event) => setDepartmentId(event.target.value)}
-                  options={[
-                    { label: "전체 부서", value: ALL_FILTER_VALUE },
-                    ...filterOptions.departments,
-                  ]}
-                  className="h-14 rounded-2xl text-base font-semibold"
+                <SlidersHorizontal className="size-4" />
+                필터
+                <ChevronDown
+                  className={cn(
+                    "ml-1 size-4 transition-transform duration-300 ease-out",
+                    showFilters && "rotate-180",
+                  )}
                 />
-              </FilterField>
-              <FilterField label="직급">
-                <Select
-                  value={positionName}
-                  onChange={(event) => setPositionName(event.target.value)}
-                  options={[
-                    { label: "전체 직급", value: ALL_FILTER_VALUE },
-                    ...filterOptions.positions,
-                  ]}
-                  className="h-14 rounded-2xl text-base font-semibold"
-                />
-              </FilterField>
-              <FilterField label="재직 상태">
-                <Select
-                  value={employmentStatus}
-                  onChange={(event) => setEmploymentStatus(event.target.value)}
-                  options={[
-                    { label: "전체 상태", value: ALL_FILTER_VALUE },
-                    ...filterOptions.statuses,
-                  ]}
-                  className="h-14 rounded-2xl text-base font-semibold"
-                />
-              </FilterField>
+              </Button>
             </div>
           </div>
-        ) : null}
+
+          <div
+            className={cn(
+              "grid overflow-hidden transition-[grid-template-rows,opacity,margin] duration-300 ease-out",
+              showFilters
+                ? "mt-0 grid-rows-[1fr] opacity-100"
+                : "mt-[-4px] grid-rows-[0fr] opacity-0",
+            )}
+          >
+            <div className="overflow-hidden">
+              <div className="space-y-4 pt-3">
+                <div className="flex items-center justify-between gap-3">
+                  <p className="text-[11px] font-bold uppercase tracking-[0.16em] text-muted-foreground">
+                    User Filters
+                  </p>
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    className="h-9 w-9"
+                    type="button"
+                    onClick={resetFilters}
+                    aria-label="필터 초기화"
+                  >
+                    <RefreshCw className="size-4" />
+                  </Button>
+                </div>
+
+                <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
+                  <FilterField label="부서">
+                    <Select
+                      aria-label="부서 필터"
+                      value={departmentId}
+                      onChange={(event) => setDepartmentId(event.target.value)}
+                      options={[
+                        { label: "전체 부서", value: ALL_FILTER_VALUE },
+                        ...filterOptions.departments,
+                      ]}
+                    />
+                  </FilterField>
+                  <FilterField label="직급">
+                    <Select
+                      aria-label="직급 필터"
+                      value={positionName}
+                      onChange={(event) => setPositionName(event.target.value)}
+                      options={[
+                        { label: "전체 직급", value: ALL_FILTER_VALUE },
+                        ...filterOptions.positions,
+                      ]}
+                    />
+                  </FilterField>
+                  <FilterField label="재직 상태">
+                    <Select
+                      aria-label="재직 상태 필터"
+                      value={employmentStatus}
+                      onChange={(event) =>
+                        setEmploymentStatus(event.target.value)
+                      }
+                      options={[
+                        { label: "전체 상태", value: ALL_FILTER_VALUE },
+                        ...filterOptions.statuses,
+                      ]}
+                    />
+                  </FilterField>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
       </section>
 
       <section className="space-y-4">
@@ -259,7 +277,7 @@ function UserCard({ user }: { user: UserSummary }) {
             </div>
           </div>
 
-          <div className="flex shrink-0 items-center justify-between gap-4 border-t border-border/60 pt-4 lg:w-52 lg:flex-col lg:items-end lg:border-t-0 lg:pt-0">
+          <div className="flex shrink-0 justify-end border-t border-border/60 pt-4 lg:w-40 lg:border-t-0 lg:pt-0">
             <div className="text-right">
               <p className="text-xs font-semibold uppercase tracking-[0.16em] text-muted-foreground">
                 입사일
@@ -268,9 +286,6 @@ function UserCard({ user }: { user: UserSummary }) {
                 {formatDate(user.joinDate)}
               </p>
             </div>
-            <span className="inline-flex h-11 min-w-28 items-center justify-center rounded-2xl bg-primary px-5 text-sm font-semibold text-primary-foreground transition-colors group-hover/card-spotlight:bg-primary/90">
-              상세 보기
-            </span>
           </div>
         </CardContent>
       </CardSpotlight>
@@ -330,12 +345,12 @@ function FilterField({
   children: ReactNode;
 }) {
   return (
-    <label className="space-y-2">
-      <span className="text-sm font-semibold text-muted-foreground">
+    <div className="space-y-2">
+      <p className="text-[11px] font-bold uppercase tracking-[0.16em] text-muted-foreground">
         {label}
-      </span>
+      </p>
       {children}
-    </label>
+    </div>
   );
 }
 

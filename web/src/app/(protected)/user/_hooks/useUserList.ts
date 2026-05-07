@@ -6,6 +6,10 @@ export const userKeys = {
   all: ["users"] as const,
   list: (params: GetUsersParams = {}) =>
     [...userKeys.all, "list", params] as const,
+  detail: (userId: number) => [...userKeys.all, "detail", userId] as const,
+  skills: (userId: number) => [...userKeys.all, "skills", userId] as const,
+  evaluations: (userId: number) =>
+    [...userKeys.all, "evaluations", userId] as const,
 };
 
 export function useUserList(params: GetUsersParams = {}) {
