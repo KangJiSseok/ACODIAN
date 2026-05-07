@@ -2,16 +2,9 @@ package com.ibank.axwms.domain.dashboard.service;
 
 import com.ibank.axwms.domain.dashboard.DashboardScope;
 import com.ibank.axwms.domain.dashboard.dto.GetDashboardApiDto;
-import com.ibank.axwms.domain.dashboard.dto.GetDashboardApiDto.BlockedWorklog;
-import com.ibank.axwms.domain.dashboard.dto.GetDashboardApiDto.CompletedInPeriod;
-import com.ibank.axwms.domain.dashboard.dto.GetDashboardApiDto.MyDashboard;
-import com.ibank.axwms.domain.dashboard.dto.GetDashboardApiDto.PredecessorBrief;
-import com.ibank.axwms.domain.dashboard.dto.GetDashboardApiDto.WorklogBrief;
 import com.ibank.axwms.domain.organization.user.UserRole;
 import com.ibank.axwms.domain.worklog.repository.WorklogDependencyRepository;
 import com.ibank.axwms.domain.worklog.repository.WorklogRepository;
-import com.ibank.axwms.domain.worklog.repository.jooq.projection.BlockedPredecessorRowProjection;
-import com.ibank.axwms.domain.worklog.repository.jooq.projection.WorklogBriefProjection;
 import com.ibank.axwms.global.error.BusinessException;
 import com.ibank.axwms.global.error.ErrorCode;
 import com.ibank.axwms.global.security.CustomUserPrincipal;
@@ -20,11 +13,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDate;
-import java.time.temporal.ChronoUnit;
-import java.util.ArrayList;
-import java.util.LinkedHashMap;
 import java.util.List;
-import java.util.Map;
 
 @Service
 @RequiredArgsConstructor
@@ -33,6 +22,7 @@ public class DashboardService {
 
     private static final int LIST_LIMIT = 10;
     private static final int COMPLETED_PERIOD_DAYS = 30;
+    private static final int WEEKLY_DAYS = 7;
 
     private final WorklogRepository worklogRepository;
     private final WorklogDependencyRepository worklogDependencyRepository;
@@ -45,10 +35,10 @@ public class DashboardService {
                                                     GetDashboardApiDto.Request request) {
         DashboardScope scope = request.scope();
         return switch (scope) {
-            case ME                    -> myDashboard(principal);
+            case ME -> myDashboard(principal);
             case DEPARTMENT_COMPARISON -> {
                 requireRole(principal, UserRole.DIRECTOR);
-                throw new UnsupportedOperationException("DEPARTMENT_COMPARISON 은 다음 단계에서 구현됩니다.");
+                yield departmentComparison();
             }
             case DEPARTMENT_DETAIL -> {
                 requireRoleAtLeast(principal, UserRole.DEPT_HEAD);
@@ -63,83 +53,61 @@ public class DashboardService {
 
     // ===== ME =====
 
-    private MyDashboard myDashboard(CustomUserPrincipal principal) {
+    private GetDashboardApiDto.MyDashboard myDashboard(CustomUserPrincipal principal) {
         Long userId = principal.userId();
         LocalDate today = LocalDate.now();
         LocalDate periodFrom = today.minusDays(COMPLETED_PERIOD_DAYS);
 
-        int inProgressCount = worklogRepository.countAuthorInProgress(userId);
-        int completedCount  = worklogRepository.countAuthorCompletedSince(userId, periodFrom);
-        int aiFailedCount   = worklogRepository.countAuthorAiFailed(userId);
-
-        List<WorklogBrief> thisWeekDue = worklogRepository
-                .findAuthorThisWeekDue(userId, today, LIST_LIMIT)
-                .stream().map(p -> toBrief(p, today)).toList();
-
-        List<WorklogBrief> todayItems = worklogRepository
-                .findAuthorTodayItems(userId, LIST_LIMIT)
-                .stream().map(p -> toBrief(p, today)).toList();
-
-        List<WorklogBrief> imminentAndOverdue = worklogRepository
-                .findAuthorImminentAndOverdue(userId, today, LIST_LIMIT)
-                .stream().map(p -> toBrief(p, today)).toList();
-
-        List<BlockedWorklog> blocked = blockedByPredecessors(userId);
-
-        return new MyDashboard(
-                inProgressCount,
-                new CompletedInPeriod(periodFrom, today, completedCount),
-                aiFailedCount,
-                thisWeekDue,
-                todayItems,
-                imminentAndOverdue,
-                blocked
+        return GetDashboardApiDto.MyDashboard.of(
+                worklogRepository.countAuthorInProgress(userId),
+                periodFrom, today, worklogRepository.countAuthorCompletedSince(userId, periodFrom),
+                worklogRepository.countAuthorAiFailed(userId),
+                worklogRepository.findAuthorThisWeekDue(userId, today, LIST_LIMIT),
+                worklogRepository.findAuthorTodayItems(userId, LIST_LIMIT),
+                worklogRepository.findAuthorImminentAndOverdue(userId, today, LIST_LIMIT),
+                blockedByPredecessors(userId),
+                today
         );
     }
 
     /**
-     * (1) 내 미완료이면서 미완료 선행이 있는 worklog ID 를 limit 만큼 조회 (worklog repo).
-     * (2) 그 ID 들의 미완료 선행 쌍을 한 번에 조회 (dependency repo).
-     * (3) myWorklogId 로 그룹핑해 응답 형태로 가공. 쿼리 수: 2개 (limit 와 무관, N+1 없음).
+     * 두 repository (worklog, dependency) 호출을 묶어 BlockedWorklog 그룹핑 입력을 준비한다.
+     * grouping 과 응답 record 조립은 BlockedWorklog.fromRows 가 담당.
+     * 쿼리 수: 2개 (limit 와 무관, N+1 없음).
      */
-    private List<BlockedWorklog> blockedByPredecessors(Long userId) {
+    private List<GetDashboardApiDto.BlockedWorklog> blockedByPredecessors(Long userId) {
         List<Long> myIds = worklogRepository.findIncompleteAuthorWorklogIdsBlockedByPredecessor(userId, LIST_LIMIT);
         if (myIds.isEmpty()) {
             return List.of();
         }
-        List<BlockedPredecessorRowProjection> rows =
-                worklogDependencyRepository.findIncompletePredecessorsByWorklogIds(myIds);
-
-        Map<Long, BlockedWorklog> indexed = new LinkedHashMap<>();
-        for (Long myId : myIds) {
-            indexed.put(myId, null);
-        }
-        for (BlockedPredecessorRowProjection row : rows) {
-            BlockedWorklog existing = indexed.get(row.myWorklogId());
-            if (existing == null) {
-                List<PredecessorBrief> preds = new ArrayList<>();
-                preds.add(new PredecessorBrief(
-                        row.predecessorWorklogId(), row.predecessorTitle(), row.predecessorStatusCode()));
-                indexed.put(row.myWorklogId(),
-                        new BlockedWorklog(row.myWorklogId(), row.myTitle(), preds));
-            } else {
-                existing.predecessors().add(new PredecessorBrief(
-                        row.predecessorWorklogId(), row.predecessorTitle(), row.predecessorStatusCode()));
-            }
-        }
-
-        return indexed.values().stream().filter(v -> v != null).toList();
+        return GetDashboardApiDto.BlockedWorklog.fromRows(
+                myIds,
+                worklogDependencyRepository.findIncompletePredecessorsByWorklogIds(myIds)
+        );
     }
 
-    private WorklogBrief toBrief(WorklogBriefProjection p, LocalDate today) {
-        Integer daysOverdue = null;
-        if (p.dueDate() != null && p.dueDate().isBefore(today)) {
-            daysOverdue = (int) ChronoUnit.DAYS.between(p.dueDate(), today);
-        }
-        return new WorklogBrief(p.worklogId(), p.title(), p.statusCode(),
-                p.dueDate(), daysOverdue,
-                null, null, null);
+    // ===== DEPARTMENT_COMPARISON =====
+
+    /**
+     * DIRECTOR 전용 전사 비교 대시보드. 6개 raw 결과를 모아 DTO 의 of() 에 넘기면
+     * 부하 편중 지수/AI 성공률 계산과 nested record 변환이 모두 DTO 안에서 수행된다.
+     * 클래스 레벨 readOnly 트랜잭션 안에서 실행되어 6개 쿼리 사이의 read-view 일관성이 보장된다.
+     */
+    private GetDashboardApiDto.DepartmentComparisonDashboard departmentComparison() {
+        LocalDate today = LocalDate.now();
+        LocalDate weekFrom = today.minusDays(WEEKLY_DAYS);
+
+        return GetDashboardApiDto.DepartmentComparisonDashboard.of(
+                worklogRepository.aggregateOrgProgress(),
+                worklogRepository.countOrgCompletedSince(weekFrom),
+                worklogRepository.aggregateOrgAiOutcome(),
+                worklogRepository.findDepartmentCompletionRates(),
+                worklogRepository.findDepartmentWorkloads(),
+                worklogRepository.findOrgImminentAndOverdue(today, LIST_LIMIT),
+                today
+        );
     }
+
 
     // ===== 권한 검증 =====
 
