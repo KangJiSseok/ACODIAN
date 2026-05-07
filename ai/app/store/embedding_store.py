@@ -1,8 +1,12 @@
 from dataclasses import dataclass
-from datetime import datetime
-from sqlalchemy import delete, select
-from sqlalchemy.ext.asyncio import AsyncSession
+from datetime import datetime, time
+from math import ceil
 
+from sqlalchemy import Select, delete, exists, false, func, select
+from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.sql import Selectable
+
+from app.model.search import SemanticWorklogSearchRequest
 from app.store.models import (
     Team,
     User,
@@ -40,6 +44,53 @@ class WorklogEmbeddingChunk:
     chunk_index: int
     chunk_content: str
     embedding: list[float]
+
+
+@dataclass(frozen=True)
+class SemanticSearchRow:
+    """pgvector 검색 결과 한 행.
+
+    `score`는 사용자에게 보여주기 쉬운 값이고, 내부 SQL 정렬은 distance로 수행한다.
+    """
+
+    worklog_id: int
+    score: float
+    chunk_index: int
+    matched_chunk: str
+    predecessor_worklog_ids: list[int]
+
+
+@dataclass(frozen=True)
+class SemanticSearchPage:
+    """store 계층의 페이지 결과.
+
+    FastAPI/Pydantic 모델을 store에 직접 섞지 않기 위해 순수 dataclass로 둔다.
+    """
+
+    items: list[SemanticSearchRow]
+    page: int
+    page_size: int
+    total_count: int
+
+    @property
+    def total_pages(self) -> int:
+        return ceil(self.total_count / self.page_size) if self.total_count else 0
+
+    @property
+    def is_first(self) -> bool:
+        return self.page == 1
+
+    @property
+    def is_last(self) -> bool:
+        return self.page >= self.total_pages if self.total_pages else True
+
+    @property
+    def has_next(self) -> bool:
+        return self.page < self.total_pages
+
+    @property
+    def has_previous(self) -> bool:
+        return self.page > 1 and self.total_count > 0
 
 
 class EmbeddingStore:
@@ -170,6 +221,146 @@ class EmbeddingStore:
                     created_at=datetime.now(),
                 )
             )
+
+    async def search_worklogs(
+        self,
+        session: AsyncSession,
+        request: SemanticWorklogSearchRequest,
+        query_embedding: list[float],
+    ) -> SemanticSearchPage:
+        """query vector와 가장 가까운 업무일지 chunk를 페이지로 조회한다."""
+        ranked = self._ranked_search_subquery(request, query_embedding)
+        total_count = (
+            await session.execute(
+                select(func.count()).select_from(ranked).where(ranked.c.rank == 1)
+            )
+        ).scalar_one()
+
+        offset = (request.page - 1) * request.page_size
+        rows = (
+            await session.execute(
+                select(
+                    ranked.c.worklog_id,
+                    ranked.c.distance,
+                    ranked.c.chunk_index,
+                    ranked.c.chunk_content,
+                )
+                .where(ranked.c.rank == 1)
+                # distance가 작을수록 query와 가까운 chunk다.
+                .order_by(ranked.c.distance.asc(), ranked.c.worklog_id.desc())
+                .limit(request.page_size)
+                .offset(offset)
+            )
+        ).all()
+        # 선행 업무 관계는 랭킹에는 쓰지 않고, API 서버가 문맥을 보여줄 수 있게 결과에만 붙인다.
+        predecessor_ids_by_worklog = await self._fetch_predecessor_ids(
+            session,
+            [row.worklog_id for row in rows],
+        )
+        return SemanticSearchPage(
+            items=[
+                SemanticSearchRow(
+                    worklog_id=row.worklog_id,
+                    score=max(0.0, 1.0 - float(row.distance)),
+                    chunk_index=row.chunk_index,
+                    matched_chunk=row.chunk_content,
+                    predecessor_worklog_ids=predecessor_ids_by_worklog.get(row.worklog_id, []),
+                )
+                for row in rows
+            ],
+            page=request.page,
+            page_size=request.page_size,
+            total_count=total_count,
+        )
+
+    def _ranked_search_subquery(
+        self,
+        request: SemanticWorklogSearchRequest,
+        query_embedding: list[float],
+    ) -> Selectable:
+        """chunk 단위 유사도를 계산하고 worklog별 1등 chunk를 고르기 위한 subquery를 만든다.
+
+        한 업무일지가 여러 chunk를 가질 수 있으므로 `row_number()`로 worklog별 최단 거리
+        chunk에 rank=1을 부여한다. 바깥 query는 rank=1만 페이지네이션한다.
+        """
+        distance = WorklogEmbedding.embedding.cosine_distance(query_embedding)
+        query = (
+            select(
+                WorklogEmbedding.worklog_id.label("worklog_id"),
+                WorklogEmbedding.chunk_index.label("chunk_index"),
+                WorklogEmbedding.chunk_content.label("chunk_content"),
+                distance.label("distance"),
+                func.row_number()
+                .over(
+                    partition_by=WorklogEmbedding.worklog_id,
+                    order_by=distance.asc(),
+                )
+                .label("rank"),
+            )
+            .join(Worklog, Worklog.worklog_id == WorklogEmbedding.worklog_id)
+            .join(Team, Team.team_id == Worklog.team_id)
+            .where(WorklogEmbedding.source_type == "WORKLOG")
+            .where(Worklog.is_deleted.is_(False))
+            .where(Team.deleted_at.is_(None))
+        )
+        return self._apply_search_filters(query, request).subquery()
+
+    def _apply_search_filters(
+        self,
+        query: Select[tuple],
+        request: SemanticWorklogSearchRequest,
+    ) -> Select[tuple]:
+        """API 검색 DTO에서 온 구조적 필터를 SQL 조건으로 추가한다.
+
+        벡터 유사도는 의미 순위를 만들고, 팀/상태/중요도/작성자/태그/기간은 최신 원본
+        테이블 기준으로 걸러낸다.
+        """
+        if request.allowed_team_ids is not None:
+            if not request.allowed_team_ids:
+                # 빈 배열은 접근 가능한 팀이 없다는 뜻이므로 SQL false 조건으로 0건 처리한다.
+                return query.where(false())
+            query = query.where(Worklog.team_id.in_(request.allowed_team_ids))
+        if request.team_id is not None:
+            query = query.where(Worklog.team_id == request.team_id)
+        if request.team_status is not None:
+            query = query.where(Team.status_code == request.team_status)
+        if request.status_code is not None:
+            query = query.where(Worklog.status_code == request.status_code)
+        if request.importance_code is not None:
+            query = query.where(Worklog.importance_code == request.importance_code)
+        if request.author_id is not None:
+            query = query.where(Worklog.author_id == request.author_id)
+        if request.tag_id is not None:
+            query = query.where(
+                exists()
+                .where(WorklogTag.worklog_id == Worklog.worklog_id)
+                .where(WorklogTag.tag_id == request.tag_id)
+            )
+        if request.created_from is not None:
+            query = query.where(
+                Worklog.created_at >= datetime.combine(request.created_from, time.min)
+            )
+        return query
+
+    async def _fetch_predecessor_ids(
+        self,
+        session: AsyncSession,
+        worklog_ids: list[int],
+    ) -> dict[int, list[int]]:
+        """검색 결과에 붙일 선행 업무 ID 목록을 조회한다."""
+        if not worklog_ids:
+            return {}
+        rows = (
+            await session.execute(
+                select(WorklogDependency.worklog_id, WorklogDependency.depends_on_worklog_id)
+                .where(WorklogDependency.worklog_id.in_(worklog_ids))
+                .order_by(WorklogDependency.worklog_id, WorklogDependency.depends_on_worklog_id)
+            )
+        ).all()
+        result: dict[int, list[int]] = {}
+        for row in rows:
+            result.setdefault(row.worklog_id, []).append(row.depends_on_worklog_id)
+        return result
 
     def _format_author_role(
         self,
