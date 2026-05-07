@@ -106,7 +106,9 @@ public class UserEvaluationService {
     /** DEPT_HEAD 는 같은 부서의 실무 역할 사용자에게만 평가 조회와 등록 범위가 제한된다. */
     private void validateDepartmentHeadVisibleTarget(CustomUserPrincipal principal, User targetUser) {
         User currentUser = getUserOrThrow(principal.userId());
-        if (!currentUser.getDepartmentId().equals(targetUser.getDepartmentId()) || !isDepartmentHeadVisibleRole(targetUser)) {
+        if (currentUser.getDepartmentId() == null
+                || !currentUser.getDepartmentId().equals(targetUser.getDepartmentId())
+                || !isDepartmentHeadVisibleRole(targetUser)) {
             throw new BusinessException(ErrorCode.EVALUATION_ACCESS_DENIED);
         }
     }

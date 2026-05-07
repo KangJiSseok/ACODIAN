@@ -54,7 +54,9 @@ public class UserService {
      */
     public GetMyProfileApiDto.Response getMyProfile(CustomUserPrincipal principal) {
         User user = getUserOrThrow(principal.userId());
-        Department department = getDepartmentOrThrow(user.getDepartmentId());
+        Department department = user.getDepartmentId() != null
+                ? getDepartmentOrThrow(user.getDepartmentId())
+                : null;
         List<GetMyProfileApiDto.Response.TeamSummary> teams = getTeamSummaries(user.getId());
 
         return GetMyProfileApiDto.Response.of(user, department, teams);
@@ -69,7 +71,9 @@ public class UserService {
      */
     public GetUserApiDto.Response getUser(Long userId) {
         User user = getUserOrThrow(userId);
-        Department department = getDepartmentOrThrow(user.getDepartmentId());
+        Department department = user.getDepartmentId() != null
+                ? getDepartmentOrThrow(user.getDepartmentId())
+                : null;
         List<GetUserApiDto.Response.TeamSummary> teams = getUserDetailTeamSummaries(user.getId());
 
         return GetUserApiDto.Response.of(user, department, teams);
@@ -214,13 +218,14 @@ public class UserService {
         }
 
         User actor = getUserOrThrow(principal.userId());
-        boolean targetBelongsToSameDepartment = actor.getDepartmentId().equals(targetUser.getDepartmentId());
+        boolean targetBelongsToSameDepartment = actor.getDepartmentId() != null
+                && actor.getDepartmentId().equals(targetUser.getDepartmentId());
         boolean targetRoleEditable = targetUser.getRoleCode() == UserRole.TEAM_LEAD
                 || targetUser.getRoleCode() == UserRole.MEMBER;
 
         // request 오는 변경하려는 부서가 자기랑 같거나, null일때. 즉 DEPT_HEAD는 타부서로 변경 못한다.
         boolean requestedDepartmentStaysInScope = request.departmentId() == null
-                || actor.getDepartmentId().equals(request.departmentId());
+                || (actor.getDepartmentId() != null && actor.getDepartmentId().equals(request.departmentId()));
 
         if (!targetBelongsToSameDepartment || !targetRoleEditable || !requestedDepartmentStaysInScope) {
             throw new BusinessException(ErrorCode.AUTH_ACCESS_DENIED);
