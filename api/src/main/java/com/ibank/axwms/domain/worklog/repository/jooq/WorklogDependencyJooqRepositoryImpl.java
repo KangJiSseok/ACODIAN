@@ -69,12 +69,6 @@ public class WorklogDependencyJooqRepositoryImpl implements WorklogDependencyJoo
                 .and(pred.IS_DELETED.isFalse())
                 .and(pred.STATUS_CODE.ne("COMPLETED"))
                 .orderBy(my.WORKLOG_ID.asc(), pred.WORKLOG_ID.asc())
-                .fetch(record -> new BlockedPredecessorRowProjection(
-                        record.get(my.WORKLOG_ID),
-                        record.get(my.TITLE),
-                        record.get(pred.WORKLOG_ID),
-                        record.get(pred.TITLE),
-                        record.get(pred.STATUS_CODE)
-                ));
+                .fetch(record -> BlockedPredecessorRowProjection.from(record, my, pred));
     }
 }

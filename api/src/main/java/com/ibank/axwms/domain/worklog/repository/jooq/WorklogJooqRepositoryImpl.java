@@ -419,10 +419,7 @@ public class WorklogJooqRepositoryImpl implements WorklogJooqRepository {
         return dsl.select(completed, total)
                 .from(TB_WORKLOG)
                 .where(TB_WORKLOG.IS_DELETED.isFalse())
-                .fetchSingle(record -> new ProgressProjection(
-                        record.get(completed),
-                        record.get(total)
-                ));
+                .fetchSingle(record -> ProgressProjection.from(record, completed, total));
     }
 
     /**
@@ -455,10 +452,7 @@ public class WorklogJooqRepositoryImpl implements WorklogJooqRepository {
         return dsl.select(success, failed)
                 .from(TB_WORKLOG)
                 .where(TB_WORKLOG.IS_DELETED.isFalse())
-                .fetchSingle(record -> new AiOutcomeProjection(
-                        record.get(success),
-                        record.get(failed)
-                ));
+                .fetchSingle(record -> AiOutcomeProjection.from(record, success, failed));
     }
 
     /**
@@ -480,12 +474,7 @@ public class WorklogJooqRepositoryImpl implements WorklogJooqRepository {
                         .and(TB_WORKLOG.IS_DELETED.isFalse()))
                 .groupBy(TB_DEPARTMENT.DEPARTMENT_ID, TB_DEPARTMENT.DEPARTMENT_NAME)
                 .orderBy(TB_DEPARTMENT.DEPARTMENT_NAME.asc(), TB_DEPARTMENT.DEPARTMENT_ID.asc())
-                .fetch(record -> new DepartmentProgressProjection(
-                        record.get(TB_DEPARTMENT.DEPARTMENT_ID),
-                        record.get(TB_DEPARTMENT.DEPARTMENT_NAME),
-                        record.get(completed),
-                        record.get(total)
-                ));
+                .fetch(record -> DepartmentProgressProjection.from(record, completed, total));
     }
 
     /**
@@ -502,11 +491,7 @@ public class WorklogJooqRepositoryImpl implements WorklogJooqRepository {
                         .and(TB_WORKLOG.STATUS_CODE.ne(STATUS_COMPLETED)))
                 .groupBy(TB_DEPARTMENT.DEPARTMENT_ID, TB_DEPARTMENT.DEPARTMENT_NAME)
                 .orderBy(TB_DEPARTMENT.DEPARTMENT_NAME.asc(), TB_DEPARTMENT.DEPARTMENT_ID.asc())
-                .fetch(record -> new DepartmentLoadProjection(
-                        record.get(TB_DEPARTMENT.DEPARTMENT_ID),
-                        record.get(TB_DEPARTMENT.DEPARTMENT_NAME),
-                        record.get(activeCount)
-                ));
+                .fetch(record -> DepartmentLoadProjection.from(record, activeCount));
     }
 
     /**
