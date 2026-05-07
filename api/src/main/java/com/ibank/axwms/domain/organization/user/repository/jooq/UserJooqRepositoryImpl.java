@@ -19,6 +19,9 @@ import org.jooq.Condition;
 import org.jooq.DSLContext;
 import org.jooq.Field;
 import org.jooq.impl.DSL;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageImpl;
+import org.springframework.data.domain.PageRequest;
 import org.springframework.stereotype.Repository;
 
 @Repository
@@ -32,16 +35,32 @@ public class UserJooqRepositoryImpl implements UserJooqRepository {
 
     private final DSLContext dsl;
 
-    /** 사용자 목록을 부서/직급/재직 상태 optional filter 와 role 우선순위 기준으로 조회한다. */
+    /** 사용자 목록을 부서/직급/재직 상태 optional filter 와 role 우선순위 기준으로 페이지 조회한다. */
     @Override
-    public List<UserSummaryProjection> findUsers(UserListQuery query) {
+    public Page<UserSummaryProjection> findUsers(UserListQuery query) {
+        int pageIndex = query.pageIndex();
+        int pageSize = query.pageSize();
+        PageRequest pageRequest = PageRequest.of(pageIndex, pageSize);
+        List<Condition> filters = findUsersFilters(query);
+
+        long total = dsl.selectCount()
+                .from(TB_USER)
+                .join(TB_DEPARTMENT).on(TB_DEPARTMENT.DEPARTMENT_ID.eq(TB_USER.DEPARTMENT_ID))
+                .where(filters)
+                .fetchSingle(0, Integer.class)
+                .longValue();
+
+        if (total == 0) {
+            return new PageImpl<>(List.of(), pageRequest, 0);
+        }
+
         TbUserTeam primaryMembership = TB_USER_TEAM.as("primary_membership");
         TbTeam primaryTeam = TB_TEAM.as("primary_team");
         Field<Long> teamId = primaryTeam.TEAM_ID.as("team_id");
         Field<String> teamName = primaryTeam.TEAM_NAME.as("team_name");
         Field<Integer> rolePriority = rolePriority();
 
-        return dsl.select(
+        List<UserSummaryProjection> items = dsl.select(
                         TB_USER.USER_ID,
                         TB_USER.USER_NAME,
                         TB_USER.EMAIL,
@@ -63,9 +82,13 @@ public class UserJooqRepositoryImpl implements UserJooqRepository {
                         .and(primaryMembership.STATUS_CODE.eq(ACTIVE_USER_TEAM_STATUS)))
                 .leftJoin(primaryTeam).on(primaryTeam.TEAM_ID.eq(primaryMembership.TEAM_ID)
                         .and(primaryTeam.DELETED_AT.isNull()))
-                .where(findUsersFilters(query))
+                .where(filters)
                 .orderBy(rolePriority.asc(), TB_USER.USER_ID.asc())
+                .limit(pageSize)
+                .offset((long) pageIndex * pageSize)
                 .fetch(UserSummaryProjection::from);
+
+        return new PageImpl<>(items, pageRequest, total);
     }
 
     /** role_code 고정 정렬 우선순위를 CASE expression 으로 만든다. */
