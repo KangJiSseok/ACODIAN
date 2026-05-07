@@ -3,6 +3,7 @@ package com.ibank.axwms.domain.auth.service;
 import com.ibank.axwms.domain.auth.dto.LoginApiDto;
 import com.ibank.axwms.domain.auth.dto.RefreshAccessTokenApiDto;
 import com.ibank.axwms.domain.auth.dto.SignupApiDto;
+import com.ibank.axwms.domain.auth.dto.ChangePasswordApiDto;
 import com.ibank.axwms.domain.organization.department.service.DepartmentService;
 import com.ibank.axwms.domain.organization.user.event.ProfileImageCommittedEvent;
 import com.ibank.axwms.domain.organization.user.service.ProfileImageStorageService.TempUploadResult;
@@ -13,6 +14,7 @@ import com.ibank.axwms.domain.organization.user.repository.UserRepository;
 import com.ibank.axwms.domain.organization.user.service.ProfileImageStorageService;
 import com.ibank.axwms.global.error.BusinessException;
 import com.ibank.axwms.global.error.ErrorCode;
+import com.ibank.axwms.global.security.CustomUserPrincipal;
 import lombok.RequiredArgsConstructor;
 import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.security.crypto.password.PasswordEncoder;
@@ -106,6 +108,24 @@ public class AuthService {
     }
 
     /**
+     * 인증된 사용자의 현재 비밀번호를 재검증한 뒤 새 비밀번호 해시로 교체한다.
+     * access token 인증만으로는 사용자의 의사를 충분히 확인할 수 없으므로 현재 비밀번호 일치 검사를 별도로 수행한다.
+     *
+     * @param principal 변경 대상을 고정하는 현재 인증 사용자
+     * @param request 현재 비밀번호와 새 비밀번호를 포함한 요청
+     * @throws BusinessException USER_NOT_FOUND principal 사용자가 없을 때
+     * @throws BusinessException AUTH_PASSWORD_MISMATCH 현재 비밀번호가 일치하지 않을 때
+     * @throws BusinessException AUTH_PASSWORD_POLICY_VIOLATION 새 비밀번호가 정책을 만족하지 못할 때
+     */
+    @Transactional
+    public void changePassword(CustomUserPrincipal principal, ChangePasswordApiDto.Request request) {
+        User user = getUserOrThrow(principal.userId());
+        validateCurrentPassword(request.currentPassword(), user);
+
+        user.changePasswordHash(passwordEncoder.encode(request.newPassword()));
+    }
+
+    /**
      * 이메일로 User 를 조회하고 비밀번호 해시까지 일치해야 반환한다.
      * 계정 미존재와 비밀번호 불일치를 동일한 AUTH_INVALID_CREDENTIALS 로 묶어, 이메일 존재 여부가 응답으로 노출되는 enumeration 공격 소재를 차단한다.
      */
@@ -126,6 +146,23 @@ public class AuthService {
     private User findRefreshUser(Long userId) {
         return userRepository.findById(userId)
                 .orElseThrow(() -> new BusinessException(ErrorCode.AUTH_INVALID_REFRESH_TOKEN));
+    }
+
+    /**
+     * userId를 기반으로 User를 조회한다. 없으면 404예외를 반환한다.
+     */
+    private User getUserOrThrow(Long userId) {
+        return userRepository.findById(userId)
+                .orElseThrow(() -> new BusinessException(ErrorCode.USER_NOT_FOUND));
+    }
+
+    /**
+     * access token 탈취만으로 비밀번호를 바꾸지 못하도록 저장된 해시와 현재 비밀번호를 다시 대조한다.
+     */
+    private void validateCurrentPassword(String currentPassword, User user) {
+        if (!passwordEncoder.matches(currentPassword, user.getPasswordHash())) {
+            throw new BusinessException(ErrorCode.AUTH_PASSWORD_MISMATCH);
+        }
     }
 
     /**

@@ -3,9 +3,11 @@ package com.ibank.axwms.domain.auth.controller;
 import com.ibank.axwms.domain.auth.dto.LoginApiDto;
 import com.ibank.axwms.domain.auth.dto.RefreshAccessTokenApiDto;
 import com.ibank.axwms.domain.auth.dto.SignupApiDto;
+import com.ibank.axwms.domain.auth.dto.ChangePasswordApiDto;
 import com.ibank.axwms.domain.auth.service.AuthService;
 import com.ibank.axwms.global.response.EmptyResponse;
 import com.ibank.axwms.global.security.AuthTokenResponseWriter;
+import com.ibank.axwms.global.security.CustomUserPrincipal;
 import com.ibank.axwms.global.security.RefreshCookieProperties;
 import jakarta.servlet.http.Cookie;
 import jakarta.servlet.http.HttpServletRequest;
@@ -14,6 +16,7 @@ import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
+import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.util.StringUtils;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
@@ -67,6 +70,16 @@ public class AuthController implements AuthControllerDocs {
     public EmptyResponse logout(HttpServletRequest request, HttpServletResponse response) {
         authService.logout(extractRefreshToken(request));
         authTokenResponseWriter.writeExpiredRefreshCookie(response);
+        return EmptyResponse.INSTANCE;
+    }
+
+    @Override
+    @PostMapping("/change-password")
+    public EmptyResponse changePassword(
+            @AuthenticationPrincipal CustomUserPrincipal principal,
+            @Valid @RequestBody ChangePasswordApiDto.Request request
+    ) {
+        authService.changePassword(principal, request);
         return EmptyResponse.INSTANCE;
     }
 

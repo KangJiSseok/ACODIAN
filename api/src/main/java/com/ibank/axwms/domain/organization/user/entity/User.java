@@ -187,4 +187,9 @@ public class User {
             this.employmentStatus = employmentStatus;
         }
     }
+
+    /** 인증 도메인에서 검증과 해시 생성을 끝낸 뒤에만 저장된 비밀번호 해시를 교체한다. */
+    public void changePasswordHash(String passwordHash) {
+        this.passwordHash = passwordHash;
+    }
 }
