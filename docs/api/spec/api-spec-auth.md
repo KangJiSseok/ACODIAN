@@ -200,7 +200,7 @@ Set-Cookie: <configured-refresh-cookie-name>=refresh-token-rotated; Max-Age=1209
 - 상태: `Proposed-risk-closure`
 - 권한/접근 주체: 인증된 사용자만 호출한다.
 - 요청
-  - Body: `currentPassword`, `newPassword`, `confirmPassword` [추론]
+  - Body: `currentPassword`, `newPassword` [추론]
 - 응답 (`data` 기준)
   - 빈 객체 (`ApiResponse.empty()`)
 - 요청 JSON 예시
@@ -211,8 +211,7 @@ Set-Cookie: <configured-refresh-cookie-name>=refresh-token-rotated; Max-Age=1209
   },
   "body": {
     "currentPassword": "********",
-    "newPassword": "********",
-    "confirmPassword": "********"
+    "newPassword": "********"
   }
 }
 ```
