@@ -27,6 +27,7 @@
 | Method | Path | Status | 목적 |
 |---|---|---|---|
 | `GET` | `/api/departments` | `Documented` | 활성 부서 목록과 활성 부서/팀/사용자 집계를 조회한다. |
+| `GET` | `/api/departments/department-candidates` | `Documented` | 부서 선택 후보를 권한 범위에 맞춰 페이지네이션 없이 조회한다. |
 | `GET` | `/api/departments/{id}/detail` | `Documented` | ACTIVE 부서 header 와 소유 ACTIVE/non-deleted 팀 목록을 조회한다. |
 | `POST` | `/api/departments` | `Documented` | 새 부서를 등록한다. |
 | `PUT` | `/api/departments/{id}` | `Documented` | 활성 부서 기본 정보를 수정한다. |
@@ -86,6 +87,48 @@
   - 성공: `200 OK`
   - 인증 없음/유효하지 않음: `AUTH_UNAUTHORIZED`
   - DIRECTOR 권한 없음: `AUTH_ACCESS_DENIED`
+
+### GET /api/departments/department-candidates
+- 목적: 부서 선택 UI에서 필요한 최소 부서 후보 목록을 조회한다.
+- 권한/접근 주체: `DIRECTOR`, `DEPT_HEAD`
+- 요청
+  - Query parameter 없음
+  - Bearer access token 필수
+- 범위
+  - `DIRECTOR`: 모든 ACTIVE 부서를 반환한다.
+  - `DEPT_HEAD`: 현재 로그인 사용자의 주 소속 ACTIVE 부서만 반환한다.
+  - `DEPT_HEAD` 의 현재 사용자 row 가 없으면 `USER_NOT_FOUND` 로 응답한다.
+  - `DEPT_HEAD` 의 주 소속 부서가 없거나 INACTIVE 이면 빈 목록을 반환한다.
+  - `TEAM_LEAD`, `MEMBER` 는 호출할 수 없다.
+- 정렬
+  - `departmentId ASC`
+- 응답 (`data` 기준)
+  - `departments[]`: 페이지네이션 wrapper 없이 반환하며 후보가 없으면 빈 배열
+    - `departmentId`, `departmentName`
+- 응답 예시
+```json
+{
+  "success": true,
+  "data": {
+    "departments": [
+      {
+        "departmentId": 10,
+        "departmentName": "물류본부"
+      },
+      {
+        "departmentId": 11,
+        "departmentName": "솔루션사업부"
+      }
+    ]
+  },
+  "timestamp": "2026-05-07T12:00:00Z"
+}
+```
+- 상태/에러
+  - 성공: `200 OK`
+  - 인증 없음/유효하지 않음: `AUTH_UNAUTHORIZED`
+  - DIRECTOR/DEPT_HEAD 권한 없음: `AUTH_ACCESS_DENIED`
+  - 현재 사용자 없음: `USER_NOT_FOUND`
 
 ### GET /api/departments/{id}/detail
 - 목적: ACTIVE 부서의 top-level header 와 해당 부서가 직접 소유한 팀 목록을 조회한다.
