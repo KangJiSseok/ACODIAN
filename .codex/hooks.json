@@ -5,7 +5,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "bash \"$(git rev-parse --show-toplevel)/.codex/hooks/windows-toast-hook.sh\"",
+            "command": "bash -lc 'bash \"$(git rev-parse --show-toplevel)/.codex/hooks/windows-toast-hook.sh\"'",
             "timeout": 10
           }
         ]
