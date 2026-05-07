@@ -319,7 +319,7 @@
     <tr>
       <td><code>GET /api/users</code></td>
       <td><code>Documented</code></td>
-      <td>사용자 목록과 조직/권한 필터 결과를 조회한다.</td>
+      <td>사용자 목록과 조직/권한 필터 결과를 페이지네이션으로 조회한다.</td>
       <td><code>domain.organization.user.controller.UserController</code></td>
       <td><code>domain.organization.user.service.UserService</code></td>
       <td><code>domain.organization.user.entity.User</code>, <code>domain.organization.user.repository.UserRepository</code>, <code>domain.organization.user.repository.jooq.UserJooqRepository</code></td>
@@ -337,11 +337,11 @@
     <tr>
       <td><code>GET /api/users</code></td>
       <td><code>Documented</code></td>
-      <td>사용자 목록을 페이지네이션 없이 부서/직급/재직상태 필터로 조회한다.</td>
+      <td>사용자 목록을 페이지네이션으로 부서/직급/재직상태 필터에 따라 조회한다.</td>
       <td><code>domain.organization.user.controller.UserController</code></td>
       <td><code>domain.organization.user.service.UserService</code></td>
       <td><code>domain.organization.user.entity.User</code>, <code>domain.organization.user.repository.UserRepository</code>, <code>domain.organization.user.repository.jooq.UserJooqRepository</code>, <code>domain.organization.team.entity.UserTeam</code>, <code>domain.organization.team.repository.jooq.UserTeamJooqRepository</code></td>
-      <td><code>DIRECTOR</code>, <code>DEPT_HEAD</code> 만 호출할 수 있다. <code>RETIRED</code> 사용자는 제외하고, 대표 팀은 <code>tb_user_team.is_primary = true</code> membership 에서 계산한다. 정렬은 <code>role_code</code> 기준 <code>DIRECTOR</code> → <code>DEPT_HEAD</code> → <code>TEAM_LEAD</code> → <code>MEMBER</code> 순서다.</td>
+      <td><code>DIRECTOR</code>, <code>DEPT_HEAD</code> 만 호출할 수 있다. <code>page</code> 기본값은 1, <code>pageSize</code> 기본값은 20, 최대값은 100 이다. <code>RETIRED</code> 사용자는 제외하고, 대표 팀은 <code>tb_user_team.is_primary = true</code> membership 에서 계산한다. 정렬은 <code>role_code</code> 기준 <code>DIRECTOR</code> → <code>DEPT_HEAD</code> → <code>TEAM_LEAD</code> → <code>MEMBER</code> 순서다.</td>
     </tr>
     <tr>
       <td><code>GET /api/users/{id}</code></td>

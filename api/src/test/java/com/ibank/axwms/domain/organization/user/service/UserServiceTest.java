@@ -31,6 +31,7 @@ import com.ibank.axwms.domain.organization.user.repository.jooq.query.UserListQu
 import com.ibank.axwms.domain.organization.user.service.ProfileImageStorageService.TempUploadResult;
 import com.ibank.axwms.global.error.BusinessException;
 import com.ibank.axwms.global.error.ErrorCode;
+import com.ibank.axwms.global.response.PageResponse;
 import com.ibank.axwms.global.security.CustomUserPrincipal;
 import java.nio.charset.StandardCharsets;
 import java.time.LocalDate;
@@ -45,6 +46,8 @@ import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.context.ApplicationEventPublisher;
+import org.springframework.data.domain.PageImpl;
+import org.springframework.data.domain.PageRequest;
 import org.springframework.http.MediaType;
 import org.springframework.mock.web.MockMultipartFile;
 import org.springframework.test.util.ReflectionTestUtils;
@@ -403,9 +406,9 @@ class UserServiceTest {
     }
 
     @Test
-    @DisplayName("사용자 목록 조회 요청을 repository query 로 정규화하고 응답 배열을 반환한다")
-    void 사용자_목록_조회_요청을_repository_query로_정규화하고_응답_배열을_반환한다() {
-        GetUsersApiDto.Request request = new GetUsersApiDto.Request("홍길동", 10L, "과장", EmploymentStatus.ACTIVE);
+    @DisplayName("사용자 목록 조회 요청을 repository query 로 정규화하고 페이지 응답을 반환한다")
+    void 사용자_목록_조회_요청을_repository_query로_정규화하고_페이지_응답을_반환한다() {
+        GetUsersApiDto.Request request = new GetUsersApiDto.Request(1, 20, "홍길동", 10L, "과장", EmploymentStatus.ACTIVE);
         UserSummaryProjection projection = new UserSummaryProjection(
                 101L,
                 "홍길동",
@@ -420,11 +423,12 @@ class UserServiceTest {
                 "팀장",
                 EmploymentStatus.ACTIVE
         );
-        given(userRepository.findUsers(UserListQuery.from(request))).willReturn(List.of(projection));
+        given(userRepository.findUsers(UserListQuery.from(request)))
+                .willReturn(new PageImpl<>(List.of(projection), PageRequest.of(0, 20), 1));
 
-        List<GetUsersApiDto.Response> result = userService.getUsers(request);
+        PageResponse<GetUsersApiDto.Response> result = userService.getUsers(request);
 
-        assertThat(result)
+        assertThat(result.items())
                 .extracting(GetUsersApiDto.Response::userId,
                         GetUsersApiDto.Response::userName,
                         GetUsersApiDto.Response::email,
@@ -445,6 +449,9 @@ class UserServiceTest {
                         "물류혁신TF",
                         EmploymentStatus.ACTIVE
                 ));
+        assertThat(result.page()).isEqualTo(1);
+        assertThat(result.pageSize()).isEqualTo(20);
+        assertThat(result.totalCount()).isEqualTo(1);
     }
 
     @Test

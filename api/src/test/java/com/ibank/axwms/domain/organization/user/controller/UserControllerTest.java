@@ -20,6 +20,7 @@ import com.ibank.axwms.domain.organization.user.dto.UpdateUserApiDto;
 import com.ibank.axwms.domain.organization.user.service.UserService;
 import com.ibank.axwms.global.response.EmptyResponse;
 import com.ibank.axwms.global.response.GlobalResponseAdvice;
+import com.ibank.axwms.global.response.PageResponse;
 import com.ibank.axwms.global.security.CustomUserPrincipal;
 import java.lang.reflect.Method;
 import java.nio.charset.StandardCharsets;
@@ -351,34 +352,43 @@ class UserControllerTest {
     }
 
     @Test
-    @DisplayName("사용자 목록 조회 메서드는 서비스 결과 배열을 그대로 반환한다")
-    void 사용자_목록_조회_메서드는_서비스_결과_배열을_그대로_반환한다() throws Exception {
+    @DisplayName("사용자 목록 조회 메서드는 서비스 페이지 결과를 그대로 반환한다")
+    void 사용자_목록_조회_메서드는_서비스_페이지_결과를_그대로_반환한다() throws Exception {
         CustomUserPrincipal principal = new CustomUserPrincipal(101L, "user@ibank.com", "MEMBER");
-        GetUsersApiDto.Request request = new GetUsersApiDto.Request("홍길동", 10L, "과장", EmploymentStatus.ACTIVE);
-        List<GetUsersApiDto.Response> responseFromService = List.of(
-                new GetUsersApiDto.Response(
-                        101L,
-                        "홍길동",
-                        "hong@axwms.com",
-                        "010-1234-1234",
-                        10L,
-                        "물류본부",
-                        "https://cdn.axwms.com/profile/101.png",
-                        21L,
-                        "물류혁신TF",
-                        "과장",
-                        "팀장",
-                        EmploymentStatus.ACTIVE
-                )
+        GetUsersApiDto.Request request = new GetUsersApiDto.Request(1, 20, "홍길동", 10L, "과장", EmploymentStatus.ACTIVE);
+        PageResponse<GetUsersApiDto.Response> responseFromService = new PageResponse<>(
+                List.of(new GetUsersApiDto.Response(
+                                101L,
+                                "홍길동",
+                                "hong@axwms.com",
+                                "010-1234-1234",
+                                10L,
+                                "물류본부",
+                                "https://cdn.axwms.com/profile/101.png",
+                                21L,
+                                "물류혁신TF",
+                                "과장",
+                                "팀장",
+                                EmploymentStatus.ACTIVE
+                        )
+                ),
+                1,
+                20,
+                1,
+                1,
+                true,
+                true,
+                false,
+                false
         );
         given(userService.getUsers(request)).willReturn(responseFromService);
 
-        List<GetUsersApiDto.Response> response = userController.getUsers(principal, request);
+        PageResponse<GetUsersApiDto.Response> response = userController.getUsers(principal, request);
         String json = objectMapper.writeValueAsString(response);
 
-        assertThat(response).containsExactlyElementsOf(responseFromService);
+        assertThat(response).isEqualTo(responseFromService);
         assertThat(json).contains("\"phone\":\"010-1234-1234\"");
-        assertThat(json).doesNotContain("pageSize", "totalCount", "items");
+        assertThat(json).contains("\"items\"", "\"pageSize\":20", "\"totalCount\":1");
     }
 
     @Test

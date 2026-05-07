@@ -24,7 +24,7 @@
 | `GET` | `/api/users/me` | `Documented` | 현재 로그인 사용자의 프로필/권한 문맥을 조회한다. |
 | `GET` | `/api/users/admin-candidates` | `Documented` | 호출자 role 기준으로 관리자 선택 후보를 조회한다. |
 | `GET` | `/api/users/department-candidates` | `Documented` | 부서에 아직 소속되지 않은 부서장 후보를 조회한다. |
-| `GET` | `/api/users` | `Documented` | 사용자 목록을 페이지네이션 없이 필터 조건에 따라 조회한다. |
+| `GET` | `/api/users` | `Documented` | 사용자 목록을 페이지네이션으로 필터 조건에 따라 조회한다. |
 | `GET` | `/api/users/{id}` | `Documented` | 단일 사용자 상세와 전체 소속 팀 문맥을 조회한다. |
 | `PATCH` | `/api/users/{id}` | `Documented` | 사용자 기본 정보와 대표 소속 팀을 부분 수정한다. |
 
@@ -228,19 +228,21 @@
   - source: `domain.organization.user.controller.UserController#getDepartmentCandidates`
 
 ### GET /api/users
-- 목적: 사용자 목록을 페이지네이션 없이 필터 조건에 따라 조회한다.
+- 목적: 사용자 목록을 페이지네이션으로 필터 조건에 따라 조회한다.
 - 상태: `Documented`
 - 권한/접근 주체: `DIRECTOR`, `DEPT_HEAD` 만 호출한다. accessToken 으로 인증한다.
 - 요청
-  - Query: `userName`,`departmentId`, `positionName`, `employmentStatus`
-  - 각 query 필드는 `null` 이거나 생략되면 전체 조건으로 해석한다.
+  - Query: `page`, `pageSize`, `userName`, `departmentId`, `positionName`, `employmentStatus`
+  - `page` 는 1-indexed 값이며 생략 시 `1` 로 해석한다.
+  - `pageSize` 는 생략 시 `20`, 최대 `100` 으로 제한한다.
+  - 필터 query 필드는 `null` 이거나 생략되면 전체 조건으로 해석한다.
   - `employmentStatus` 필터가 없으면 `ACTIVE`, `LEAVE` 사용자만 조회한다. `RETIRED` 사용자는 조회 대상에서 항상 제외한다.
 - 정렬
   - `role_code` 기준으로 `DIRECTOR` → `DEPT_HEAD` → `TEAM_LEAD` → `MEMBER` 순서로 정렬한다.
 - 응답 (`data` 기준)
-  - 페이지네이션 래퍼를 사용하지 않고 `UserSummary[]` 배열을 반환한다.
-  - `items`/`page`/`pageSize`/`totalCount` 같은 `PageResponse` 필드를 포함하지 않는다.
-  - 각 항목: `userId`, `userName`, `email`, `phone`, `departmentId`, `departmentName`, `profileImageUrl`, `teamId`, `teamName`, `positionName`, `titleName`, `employmentStatus`
+  - `PageResponse<UserSummary>` 를 반환한다.
+  - `items`, `page`, `pageSize`, `totalCount`, `totalPages`, `isFirst`, `isLast`, `hasNext`, `hasPrevious`
+  - `items[*]`: `userId`, `userName`, `email`, `phone`, `departmentId`, `departmentName`, `profileImageUrl`, `teamId`, `teamName`, `positionName`, `titleName`, `employmentStatus`
 - 응답 필드 메모
   - `teamId`, `teamName` 은 `tb_user_team.is_primary = true` 인 대표 소속 팀이다.
   - 대표 소속 팀은 사용자별로 항상 1개 이하이며, 존재하지 않으면 `teamId`, `teamName` 을 `null` 로 반환한다.
@@ -248,6 +250,8 @@
 ```json
 {
   "query": {
+    "page": 1,
+    "pageSize": 20,
     "userName" : "한과장",
     "departmentId": 10,
     "positionName": "과장",
@@ -259,35 +263,46 @@
 ```json
 {
   "success": true,
-  "data": [
-    {
-      "userId": 101,
-      "userName": "홍길동",
-      "email": "hong@axwms.com",
-      "phone": "010-1234-1234",
-      "departmentId": 10,
-      "departmentName": "물류본부",
-      "profileImageUrl": "https://cdn.axwms.com/profile/101.png",
-      "teamId": 21,
-      "teamName": "물류혁신TF",
-      "positionName": "과장",
-      "titleName": "팀장",
-      "employmentStatus": "ACTIVE"
-    },
-    {
-      "userId": 102,
-      "userName": "김휴직",
-      "email": "leave@axwms.com",
-      "departmentId": 10,
-      "departmentName": "물류본부",
-      "profileImageUrl": null,
-      "teamId": null,
-      "teamName": null,
-      "positionName": "대리",
-      "titleName": "팀원",
-      "employmentStatus": "LEAVE"
-    }
-  ],
+  "data": {
+    "items": [
+      {
+        "userId": 101,
+        "userName": "홍길동",
+        "email": "hong@axwms.com",
+        "phone": "010-1234-1234",
+        "departmentId": 10,
+        "departmentName": "물류본부",
+        "profileImageUrl": "https://cdn.axwms.com/profile/101.png",
+        "teamId": 21,
+        "teamName": "물류혁신TF",
+        "positionName": "과장",
+        "titleName": "팀장",
+        "employmentStatus": "ACTIVE"
+      },
+      {
+        "userId": 102,
+        "userName": "김휴직",
+        "email": "leave@axwms.com",
+        "phone": null,
+        "departmentId": 10,
+        "departmentName": "물류본부",
+        "profileImageUrl": null,
+        "teamId": null,
+        "teamName": null,
+        "positionName": "대리",
+        "titleName": "팀원",
+        "employmentStatus": "LEAVE"
+      }
+    ],
+    "page": 1,
+    "pageSize": 20,
+    "totalCount": 2,
+    "totalPages": 1,
+    "isFirst": true,
+    "isLast": true,
+    "hasNext": false,
+    "hasPrevious": false
+  },
   "timestamp": "2026-04-21T03:00:00Z"
 }
 ```
@@ -302,7 +317,9 @@
   - `tb_team`
 - 근거
   - source: user-request clarification
-  - source: ADR-007 예외 — 본 API는 명시적으로 페이지네이션을 사용하지 않는다.
+  - source: `domain.organization.user.controller.UserController#getUsers`
+  - source: `domain.organization.user.dto.GetUsersApiDto`
+  - source: ADR-007
 
 ### GET /api/users/{id}
 - 목적: 단일 사용자 상세와 전체 소속 팀 문맥을 조회한다.
@@ -451,6 +468,6 @@
 - `POST /api/users` 는 현재 사용자 명세에서 삭제한다.
 - `DELETE /api/users/{id}` 는 현재 사용자 명세에서 삭제한다.
 - 기존 `PUT /api/users/{id}` 표기는 `PATCH /api/users/{id}` 로 정정한다.
-- `GET /api/users` 는 ADR-007의 일반 목록 페이지네이션 표준과 달리, 본 요구사항에 따라 페이지네이션 없이 배열을 반환한다.
+- `GET /api/users` 는 ADR-007의 일반 목록 페이지네이션 표준에 맞춰 `PageResponse<UserSummary>` 를 반환한다.
 - `GET /api/users/department-candidates` 요구에 따라 `tb_user.department_id` 는 미배정 DEPT_HEAD 후보를 표현할 때만 `NULL` 을 허용한다. 후보 조회 외 기존 사용자 프로필/상세 API는 부서 문맥이 있는 사용자를 전제로 한다.
 - 부서 후보 조회는 조회 전용이며, 후보 사용자를 실제 부서에 배정하는 쓰기 정책은 부서 생성/수정 유스케이스에서 별도로 다룬다.

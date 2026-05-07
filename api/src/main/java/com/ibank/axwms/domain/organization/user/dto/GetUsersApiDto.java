@@ -2,16 +2,31 @@ package com.ibank.axwms.domain.organization.user.dto;
 
 import com.ibank.axwms.domain.organization.user.EmploymentStatus;
 import com.ibank.axwms.domain.organization.user.repository.jooq.projection.UserSummaryProjection;
+import com.ibank.axwms.global.response.PageResponse;
 import io.swagger.v3.oas.annotations.media.Schema;
+import jakarta.validation.constraints.Max;
+import jakarta.validation.constraints.Min;
 import jakarta.validation.constraints.Size;
 import lombok.AccessLevel;
 import lombok.NoArgsConstructor;
+import org.springframework.data.domain.Page;
 
 @NoArgsConstructor(access = AccessLevel.PRIVATE)
 public final class GetUsersApiDto {
 
+    private static final int DEFAULT_PAGE = 1;
+    private static final int DEFAULT_PAGE_SIZE = 20;
+    private static final int MAX_PAGE_SIZE = 100;
+
     @Schema(description = "사용자 목록 조회 요청 DTO")
     public record Request(
+            @Schema(description = "페이지 번호", example = "1")
+            @Min(value = 1, message = "page 는 1 이상이어야 합니다.")
+            Integer page,
+            @Schema(description = "페이지 크기", example = "20")
+            @Min(value = 1, message = "pageSize 는 1 이상이어야 합니다.")
+            @Max(value = MAX_PAGE_SIZE, message = "pageSize 는 100 이하여야 합니다.")
+            Integer pageSize,
             @Schema(description = "사용자명", example = "한과장")
             @Size(max = 50, message = "userName 은 50자 이하여야 합니다.")
             String userName,
@@ -23,6 +38,15 @@ public final class GetUsersApiDto {
             @Schema(description = "재직 상태", example = "ACTIVE")
             EmploymentStatus employmentStatus
     ) {
+        /** page query 가 없을 때 ADR 페이지네이션 기본값인 1페이지를 적용한다. */
+        public int pageOrDefault() {
+            return page == null ? DEFAULT_PAGE : page;
+        }
+
+        /** pageSize query 가 없을 때 목록 API 공통 기본 크기 20을 적용한다. */
+        public int pageSizeOrDefault() {
+            return pageSize == null ? DEFAULT_PAGE_SIZE : pageSize;
+        }
     }
 
     @Schema(description = "사용자 목록 항목")
@@ -52,6 +76,11 @@ public final class GetUsersApiDto {
             @Schema(description = "재직 상태", example = "ACTIVE")
             EmploymentStatus employmentStatus
     ) {
+
+        /** repository projection 페이지를 사용자 목록 API 응답 페이지로 변환한다. */
+        public static PageResponse<Response> fromPage(Page<UserSummaryProjection> page) {
+            return PageResponse.from(page.map(Response::from));
+        }
 
         /** repository projection 한 행을 사용자 목록 응답 항목으로 변환한다. */
         public static Response from(UserSummaryProjection projection) {

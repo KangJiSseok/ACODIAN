@@ -8,6 +8,7 @@ import com.ibank.axwms.domain.organization.user.dto.GetUsersApiDto;
 import com.ibank.axwms.domain.organization.user.dto.UpdateMyProfileApiDto;
 import com.ibank.axwms.domain.organization.user.dto.UpdateUserApiDto;
 import com.ibank.axwms.global.response.EmptyResponse;
+import com.ibank.axwms.global.response.PageResponse;
 import com.ibank.axwms.global.security.CustomUserPrincipal;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
@@ -137,23 +138,24 @@ public interface UserControllerDocs {
 
     @Operation(
             summary = "사용자 목록 조회",
-            description = "DIRECTOR 또는 DEPT_HEAD 가 사용자 목록을 페이지네이션 없이 조회한다. "
+            description = "DIRECTOR 또는 DEPT_HEAD 가 사용자 목록을 페이지네이션으로 조회한다. "
                     + "userName, departmentId, positionName, employmentStatus optional filter 를 적용하며, "
                     + "employmentStatus 가 없으면 ACTIVE/LEAVE 만 포함하고 RETIRED 는 항상 제외한다. "
+                    + "page 기본값은 1, pageSize 기본값은 20이고 최대 100이다. "
                     + "정렬은 DIRECTOR, DEPT_HEAD, TEAM_LEAD, MEMBER 순서다."
     )
     @SecurityRequirement(name = "bearerAuth")
     @ApiResponses({
             @ApiResponse(
                     responseCode = "200",
-                    description = "사용자 목록을 배열로 반환한다.",
-                    content = @Content(array = @ArraySchema(schema = @Schema(implementation = GetUsersApiDto.Response.class)))
+                    description = "사용자 목록을 PageResponse 로 반환한다.",
+                    content = @Content(schema = @Schema(implementation = PageResponse.class))
             ),
             @ApiResponse(responseCode = "400", description = "요청 값이 올바르지 않다.", content = @Content),
             @ApiResponse(responseCode = "401", description = "access token 이 없거나 유효하지 않다.", content = @Content),
             @ApiResponse(responseCode = "403", description = "사용자 목록 조회 권한이 없다.", content = @Content)
     })
-    List<GetUsersApiDto.Response> getUsers(
+    PageResponse<GetUsersApiDto.Response> getUsers(
             @Parameter(hidden = true) CustomUserPrincipal principal,
             @ParameterObject GetUsersApiDto.Request request
     );

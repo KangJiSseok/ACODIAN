@@ -9,6 +9,7 @@ import com.ibank.axwms.domain.organization.user.dto.UpdateMyProfileApiDto;
 import com.ibank.axwms.domain.organization.user.dto.UpdateUserApiDto;
 import com.ibank.axwms.domain.organization.user.service.UserService;
 import com.ibank.axwms.global.response.EmptyResponse;
+import com.ibank.axwms.global.response.PageResponse;
 import com.ibank.axwms.global.security.CustomUserPrincipal;
 import jakarta.validation.Valid;
 import java.util.List;
@@ -80,7 +81,7 @@ public class UserController implements UserControllerDocs {
     @Override
     @GetMapping
     @PreAuthorize("hasAnyRole('DIRECTOR','DEPT_HEAD')")
-    public List<GetUsersApiDto.Response> getUsers(
+    public PageResponse<GetUsersApiDto.Response> getUsers(
             @AuthenticationPrincipal CustomUserPrincipal principal,
             @Valid @ModelAttribute GetUsersApiDto.Request request
     ) {
