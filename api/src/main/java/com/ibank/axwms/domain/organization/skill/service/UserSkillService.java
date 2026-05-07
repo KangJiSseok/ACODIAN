@@ -89,7 +89,7 @@ public class UserSkillService {
         }
 
         User actor = getUserOrThrow(principal.userId());
-        if (!actor.getDepartmentId().equals(targetUser.getDepartmentId())) {
+        if (actor.getDepartmentId() == null || !actor.getDepartmentId().equals(targetUser.getDepartmentId())) {
             throw new BusinessException(ErrorCode.AUTH_ACCESS_DENIED);
         }
     }
@@ -117,7 +117,7 @@ public class UserSkillService {
         }
 
         User actor = getUserOrThrow(principal.userId());
-        if (!actor.getDepartmentId().equals(targetUser.getDepartmentId())) {
+        if (actor.getDepartmentId() == null || !actor.getDepartmentId().equals(targetUser.getDepartmentId())) {
             throw new BusinessException(ErrorCode.AUTH_ACCESS_DENIED);
         }
     }
