@@ -27,6 +27,7 @@ import java.time.LocalDate;
 import java.util.List;
 import java.util.Optional;
 
+import static com.ibank.axwms.global.jooq.Tables.TB_DEPARTMENT;
 import static com.ibank.axwms.global.jooq.Tables.TB_TEAM;
 import static com.ibank.axwms.global.jooq.Tables.TB_TEAM_ADMIN;
 import static com.ibank.axwms.global.jooq.Tables.TB_USER;
@@ -424,7 +425,9 @@ public class WorklogJooqRepositoryImpl implements WorklogJooqRepository {
                 ));
     }
 
-    /** "최근 N일 완료" 위젯용 — 완료 기준은 status=COMPLETED 그리고 completion_date >= from. */
+    /**
+     * "최근 N일 완료" 위젯용 — 완료 기준은 status=COMPLETED 그리고 completion_date >= from.
+     */
     @Override
     public int countOrgCompletedSince(LocalDate from) {
         return dsl.selectCount()
@@ -544,8 +547,7 @@ public class WorklogJooqRepositoryImpl implements WorklogJooqRepository {
             case WorklogVisibilityScope.All ignored -> DSL.noCondition();
             case WorklogVisibilityScope.Department department ->
                     TB_TEAM.TEAM_ID.in(visibleTeamIds(department.userId()));
-            case WorklogVisibilityScope.MyTeams myTeams ->
-                    TB_TEAM.TEAM_ID.in(visibleTeamIds(myTeams.userId()));
+            case WorklogVisibilityScope.MyTeams myTeams -> TB_TEAM.TEAM_ID.in(visibleTeamIds(myTeams.userId()));
         };
     }
 
