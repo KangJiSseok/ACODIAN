@@ -270,7 +270,7 @@ class AuthControllerE2eTest extends E2eTestSupport {
         String accessTokenHeader = loginAccessTokenHeader(EMAIL, RAW_PASSWORD);
         String newPassword = "newPassword1!";
 
-        mockMvc.perform(authPost("/change-password")
+        mockMvc.perform(authPatch("/change-password")
                         .header(HttpHeaders.AUTHORIZATION, accessTokenHeader)
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("""
@@ -314,7 +314,7 @@ class AuthControllerE2eTest extends E2eTestSupport {
     void 현재_비밀번호가_틀리면_비밀번호_변경을_거부한다() throws Exception {
         String accessTokenHeader = loginAccessTokenHeader(EMAIL, RAW_PASSWORD);
 
-        mockMvc.perform(authPost("/change-password")
+        mockMvc.perform(authPatch("/change-password")
                         .header(HttpHeaders.AUTHORIZATION, accessTokenHeader)
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("""
@@ -386,5 +386,9 @@ class AuthControllerE2eTest extends E2eTestSupport {
 
     private MockHttpServletRequestBuilder authPost(String path) {
         return apiPost("/auth" + path);
+    }
+
+    private MockHttpServletRequestBuilder authPatch(String path) {
+        return apiPatch("/auth" + path);
     }
 }
