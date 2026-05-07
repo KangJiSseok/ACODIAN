@@ -26,6 +26,7 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.data.domain.Page;
 
 class UserRepositoryIntegrationTest extends IntegrationTestSupport {
 
@@ -57,9 +58,9 @@ class UserRepositoryIntegrationTest extends IntegrationTestSupport {
     void 사용자_목록은_기본_재직_상태와_role_우선순위로_조회하고_대표_팀을_함께_반환한다() {
         UserListFixture fixture = seedUserListFixture();
 
-        List<UserSummaryProjection> result = userRepository.findUsers(new UserListQuery(null, null, null, null));
+        Page<UserSummaryProjection> result = userRepository.findUsers(new UserListQuery(null, null, null, null, 1, 20));
 
-        assertThat(result)
+        assertThat(result.getContent())
                 .extracting(
                         UserSummaryProjection::userId,
                         UserSummaryProjection::userName,
@@ -79,9 +80,12 @@ class UserRepositoryIntegrationTest extends IntegrationTestSupport {
                         tuple(fixture.teamLeadId(), "팀장", "team-lead@example.com", "010-0000-0003", fixture.supportDepartmentId(), "지원본부", fixture.secondaryTeamId(), "지원팀", "과장", "팀장", EmploymentStatus.LEAVE),
                         tuple(fixture.memberId(), "팀원", "member@example.com", "010-0000-0004", fixture.supportDepartmentId(), "지원본부", null, null, "사원", "팀원", EmploymentStatus.ACTIVE)
                 );
-        assertThat(result)
+        assertThat(result.getContent())
                 .extracting(UserSummaryProjection::userName)
                 .doesNotContain("퇴직자");
+        assertThat(result.getTotalElements()).isEqualTo(4);
+        assertThat(result.getNumber()).isZero();
+        assertThat(result.getSize()).isEqualTo(20);
     }
 
     @Test
@@ -89,14 +93,16 @@ class UserRepositoryIntegrationTest extends IntegrationTestSupport {
     void 사용자_목록은_사용자명_부서_직급_재직_상태_조합_필터를_적용한다() {
         UserListFixture fixture = seedUserListFixture();
 
-        List<UserSummaryProjection> result = userRepository.findUsers(new UserListQuery(
+        Page<UserSummaryProjection> result = userRepository.findUsers(new UserListQuery(
                 "팀장",
                 fixture.supportDepartmentId(),
                 "과장",
-                EmploymentStatus.LEAVE
+                EmploymentStatus.LEAVE,
+                1,
+                20
         ));
 
-        assertThat(result)
+        assertThat(result.getContent())
                 .extracting(UserSummaryProjection::userId,
                         UserSummaryProjection::userName,
                         UserSummaryProjection::departmentId,
@@ -110,9 +116,31 @@ class UserRepositoryIntegrationTest extends IntegrationTestSupport {
     void 사용자_목록은_RETIRED_필터가_전달되어도_퇴직자를_반환하지_않는다() {
         seedUserListFixture();
 
-        List<UserSummaryProjection> result = userRepository.findUsers(new UserListQuery(null, null, null, EmploymentStatus.RETIRED));
+        Page<UserSummaryProjection> result = userRepository.findUsers(
+                new UserListQuery(null, null, null, EmploymentStatus.RETIRED, 1, 20));
 
-        assertThat(result).isEmpty();
+        assertThat(result.getContent()).isEmpty();
+        assertThat(result.getTotalElements()).isZero();
+    }
+
+    @Test
+    @DisplayName("사용자 목록은 페이지 번호와 페이지 크기를 적용하고 전체 건수를 유지한다")
+    void 사용자_목록은_페이지_번호와_페이지_크기를_적용하고_전체_건수를_유지한다() {
+        UserListFixture fixture = seedUserListFixture();
+
+        Page<UserSummaryProjection> result = userRepository.findUsers(
+                new UserListQuery(null, null, null, null, 2, 2));
+
+        assertThat(result.getContent())
+                .extracting(UserSummaryProjection::userId, UserSummaryProjection::userName)
+                .containsExactly(
+                        tuple(fixture.teamLeadId(), "팀장"),
+                        tuple(fixture.memberId(), "팀원")
+                );
+        assertThat(result.getTotalElements()).isEqualTo(4);
+        assertThat(result.getTotalPages()).isEqualTo(2);
+        assertThat(result.getNumber()).isEqualTo(1);
+        assertThat(result.getSize()).isEqualTo(2);
     }
 
     @Test
