@@ -4,15 +4,16 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.hamcrest.Matchers.hasSize;
 import static org.hamcrest.Matchers.is;
 import static org.hamcrest.Matchers.nullValue;
+import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.authentication;
 import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.user;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 import com.ibank.axwms.domain.organization.department.DepartmentStatus;
 import com.ibank.axwms.domain.organization.department.entity.Department;
-import com.ibank.axwms.domain.organization.team.UserTeamStatus;
 import com.ibank.axwms.domain.organization.department.repository.DepartmentRepository;
 import com.ibank.axwms.domain.organization.team.TeamStatus;
+import com.ibank.axwms.domain.organization.team.UserTeamStatus;
 import com.ibank.axwms.domain.organization.team.entity.Team;
 import com.ibank.axwms.domain.organization.team.entity.UserTeam;
 import com.ibank.axwms.domain.organization.team.repository.TeamRepository;
@@ -21,13 +22,18 @@ import com.ibank.axwms.domain.organization.user.EmploymentStatus;
 import com.ibank.axwms.domain.organization.user.UserRole;
 import com.ibank.axwms.domain.organization.user.entity.User;
 import com.ibank.axwms.domain.organization.user.repository.UserRepository;
+import com.ibank.axwms.global.security.CustomUserPrincipal;
 import com.ibank.axwms.testsupport.E2eTestSupport;
 import java.time.LocalDate;
+import java.util.List;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.MediaType;
+import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
+import org.springframework.security.core.authority.SimpleGrantedAuthority;
+import org.springframework.test.web.servlet.request.RequestPostProcessor;
 
 class DepartmentControllerE2eTest extends E2eTestSupport {
 
@@ -96,6 +102,40 @@ class DepartmentControllerE2eTest extends E2eTestSupport {
                 .andExpect(jsonPath("$.data.departments[0].departmentName", is("물류본부")))
                 .andExpect(jsonPath("$.data.departments[2].departmentName", is("비상대응본부")))
                 .andExpect(jsonPath("$.data.departments[2].departmentHeadUserId", nullValue()));
+    }
+
+    @Test
+    @DisplayName("DIRECTOR 가 부서 선택 후보를 조회하면 모든 활성 부서를 최소 필드로 반환한다")
+    void director_가_부서_선택_후보를_조회하면_모든_활성_부서를_최소_필드로_반환한다() throws Exception {
+        mockMvc.perform(apiGet("/departments/department-candidates")
+                        .with(principal(1L, "director@ibank.com", UserRole.DIRECTOR)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.success", is(true)))
+                .andExpect(jsonPath("$.data.departments", hasSize(3)))
+                .andExpect(jsonPath("$.data.departments[0].departmentName", is("물류본부")))
+                .andExpect(jsonPath("$.data.departments[0].description").doesNotExist())
+                .andExpect(jsonPath("$.data.departments[2].departmentName", is("비상대응본부")));
+    }
+
+    @Test
+    @DisplayName("DEPT_HEAD 가 부서 선택 후보를 조회하면 자기 소속 활성 부서만 반환한다")
+    void dept_head_가_부서_선택_후보를_조회하면_자기_소속_활성_부서만_반환한다() throws Exception {
+        mockMvc.perform(apiGet("/departments/department-candidates")
+                        .with(principal(logisticsCandidateUserId, "dept-head@ibank.com", UserRole.DEPT_HEAD)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.success", is(true)))
+                .andExpect(jsonPath("$.data.departments", hasSize(1)))
+                .andExpect(jsonPath("$.data.departments[0].departmentId", is(logisticsDepartmentId.intValue())))
+                .andExpect(jsonPath("$.data.departments[0].departmentName", is("물류본부")));
+    }
+
+    @Test
+    @DisplayName("MEMBER 는 부서 선택 후보 조회를 AUTH_ACCESS_DENIED 로 거부한다")
+    void member_는_부서_선택_후보_조회를_auth_access_denied로_거부한다() throws Exception {
+        mockMvc.perform(apiGet("/departments/department-candidates")
+                        .with(user("member@ibank.com").roles("MEMBER")))
+                .andExpect(status().isForbidden())
+                .andExpect(jsonPath("$.error.code", is("AUTH_ACCESS_DENIED")));
     }
 
     @Test
@@ -769,5 +809,16 @@ class DepartmentControllerE2eTest extends E2eTestSupport {
                 null,
                 null
         );
+    }
+
+    /** @AuthenticationPrincipal 과 role gate 를 동시에 통과할 수 있는 테스트 인증 주체를 구성한다. */
+    private RequestPostProcessor principal(Long userId, String email, UserRole role) {
+        CustomUserPrincipal principal = new CustomUserPrincipal(userId, email, role.name());
+        UsernamePasswordAuthenticationToken authenticationToken = new UsernamePasswordAuthenticationToken(
+                principal,
+                "N/A",
+                List.of(new SimpleGrantedAuthority("ROLE_" + role.name()))
+        );
+        return authentication(authenticationToken);
     }
 }

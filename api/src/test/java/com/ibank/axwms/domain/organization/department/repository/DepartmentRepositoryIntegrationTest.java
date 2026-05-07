@@ -77,6 +77,25 @@ class DepartmentRepositoryIntegrationTest extends IntegrationTestSupport {
     }
 
     @Test
+    @DisplayName("부서 선택 후보 전체 조회는 ACTIVE 부서만 ID 오름차순으로 반환한다")
+    void 부서_선택_후보_전체_조회는_active_부서만_id_오름차순으로_반환한다() {
+        List<Department> departments = departmentRepository.findAllByStatusCodeOrderByIdAsc(DepartmentStatus.ACTIVE);
+
+        assertThat(departments)
+                .extracting(Department::getDepartmentName)
+                .containsExactly("물류본부", "무부장본부", "빈본부");
+    }
+
+    @Test
+    @DisplayName("부서 선택 후보 단건 조회는 지정한 부서가 ACTIVE 일 때만 반환한다")
+    void 부서_선택_후보_단건_조회는_지정한_부서가_active_일_때만_반환한다() {
+        assertThat(departmentRepository.findAllByIdAndStatusCodeOrderByIdAsc(logisticsDepartmentId, DepartmentStatus.ACTIVE))
+                .extracting(Department::getDepartmentName)
+                .containsExactly("물류본부");
+        assertThat(departmentRepository.findAllByIdAndStatusCodeOrderByIdAsc(inactiveDepartmentId, DepartmentStatus.ACTIVE)).isEmpty();
+    }
+
+    @Test
     @DisplayName("활성 부서 상세 header를 조회하면 부서장 이름을 left join으로 반환한다")
     void 활성_부서_상세_header를_조회하면_부서장_이름을_left_join으로_반환한다() {
         DepartmentDetailHeaderProjection header = departmentRepository
