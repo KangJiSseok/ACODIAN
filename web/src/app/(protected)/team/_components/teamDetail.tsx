@@ -60,8 +60,8 @@ export default function TeamDetail({
             팀 목록
           </Link>
         </Button>
-        <div className="flex flex-wrap justify-end gap-3">
-          {canEdit ? (
+        {canEdit ? (
+          <div className="flex flex-wrap justify-end gap-3">
             <Button
               asChild
               variant="default"
@@ -72,30 +72,19 @@ export default function TeamDetail({
                 수정
               </Link>
             </Button>
-          ) : (
             <Button
               type="button"
-              variant="default"
-              disabled
-              title="팀 관리자만 수정할 수 있습니다."
-              className="h-10 min-w-28 !text-primary-foreground hover:!text-primary-foreground [&_svg]:!text-primary-foreground"
+              variant="destructive"
+              className="h-10 min-w-28 !text-destructive hover:!text-destructive [&_svg]:!text-destructive"
+              disabled={deleteTeam.isPending}
+              title="팀 삭제"
+              onClick={handleDelete}
             >
-              <Pencil className="size-4" />
-              수정
+              <Trash2 className="size-4" />
+              삭제
             </Button>
-          )}
-          <Button
-            type="button"
-            variant="destructive"
-            className="h-10 min-w-28 !text-destructive hover:!text-destructive [&_svg]:!text-destructive"
-            disabled={!canEdit || deleteTeam.isPending}
-            title={canEdit ? "팀 삭제" : "팀 관리자만 삭제할 수 있습니다."}
-            onClick={handleDelete}
-          >
-            <Trash2 className="size-4" />
-            삭제
-          </Button>
-        </div>
+          </div>
+        ) : null}
       </div>
 
       <Card className="rounded-[28px]">

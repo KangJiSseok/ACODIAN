@@ -17,6 +17,8 @@ export interface UserSummary {
 }
 
 export interface GetUsersParams {
+  page?: number;
+  pageSize?: number;
   userName?: string;
   departmentId?: number;
   positionName?: string;

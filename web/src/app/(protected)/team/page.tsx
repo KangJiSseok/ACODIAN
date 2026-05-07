@@ -11,6 +11,8 @@ import {
 } from "lucide-react";
 import { Pagination } from "@/app/_common/components/data-display/pagination";
 import { usePagination } from "@/app/_common/hooks/usePagination";
+import { useAuth } from "@/app/_common/hooks/useAuth";
+import { canCreateTeams } from "@/app/_common/utils/organizationAccess.utils";
 import PageHeader from "@/app/_common/components/layout/pageHeader";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -48,8 +50,10 @@ const teamFilters: Array<{
 
 export default function TeamPage() {
   const [filter, setFilter] = useState<TeamFilter>("all");
+  const { user } = useAuth();
   const { data: teamPage, isLoading, error } = useTeamList({ pageSize: 100 });
   const { data: summary } = useTeamSummary();
+  const canCreateTeam = canCreateTeams(user);
 
   const teams = useMemo(() => teamPage?.items ?? [], [teamPage?.items]);
   const counts = {
@@ -73,7 +77,7 @@ export default function TeamPage() {
       <PageHeader
         title="팀 관리"
         description="관리 가능한 팀과 소속 구성원을 확인합니다."
-        actions={
+        actions={canCreateTeam ? (
           <Button
             asChild
             type="button"
@@ -82,7 +86,7 @@ export default function TeamPage() {
           >
             <Link href="/team/create">팀 등록</Link>
           </Button>
-        }
+        ) : undefined}
       />
 
       <div className="grid gap-4 md:grid-cols-3">
