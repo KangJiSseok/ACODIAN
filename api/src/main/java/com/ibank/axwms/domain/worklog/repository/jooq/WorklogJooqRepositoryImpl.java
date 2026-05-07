@@ -146,6 +146,7 @@ public class WorklogJooqRepositoryImpl implements WorklogJooqRepository {
 
         long total = dsl.selectCount()
                 .from(TB_WORKLOG)
+                .join(TB_TEAM).on(TB_WORKLOG.TEAM_ID.eq(TB_TEAM.TEAM_ID))
                 .where(condition)
                 .fetchSingle(0, Integer.class)
                 .longValue();

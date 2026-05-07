@@ -65,6 +65,12 @@ storage:
       cron: ${PROFILE_IMAGE_CLEANUP_CRON:0 20 22 * * *}
       temp-prefix: ${PROFILE_IMAGE_TEMP_PREFIX:temp/}
       retention-days: ${PROFILE_IMAGE_RETENTION_DAYS:1}
+ai:
+  worklog-search:
+    enabled: ${AI_WORKLOG_SEARCH_ENABLED:false}
+    base-url: ${AI_WORKLOG_SEARCH_BASE_URL:http://localhost:8000/ai}
+    connect-timeout: ${AI_WORKLOG_SEARCH_CONNECT_TIMEOUT:2s}
+    read-timeout: ${AI_WORKLOG_SEARCH_READ_TIMEOUT:10s}
 
 auth:
   refresh-cookie:
