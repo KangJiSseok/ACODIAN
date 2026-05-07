@@ -133,7 +133,7 @@ export function WorklogSettingsModal({
               </p>
               <div className="grid gap-3 sm:grid-cols-[1fr_auto_1fr] sm:items-center">
                 <ScheduleDateControl
-                  label="시작일"
+                  label="지시일"
                   value={values.instructionDate}
                   onChange={(nextValue) =>
                     onValuesChange({ ...values, instructionDate: nextValue })

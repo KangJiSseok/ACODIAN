@@ -53,6 +53,8 @@ const aiProcessingStatusCodeMap: Record<string, AiProcessingStatus> = {
 }
 
 function toWorklogListItem(item: WorklogListApiItem): WorklogListItem {
+  const aiSummary = item.aiSummary?.trim() || "AI 요약을 생성 중입니다."
+
   return {
     id: item.worklogId,
     title: item.title,
@@ -60,9 +62,9 @@ function toWorklogListItem(item: WorklogListApiItem): WorklogListItem {
     workContent: item.workContent,
     actualHours: Number(item.actualHours),
     importance: importanceCodeMap[item.importanceCode] ?? "NORMAL",
-    aiSummary: item.aiSummary,
+    aiSummary,
     aiStatus: aiProcessingStatusCodeMap[item.aiProcessingStatus] ?? "PENDING",
-    aiSummaryEdited: item.aiSummaryEdited,
+    aiSummaryEdited: item.aiSummaryEdited ?? false,
     teamId: item.teamId,
     teamName: item.teamName,
     authorId: item.authorId,

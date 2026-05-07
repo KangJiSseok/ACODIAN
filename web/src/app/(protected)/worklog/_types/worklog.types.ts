@@ -77,9 +77,9 @@ export interface WorklogListApiItem {
   workContent: string
   actualHours: number
   importanceCode: string
-  aiSummary: string
+  aiSummary: string | null
   aiProcessingStatus: string
-  aiSummaryEdited: boolean
+  aiSummaryEdited: boolean | null
   teamId: number
   teamName: string
   authorId: number
