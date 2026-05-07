@@ -201,7 +201,7 @@
   - 부서 없음: `DEPARTMENT_NOT_FOUND`
   - ACTIVE 팀 존재: `DEPARTMENT_HAS_ACTIVE_TEAMS`
 
-## 6. 수동 검증용 로컬 시드 시나리오
+## 6. 수동 검증용 데이터 시나리오
 - `솔루션개발사업부`: ACTIVE + 직접 소유 ACTIVE 팀 존재 → DETAIL teams 노출 / DELETE 실패
 - `솔루션사업부`: ACTIVE + 직접 소유 팀이 모두 INACTIVE → DELETE 성공
 - `휴면본부`: INACTIVE → DELETE no-op 성공
