@@ -21,4 +21,4 @@
   - WHAT 재서술 주석은 금지하고, 역할 범위·통과/차단 기준·기본값 선택 이유·예외 변환·경계 간 vocabulary 변환 이유 같은 WHY/계약을 한국어로 남긴다.
 - 요청 범위를 넘는 구조 변경, 패키지 이동, 리팩토링을 하지 않는다.
 - Flyway 마이그레이션에 시드 데이터를 넣지 않는다.
-- 로컬 시드는 `api/src/main/java/com/ibank/axwms/devsupport/bootstrap/LocalSeedRunner.java` 에만 추가한다.
+- 현재 API 코드베이스는 기동 시 참조 데이터를 자동 삽입하는 러너를 두지 않는다. 참조 데이터가 필요하면 별도 정책 합의 후 정적 개발용 SQL 자산이나 테스트 fixture 로 분리한다.

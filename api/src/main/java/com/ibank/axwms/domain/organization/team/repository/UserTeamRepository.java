@@ -15,7 +15,7 @@ public interface UserTeamRepository extends JpaRepository<UserTeam, Long>, UserT
      */
     boolean existsByUserIdAndTeamIdAndStatusCode(Long userId, Long teamId, UserTeamStatus statusCode);
 
-    /** 로컬 시드가 기존 사용자-팀 관계를 찾아 멱등 보정할 때 사용한다. */
+    /** 팀 구성원 수정과 대표 소속 재지정에서 기존 membership 을 단건 확인한다. */
     Optional<UserTeam> findByUserIdAndTeamId(Long userId, Long teamId);
 
     /** 사용자별 모든 팀 membership 을 조회한다. 대표 소속 팀 재지정 시 기존 대표 플래그 해제에 사용한다. */

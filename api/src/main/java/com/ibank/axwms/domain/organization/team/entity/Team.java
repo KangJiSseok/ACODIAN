@@ -91,27 +91,6 @@ public class Team {
         return team;
     }
 
-    /** 로컬 시드 재실행 시 팀의 식별 문맥과 운영 상태를 목표값으로 맞추고 soft-delete 는 해제한다. */
-    public void synchronizeSeedProfile(String teamName,
-                                       TeamStatus statusCode,
-                                       String description,
-                                       LocalDate startDate,
-                                       LocalDate expectedEndDate) {
-        synchronizeSeedProfile(null, teamName, statusCode, description, startDate, expectedEndDate);
-    }
-
-    /** 로컬 시드 팀을 부서 ownership 까지 목표값으로 맞춰 상세 화면 검증 데이터를 안정화한다. */
-    public void synchronizeSeedProfile(Long departmentId,
-                                       String teamName,
-                                       TeamStatus statusCode,
-                                       String description,
-                                       LocalDate startDate,
-                                       LocalDate expectedEndDate) {
-        this.departmentId = departmentId;
-        updateProfile(teamName, statusCode, description, startDate, expectedEndDate);
-        this.deletedAt = null;
-    }
-
     /** 팀 기본 정보를 최신 요청값으로 갱신한다. */
     public void updateProfile(String teamName,
                               TeamStatus statusCode,

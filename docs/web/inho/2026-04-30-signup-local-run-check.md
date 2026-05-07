@@ -85,17 +85,17 @@ AWS_SECRET_ACCESS_KEY
 
 단, `AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY` 같은 민감정보는 절대 `application.yml`이나 문서에 실제 값으로 남기면 안 된다. 로컬에서는 쉘 환경변수나 Git에 올라가지 않는 개인 환경 파일로 관리한다.
 
-두 번째 원인은 local profile의 seed 데이터와 기존 로컬 DB 데이터 충돌이다.
+두 번째 원인은 기존 로컬 DB 데이터의 UNIQUE 제약 충돌이다.
 
 ```text
 duplicate key value violates unique constraint "tb_department_department_head_user_id_key"
 ```
 
-S3 더미 환경변수로 첫 번째 문제를 넘기면, `LocalSeedRunner`가 기존 DB에 있는 부서장 데이터와 충돌하면서 위 오류가 발생했다.
+S3 더미 환경변수로 첫 번째 문제를 넘기면, 기존 DB에 있는 부서장 데이터와 새로 준비한 검증 데이터가 충돌하면서 위 오류가 발생했다.
 
 ## 당장 로컬에서 띄우는 방법
 
-기존 DB를 지우지 않고 서버만 띄우려면 `local` profile의 seed runner를 피해서 실행할 수 있다.
+기존 DB를 지우지 않고 서버만 띄우려면 `dev` profile을 명시해서 실행할 수 있다.
 
 ```bash
 SPRING_PROFILES_ACTIVE=dev \

@@ -108,26 +108,6 @@ public class User {
         return user;
     }
 
-    /**
-     * 로컬 시드 재실행 시 사용자 조직/프로필 문맥을 최신 기준으로 맞춘다.
-     * 이미 존재하는 시드 사용자의 titleName, 직급, 부서, 권한이 바뀌어도 멱등하게 보정할 수 있게 한다.
-     */
-    public void synchronizeSeedProfile(Long departmentId,
-                                       String userName,
-                                       UserRole roleCode,
-                                       EmploymentStatus employmentStatus,
-                                       String positionName,
-                                       String titleName,
-                                       LocalDate joinDate) {
-        this.departmentId = departmentId;
-        this.userName = userName;
-        this.roleCode = roleCode;
-        this.employmentStatus = employmentStatus;
-        this.positionName = positionName;
-        this.titleName = titleName;
-        this.joinDate = joinDate;
-    }
-
     /** null 이 아닌 요청 필드만 사용자 기본 정보에 반영한다. */
     public void updatePartial(String userName,
                               String email,

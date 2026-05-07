@@ -62,8 +62,8 @@ class TeamRepositoryIntegrationTest extends IntegrationTestSupport {
     }
 
     @Test
-    @DisplayName("팀명으로 로컬 시드 재사용 대상 팀을 조회한다")
-    void 팀명으로_로컬_시드_재사용_대상_팀을_조회한다() {
+    @DisplayName("팀명으로 soft-delete 최신순 조회 대상 팀을 조회한다")
+    void 팀명으로_soft_delete_최신순_조회_대상_팀을_조회한다() {
         Team team = teamRepository.save(createTeam("물류혁신TF", TeamStatus.ACTIVE));
 
         assertThat(teamRepository.findFirstByTeamNameOrderByDeletedAtDesc("물류혁신TF"))

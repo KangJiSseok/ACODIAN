@@ -96,15 +96,6 @@ public class UserTeam {
         return userTeam;
     }
 
-    /** 로컬 시드 재실행 시 사용자-팀 관계의 권한/역할/주소속/상태를 목표값으로 맞춘다. */
-    public void synchronizeSeedProfile(boolean isLeader,
-                                       String teamRole,
-                                       String allocation,
-                                       boolean isPrimary,
-                                       UserTeamStatus statusCode) {
-        synchronizeMembershipProfile(isLeader, teamRole, allocation, isPrimary, statusCode);
-    }
-
     /** membership 리더 여부/역할/상태를 한 번에 최신값으로 맞춘다. */
     public void synchronizeMembershipProfile(boolean isLeader,
                                              String teamRole,

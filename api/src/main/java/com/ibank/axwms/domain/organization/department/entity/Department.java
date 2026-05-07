@@ -65,17 +65,6 @@ public class Department {
         return department;
     }
 
-    /** 로컬 시드 재실행이나 기본 정보 수정 시 부서 식별 문맥과 상태를 목표값으로 동기화한다. */
-    public void synchronizeSeedProfile(String departmentName,
-                                       String description,
-                                       Long departmentHeadUserId,
-                                       DepartmentStatus statusCode) {
-        this.departmentName = departmentName;
-        this.description = description;
-        assignHeadUserId(departmentHeadUserId);
-        changeStatus(statusCode);
-    }
-
     /** API 수정 유스케이스에서 부서명과 설명을 함께 갱신한다. */
     public void updateBasicInfo(String departmentName, String description) {
         this.departmentName = departmentName;
