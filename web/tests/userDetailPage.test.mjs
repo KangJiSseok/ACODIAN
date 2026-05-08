@@ -74,11 +74,15 @@ test("사용자 상세 화면은 부서, 직급, 직책, 상태만 바로 수정
 
 test("사용자 상세 직급과 직책은 표준 옵션 select로 수정한다", () => {
   const component = readUserFile("_components/userDetail.tsx");
+  const options = readUserFile("_utils/userSelectOptions.ts");
 
-  assert.match(component, /const positionOptions: SelectOption\[\] = \[/);
-  assert.match(component, /value: "사원"[\s\S]*value: "이사"/);
-  assert.match(component, /const titleOptions: SelectOption\[\] = \[/);
-  assert.match(component, /value: "본부장"[\s\S]*value: "팀장"[\s\S]*value: "팀원"/);
+  assert.match(options, /export const positionOptions: SelectOption\[\] = \[/);
+  assert.match(options, /value: "사원"[\s\S]*value: "이사"/);
+  assert.match(options, /export const titleOptions: SelectOption\[\] = \[/);
+  assert.match(options, /value: "본부장"[\s\S]*value: "팀장"[\s\S]*value: "팀원"/);
+  assert.match(component, /from "\.\.\/_utils\/userSelectOptions"/);
+  assert.doesNotMatch(component, /const positionOptions: SelectOption\[\] = \[/);
+  assert.doesNotMatch(component, /const titleOptions: SelectOption\[\] = \[/);
   assert.match(component, /buildOptionsWithCurrentValue\(positionOptions, values\.positionName\)/);
   assert.match(component, /buildOptionsWithCurrentValue\(titleOptions, values\.titleName\)/);
   assert.match(component, /<SelectField[\s\S]*label="직급"[\s\S]*name="positionName"[\s\S]*options=\{userPositionOptions\}/);
