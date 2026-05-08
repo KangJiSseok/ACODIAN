@@ -1,8 +1,12 @@
 workflow:
+  auto_cancel:
+    on_new_commit: conservative
   rules:
     - if: '$CI_PIPELINE_SOURCE == "merge_request_event" && ($CI_MERGE_REQUEST_TARGET_BRANCH_NAME == "dev" || $CI_MERGE_REQUEST_TARGET_BRANCH_NAME == "master")'
     - if: '$CI_PIPELINE_SOURCE == "push" && $CI_COMMIT_BRANCH && $CI_COMMIT_BRANCH != "dev" && $CI_COMMIT_BRANCH != "master"'
     - if: '$CI_PIPELINE_SOURCE == "push" && ($CI_COMMIT_BRANCH == "dev" || $CI_COMMIT_BRANCH == "master")'
+      auto_cancel:
+        on_new_commit: none
     - when: never
 
 stages:
@@ -176,6 +180,7 @@ api_ci:
 
 api_image:
   stage: image
+  interruptible: false
   image: docker:27.5.1-cli
   services:
     - name: docker:27.5.1-dind
@@ -198,6 +203,7 @@ api_image:
 
 web_image:
   stage: image
+  interruptible: false
   image: docker:27.5.1-cli
   services:
     - name: docker:27.5.1-dind
@@ -217,6 +223,7 @@ web_image:
 
 ai_image:
   stage: image
+  interruptible: false
   image: docker:27.5.1-cli
   services:
     - name: docker:27.5.1-dind
@@ -249,6 +256,7 @@ ai_image:
 deploy_dev:
   extends: .deploy_base
   stage: deploy
+  interruptible: false
   environment:
     name: staging
     url: $STAGING_URL
@@ -272,6 +280,7 @@ deploy_dev:
 deploy_prod:
   extends: .deploy_base
   stage: deploy
+  interruptible: false
   environment:
     name: production
     url: $PRODUCTION_URL

@@ -586,3 +586,27 @@
     pending-decisions #5 의 ai 잔존 항목 종결. ai 도 CI 선빌드 + ghcr push + EC2 SSH compose 흐름에 편입되어 ADR-002/005/007/014 의 패턴이 영역 무관하게 일관된다.
     Gemini API 키 없이 기동하면 `/ai/` 호출이 외부 호출 단계에서 실패하므로 첫 deploy 전 서버 `.env` 의 `GEMINI_API_KEY` 주입이 필수다.
     파일 업로드가 붙는 시점에는 API 컨테이너에도 `AWS_S3_BUCKET`, `AWS_REGION`, `AWS_S3_BASE_PREFIX`, `AWS_S3_PUBLIC_BASE_URL`, `AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY` 를 서버 `.env` 또는 GitLab CI/CD Variables 로 주입해야 한다.
+
+- id: ADR-017
+  title: dev/master 배포 파이프라인 auto-cancel 방지
+  status: adopted
+  date: 2026-05-08
+  stacks: [gitlab, ci, cd]
+  context: |
+    `.gitlab-ci.yml` 의 전역 `interruptible: true` 와 GitLab 의 auto-cancel redundant pipelines 동작이 결합되면,
+    같은 ref 에 새 pipeline 이 생성될 때 기존 pipeline 의 실행 중 job 이 취소될 수 있다.
+    이는 작업 브랜치나 MR 검증에서는 오래된 검증을 줄이는 장점이 있지만,
+    `dev` / `master` push pipeline 에서는 배포 반영 중인 image build 또는 deploy job 이 취소되어 문제가 된다.
+
+    특히 web 변경 merge 후 `web_image` 가 `:<ref-slug>` 태그를 push 하기 전에 api 변경 merge 로 새 `dev` pipeline 이 생성되면,
+    기존 web pipeline 이 취소되고 다음 deploy 가 이전 `web:dev` 이미지를 그대로 사용할 수 있다.
+    GitLab auto-cancel 은 변경 영역(web/api/ai)이 아니라 ref 단위로 동작하므로,
+    단일 pipeline 구조에서 "같은 영역 중복 pipeline 만 취소하고 다른 영역 pipeline 은 유지"를 안전하게 표현하기 어렵다.
+  decision: |
+    `workflow:auto_cancel:on_new_commit` 의 기본값은 `conservative` 로 두어 작업 브랜치와 MR pipeline 의 중복 정리는 유지한다.
+    단, `dev` / `master` push pipeline 은 `workflow:rules:auto_cancel:on_new_commit: none` 으로 지정해 새 commit 이 같은 branch 에 들어와도 자동 취소하지 않는다.
+    또한 `api_image`, `web_image`, `ai_image`, `deploy_dev`, `deploy_prod` 는 명시적으로 `interruptible: false` 를 선언한다.
+  consequence: |
+    서로 다른 영역의 변경이 같은 배포 브랜치에 연속 merge 되어도 먼저 시작된 image build/deploy 가 중간 취소되지 않는다.
+    배포 정합성은 높아지지만, 같은 영역 변경이 짧은 간격으로 중복 merge 되는 경우에도 이전 배포 pipeline 이 끝까지 실행될 수 있어 CI 사용량은 다소 늘 수 있다.
+    영역별 중복 취소가 필요해지면 web/api/ai 를 child pipeline 또는 별도 pipeline 단위로 분리하는 설계를 별도 ADR 로 검토한다.

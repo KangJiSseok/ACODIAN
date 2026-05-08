@@ -431,6 +431,10 @@ probe 라인은 원인 확정 후 동일 MR 또는 후속 MR 로 반드시 제�
 
 이렇게 해야 작업 브랜치 검증과 배포 브랜치 반영이 섞이지 않는다.
 
+`dev` / `master` push pipeline 은 배포 반영 기록이므로 새 commit 이 같은 branch 에 들어와도 auto-cancel 하지 않는다.
+GitLab auto-cancel 은 변경 영역(web/api/ai)이 아니라 ref 단위로 동작하므로, 단일 pipeline 구조에서는 "web 중복만 취소하고 api push 로 web 을 취소하지 않기" 같은 영역별 취소를 안전하게 표현할 수 없다.
+작업 브랜치와 MR pipeline 은 기존처럼 중복 pipeline 정리를 허용하되, 배포 브랜치에서는 image build 와 deploy 가 끝까지 진행되도록 둔다.
+
 ### 10-2. CI job
 
 - `web_ci`: web lint/build
@@ -442,6 +446,7 @@ probe 라인은 원인 확정 후 동일 MR 또는 후속 MR 로 반드시 제�
 
 - `api_image`: `api/Dockerfile` (컨텍스트 `api/`) 빌드 후 ghcr push, 트리거는 `.api_deploy_changes` (api 코드 + 인프라 변경 시).
 - `web_image`: `web/Dockerfile` (컨텍스트 모노레포 루트, `-f web/Dockerfile`) 빌드 후 ghcr push, 트리거는 `.web_deploy_changes` (web 코드 + 모노레포 manifest + 인프라 변경 시). ADR-014.
+- `api_image`, `web_image`, `ai_image` 는 `interruptible: false` 로 둔다. 이미지 태그(`:<sha>`, `:<ref-slug>`) push 도중 취소되면 이후 deploy 가 이전 이미지를 재사용할 수 있기 때문이다.
 
 ### 10-4. 배포 job
 
@@ -449,6 +454,7 @@ probe 라인은 원인 확정 후 동일 MR 또는 후속 MR 로 반드시 제�
 - `deploy_prod`: `master` push 시 production 배포
 
 배포 트리거(`.deploy_changes`) 는 **api/web/모노레포 manifest/infra/docs/infra/.gitlab-ci.yml 중 하나라도 변경**되면 작동한다. 변경 영역에 해당하는 이미지 job 이 함께 돌고, deploy job 은 `API_IMAGE`/`WEB_IMAGE` 두 변수를 SSH 환경변수로 같이 주입한다. 인프라-only 변경에서도 기존 `:<ref-slug>` 태그 이미지로 재배포된다.
+`deploy_dev`, `deploy_prod` 도 `interruptible: false` 로 둔다. 배포 중간 취소는 서버 상태와 GitLab pipeline 상태를 어긋나게 만들 수 있으므로 허용하지 않는다.
 
 ---
 
