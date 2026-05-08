@@ -1,104 +1,107 @@
 "use client"
 
 import Link from "next/link"
-import { teams, users, worklogs } from "../_mock/worklog.mock"
-import { formatDate, formatHours } from "../_utils/worklogFormat"
+import { formatDate, formatHours, getAiStatusLabel } from "../_utils/worklogFormat"
 import { Button } from "@/components/ui/button"
 import {
   Dialog,
   DialogContent,
-  DialogDescription,
-  DialogFooter,
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog"
-import { Separator } from "@/components/ui/separator"
 import { ImportanceBadge } from "./importanceBadge"
 import { StatusBadge } from "./statusBadge"
-import { TagList } from "./tagList"
+import { useAuth } from "@/app/_common/hooks/useAuth"
 import type { WorklogListItem } from "../_types/worklog.types"
 
 export function WorklogPreviewDialog({
   open,
   onOpenChange,
   worklog,
-  worklogId,
 }: {
   open: boolean
   onOpenChange: (open: boolean) => void
   worklog?: WorklogListItem | null
   worklogId?: number | null
 }) {
-  const mockWorklog = worklogs.find(
-    (item) => item.id === worklogId && !item.isDeleted
-  )
-  const previewWorklog = worklog ?? mockWorklog
-  const author = previewWorklog
-    ? users.find((user) => user.id === previewWorklog.authorId)
-    : undefined
-  const team = previewWorklog
-    ? teams.find((item) => item.id === previewWorklog.teamId)
-    : undefined
-  const teamName = worklog?.teamName ?? team?.name ?? "-"
-  const authorName = worklog?.authorName ?? author?.name ?? "-"
+  const { user } = useAuth()
+  const previewWorklog = worklog ?? null
+  const teamName = previewWorklog?.teamName ?? "-"
+  const authorName = previewWorklog?.authorName ?? "-"
   const actualHours = previewWorklog
     ? formatHours(previewWorklog.actualHours)
     : "-"
-  const tagIds = mockWorklog?.tagIds ?? []
+  const predecessorCount = previewWorklog?.predecessorCount ?? 0
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="worklog-root max-w-2xl rounded-[28px] p-0">
+      <DialogContent className="worklog-root max-w-3xl rounded-[28px] p-0">
         {!previewWorklog ? (
           <div className="p-6 text-sm text-muted-foreground">
             미리보기할 업무를 찾을 수 없습니다.
           </div>
         ) : (
-          <div className="space-y-5 p-6">
-            <DialogHeader>
-              <div className="mb-2 flex flex-wrap gap-2">
+          <div className="space-y-6 p-7">
+            <DialogHeader className="mb-0 gap-3">
+              <div className="flex flex-wrap items-center gap-2">
                 <StatusBadge status={previewWorklog.status} />
                 <ImportanceBadge importance={previewWorklog.importance} />
               </div>
-              <DialogTitle className="text-2xl tracking-[-0.04em]">
+              <DialogTitle className="text-[26px] tracking-[-0.05em]">
                 {previewWorklog.title}
               </DialogTitle>
-              <DialogDescription>{previewWorklog.aiSummary}</DialogDescription>
             </DialogHeader>
 
-            <Separator />
+            <div className="grid gap-6 lg:grid-cols-[1.25fr_0.75fr]">
+              <div className="space-y-4">
+                <section className="rounded-2xl border border-border/70 bg-muted/25 p-5">
+                  <p className="text-sm font-semibold text-foreground">업무 내용</p>
+                  <p className="mt-3 text-[15px] leading-7 text-muted-foreground">
+                    {previewWorklog.workContent}
+                  </p>
+                </section>
 
-            <div className="grid gap-3 text-sm sm:grid-cols-2">
-              <PreviewMeta label="팀" value={teamName} />
-              <PreviewMeta label="작성자" value={authorName} />
-              <PreviewMeta label="업무 시간" value={actualHours} />
-              <PreviewMeta
-                label="지시일"
-                value={formatDate(previewWorklog.instructionDate)}
-              />
-              <PreviewMeta label="마감일" value={formatDate(previewWorklog.dueDate)} />
+                <section className="rounded-2xl border border-border/70 bg-muted/25 p-5">
+                  <p className="text-sm font-semibold text-foreground">AI 요약</p>
+                  <p className="mt-3 text-[15px] leading-7 text-muted-foreground">
+                    {previewWorklog.aiSummary}
+                  </p>
+                </section>
+              </div>
+
+              <div className="space-y-3">
+                <InfoRow label="팀" value={teamName} />
+                <InfoRow label="작성자" value={authorName} />
+                <InfoRow label="마감일" value={formatDate(previewWorklog.dueDate)} />
+                <InfoRow label="업무시간" value={actualHours} />
+                <InfoRow label="AI 상태" value={getAiStatusLabel(previewWorklog.aiStatus)} />
+                <InfoRow label="선행 업무" value={`${predecessorCount}건`} />
+              </div>
             </div>
 
-            {tagIds.length > 0 ? (
-              <div className="space-y-2">
-                <p className="text-sm font-semibold text-foreground">태그</p>
-                <TagList tagIds={tagIds} />
-              </div>
-            ) : null}
-
-            <DialogFooter>
-              <Button variant="outline" type="button" onClick={() => onOpenChange(false)}>
+            <div className="flex flex-wrap justify-end gap-3 border-t border-border/70 pt-6">
+              <Button variant="secondary" type="button" onClick={() => onOpenChange(false)}>
                 닫기
               </Button>
-              <Button asChild>
+              <Button variant="outline" asChild>
                 <Link
                   href={`/worklog/detail/${previewWorklog.id}`}
-                  className="text-primary-foreground"
+                  onClick={() => onOpenChange(false)}
                 >
-                  상세 보기
+                  상세 페이지
                 </Link>
               </Button>
-            </DialogFooter>
+              {user?.userId === previewWorklog.authorId ? (
+                <Button asChild>
+                  <Link
+                    href={`/worklog/edit/${previewWorklog.id}`}
+                    onClick={() => onOpenChange(false)}
+                  >
+                    업무 수정
+                  </Link>
+                </Button>
+              ) : null}
+            </div>
           </div>
         )}
       </DialogContent>
@@ -106,13 +109,13 @@ export function WorklogPreviewDialog({
   )
 }
 
-function PreviewMeta({ label, value }: { label: string; value: string }) {
+function InfoRow({ label, value }: { label: string; value: string }) {
   return (
-    <div className="rounded-2xl border border-border/70 bg-muted/30 px-4 py-3">
-      <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-muted-foreground">
+    <div className="rounded-2xl border border-border/70 bg-muted/25 px-4 py-3">
+      <p className="text-[12px] font-semibold uppercase tracking-[0.16em] text-muted-foreground">
         {label}
       </p>
-      <p className="mt-1 font-medium text-foreground">{value}</p>
+      <p className="mt-1 text-[15px] font-semibold text-foreground">{value}</p>
     </div>
   )
 }
