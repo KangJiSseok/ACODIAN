@@ -12,6 +12,7 @@ import java.util.Collection;
 import java.util.List;
 import java.util.Map;
 
+import static com.ibank.axwms.global.jooq.Tables.TB_TEAM;
 import static com.ibank.axwms.global.jooq.Tables.TB_WORKLOG;
 import static com.ibank.axwms.global.jooq.Tables.TB_WORKLOG_DEPENDENCY;
 
@@ -55,6 +56,8 @@ public class WorklogDependencyJooqRepositoryImpl implements WorklogDependencyJoo
         }
         var my = TB_WORKLOG.as("my");
         var pred = TB_WORKLOG.as("pred");
+        // 선행 worklog 의 팀이 삭제된 경우 dashboard 정책상 제외 — pred 의 team JOIN 으로 가드.
+        var predTeam = TB_TEAM.as("pred_team");
 
         return dsl.select(
                         my.WORKLOG_ID,
@@ -66,6 +69,8 @@ public class WorklogDependencyJooqRepositoryImpl implements WorklogDependencyJoo
                 .from(my)
                 .join(TB_WORKLOG_DEPENDENCY).on(TB_WORKLOG_DEPENDENCY.WORKLOG_ID.eq(my.WORKLOG_ID))
                 .join(pred).on(pred.WORKLOG_ID.eq(TB_WORKLOG_DEPENDENCY.DEPENDS_ON_WORKLOG_ID))
+                .join(predTeam).on(predTeam.TEAM_ID.eq(pred.TEAM_ID)
+                        .and(predTeam.DELETED_AT.isNull()))
                 .where(my.WORKLOG_ID.in(worklogIds))
                 .and(pred.IS_DELETED.isFalse())
                 .and(pred.STATUS_CODE.ne(WorklogStatus.COMPLETED.name()))

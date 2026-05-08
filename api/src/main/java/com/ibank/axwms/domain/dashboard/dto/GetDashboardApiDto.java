@@ -10,6 +10,7 @@ import com.ibank.axwms.domain.worklog.repository.jooq.projection.AuthorCountSumm
 import com.ibank.axwms.domain.worklog.repository.jooq.projection.BlockedPredecessorRowProjection;
 import com.ibank.axwms.domain.worklog.repository.jooq.projection.DepartmentLoadProjection;
 import com.ibank.axwms.domain.worklog.repository.jooq.projection.DepartmentProgressProjection;
+import com.ibank.axwms.domain.worklog.repository.jooq.projection.MemberLoadProjection;
 import com.ibank.axwms.domain.worklog.repository.jooq.projection.ProgressProjection;
 import com.ibank.axwms.domain.worklog.repository.jooq.projection.TeamLoadProjection;
 import com.ibank.axwms.domain.worklog.repository.jooq.projection.TeamProgressProjection;
@@ -230,7 +231,38 @@ public final class GetDashboardApiDto {
             List<MemberLoad> memberWorkload,
             @Schema(description = "마감 임박 및 지연 (D-3 이내 또는 지연, 최대 10건)")
             List<WorklogBrief> imminentAndOverdue
-    ) implements Response {}
+    ) implements Response {
+
+        /**
+         * service 가 모은 5개 raw 결과 + 팀 식별 정보를 받아 TEAM_DETAIL 응답을 조립한다.
+         * completionRate 는 totalProgress.rate 와 동일 값을 그대로 노출 (UI 가 별도 표시 필요해서 중복 필드).
+         * 팀원 부하 편중 지수와 AI 성공률 계산도 여기서 수행한다.
+         */
+        public static TeamDetailDashboard of(
+                Long teamId,
+                String teamName,
+                ProgressProjection teamProgress,
+                int weeklyCompleted,
+                AiOutcomeProjection aiOutcome,
+                List<MemberLoadProjection> memberLoads,
+                List<WorklogBriefProjection> imminentAndOverdue,
+                LocalDate today
+        ) {
+            Progress progress = Progress.from(teamProgress);
+            int[] loads = memberLoads.stream().mapToInt(MemberLoadProjection::activeWorklogCount).toArray();
+            return new TeamDetailDashboard(
+                    teamId,
+                    teamName,
+                    progress,
+                    LoadBalanceIndex.balance(loads),
+                    weeklyCompleted,
+                    GetDashboardApiDto.aiSuccessRate(aiOutcome),
+                    progress.rate(),
+                    memberLoads.stream().map(MemberLoad::from).toList(),
+                    imminentAndOverdue.stream().map(p -> WorklogBrief.from(p, today)).toList()
+            );
+        }
+    }
 
     // ===== 공통/공유 record =====
 
@@ -382,5 +414,9 @@ public final class GetDashboardApiDto {
     @Schema(description = "팀원별 활성 업무 부하")
     public record MemberLoad(
             Long userId, String userName, int activeWorklogCount
-    ) {}
+    ) {
+        public static MemberLoad from(MemberLoadProjection r) {
+            return new MemberLoad(r.userId(), r.userName(), r.activeWorklogCount());
+        }
+    }
 }

@@ -1,13 +1,13 @@
 package com.ibank.axwms.domain.worklog.repository.jooq;
 
+import com.ibank.axwms.domain.organization.team.UserTeamStatus;
 import com.ibank.axwms.domain.worklog.WorklogStatus;
 import com.ibank.axwms.domain.worklog.policy.WorklogVisibilityScope;
-import com.ibank.axwms.domain.worklog.repository.jooq.projection.AiOutcomeProjection;
 import com.ibank.axwms.domain.worklog.repository.jooq.projection.AuthorCountSummaryProjection;
-import com.ibank.axwms.global.enums.AiProcessingStatus;
+import com.ibank.axwms.domain.worklog.repository.jooq.projection.DashboardScopeSummaryProjection;
 import com.ibank.axwms.domain.worklog.repository.jooq.projection.DepartmentLoadProjection;
 import com.ibank.axwms.domain.worklog.repository.jooq.projection.DepartmentProgressProjection;
-import com.ibank.axwms.domain.worklog.repository.jooq.projection.ProgressProjection;
+import com.ibank.axwms.domain.worklog.repository.jooq.projection.MemberLoadProjection;
 import com.ibank.axwms.domain.worklog.repository.jooq.projection.TeamLoadProjection;
 import com.ibank.axwms.domain.worklog.repository.jooq.projection.TeamProgressProjection;
 import com.ibank.axwms.domain.worklog.repository.jooq.projection.WorklogBriefProjection;
@@ -16,6 +16,7 @@ import com.ibank.axwms.domain.worklog.repository.jooq.projection.WorklogListProj
 import com.ibank.axwms.domain.worklog.repository.jooq.projection.WorklogSearchProjection;
 import com.ibank.axwms.domain.worklog.repository.jooq.query.WorklogPageQuery;
 import com.ibank.axwms.domain.worklog.repository.jooq.query.WorklogSearchQuery;
+import com.ibank.axwms.global.enums.AiProcessingStatus;
 import lombok.RequiredArgsConstructor;
 import org.jooq.Condition;
 import org.jooq.DSLContext;
@@ -45,7 +46,8 @@ import static com.ibank.axwms.global.jooq.Tables.TB_WORKLOG_TAG;
 @RequiredArgsConstructor
 public class WorklogJooqRepositoryImpl implements WorklogJooqRepository {
 
-    private static final String ACTIVE_USER_TEAM_STATUS = "ACTIVE";
+    // STATUS_COMPLETED 와 같은 패턴 — enum.name() 으로 정의해 enum 리네임/삭제 시 컴파일 에러로 잡히도록.
+    private static final String ACTIVE_USER_TEAM_STATUS = UserTeamStatus.ACTIVE.name();
 
     private final DSLContext dsl;
 
@@ -314,7 +316,8 @@ public class WorklogJooqRepositoryImpl implements WorklogJooqRepository {
 
     /**
      * 한 번의 SELECT 로 ME 카운트 3종 동시 집계 — 3개 별도 쿼리 → 1번으로 round-trip 절감.
-     * 같은 (author + team + is_deleted=false) 위에서 CASE WHEN 으로 갈라 sum 한다.
+     * 같은 (author + 활성 팀 + is_deleted=false) 위에서 CASE WHEN 으로 갈라 sum 한다.
+     * teamScope JOIN 으로 team.deleted_at IS NULL 가드 — 삭제 팀 worklog 는 노출 X.
      */
     @Override
     public AuthorCountSummaryProjection aggregateAuthorCounts(Long authorId, Long teamId, LocalDate completedFrom) {
@@ -334,8 +337,8 @@ public class WorklogJooqRepositoryImpl implements WorklogJooqRepository {
 
         return dsl.select(inProgress, completedSince, aiFailed)
                 .from(TB_WORKLOG)
+                .join(TB_TEAM).on(teamScope(teamId))
                 .where(TB_WORKLOG.AUTHOR_ID.eq(authorId))
-                .and(TB_WORKLOG.TEAM_ID.eq(teamId))
                 .and(TB_WORKLOG.IS_DELETED.isFalse())
                 .fetchSingle(record -> AuthorCountSummaryProjection.from(
                         record, inProgress, completedSince, aiFailed));
@@ -345,8 +348,8 @@ public class WorklogJooqRepositoryImpl implements WorklogJooqRepository {
     public List<WorklogBriefProjection> findAuthorThisWeekDue(Long authorId, Long teamId, LocalDate today, int limit) {
         return dsl.select(TB_WORKLOG.WORKLOG_ID, TB_WORKLOG.TITLE, TB_WORKLOG.STATUS_CODE, TB_WORKLOG.DUE_DATE)
                 .from(TB_WORKLOG)
+                .join(TB_TEAM).on(teamScope(teamId))
                 .where(TB_WORKLOG.AUTHOR_ID.eq(authorId))
-                .and(TB_WORKLOG.TEAM_ID.eq(teamId))
                 .and(TB_WORKLOG.IS_DELETED.isFalse())
                 .and(TB_WORKLOG.STATUS_CODE.ne(STATUS_COMPLETED))
                 .and(TB_WORKLOG.DUE_DATE.between(today, today.plusDays(7)))
@@ -361,8 +364,8 @@ public class WorklogJooqRepositoryImpl implements WorklogJooqRepository {
                 DSL.when(TB_WORKLOG.STATUS_CODE.eq(STATUS_IN_PROGRESS), 0).otherwise(1);
         return dsl.select(TB_WORKLOG.WORKLOG_ID, TB_WORKLOG.TITLE, TB_WORKLOG.STATUS_CODE, TB_WORKLOG.DUE_DATE)
                 .from(TB_WORKLOG)
+                .join(TB_TEAM).on(teamScope(teamId))
                 .where(TB_WORKLOG.AUTHOR_ID.eq(authorId))
-                .and(TB_WORKLOG.TEAM_ID.eq(teamId))
                 .and(TB_WORKLOG.IS_DELETED.isFalse())
                 .and(TB_WORKLOG.STATUS_CODE.ne(STATUS_COMPLETED))
                 .orderBy(inProgressPriority.asc(),
@@ -376,8 +379,8 @@ public class WorklogJooqRepositoryImpl implements WorklogJooqRepository {
     public List<WorklogBriefProjection> findAuthorImminentAndOverdue(Long authorId, Long teamId, LocalDate today, int limit) {
         return dsl.select(TB_WORKLOG.WORKLOG_ID, TB_WORKLOG.TITLE, TB_WORKLOG.STATUS_CODE, TB_WORKLOG.DUE_DATE)
                 .from(TB_WORKLOG)
+                .join(TB_TEAM).on(teamScope(teamId))
                 .where(TB_WORKLOG.AUTHOR_ID.eq(authorId))
-                .and(TB_WORKLOG.TEAM_ID.eq(teamId))
                 .and(TB_WORKLOG.IS_DELETED.isFalse())
                 .and(TB_WORKLOG.STATUS_CODE.ne(STATUS_COMPLETED))
                 .and(TB_WORKLOG.DUE_DATE.le(today.plusDays(3)))
@@ -389,16 +392,19 @@ public class WorklogJooqRepositoryImpl implements WorklogJooqRepository {
     @Override
     public List<Long> findIncompleteAuthorWorklogIdsBlockedByPredecessor(Long authorId, Long teamId, int limit) {
         var pred = TB_WORKLOG.as("pred");
+        var predTeam = TB_TEAM.as("pred_team");
         return dsl.select(TB_WORKLOG.WORKLOG_ID)
                 .from(TB_WORKLOG)
+                .join(TB_TEAM).on(teamScope(teamId))
                 .where(TB_WORKLOG.AUTHOR_ID.eq(authorId))
-                .and(TB_WORKLOG.TEAM_ID.eq(teamId))
                 .and(TB_WORKLOG.IS_DELETED.isFalse())
                 .and(TB_WORKLOG.STATUS_CODE.ne(STATUS_COMPLETED))
                 .and(DSL.exists(
                         DSL.selectOne()
                                 .from(TB_WORKLOG_DEPENDENCY)
                                 .join(pred).on(pred.WORKLOG_ID.eq(TB_WORKLOG_DEPENDENCY.DEPENDS_ON_WORKLOG_ID))
+                                .join(predTeam).on(predTeam.TEAM_ID.eq(pred.TEAM_ID)
+                                        .and(predTeam.DELETED_AT.isNull()))
                                 .where(TB_WORKLOG_DEPENDENCY.WORKLOG_ID.eq(TB_WORKLOG.WORKLOG_ID))
                                 .and(pred.IS_DELETED.isFalse())
                                 .and(pred.STATUS_CODE.ne(STATUS_COMPLETED))
@@ -408,10 +414,19 @@ public class WorklogJooqRepositoryImpl implements WorklogJooqRepository {
                 .fetch(record -> record.get(TB_WORKLOG.WORKLOG_ID));
     }
 
-    // ===== 대시보드 위젯 — 전사(ORG)/부서(DEPT) 집계 =====
+    // ===== 대시보드 위젯 — 전사(ORG)/부서(DEPT)/팀(TEAM) 집계 =====
 
     // STATUS_COMPLETED 와 같은 문자열이지만 컬럼이 다름 (ai_processing_status). enum 분리되어 있어 별도 상수.
     private static final String AI_STATUS_COMPLETED = AiProcessingStatus.COMPLETED.name();
+
+    /**
+     * 전사(ORG) scope — 활성 팀의 worklog 만 잡기 위한 공통 JOIN 조건.
+     * 삭제된 팀의 worklog 는 dashboard 정책상 조회 X.
+     */
+    private static Condition orgScope() {
+        return TB_TEAM.TEAM_ID.eq(TB_WORKLOG.TEAM_ID)
+                .and(TB_TEAM.DELETED_AT.isNull());
+    }
 
     /**
      * 부서 소속 팀의 worklog 만 잡기 위한 공통 JOIN 조건.
@@ -424,61 +439,52 @@ public class WorklogJooqRepositoryImpl implements WorklogJooqRepository {
     }
 
     /**
-     * 진행 현황 (완료, 전체) 동시 집계. coalesce(sum(case when …), 0) 으로 매칭 0건 시 NULL 대신 0 보장.
-     * teamJoinCondition 이 null 이면 전사 (team JOIN 없음), 아니면 부서로 좁힘.
+     * 단일 팀 의 worklog 만 잡기 위한 공통 JOIN 조건.
+     * 삭제된 팀은 service 의 lookup 단계에서 차단되지만 동시성 대비로 가드 유지.
      */
-    private ProgressProjection aggregateProgress(Condition teamJoinCondition) {
+    private static Condition teamScope(Long teamId) {
+        return TB_TEAM.TEAM_ID.eq(TB_WORKLOG.TEAM_ID)
+                .and(TB_TEAM.TEAM_ID.eq(teamId))
+                .and(TB_TEAM.DELETED_AT.isNull());
+    }
+
+    /**
+     * 한 scope 의 dashboard 스칼라 5종 (completed/total/weeklyCompleted/aiSuccess/aiFailed) 을
+     * 한 번의 SELECT 로 동시 집계. 같은 base + 다른 CASE WHEN 으로 갈라 sum — round-trip 3회 → 1회.
+     * teamJoinCondition 으로 scope 결정 — orgScope/deptScope/teamScope 모두 team.deleted_at IS NULL 가드 포함.
+     */
+    private DashboardScopeSummaryProjection aggregateScopeSummary(Condition teamJoinCondition,
+                                                                  LocalDate weeklyFrom) {
         Field<Integer> completed = DSL.coalesce(
                 DSL.sum(DSL.when(TB_WORKLOG.STATUS_CODE.eq(STATUS_COMPLETED), 1).otherwise(0)),
                 0
         ).cast(Integer.class).as("completed_count");
         Field<Integer> total = DSL.count(TB_WORKLOG.WORKLOG_ID).as("total_count");
-
-        var step = dsl.select(completed, total).from(TB_WORKLOG);
-        if (teamJoinCondition != null) {
-            step = step.join(TB_TEAM).on(teamJoinCondition);
-        }
-        return step.where(TB_WORKLOG.IS_DELETED.isFalse())
-                .fetchSingle(record -> ProgressProjection.from(record, completed, total));
-    }
-
-    /** "최근 N일 완료" 카운트. teamJoinCondition 이 null 이면 전사, 아니면 부서. */
-    private int countCompletedSince(Condition teamJoinCondition, LocalDate from) {
-        var step = dsl.selectCount().from(TB_WORKLOG);
-        if (teamJoinCondition != null) {
-            step = step.join(TB_TEAM).on(teamJoinCondition);
-        }
-        return step.where(TB_WORKLOG.IS_DELETED.isFalse())
-                .and(TB_WORKLOG.STATUS_CODE.eq(STATUS_COMPLETED))
-                .and(TB_WORKLOG.COMPLETION_DATE.ge(from))
-                .fetchSingle(0, Integer.class);
-    }
-
-    /**
-     * AI 처리 결과 (success, failed) raw 카운트. 성공률 계산은 DTO 책임 —
-     * PENDING/PROCESSING 을 분모에서 뺄지 등 분모 정의가 도메인 정책이라 repository 가 결정하지 않는다.
-     */
-    private AiOutcomeProjection aggregateAiOutcome(Condition teamJoinCondition) {
-        Field<Integer> success = DSL.coalesce(
+        Field<Integer> weeklyCompleted = DSL.coalesce(
+                DSL.sum(DSL.when(TB_WORKLOG.STATUS_CODE.eq(STATUS_COMPLETED)
+                        .and(TB_WORKLOG.COMPLETION_DATE.ge(weeklyFrom)), 1).otherwise(0)),
+                0
+        ).cast(Integer.class).as("weekly_completed_count");
+        Field<Integer> aiSuccess = DSL.coalesce(
                 DSL.sum(DSL.when(TB_WORKLOG.AI_PROCESSING_STATUS.eq(AI_STATUS_COMPLETED), 1).otherwise(0)),
                 0
-        ).cast(Integer.class).as("success_count");
-        Field<Integer> failed = DSL.coalesce(
+        ).cast(Integer.class).as("ai_success_count");
+        Field<Integer> aiFailed = DSL.coalesce(
                 DSL.sum(DSL.when(TB_WORKLOG.AI_PROCESSING_STATUS.eq(AI_STATUS_FAILED), 1).otherwise(0)),
                 0
-        ).cast(Integer.class).as("failed_count");
+        ).cast(Integer.class).as("ai_failed_count");
 
-        var step = dsl.select(success, failed).from(TB_WORKLOG);
-        if (teamJoinCondition != null) {
-            step = step.join(TB_TEAM).on(teamJoinCondition);
-        }
-        return step.where(TB_WORKLOG.IS_DELETED.isFalse())
-                .fetchSingle(record -> AiOutcomeProjection.from(record, success, failed));
+        return dsl.select(completed, total, weeklyCompleted, aiSuccess, aiFailed)
+                .from(TB_WORKLOG)
+                .join(TB_TEAM).on(teamJoinCondition)
+                .where(TB_WORKLOG.IS_DELETED.isFalse())
+                .fetchSingle(record -> DashboardScopeSummaryProjection.from(
+                        record, completed, total, weeklyCompleted, aiSuccess, aiFailed));
     }
 
     /**
-     * 마감 임박/지연 (D-3 이내, 미완료) worklog. team JOIN 은 항상 있고 (team_name 표시용),
-     * teamJoinCondition 으로 scope 결정 — 전사면 단순 매칭, 부서면 dept 필터까지.
+     * 마감 임박/지연 (D-3 이내, 미완료) worklog. team JOIN 은 항상 있고 (team_name 표시 + 활성 팀 가드),
+     * teamJoinCondition 으로 scope 결정 — orgScope/deptScope/teamScope 모두 team.deleted_at 가드 포함.
      * 부서 표시는 team.department_id 기준 — 부서별 집계 위젯과 같은 매핑이라 합이 맞는다.
      * DUE_DATE.le(today+3) 는 NULL due_date 를 자연스럽게 제외하므로 nullsLast() 정렬은 안전 가드용.
      */
@@ -511,46 +517,38 @@ public class WorklogJooqRepositoryImpl implements WorklogJooqRepository {
     // ----- 공개 API: 전사 (DEPARTMENT_COMPARISON) -----
 
     @Override
-    public ProgressProjection aggregateOrgProgress() {
-        return aggregateProgress(null);
-    }
-
-    @Override
-    public int countOrgCompletedSince(LocalDate from) {
-        return countCompletedSince(null, from);
-    }
-
-    @Override
-    public AiOutcomeProjection aggregateOrgAiOutcome() {
-        return aggregateAiOutcome(null);
+    public DashboardScopeSummaryProjection aggregateOrgSummary(LocalDate weeklyFrom) {
+        return aggregateScopeSummary(orgScope(), weeklyFrom);
     }
 
     @Override
     public List<WorklogBriefProjection> findOrgImminentAndOverdue(LocalDate today, int limit) {
-        // 전사 위젯은 모든 worklog 포함 — team JOIN 은 team_name 표시용으로만, 추가 필터 없음.
-        return findImminentAndOverdue(TB_TEAM.TEAM_ID.eq(TB_WORKLOG.TEAM_ID), today, limit);
+        // 전사 위젯은 활성 팀의 worklog 만 — orgScope 로 team.deleted_at IS NULL 가드 포함.
+        return findImminentAndOverdue(orgScope(), today, limit);
     }
 
     // ----- 공개 API: 단일 부서 (DEPARTMENT_DETAIL) -----
 
     @Override
-    public ProgressProjection aggregateDeptProgress(Long departmentId) {
-        return aggregateProgress(deptScope(departmentId));
-    }
-
-    @Override
-    public int countDeptCompletedSince(Long departmentId, LocalDate from) {
-        return countCompletedSince(deptScope(departmentId), from);
-    }
-
-    @Override
-    public AiOutcomeProjection aggregateDeptAiOutcome(Long departmentId) {
-        return aggregateAiOutcome(deptScope(departmentId));
+    public DashboardScopeSummaryProjection aggregateDeptSummary(Long departmentId, LocalDate weeklyFrom) {
+        return aggregateScopeSummary(deptScope(departmentId), weeklyFrom);
     }
 
     @Override
     public List<WorklogBriefProjection> findDeptImminentAndOverdue(Long departmentId, LocalDate today, int limit) {
         return findImminentAndOverdue(deptScope(departmentId), today, limit);
+    }
+
+    // ----- 공개 API: 단일 팀 (TEAM_DETAIL) -----
+
+    @Override
+    public DashboardScopeSummaryProjection aggregateTeamSummary(Long teamId, LocalDate weeklyFrom) {
+        return aggregateScopeSummary(teamScope(teamId), weeklyFrom);
+    }
+
+    @Override
+    public List<WorklogBriefProjection> findTeamImminentAndOverdue(Long teamId, LocalDate today, int limit) {
+        return findImminentAndOverdue(teamScope(teamId), today, limit);
     }
 
     // ----- 공개 API: 부서별 그래프 (DEPARTMENT_COMPARISON 전용, 부서 baseline) -----
@@ -601,7 +599,9 @@ public class WorklogJooqRepositoryImpl implements WorklogJooqRepository {
 
     // ----- 공개 API: 팀별 그래프 (DEPARTMENT_DETAIL 전용, 팀 baseline) -----
 
-    /** 팀 baseline LEFT JOIN — 부서 소속이지만 worklog 0 건인 팀도 (completed=0, total=0) 행으로 포함. */
+    /**
+     * 팀 baseline LEFT JOIN — 부서 소속이지만 worklog 0 건인 팀도 (completed=0, total=0) 행으로 포함.
+     */
     @Override
     public List<TeamProgressProjection> findTeamCompletionRatesInDept(Long departmentId) {
         Field<Integer> completed = DSL.coalesce(
@@ -621,7 +621,9 @@ public class WorklogJooqRepositoryImpl implements WorklogJooqRepository {
                 .fetch(record -> TeamProgressProjection.from(record, completed, total));
     }
 
-    /** 팀 baseline LEFT JOIN — 부서 소속이지만 활성 worklog 0 건인 팀도 행에 포함. */
+    /**
+     * 팀 baseline LEFT JOIN — 부서 소속이지만 활성 worklog 0 건인 팀도 행에 포함.
+     */
     @Override
     public List<TeamLoadProjection> findTeamWorkloadsInDept(Long departmentId) {
         Field<Integer> activeCount = DSL.count(TB_WORKLOG.WORKLOG_ID).as("active_count");
@@ -635,6 +637,29 @@ public class WorklogJooqRepositoryImpl implements WorklogJooqRepository {
                 .groupBy(TB_TEAM.TEAM_ID, TB_TEAM.TEAM_NAME)
                 .orderBy(TB_TEAM.TEAM_NAME.asc(), TB_TEAM.TEAM_ID.asc())
                 .fetch(record -> TeamLoadProjection.from(record, activeCount));
+    }
+
+    // ----- 공개 API: 팀의 멤버별 그래프 (TEAM_DETAIL 전용, 멤버 baseline) -----
+
+    /**
+     * 팀의 ACTIVE 멤버 baseline INNER JOIN — 활성 worklog 0 건인 멤버도 (activeWorklogCount=0) 으로 행에 포함.
+     * worklog 매칭은 author=member AND team=teamId AND 미완료 — 다른 팀에서 그 멤버가 작성한 worklog 는 제외.
+     */
+    @Override
+    public List<MemberLoadProjection> findMemberWorkloadsInTeam(Long teamId) {
+        Field<Integer> activeCount = DSL.count(TB_WORKLOG.WORKLOG_ID).as("active_count");
+        return dsl.select(TB_USER.USER_ID, TB_USER.USER_NAME, activeCount)
+                .from(TB_USER)
+                .join(TB_USER_TEAM).on(TB_USER_TEAM.USER_ID.eq(TB_USER.USER_ID)
+                        .and(TB_USER_TEAM.TEAM_ID.eq(teamId))
+                        .and(TB_USER_TEAM.STATUS_CODE.eq(ACTIVE_USER_TEAM_STATUS)))
+                .leftJoin(TB_WORKLOG).on(TB_WORKLOG.AUTHOR_ID.eq(TB_USER.USER_ID)
+                        .and(TB_WORKLOG.TEAM_ID.eq(teamId))
+                        .and(TB_WORKLOG.IS_DELETED.isFalse())
+                        .and(TB_WORKLOG.STATUS_CODE.ne(STATUS_COMPLETED)))
+                .groupBy(TB_USER.USER_ID, TB_USER.USER_NAME)
+                .orderBy(TB_USER.USER_NAME.asc(), TB_USER.USER_ID.asc())
+                .fetch(record -> MemberLoadProjection.from(record, activeCount));
     }
 
     /**
