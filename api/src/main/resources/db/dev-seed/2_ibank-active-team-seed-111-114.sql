@@ -3,12 +3,13 @@
 -- Prerequisite: tb_department and tb_user seed data already exists.
 BEGIN;
 
-INSERT INTO tb_team (team_id, team_name, status_code, description, start_date, expected_end_date, deleted_at) VALUES
-  (111, '현대자동차 부품 수급 데이터 정합성 컨설팅 TF', 'ACTIVE', '현대자동차의 부품 수급, 협력사 납기, 창고 입출고, 생산 라인 투입 데이터를 비교해 결품 위험과 납기 지연 원인을 조기에 찾는 데이터 정합성 개선안을 제시한다.', '2026-04-06', '2026-05-20', NULL),
-  (112, 'CJ대한통운 풀필먼트 알림 안정화 TF', 'ACTIVE', 'CJ대한통운 풀필먼트 고객사의 주문 접수, 피킹, 출고, 배송 추적 알림이 채널별로 다르게 발송되는 문제를 줄이고 배송 상태 알림 솔루션 개선안을 제시한다.', '2026-04-13', '2026-06-03', NULL),
-  (113, '한국콜마 B2B 수주·정산 예외 대응 TF', 'ACTIVE', '한국콜마의 B2B 고객 주문, 생산 의뢰, 출고 승인, 세금계산서, 정산 보정 과정에서 반복되는 예외를 운영 솔루션 개선안으로 정리한다.', '2026-04-27', '2026-06-17', NULL),
-  (114, 'Siemens 스마트팩토리 장애 상담 요약 품질 TF', 'ACTIVE', 'Siemens 스마트팩토리 장비 장애 상담 기록을 AI가 요약할 때 누락되는 설비명, 알람 코드, 현장 조치, 부품 교체 여부, 재발 가능성을 평가하고 품질 개선안을 제시한다.', '2026-05-04', '2026-07-01', NULL)
+INSERT INTO tb_team (team_id, department_id, team_name, status_code, description, start_date, expected_end_date, deleted_at) VALUES
+  (111, 1, '현대자동차 부품 수급 데이터 정합성 컨설팅 TF', 'ACTIVE', '현대자동차의 부품 수급, 협력사 납기, 창고 입출고, 생산 라인 투입 데이터를 비교해 결품 위험과 납기 지연 원인을 조기에 찾는 데이터 정합성 개선안을 제시한다.', '2026-04-06', '2026-05-20', NULL),
+  (112, 2, 'CJ대한통운 풀필먼트 알림 안정화 TF', 'ACTIVE', 'CJ대한통운 풀필먼트 고객사의 주문 접수, 피킹, 출고, 배송 추적 알림이 채널별로 다르게 발송되는 문제를 줄이고 배송 상태 알림 솔루션 개선안을 제시한다.', '2026-04-13', '2026-06-03', NULL),
+  (113, 3, '한국콜마 B2B 수주·정산 예외 대응 TF', 'ACTIVE', '한국콜마의 B2B 고객 주문, 생산 의뢰, 출고 승인, 세금계산서, 정산 보정 과정에서 반복되는 예외를 운영 솔루션 개선안으로 정리한다.', '2026-04-27', '2026-06-17', NULL),
+  (114, 1, 'Siemens 스마트팩토리 장애 상담 요약 품질 TF', 'ACTIVE', 'Siemens 스마트팩토리 장비 장애 상담 기록을 AI가 요약할 때 누락되는 설비명, 알람 코드, 현장 조치, 부품 교체 여부, 재발 가능성을 평가하고 품질 개선안을 제시한다.', '2026-05-04', '2026-07-01', NULL)
 ON CONFLICT (team_id) DO UPDATE SET
+  department_id = EXCLUDED.department_id,
   team_name = EXCLUDED.team_name,
   status_code = EXCLUDED.status_code,
   description = EXCLUDED.description,
@@ -22,9 +23,9 @@ SELECT v.user_id, v.team_id
 FROM (VALUES
   (2, 111),
   (1, 111),
-  (4, 112),
+  (3, 112),
   (1, 112),
-  (3, 113),
+  (4, 113),
   (1, 113),
   (2, 114),
   (1, 114)
