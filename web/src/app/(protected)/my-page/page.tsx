@@ -7,12 +7,18 @@ import {
 } from "react";
 import {
   Image as ImageIcon,
+  KeyRound,
+  LockKeyhole,
   Phone,
   UserRound,
+  type LucideIcon,
 } from "lucide-react";
 import { useAuth } from "@/app/_common/hooks/useAuth";
 import { getApiErrorMessage } from "@/app/_common/service/api-client";
-import type { UpdateMyProfilePayload } from "@/app/_common/service/auth";
+import type {
+  ChangePasswordPayload,
+  UpdateMyProfilePayload,
+} from "@/app/_common/service/auth";
 import type { AuthUser } from "@/app/_common/store/auth.store";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -35,8 +41,16 @@ interface ProfileFormValues {
   phone: string;
 }
 
+interface PasswordFormValues {
+  currentPassword: string;
+  newPassword: string;
+  newPasswordConfirm: string;
+}
+
+const PASSWORD_MISMATCH_MESSAGE = "새 비밀번호가 일치하지 않습니다.";
+
 export default function MyPage() {
-  const { user, updateMyProfile } = useAuth();
+  const { user, updateMyProfile, changePassword } = useAuth();
 
   // /users/me 응답의 팀 목록에서 대표 소속 팀 라벨을 만든다.
   const primaryTeam = user?.teams.find((team) => team.isPrimary);
@@ -140,13 +154,7 @@ export default function MyPage() {
             <p className="text-xs font-bold uppercase tracking-[0.22em] text-muted-foreground">
               비밀번호 변경
             </p>
-            {/* 비밀번호는 서버에서 내려받지 않으므로 변경 API 연결 전까지 마스킹 UI만 표시한다. */}
-            {/* 입력 필드 연결 시 새 비밀번호와 확인 값의 일치 여부를 검증한다. */}
-            <div className="mt-4 grid gap-4 md:grid-cols-2">
-              <ReadOnlyField label="현재 비밀번호" value="••••••••" />
-              <ReadOnlyField label="새 비밀번호" value="••••••••" />
-              <ReadOnlyField label="새 비밀번호 확인" value="••••••••" />
-            </div>
+            <PasswordChangeForm onChangePassword={changePassword} />
           </section>
         </div>
       </div>
@@ -159,7 +167,7 @@ function ReadOnlyField({
   label,
   value,
 }: {
-  icon?: typeof UserRound;
+  icon?: LucideIcon;
   label: string;
   value: string;
 }) {
@@ -331,6 +339,146 @@ function EditableProfileForm({
   );
 }
 
+function PasswordChangeForm({
+  onChangePassword,
+}: {
+  onChangePassword: (payload: ChangePasswordPayload) => Promise<unknown>;
+}) {
+  const [values, setValues] = useState<PasswordFormValues>({
+    currentPassword: "",
+    newPassword: "",
+    newPasswordConfirm: "",
+  });
+  const [isSaving, setIsSaving] = useState(false);
+  const [message, setMessage] = useState<{
+    type: "success" | "error";
+    text: string;
+  } | null>(null);
+  const passwordMismatch =
+    values.newPasswordConfirm.length > 0 &&
+    values.newPassword !== values.newPasswordConfirm;
+
+  function handleChange(event: ChangeEvent<HTMLInputElement>) {
+    const { name, value } = event.target;
+
+    setValues((prev) => ({
+      ...prev,
+      [name]: value,
+    }));
+    setMessage(null);
+  }
+
+  async function handleSubmit(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+
+    const { currentPassword, newPassword, newPasswordConfirm } = values;
+
+    if (
+      !currentPassword.trim() ||
+      !newPassword.trim() ||
+      !newPasswordConfirm.trim()
+    ) {
+      setMessage({
+        type: "error",
+        text: "비밀번호를 모두 입력해주세요.",
+      });
+      return;
+    }
+
+    if (newPassword !== newPasswordConfirm) {
+      setMessage({
+        type: "error",
+        text: PASSWORD_MISMATCH_MESSAGE,
+      });
+      return;
+    }
+
+    setIsSaving(true);
+    setMessage(null);
+
+    try {
+      await onChangePassword({
+        currentPassword,
+        newPassword,
+      });
+      setValues({
+        currentPassword: "",
+        newPassword: "",
+        newPasswordConfirm: "",
+      });
+      setMessage({
+        type: "success",
+        text: "비밀번호가 변경되었습니다.",
+      });
+    } catch (error) {
+      setMessage({
+        type: "error",
+        text: getApiErrorMessage(error, "비밀번호 변경에 실패했습니다."),
+      });
+    } finally {
+      setIsSaving(false);
+    }
+  }
+
+  return (
+    <form className="mt-4 space-y-4" onSubmit={handleSubmit}>
+      <div className="grid gap-4 md:grid-cols-2">
+        <div className="md:col-span-2">
+          <PasswordField
+            label="현재 비밀번호"
+            name="currentPassword"
+            value={values.currentPassword}
+            autoComplete="current-password"
+            disabled={isSaving}
+            onChange={handleChange}
+          />
+        </div>
+        <PasswordField
+          label="새 비밀번호"
+          name="newPassword"
+          value={values.newPassword}
+          autoComplete="new-password"
+          disabled={isSaving}
+          onChange={handleChange}
+        />
+        <PasswordField
+          label="새 비밀번호 확인"
+          name="newPasswordConfirm"
+          value={values.newPasswordConfirm}
+          autoComplete="new-password"
+          disabled={isSaving}
+          onChange={handleChange}
+          errorMessage={passwordMismatch ? PASSWORD_MISMATCH_MESSAGE : undefined}
+        />
+      </div>
+
+      {message ? (
+        <p
+          className={cn(
+            "rounded-2xl border px-4 py-3 text-sm font-semibold",
+            message.type === "success"
+              ? "border-emerald-400/30 bg-emerald-400/10 text-emerald-700"
+              : "border-destructive/30 bg-destructive/5 text-destructive",
+          )}
+        >
+          {message.text}
+        </p>
+      ) : null}
+
+      <div className="flex justify-end">
+        <Button
+          type="submit"
+          disabled={isSaving}
+          className="h-11 min-w-36 rounded-2xl !text-primary-foreground hover:!text-primary-foreground"
+        >
+          <KeyRound className="size-4" />
+          {isSaving ? "변경 중" : "비밀번호 변경"}
+        </Button>
+      </div>
+    </form>
+  );
+}
+
 function EditableField({
   icon: Icon,
   label,
@@ -342,7 +490,7 @@ function EditableField({
   required = false,
   onChange,
 }: {
-  icon?: typeof UserRound;
+  icon?: LucideIcon;
   label: string;
   name: keyof ProfileFormValues;
   value: string;
@@ -375,6 +523,54 @@ function EditableField({
           )}
         />
       </span>
+    </label>
+  );
+}
+
+function PasswordField({
+  label,
+  name,
+  value,
+  autoComplete,
+  disabled,
+  errorMessage,
+  onChange,
+}: {
+  label: string;
+  name: keyof PasswordFormValues;
+  value: string;
+  autoComplete: string;
+  disabled?: boolean;
+  errorMessage?: string;
+  onChange: (event: ChangeEvent<HTMLInputElement>) => void;
+}) {
+  return (
+    <label className="block">
+      <span className="mb-2 block text-sm font-bold text-foreground">
+        {label}
+      </span>
+      <span className="relative block">
+        <LockKeyhole className="pointer-events-none absolute left-4 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
+        <Input
+          name={name}
+          type="password"
+          value={value}
+          autoComplete={autoComplete}
+          onChange={onChange}
+          disabled={disabled}
+          aria-invalid={Boolean(errorMessage)}
+          className={cn(
+            "h-14 border-primary/35 bg-background pl-11 font-semibold shadow-sm focus-visible:ring-primary/30",
+            errorMessage &&
+              "border-destructive/70 focus-visible:ring-destructive/30",
+          )}
+        />
+      </span>
+      {errorMessage ? (
+        <p role="alert" className="mt-2 text-sm font-semibold text-destructive">
+          {errorMessage}
+        </p>
+      ) : null}
     </label>
   );
 }
