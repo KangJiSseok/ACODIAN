@@ -8,6 +8,7 @@ import com.ibank.axwms.domain.organization.user.UserRole;
 import com.ibank.axwms.domain.organization.user.service.UserService;
 import com.ibank.axwms.domain.worklog.repository.WorklogDependencyRepository;
 import com.ibank.axwms.domain.worklog.repository.WorklogRepository;
+import com.ibank.axwms.domain.worklog.repository.jooq.projection.DashboardScopeSummaryProjection;
 import com.ibank.axwms.global.error.BusinessException;
 import com.ibank.axwms.global.error.ErrorCode;
 import com.ibank.axwms.global.security.CustomUserPrincipal;
@@ -58,7 +59,7 @@ public class DashboardService {
             }
             case TEAM_DETAIL -> {
                 requireRoleAtLeast(principal, UserRole.TEAM_LEAD);
-                throw new UnsupportedOperationException("TEAM_DETAIL 은 다음 단계에서 구현됩니다.");
+                yield teamDetail(principal, request);
             }
         };
     }
@@ -74,7 +75,8 @@ public class DashboardService {
                                                        GetDashboardApiDto.Request request) {
         Long userId = principal.userId();
         Long teamId = request.teamId();
-        if (teamId == null || !teamService.isMember(userId, teamId)) {
+        // canAccessActiveTeam: ACTIVE 멤버이면서 팀 자체도 활성 — 두 조건 동시 검증.
+        if (teamId == null || !teamService.canAccessActiveTeam(userId, teamId)) {
             throw new BusinessException(ErrorCode.DASHBOARD_NOT_FOUND);
         }
 
@@ -119,10 +121,11 @@ public class DashboardService {
         LocalDate today = LocalDate.now();
         LocalDate weekFrom = today.minusDays(WEEKLY_DAYS);
 
+        DashboardScopeSummaryProjection summary = worklogRepository.aggregateOrgSummary(weekFrom);
         return GetDashboardApiDto.DepartmentComparisonDashboard.of(
-                worklogRepository.aggregateOrgProgress(),
-                worklogRepository.countOrgCompletedSince(weekFrom),
-                worklogRepository.aggregateOrgAiOutcome(),
+                summary.progress(),
+                summary.weeklyCompleted(),
+                summary.aiOutcome(),
                 worklogRepository.findDepartmentCompletionRates(),
                 worklogRepository.findDepartmentWorkloads(),
                 worklogRepository.findOrgImminentAndOverdue(today, LIST_LIMIT),
@@ -161,15 +164,73 @@ public class DashboardService {
         LocalDate today = LocalDate.now();
         LocalDate weekFrom = today.minusDays(WEEKLY_DAYS);
 
+        DashboardScopeSummaryProjection summary = worklogRepository.aggregateDeptSummary(departmentId, weekFrom);
         return GetDashboardApiDto.DepartmentDetailDashboard.of(
                 departmentId,
                 departmentName,
-                worklogRepository.aggregateDeptProgress(departmentId),
-                worklogRepository.countDeptCompletedSince(departmentId, weekFrom),
-                worklogRepository.aggregateDeptAiOutcome(departmentId),
+                summary.progress(),
+                summary.weeklyCompleted(),
+                summary.aiOutcome(),
                 worklogRepository.findTeamCompletionRatesInDept(departmentId),
                 worklogRepository.findTeamWorkloadsInDept(departmentId),
                 worklogRepository.findDeptImminentAndOverdue(departmentId, today, LIST_LIMIT),
+                today
+        );
+    }
+
+    // ===== TEAM_DETAIL =====
+
+    /**
+     * TEAM_LEAD 이상이 단일 팀의 상세 대시보드를 조회한다.
+     * 팀 매핑은 worklog.team_id 기준 (DEPARTMENT_DETAIL 와 정합).
+     *
+     * <p>가드 순서 — 모든 실패 케이스를 동일하게 DASHBOARD_NOT_FOUND 로 정규화 (보안 leak 방지):
+     * <ol>
+     *   <li>request.teamId 가 null 이면 NOT_FOUND</li>
+     *   <li>활성(soft-delete 안 된) 팀이 아니면 NOT_FOUND</li>
+     *   <li>TEAM_LEAD 인 경우 자기가 ACTIVE 멤버인 팀이 아니면 NOT_FOUND</li>
+     *   <li>DEPT_HEAD 인 경우 그 팀의 부서가 자기 부서가 아니면 NOT_FOUND</li>
+     *   <li>DIRECTOR 는 모든 팀 통과</li>
+     * </ol>
+     * 권한 검증을 통과한 후 5개 raw 결과를 모아 DTO 의 of() 가 부하 편중 지수/AI 성공률 계산과 nested 변환을 수행.
+     */
+    private GetDashboardApiDto.TeamDetailDashboard teamDetail(CustomUserPrincipal principal,
+                                                              GetDashboardApiDto.Request request) {
+        Long teamId = request.teamId();
+        if (teamId == null) {
+            throw new BusinessException(ErrorCode.DASHBOARD_NOT_FOUND);
+        }
+        String teamName = teamService.findActiveTeamName(teamId)
+                .orElseThrow(() -> new BusinessException(ErrorCode.DASHBOARD_NOT_FOUND));
+
+        UserRole role = parseRole(principal);
+        if (role == UserRole.TEAM_LEAD) {
+            // TEAM_LEAD 는 본인이 ACTIVE 멤버인 팀만 — 다른 팀 탐색 차단
+            if (!teamService.isMember(principal.userId(), teamId)) {
+                throw new BusinessException(ErrorCode.DASHBOARD_NOT_FOUND);
+            }
+        } else if (role == UserRole.DEPT_HEAD) {
+            // DEPT_HEAD 는 본인 부서 소속 팀만
+            Long teamDeptId = teamService.findActiveTeamDepartmentId(teamId)
+                    .orElseThrow(() -> new BusinessException(ErrorCode.DASHBOARD_NOT_FOUND));
+            if (!Objects.equals(teamDeptId, userService.getDepartmentIdOrThrow(principal.userId()))) {
+                throw new BusinessException(ErrorCode.DASHBOARD_NOT_FOUND);
+            }
+        }
+        // DIRECTOR 는 모든 팀 통과
+
+        LocalDate today = LocalDate.now();
+        LocalDate weekFrom = today.minusDays(WEEKLY_DAYS);
+
+        DashboardScopeSummaryProjection summary = worklogRepository.aggregateTeamSummary(teamId, weekFrom);
+        return GetDashboardApiDto.TeamDetailDashboard.of(
+                teamId,
+                teamName,
+                summary.progress(),
+                summary.weeklyCompleted(),
+                summary.aiOutcome(),
+                worklogRepository.findMemberWorkloadsInTeam(teamId),
+                worklogRepository.findTeamImminentAndOverdue(teamId, today, LIST_LIMIT),
                 today
         );
     }

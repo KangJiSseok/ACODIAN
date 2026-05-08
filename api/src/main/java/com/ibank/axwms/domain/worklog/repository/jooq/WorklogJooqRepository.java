@@ -1,11 +1,11 @@
 package com.ibank.axwms.domain.worklog.repository.jooq;
 
 import com.ibank.axwms.domain.worklog.policy.WorklogVisibilityScope;
-import com.ibank.axwms.domain.worklog.repository.jooq.projection.AiOutcomeProjection;
 import com.ibank.axwms.domain.worklog.repository.jooq.projection.AuthorCountSummaryProjection;
+import com.ibank.axwms.domain.worklog.repository.jooq.projection.DashboardScopeSummaryProjection;
 import com.ibank.axwms.domain.worklog.repository.jooq.projection.DepartmentLoadProjection;
 import com.ibank.axwms.domain.worklog.repository.jooq.projection.DepartmentProgressProjection;
-import com.ibank.axwms.domain.worklog.repository.jooq.projection.ProgressProjection;
+import com.ibank.axwms.domain.worklog.repository.jooq.projection.MemberLoadProjection;
 import com.ibank.axwms.domain.worklog.repository.jooq.projection.TeamLoadProjection;
 import com.ibank.axwms.domain.worklog.repository.jooq.projection.TeamProgressProjection;
 import com.ibank.axwms.domain.worklog.repository.jooq.projection.WorklogBriefProjection;
@@ -65,16 +65,20 @@ public interface WorklogJooqRepository {
      */
     List<Long> findVisibleTeamIds(WorklogVisibilityScope scope);
 
-    // ----- 대시보드 DEPARTMENT_COMPARISON 위젯용 -----
+    // ----- 대시보드 위젯 — 전사/부서/팀 스칼라 집계 (한 SELECT 통합) -----
+    // 5개 스칼라 (completed/total/weeklyCompleted/aiSuccess/aiFailed) 를 같은 base 위에서 한 번의 SELECT 로 집계.
+    // round-trip 3회 → 1회. 같은 base + 다른 CASE WHEN 분기로 결합.
 
-    /** 전사 (완료, 전체) worklog 카운트. */
-    ProgressProjection aggregateOrgProgress();
+    /** 전사 dashboard 스칼라 집계 (DEPARTMENT_COMPARISON 위젯용). */
+    DashboardScopeSummaryProjection aggregateOrgSummary(LocalDate weeklyFrom);
 
-    /** 전사 COMPLETED worklog 중 completion_date >= from 인 것의 수. */
-    int countOrgCompletedSince(LocalDate from);
+    /** 부서 dashboard 스칼라 집계 (DEPARTMENT_DETAIL 위젯용). 부서 매핑 = team.department_id. */
+    DashboardScopeSummaryProjection aggregateDeptSummary(Long departmentId, LocalDate weeklyFrom);
 
-    /** 전사 AI 처리 결과 (COMPLETED, FAILED) 카운트. */
-    AiOutcomeProjection aggregateOrgAiOutcome();
+    /** 팀 dashboard 스칼라 집계 (TEAM_DETAIL 위젯용). */
+    DashboardScopeSummaryProjection aggregateTeamSummary(Long teamId, LocalDate weeklyFrom);
+
+    // ----- 대시보드 DEPARTMENT_COMPARISON 위젯 — 부서별 그래프 + 임박 목록 -----
 
     /**
      * 부서별 진행 현황. 부서 매핑은 worklog → tb_team → tb_team.department_id 기준
@@ -95,18 +99,7 @@ public interface WorklogJooqRepository {
      */
     List<WorklogBriefProjection> findOrgImminentAndOverdue(LocalDate today, int limit);
 
-    // ----- 대시보드 DEPARTMENT_DETAIL 위젯용 -----
-    // 부서 매핑은 worklog.team_id → tb_team.department_id 기준 (전사 비교의 author 기반과 다름).
-    // "이 부서가 직접 소유한 팀의 worklog" 라는 의미이며, GET /departments/{id}/detail 의 ownership 정의와 일치한다.
-
-    /** 부서 소속 팀들의 worklog (완료, 전체) 카운트. */
-    ProgressProjection aggregateDeptProgress(Long departmentId);
-
-    /** 부서 소속 팀들의 COMPLETED worklog 중 completion_date >= from 인 것의 수. */
-    int countDeptCompletedSince(Long departmentId, LocalDate from);
-
-    /** 부서 소속 팀들의 AI 처리 결과 (COMPLETED, FAILED) 카운트. */
-    AiOutcomeProjection aggregateDeptAiOutcome(Long departmentId);
+    // ----- 대시보드 DEPARTMENT_DETAIL 위젯 — 팀별 그래프 + 임박 목록 -----
 
     /**
      * 부서 소속 팀별 진행 현황. worklog 가 0 건인 팀도 행에 포함된다 (LEFT JOIN, 그래프 누락 방지).
@@ -122,4 +115,15 @@ public interface WorklogJooqRepository {
 
     /** 부서 소속 팀들의 마감 임박/지연 (D-3 이내, 미완료) 위젯용. 작성자/팀/부서 이름까지 함께. */
     List<WorklogBriefProjection> findDeptImminentAndOverdue(Long departmentId, LocalDate today, int limit);
+
+    // ----- 대시보드 TEAM_DETAIL 위젯 — 멤버별 그래프 + 임박 목록 -----
+
+    /** 팀의 마감 임박/지연 (D-3 이내, 미완료) 위젯용. 작성자/팀/부서 이름까지 함께. */
+    List<WorklogBriefProjection> findTeamImminentAndOverdue(Long teamId, LocalDate today, int limit);
+
+    /**
+     * 팀의 ACTIVE 멤버별 활성(미완료) worklog 수. 멤버 baseline INNER JOIN — ACTIVE 멤버는 모두 행에 포함.
+     * worklog 가 0 건인 멤버도 (activeWorklogCount=0) 으로 포함된다 (Gini 계산 정확성 위해).
+     */
+    List<MemberLoadProjection> findMemberWorkloadsInTeam(Long teamId);
 }
