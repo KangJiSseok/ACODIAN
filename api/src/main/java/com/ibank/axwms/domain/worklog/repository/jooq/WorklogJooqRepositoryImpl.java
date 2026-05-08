@@ -119,10 +119,16 @@ public class WorklogJooqRepositoryImpl implements WorklogJooqRepository {
                         TB_WORKLOG.TITLE,
                         TB_WORKLOG.REQUEST_CONTENT,
                         TB_WORKLOG.WORK_CONTENT,
+                        TB_WORKLOG.AI_SUMMARY,
+                        TB_WORKLOG.AI_SUMMARY_EDITED,
+                        TB_WORKLOG.AI_PROCESSING_STATUS,
                         TB_WORKLOG.STATUS_CODE,
+                        TB_WORKLOG.IMPORTANCE_CODE,
                         TB_WORKLOG.ACTUAL_HOURS,
                         TB_WORKLOG.INSTRUCTION_DATE,
-                        TB_WORKLOG.DUE_DATE
+                        TB_WORKLOG.DUE_DATE,
+                        TB_WORKLOG.CREATED_AT,
+                        TB_WORKLOG.UPDATED_AT
                 )
                 .from(TB_WORKLOG)
                 .join(TB_TEAM).on(TB_WORKLOG.TEAM_ID.eq(TB_TEAM.TEAM_ID))
@@ -175,7 +181,10 @@ public class WorklogJooqRepositoryImpl implements WorklogJooqRepository {
         List<WorklogSearchProjection> items = dsl.select(
                         TB_WORKLOG.WORKLOG_ID,
                         TB_WORKLOG.TITLE,
+                        TB_WORKLOG.WORK_CONTENT,
+                        TB_WORKLOG.ACTUAL_HOURS,
                         TB_WORKLOG.AI_SUMMARY,
+                        TB_WORKLOG.AI_SUMMARY_EDITED,
                         TB_WORKLOG.STATUS_CODE,
                         TB_WORKLOG.IMPORTANCE_CODE,
                         TB_WORKLOG.AI_PROCESSING_STATUS,
@@ -222,7 +231,10 @@ public class WorklogJooqRepositoryImpl implements WorklogJooqRepository {
         return dsl.select(
                         TB_WORKLOG.WORKLOG_ID,
                         TB_WORKLOG.TITLE,
+                        TB_WORKLOG.WORK_CONTENT,
+                        TB_WORKLOG.ACTUAL_HOURS,
                         TB_WORKLOG.AI_SUMMARY,
+                        TB_WORKLOG.AI_SUMMARY_EDITED,
                         TB_WORKLOG.STATUS_CODE,
                         TB_WORKLOG.IMPORTANCE_CODE,
                         TB_WORKLOG.AI_PROCESSING_STATUS,

@@ -34,14 +34,26 @@ public final class GetWorklogDetailApiDto {
             String requestContent,
             @Schema(description = "실제 수행 업무 내용")
             String workContent,
+            @Schema(description = "AI 업무일지 요약 내용")
+            String aiSummary,
+            @Schema(description = "AI 업무일지 수정 유무")
+            Boolean aiSummaryEdited,
+            @Schema(description = "AI 파이프라인 상태")
+            String aiProcessingStatus,
             @Schema(description = "업무 상태 코드", example = "IN_PROGRESS")
             String statusCode,
+            @Schema(description = "업무 중요도 코드", example = "HIGH")
+            String importanceCode,
             @Schema(description = "실제 소요 시간(시간.분)", example = "3.10")
             BigDecimal actualHours,
             @Schema(description = "업무 지시 일자")
             LocalDate instructionDate,
             @Schema(description = "업무 마감 일자")
             LocalDate dueDate,
+            @Schema(description = "업무일지 생성일자")
+            LocalDateTime createdAt,
+            @Schema(description = "업무일지 마지막 수정일자")
+            LocalDateTime updatedAt,
             @Schema(description = "첨부 파일 목록")
             List<FileItem> files,
             @Schema(description = "태그 이름 목록", example = "[\"결산\", \"보고서\"]")
@@ -52,6 +64,9 @@ public final class GetWorklogDetailApiDto {
             List<StatusHistoryItem> statusHistories
     ) {
 
+        /**
+         * 본문 projection 과 부가 목록 조회 결과를 상세조회 API 응답 계약으로 조립한다.
+         */
         public static Response of(
                 WorklogDetailProjection detail,
                 List<WorklogFileProjection> files,
@@ -68,10 +83,16 @@ public final class GetWorklogDetailApiDto {
                     detail.title(),
                     detail.requestContent(),
                     detail.workContent(),
+                    detail.aiSummary(),
+                    detail.aiSummaryEdited(),
+                    detail.aiProcessingStatus(),
                     detail.statusCode(),
+                    detail.importanceCode(),
                     detail.actualHours(),
                     detail.instructionDate(),
                     detail.dueDate(),
+                    detail.createdAt(),
+                    detail.updatedAt(),
                     files.stream().map(FileItem::from).toList(),
                     tags,
                     dependencies.stream().map(DependencyItem::from).toList(),

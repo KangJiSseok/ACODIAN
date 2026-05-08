@@ -10,6 +10,7 @@ import io.swagger.v3.oas.annotations.media.Schema;
 import jakarta.validation.constraints.Max;
 import jakarta.validation.constraints.Min;
 import jakarta.validation.constraints.Size;
+import java.math.BigDecimal;
 import java.time.LocalDate;
 import lombok.AccessLevel;
 import lombok.NoArgsConstructor;
@@ -74,8 +75,14 @@ public final class SearchWorklogsApiDto {
                 Long worklogId,
                 @Schema(description = "업무 제목", example = "4월 결산 보고서 작성")
                 String title,
+                @Schema(description = "업무 수행 내용")
+                String workContent,
+                @Schema(description = "실제 소요 시간(시간.분)", example = "3.10")
+                BigDecimal actualHours,
                 @Schema(description = "AI 요약")
                 String aiSummary,
+                @Schema(description = "AI 업무일지 수정 유무")
+                Boolean aiSummaryEdited,
                 @Schema(description = "업무 상태 코드", example = "IN_PROGRESS")
                 String statusCode,
                 @Schema(description = "업무 중요도 코드", example = "HIGH")
@@ -104,7 +111,10 @@ public final class SearchWorklogsApiDto {
                 return new Item(
                         projection.worklogId(),
                         projection.title(),
+                        projection.workContent(),
+                        projection.actualHours(),
                         projection.aiSummary(),
+                        projection.aiSummaryEdited(),
                         projection.statusCode(),
                         projection.importanceCode(),
                         projection.aiProcessingStatus(),
