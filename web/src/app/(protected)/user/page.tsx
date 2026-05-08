@@ -15,6 +15,7 @@ import {
 } from "lucide-react";
 import { Pagination } from "@/app/_common/components/data-display/pagination";
 import PageHeader from "@/app/_common/components/layout/pageHeader";
+import { selectAuthUser, useAuthStore } from "@/app/_common/store/auth.store";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { CardContent } from "@/components/ui/card";
@@ -28,31 +29,52 @@ import {
   getEmploymentStatusBadgeVariant,
   getEmploymentStatusLabel,
 } from "./_utils/userStatus.utils";
+import {
+  canUseUserDepartmentFilter,
+  resolveUserListDepartmentId,
+} from "./_utils/userAccess.utils";
 
 const ALL_FILTER_VALUE = "all";
 const USER_PAGE_SIZE = 4;
 
 export default function UserPage() {
+  const currentUser = useAuthStore(selectAuthUser);
   const [query, setQuery] = useState("");
   const [showFilters, setShowFilters] = useState(false);
   const [departmentId, setDepartmentId] = useState(ALL_FILTER_VALUE);
   const [positionName, setPositionName] = useState(ALL_FILTER_VALUE);
   const [employmentStatus, setEmploymentStatus] = useState(ALL_FILTER_VALUE);
   const [page, setPage] = useState(1);
+  const canUseDepartmentFilter = canUseUserDepartmentFilter(currentUser);
+  const scopedDepartmentId = resolveUserListDepartmentId(
+    currentUser,
+    departmentId,
+    ALL_FILTER_VALUE,
+  );
 
   const userListParams = useMemo<GetUsersParams>(
     () => ({
       page,
       pageSize: USER_PAGE_SIZE,
       userName: query.trim() || undefined,
-      departmentId:
-        departmentId === ALL_FILTER_VALUE ? undefined : Number(departmentId),
+      departmentId: scopedDepartmentId,
       positionName:
         positionName === ALL_FILTER_VALUE ? undefined : positionName,
       employmentStatus:
         employmentStatus === ALL_FILTER_VALUE ? undefined : employmentStatus,
     }),
-    [departmentId, employmentStatus, page, positionName, query],
+    [employmentStatus, page, positionName, query, scopedDepartmentId],
+  );
+  const filterListParams = useMemo<GetUsersParams>(
+    () => ({
+      pageSize: 100,
+      departmentId: resolveUserListDepartmentId(
+        currentUser,
+        ALL_FILTER_VALUE,
+        ALL_FILTER_VALUE,
+      ),
+    }),
+    [currentUser],
   );
 
   const {
@@ -61,9 +83,15 @@ export default function UserPage() {
     error,
     refetch,
   } = useUserList(userListParams);
-  const { data: filterUserPage } = useUserList({ pageSize: 100 });
-  const users = userPage?.items ?? [];
-  const filterSourceUsers = filterUserPage?.items ?? users;
+  const { data: filterUserPage } = useUserList(filterListParams);
+  const users = useMemo(
+    () => dedupeUsersById(userPage?.items ?? []),
+    [userPage?.items],
+  );
+  const filterSourceUsers = useMemo(
+    () => dedupeUsersById(filterUserPage?.items ?? users),
+    [filterUserPage?.items, users],
+  );
 
   const filterOptions = useMemo(
     () => buildFilterOptions(filterSourceUsers),
@@ -168,19 +196,21 @@ export default function UserPage() {
                 </div>
 
                 <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
-                  <FilterField label="부서">
-                    <Select
-                      aria-label="부서 필터"
-                      value={departmentId}
-                      onChange={(event) =>
-                        updateDepartmentId(event.target.value)
-                      }
-                      options={[
-                        { label: "전체 부서", value: ALL_FILTER_VALUE },
-                        ...filterOptions.departments,
-                      ]}
-                    />
-                  </FilterField>
+                  {canUseDepartmentFilter ? (
+                    <FilterField label="부서">
+                      <Select
+                        aria-label="부서 필터"
+                        value={departmentId}
+                        onChange={(event) =>
+                          updateDepartmentId(event.target.value)
+                        }
+                        options={[
+                          { label: "전체 부서", value: ALL_FILTER_VALUE },
+                          ...filterOptions.departments,
+                        ]}
+                      />
+                    </FilterField>
+                  ) : null}
                   <FilterField label="직급">
                     <Select
                       aria-label="직급 필터"
@@ -393,6 +423,19 @@ function FilterField({
       {children}
     </div>
   );
+}
+
+function dedupeUsersById(users: UserSummary[]) {
+  const seenUserIds = new Set<number>();
+
+  return users.filter((user) => {
+    if (seenUserIds.has(user.userId)) {
+      return false;
+    }
+
+    seenUserIds.add(user.userId);
+    return true;
+  });
 }
 
 function buildFilterOptions(users: UserSummary[]) {
