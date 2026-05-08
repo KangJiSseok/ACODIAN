@@ -70,6 +70,23 @@ const employmentStatusOptions: SelectOption[] = [
   { value: "RETIRED", label: "퇴사" },
 ];
 
+const positionOptions: SelectOption[] = [
+  { value: "사원", label: "사원" },
+  { value: "대리", label: "대리" },
+  { value: "과장", label: "과장" },
+  { value: "차장", label: "차장" },
+  { value: "부장", label: "부장" },
+  { value: "상무", label: "상무" },
+  { value: "이사", label: "이사" },
+];
+
+const titleOptions: SelectOption[] = [
+  { value: "본부장", label: "본부장" },
+  { value: "사업부장", label: "사업부장" },
+  { value: "팀장", label: "팀장" },
+  { value: "팀원", label: "팀원" },
+];
+
 const skillLevelOptions: SelectOption[] = [1, 2, 3, 4, 5].map((level) => ({
   value: String(level),
   label: `Lv.${level}`,
@@ -188,6 +205,14 @@ function ProfileTab({
     () => buildDepartmentOptions(user, departments),
     [departments, user],
   );
+  const userPositionOptions = useMemo(
+    () => buildOptionsWithCurrentValue(positionOptions, values.positionName),
+    [values.positionName],
+  );
+  const userTitleOptions = useMemo(
+    () => buildOptionsWithCurrentValue(titleOptions, values.titleName),
+    [values.titleName],
+  );
   const otherTeams = useMemo(
     () => user.teams.filter((team) => !team.isPrimary),
     [user.teams],
@@ -258,17 +283,19 @@ function ProfileTab({
             onChange={handleChange}
             disabled={isSaving || departmentOptions.length === 0}
           />
-          <EditableField
+          <SelectField
             label="직급"
             name="positionName"
             value={values.positionName}
+            options={userPositionOptions}
             onChange={handleChange}
             disabled={isSaving}
           />
-          <EditableField
+          <SelectField
             label="직책"
             name="titleName"
             value={values.titleName}
+            options={userTitleOptions}
             onChange={handleChange}
             disabled={isSaving}
           />
@@ -739,36 +766,6 @@ function ReadOnlyField({
   );
 }
 
-function EditableField({
-  label,
-  name,
-  value,
-  type = "text",
-  disabled = false,
-  onChange,
-}: {
-  label: string;
-  name: keyof UserDetailFormValues;
-  value: string;
-  type?: string;
-  disabled?: boolean;
-  onChange: (event: ChangeEvent<HTMLInputElement>) => void;
-}) {
-  return (
-    <label className="space-y-2">
-      <span className="text-sm font-semibold text-foreground">{label}</span>
-      <Input
-        name={name}
-        type={type}
-        value={value}
-        disabled={disabled}
-        onChange={onChange}
-        className="h-14 bg-input/80 font-medium"
-      />
-    </label>
-  );
-}
-
 function SelectField({
   label,
   name,
@@ -903,6 +900,22 @@ function buildDepartmentOptions(
   }
 
   return options;
+}
+
+function buildOptionsWithCurrentValue(
+  options: SelectOption[],
+  currentValue: string,
+) {
+  const trimmedValue = currentValue.trim();
+
+  if (
+    !trimmedValue ||
+    options.some((option) => option.value === trimmedValue)
+  ) {
+    return options;
+  }
+
+  return [{ value: trimmedValue, label: trimmedValue }, ...options];
 }
 
 function buildTeamOptionLabel(team: UserDetailType["teams"][number]) {
