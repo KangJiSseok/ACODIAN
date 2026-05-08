@@ -26,8 +26,19 @@ test("current user profile update is wired to PATCH /users/me", () => {
   assert.match(useAuthHook, /updateMyProfile,?/);
 });
 
+test("current user password update is wired to PATCH /auth/change-password without confirmation payload", () => {
+  assert.match(authService, /export interface ChangePasswordPayload/);
+  assert.match(authService, /export async function changePassword/);
+  assert.match(authService, /apiClient\.patch<EmptyResponse,\s*ChangePasswordPayload>\(\s*"\/auth\/change-password"/);
+  assert.match(authService, /currentPassword:\s*payload\.currentPassword/);
+  assert.match(authService, /newPassword:\s*payload\.newPassword/);
+  assert.doesNotMatch(authService, /passwordConfirm/);
+  assert.match(useAuthHook, /changePassword as changePasswordRequest/);
+  assert.match(useAuthHook, /changePassword,?/);
+});
+
 test("my page exposes editable profile form fields and keeps organization data read-only", () => {
-  assert.match(myPage, /const \{ user, updateMyProfile \} = useAuth\(\)/);
+  assert.match(myPage, /const \{ user, updateMyProfile, changePassword \} = useAuth\(\)/);
   assert.match(myPage, /<form[^>]+onSubmit=\{handleSubmit\}/);
   assert.match(myPage, /name="userName"/);
   assert.match(myPage, /name="email"/);
@@ -38,6 +49,32 @@ test("my page exposes editable profile form fields and keeps organization data r
   assert.doesNotMatch(myPage, /name="departmentId"/);
   assert.doesNotMatch(myPage, /name="titleName"/);
   assert.doesNotMatch(myPage, /name="employmentStatus"/);
+});
+
+test("my page exposes editable password fields and validates confirmation only on the frontend", () => {
+  assert.match(myPage, /function PasswordChangeForm/);
+  assert.match(myPage, /onChangePassword=\{changePassword\}/);
+  assert.match(myPage, /name="currentPassword"/);
+  assert.match(myPage, /name="newPassword"/);
+  assert.match(myPage, /name="newPasswordConfirm"/);
+  assert.match(myPage, /새 비밀번호가 일치하지 않습니다/);
+  assert.match(myPage, /newPasswordConfirm:\s*""/);
+  assert.match(myPage, /await onChangePassword\(\{\s*currentPassword,\s*newPassword,\s*\}\)/);
+  assert.doesNotMatch(myPage, /<ReadOnlyField label="현재 비밀번호"/);
+});
+
+test("my page keeps new password and confirmation fields on the same desktop row", () => {
+  assert.match(
+    myPage,
+    /<div className="grid gap-4 md:grid-cols-2">\s*<div className="md:col-span-2">\s*<PasswordField[\s\S]+name="currentPassword"[\s\S]+<\/div>\s*<PasswordField[\s\S]+name="newPassword"[\s\S]+<PasswordField[\s\S]+name="newPasswordConfirm"/,
+  );
+});
+
+test("my page shows password confirmation mismatch feedback while typing", () => {
+  assert.match(myPage, /const passwordMismatch =[\s\S]+values\.newPasswordConfirm\.length > 0[\s\S]+values\.newPassword !== values\.newPasswordConfirm/);
+  assert.match(myPage, /errorMessage=\{passwordMismatch \? PASSWORD_MISMATCH_MESSAGE : undefined\}/);
+  assert.match(myPage, /aria-invalid=\{Boolean\(errorMessage\)\}/);
+  assert.match(myPage, /role="alert"[\s\S]+\{errorMessage\}/);
 });
 
 test("my page avoids duplicated read-only HR summary panel", () => {

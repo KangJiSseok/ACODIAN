@@ -9,11 +9,13 @@ import {
   useAuthStore,
 } from "@/app/_common/store/auth.store";
 import {
+  changePassword as changePasswordRequest,
   login as loginRequest,
   logout as logoutRequest,
   refreshSession as refreshSessionRequest,
   signup as signupRequest,
   updateMyProfile as updateMyProfileRequest,
+  type ChangePasswordPayload,
   type LoginCredentials,
   type SignupPayload,
   type UpdateMyProfilePayload,
@@ -65,6 +67,11 @@ export function useAuth() {
     return updateMyProfileRequest(payload);
   }, []);
 
+  /* 내 비밀번호 변경 */
+  const changePassword = useCallback((payload: ChangePasswordPayload) => {
+    return changePasswordRequest(payload);
+  }, []);
+
   /* 7. 화면에서 사용할 값 반환 */
   return {
     status,
@@ -76,6 +83,7 @@ export function useAuth() {
     refreshSession,
     signup,
     updateMyProfile,
+    changePassword,
     setStatus,
     setAccessToken,
     setUser,

@@ -42,6 +42,12 @@ export interface UpdateMyProfilePayload {
 }
 // 현재 로그인한 사용자 프로필 수정 데이터
 
+export interface ChangePasswordPayload {
+  currentPassword: string;
+  newPassword: string;
+}
+// 현재 로그인한 사용자 비밀번호 변경 데이터
+
 /* 3. 로그인 */
 export async function login(credentials: LoginCredentials) {
   useAuthStore.getState().setStatus("loading");
@@ -184,7 +190,20 @@ export async function updateMyProfile(payload: UpdateMyProfilePayload) {
   return user;
 }
 
-/* 7. 현재 사용자 조회 helper */
+/* 8. 내 비밀번호 변경 */
+export async function changePassword(payload: ChangePasswordPayload) {
+  const request: ChangePasswordPayload = {
+    currentPassword: payload.currentPassword,
+    newPassword: payload.newPassword,
+  };
+
+  return apiClient.patch<EmptyResponse, ChangePasswordPayload>(
+    "/auth/change-password",
+    request,
+  );
+}
+
+/* 9. 현재 사용자 조회 helper */
 async function fetchCurrentUser() {
   return apiClient.get<AuthUser>("/users/me");
   // 현재 로그인한 사용자 정보를 조회합니다.
