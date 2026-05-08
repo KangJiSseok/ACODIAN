@@ -8,10 +8,10 @@ import {
 test("재직 상태 코드를 한글 라벨로 변환한다", () => {
   assert.equal(getEmploymentStatusLabel("ACTIVE"), "재직");
   assert.equal(getEmploymentStatusLabel("LEAVE"), "휴직");
+  assert.equal(getEmploymentStatusLabel("RETIRED"), "퇴사");
 });
 
 test("알 수 없는 재직 상태는 원본 값을 유지한다", () => {
-  assert.equal(getEmploymentStatusLabel("RETIRED"), "RETIRED");
   assert.equal(getEmploymentStatusLabel("UNKNOWN"), "UNKNOWN");
   assert.equal(getEmploymentStatusLabel(null), "-");
 });
