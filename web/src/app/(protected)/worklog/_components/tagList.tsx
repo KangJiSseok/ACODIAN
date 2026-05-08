@@ -3,15 +3,30 @@ import { getTagSourceBadgeClass } from "../_utils/tagBadge"
 import { Badge } from "@/components/ui/badge"
 import { cn } from "@/lib/utils"
 
-export function TagList({ tagIds }: { tagIds: number[] }) {
+export function TagList({
+  tagIds,
+  tagNames,
+}: {
+  tagIds: number[]
+  tagNames?: string[]
+}) {
   const selectedTags = tags.filter((tag) => tagIds.includes(tag.id))
 
-  if (selectedTags.length === 0) {
+  if (selectedTags.length === 0 && (!tagNames || tagNames.length === 0)) {
     return <p className="text-sm text-muted-foreground">연결된 태그가 없습니다.</p>
   }
 
   return (
     <div className="flex flex-wrap gap-2">
+      {tagNames?.map((tagName) => (
+        <Badge
+          key={tagName}
+          variant="outline"
+          className="rounded-full px-3 py-1.5"
+        >
+          #{tagName}
+        </Badge>
+      ))}
       {selectedTags.map((tag) => (
         <Badge
           key={tag.id}

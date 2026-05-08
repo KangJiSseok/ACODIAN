@@ -1,4 +1,6 @@
-import { users } from "../_mock/worklog.mock"
+"use client"
+
+import { type ReactNode, useState } from "react"
 import type { Worklog, WorklogStatus } from "../_types/worklog.types"
 import { AiSummaryCard } from "./aiSummaryCard"
 import { DependencyGraph } from "./dependencyGraph"
@@ -9,20 +11,27 @@ import { StatusHistory } from "./statusHistory"
 import { StatusTransition } from "./statusTransition"
 import { TagList } from "./tagList"
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
+import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { formatDate, formatDateTime, formatHours } from "../_utils/worklogFormat"
+import { ChevronDown } from "lucide-react"
 
 export function WorklogDetail({
   worklog,
   canTransition = false,
   onTransition = async () => {},
   transitionNotice,
+  transitionDisabledMessage,
 }: {
   worklog: Worklog | null
   canTransition?: boolean
   onTransition?: (nextStatus: WorklogStatus, reason: string) => Promise<void>
   transitionNotice?: string
+  transitionDisabledMessage?: string
 }) {
+  const [isStatusTransitionOpen, setIsStatusTransitionOpen] = useState(false)
+  const [isStatusHistoryOpen, setIsStatusHistoryOpen] = useState(false)
+
   if (!worklog) {
     return (
       <Card className="rounded-[28px]">
@@ -33,10 +42,12 @@ export function WorklogDetail({
     )
   }
 
-  const author = users.find((user) => user.id === worklog.authorId)
+  const authorName = worklog.authorName ?? "-"
+  const createdAt = worklog.createdAt ? formatDateTime(worklog.createdAt) : "-"
+  const updatedAt = worklog.updatedAt ? formatDateTime(worklog.updatedAt) : "-"
 
   return (
-    <div className="grid gap-6 xl:grid-cols-[1.15fr_0.85fr]">
+    <div className="grid gap-6 xl:grid-cols-[minmax(0,1.55fr)_minmax(320px,0.65fr)]">
       <div className="space-y-6">
         <Card>
           <CardHeader className="pb-4">
@@ -50,14 +61,17 @@ export function WorklogDetail({
                   <CardTitle className="text-2xl tracking-[-0.04em]">
                     {worklog.title}
                   </CardTitle>
-                  <p className="max-w-4xl text-sm leading-7 text-muted-foreground">
-                    {worklog.requestContent || "상위 요청/지시 내용이 아직 입력되지 않았습니다."}
-                  </p>
                 </div>
               </div>
             </div>
           </CardHeader>
           <CardContent className="space-y-4 border-t border-border/70 pt-4">
+            <section>
+              <p className="text-sm font-medium">요청 내용</p>
+              <p className="mt-2 text-sm leading-7 text-muted-foreground">
+                {worklog.requestContent || "상위 요청/지시 내용이 아직 입력되지 않았습니다."}
+              </p>
+            </section>
             <section>
               <p className="text-sm font-medium">업무 내용</p>
               <p className="mt-2 text-sm leading-7 text-muted-foreground">
@@ -67,7 +81,7 @@ export function WorklogDetail({
             <section>
               <p className="text-sm font-medium">메타 태그</p>
               <div className="mt-2">
-                <TagList tagIds={worklog.tagIds} />
+                <TagList tagIds={worklog.tagIds} tagNames={worklog.tagNames} />
               </div>
             </section>
           </CardContent>
@@ -80,18 +94,10 @@ export function WorklogDetail({
             <CardTitle>첨부 파일</CardTitle>
           </CardHeader>
           <CardContent>
-            <FileAttachment fileIds={worklog.fileIds} />
+            <FileAttachment fileIds={worklog.fileIds} files={worklog.fileItems} />
           </CardContent>
         </Card>
 
-        <Card>
-          <CardHeader>
-            <CardTitle>선행 업무</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <DependencyGraph dependencyIds={worklog.dependencyIds} />
-          </CardContent>
-        </Card>
       </div>
 
       <div className="space-y-6">
@@ -100,18 +106,18 @@ export function WorklogDetail({
             <CardTitle>작성자 및 일정</CardTitle>
           </CardHeader>
           <CardContent className="space-y-4">
-            {author ? (
-              <div className="flex items-center gap-3 rounded-xl bg-muted/40 p-4">
-                <Avatar className="size-11">
-                  <AvatarImage src={author.profileImage} alt={author.name} />
-                  <AvatarFallback>{author.name.slice(0, 1)}</AvatarFallback>
-                </Avatar>
-                <div>
-                  <p className="font-medium">{author.name}</p>
-                  <p className="text-sm text-muted-foreground">{author.title}</p>
-                </div>
+            <div className="flex items-center gap-3 rounded-xl bg-muted/40 p-4">
+              <Avatar className="size-11">
+                <AvatarImage src="" alt={authorName} />
+                <AvatarFallback>{authorName.slice(0, 1)}</AvatarFallback>
+              </Avatar>
+              <div>
+                <p className="font-medium">{authorName}</p>
+                <p className="text-sm text-muted-foreground">
+                  {worklog.teamName ?? "-"}
+                </p>
               </div>
-            ) : null}
+            </div>
             <div className="grid gap-3">
               <InfoRow label="지시일" value={formatDate(worklog.instructionDate)} />
               <InfoRow label="마감일" value={formatDate(worklog.dueDate)} />
@@ -124,38 +130,49 @@ export function WorklogDetail({
                 label="AI 수동 편집"
                 value={worklog.aiSummaryEdited ? "사용자 수정 완료" : "자동 생성 유지"}
               />
-              <InfoRow label="생성일" value={formatDateTime(worklog.createdAt)} />
-              <InfoRow label="수정일" value={formatDateTime(worklog.updatedAt)} />
+              <InfoRow label="생성일" value={createdAt} />
+              <InfoRow label="수정일" value={updatedAt} />
             </div>
           </CardContent>
         </Card>
 
         <Card>
           <CardHeader>
-            <CardTitle>상태 변경</CardTitle>
+            <CardTitle>선행 업무</CardTitle>
           </CardHeader>
-          <CardContent className="space-y-3">
-            <StatusTransition
-              worklog={worklog}
-              canTransition={canTransition}
-              onTransition={onTransition}
+          <CardContent>
+            <DependencyGraph
+              dependencyIds={worklog.dependencyIds}
+              dependencies={worklog.dependOnWorklogs}
             />
-            {transitionNotice ? (
-              <div className="rounded-xl border border-warning/40 bg-warning/10 px-4 py-3 text-sm text-[color:var(--warning)]">
-                {transitionNotice}
-              </div>
-            ) : null}
           </CardContent>
         </Card>
 
-        <Card>
-          <CardHeader>
-            <CardTitle>상태 이력</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <StatusHistory worklog={worklog} />
-          </CardContent>
-        </Card>
+        <CollapsibleCard
+          title="상태 변경"
+          open={isStatusTransitionOpen}
+          onOpenChange={setIsStatusTransitionOpen}
+        >
+          <StatusTransition
+            worklog={worklog}
+            canTransition={canTransition}
+            onTransition={onTransition}
+            disabledMessage={transitionDisabledMessage}
+          />
+          {transitionNotice ? (
+            <div className="rounded-xl border border-warning/40 bg-warning/10 px-4 py-3 text-sm text-[color:var(--warning)]">
+              {transitionNotice}
+            </div>
+          ) : null}
+        </CollapsibleCard>
+
+        <CollapsibleCard
+          title="상태 이력"
+          open={isStatusHistoryOpen}
+          onOpenChange={setIsStatusHistoryOpen}
+        >
+          <StatusHistory worklog={worklog} />
+        </CollapsibleCard>
       </div>
     </div>
   )
@@ -169,5 +186,42 @@ function InfoRow({ label, value }: { label: string; value: string }) {
       <span className="text-muted-foreground">{label}</span>
       <span className="text-right font-medium">{value}</span>
     </div>
+  )
+}
+
+function CollapsibleCard({
+  title,
+  open,
+  onOpenChange,
+  children,
+}: {
+  title: string
+  open: boolean
+  onOpenChange: (open: boolean) => void
+  children: ReactNode
+}) {
+  return (
+    <Card>
+      <CardHeader className="flex flex-row items-center justify-between gap-3">
+        <CardTitle>{title}</CardTitle>
+        <Button
+          type="button"
+          variant="ghost"
+          size="icon"
+          aria-expanded={open}
+          aria-label={`${title} ${open ? "접기" : "펼치기"}`}
+          onClick={() => onOpenChange(!open)}
+        >
+          <ChevronDown
+            className={`size-4 transition-transform ${open ? "rotate-180" : ""}`}
+          />
+        </Button>
+      </CardHeader>
+      {open ? (
+        <CardContent className="space-y-3">
+          {children}
+        </CardContent>
+      ) : null}
+    </Card>
   )
 }

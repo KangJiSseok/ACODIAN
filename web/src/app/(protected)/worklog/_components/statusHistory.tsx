@@ -26,7 +26,10 @@ export function StatusHistory({ worklog }: { worklog: Worklog }) {
               </span>
             </div>
             <p className="mt-2 text-muted-foreground">
-              변경자: {users.find((user) => user.id === history.changedBy)?.name ?? "-"}
+              변경자:{" "}
+              {history.changedByName ??
+                users.find((user) => user.id === history.changedBy)?.name ??
+                "-"}
             </p>
             <p className="mt-1 text-muted-foreground">사유: {history.reason}</p>
           </div>
