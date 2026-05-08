@@ -2,6 +2,7 @@
 
 import { useParams } from "next/navigation";
 import PageHeader from "@/app/_common/components/layout/pageHeader";
+import { useDepartmentList } from "../../../department/_hooks";
 import UserDetail from "../../_components/userDetail";
 import {
   useUserDetail,
@@ -16,6 +17,7 @@ export default function UserDetailPage() {
   const { data: skills, isLoading: isSkillsLoading } = useUserSkills(userId);
   const { data: evaluations, isLoading: isEvaluationsLoading } =
     useUserEvaluations(userId);
+  const { data: departments } = useDepartmentList();
 
   return (
     <section className="space-y-6">
@@ -45,6 +47,7 @@ export default function UserDetailPage() {
       {user ? (
         <UserDetail
           user={user}
+          departments={departments?.departments ?? []}
           skills={skills?.skills ?? []}
           evaluations={evaluations?.items ?? []}
           isSkillsLoading={isSkillsLoading}
