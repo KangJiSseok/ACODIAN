@@ -99,3 +99,6 @@ ops:
   - id: OPS-018
     rule: 'Nginx 배포의 sudoers 권한은 deploy user 의 `/etc/sudoers.d/axwms-deploy` 에 NOPASSWD 로 다음 5개 명령만 등록한다 — `/usr/bin/install -o root -g root -m 0644 /tmp/axwms.conf /etc/nginx/sites-available/axwms.conf`, `/usr/bin/install -o root -g root -m 0644 /tmp/proxy-headers.conf /etc/nginx/snippets/proxy-headers.conf`, `/usr/bin/mkdir -p /etc/nginx/snippets`, `/usr/sbin/nginx -t`, `/usr/bin/systemctl reload nginx`. `ALL=(ALL) NOPASSWD: ALL` 같은 광역 부여를 사용하지 않는다(권한 최소화). 등록 후 `sudo visudo -c` 로 문법 검증을 수행한 증거를 운영 기록에 남긴다. 근거는 ADR-015.'
     stacks: [nginx, ec2, security]
+  - id: OPS-019
+    rule: '`dev` / `master` push pipeline 은 배포 반영 기록이므로 GitLab auto-cancel 대상에서 제외한다. `api_image`, `web_image`, `ai_image`, `deploy_dev`, `deploy_prod` 는 명시적으로 `interruptible: false` 를 선언해 image tag push 또는 deploy 중간 취소를 방지한다. 작업 브랜치와 MR pipeline 의 중복 취소는 허용하되, 영역별(web/api/ai) 중복 취소 최적화가 필요하면 child pipeline 또는 별도 pipeline 분리를 별도 ADR 로 검토한다. 근거는 ADR-017.'
+    stacks: [gitlab, ci, cd]
