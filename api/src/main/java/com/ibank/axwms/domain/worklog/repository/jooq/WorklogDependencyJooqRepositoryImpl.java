@@ -1,5 +1,6 @@
 package com.ibank.axwms.domain.worklog.repository.jooq;
 
+import com.ibank.axwms.domain.worklog.WorklogStatus;
 import com.ibank.axwms.domain.worklog.repository.jooq.projection.BlockedPredecessorRowProjection;
 import com.ibank.axwms.domain.worklog.repository.jooq.projection.WorklogDependencyProjection;
 import lombok.RequiredArgsConstructor;
@@ -67,7 +68,7 @@ public class WorklogDependencyJooqRepositoryImpl implements WorklogDependencyJoo
                 .join(pred).on(pred.WORKLOG_ID.eq(TB_WORKLOG_DEPENDENCY.DEPENDS_ON_WORKLOG_ID))
                 .where(my.WORKLOG_ID.in(worklogIds))
                 .and(pred.IS_DELETED.isFalse())
-                .and(pred.STATUS_CODE.ne("COMPLETED"))
+                .and(pred.STATUS_CODE.ne(WorklogStatus.COMPLETED.name()))
                 .orderBy(my.WORKLOG_ID.asc(), pred.WORKLOG_ID.asc())
                 .fetch(record -> BlockedPredecessorRowProjection.from(record, my, pred));
     }

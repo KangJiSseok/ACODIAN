@@ -6,10 +6,13 @@ import com.fasterxml.jackson.annotation.JsonTypeInfo;
 import com.ibank.axwms.domain.dashboard.DashboardScope;
 import com.ibank.axwms.domain.dashboard.util.LoadBalanceIndex;
 import com.ibank.axwms.domain.worklog.repository.jooq.projection.AiOutcomeProjection;
+import com.ibank.axwms.domain.worklog.repository.jooq.projection.AuthorCountSummaryProjection;
 import com.ibank.axwms.domain.worklog.repository.jooq.projection.BlockedPredecessorRowProjection;
 import com.ibank.axwms.domain.worklog.repository.jooq.projection.DepartmentLoadProjection;
 import com.ibank.axwms.domain.worklog.repository.jooq.projection.DepartmentProgressProjection;
 import com.ibank.axwms.domain.worklog.repository.jooq.projection.ProgressProjection;
+import com.ibank.axwms.domain.worklog.repository.jooq.projection.TeamLoadProjection;
+import com.ibank.axwms.domain.worklog.repository.jooq.projection.TeamProgressProjection;
 import com.ibank.axwms.domain.worklog.repository.jooq.projection.WorklogBriefProjection;
 import io.swagger.v3.oas.annotations.media.Schema;
 import jakarta.validation.constraints.NotNull;
@@ -22,9 +25,20 @@ import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 
 @NoArgsConstructor(access = AccessLevel.PRIVATE)
 public final class GetDashboardApiDto {
+
+    /**
+     * AI 성공률 분모는 (COMPLETED + FAILED) 즉 처리 시도가 끝난 것만 본다.
+     * PENDING/PROCESSING 같은 미처리 worklog 는 의도적으로 분모에서 제외 — 처리 종료 시점 기준 성공률을 의미.
+     * DEPARTMENT_COMPARISON / DEPARTMENT_DETAIL 양쪽에서 같은 정의로 재사용된다.
+     */
+    static double aiSuccessRate(AiOutcomeProjection row) {
+        int processed = row.success() + row.failed();
+        return processed == 0 ? 0.0 : (double) row.success() / processed;
+    }
 
     @Schema(description = "대시보드 조회 요청 DTO")
     public record Request(
@@ -33,7 +47,7 @@ public final class GetDashboardApiDto {
             DashboardScope scope,
             @Schema(description = "scope=DEPARTMENT_DETAIL 일 때 필수", example = "1")
             Long departmentId,
-            @Schema(description = "scope=TEAM_DETAIL 일 때 필수", example = "21")
+            @Schema(description = "scope=ME 또는 TEAM_DETAIL 일 때 필수. ME 의 경우 본인이 ACTIVE 멤버인 팀이어야 한다.", example = "21")
             Long teamId
     ) {}
 
@@ -73,14 +87,14 @@ public final class GetDashboardApiDto {
     ) implements Response {
 
         /**
-         * service 가 모은 raw projection 과 카운트를 받아 ME 대시보드 응답을 조립한다.
-         * worklog brief 변환은 같은 today 기준으로 수행되고, blocked 는 service 가 두 repository 호출이
+         * service 가 모은 raw projection 들을 받아 ME 대시보드 응답을 조립한다.
+         * 카운트 3종은 단일 SELECT 의 AuthorCountSummaryProjection 으로 묶어 받고,
+         * worklog brief 변환은 같은 today 기준으로 수행. blocked 는 service 가 두 repository 호출이
          * 필요해 미리 조립해서 넘긴다.
          */
         public static MyDashboard of(
-                int inProgressCount,
-                LocalDate periodFrom, LocalDate periodTo, int completedCount,
-                int aiFailedCount,
+                AuthorCountSummaryProjection counts,
+                LocalDate periodFrom, LocalDate periodTo,
                 List<WorklogBriefProjection> thisWeekDue,
                 List<WorklogBriefProjection> todayItems,
                 List<WorklogBriefProjection> imminentAndOverdue,
@@ -88,9 +102,9 @@ public final class GetDashboardApiDto {
                 LocalDate today
         ) {
             return new MyDashboard(
-                    inProgressCount,
-                    CompletedInPeriod.of(periodFrom, periodTo, completedCount),
-                    aiFailedCount,
+                    counts.inProgressCount(),
+                    CompletedInPeriod.of(periodFrom, periodTo, counts.completedSinceCount()),
+                    counts.aiFailedCount(),
                     thisWeekDue.stream().map(p -> WorklogBrief.from(p, today)).toList(),
                     todayItems.stream().map(p -> WorklogBrief.from(p, today)).toList(),
                     imminentAndOverdue.stream().map(p -> WorklogBrief.from(p, today)).toList(),
@@ -135,20 +149,11 @@ public final class GetDashboardApiDto {
                     Progress.from(orgProgress),
                     LoadBalanceIndex.balance(loads),
                     weeklyCompleted,
-                    aiSuccessRate(aiOutcome),
+                    GetDashboardApiDto.aiSuccessRate(aiOutcome),
                     deptProgresses.stream().map(DepartmentCompletionRate::from).toList(),
                     deptLoads.stream().map(DepartmentLoad::from).toList(),
                     imminentAndOverdue.stream().map(p -> WorklogBrief.from(p, today)).toList()
             );
-        }
-
-        /**
-         * AI 성공률 분모는 (COMPLETED + FAILED) 즉 처리 시도가 끝난 것만 본다.
-         * PENDING/PROCESSING 같은 미처리 worklog 는 의도적으로 분모에서 제외 — 처리 종료 시점 기준 성공률을 의미.
-         */
-        private static double aiSuccessRate(AiOutcomeProjection row) {
-            int processed = row.success() + row.failed();
-            return processed == 0 ? 0.0 : (double) row.success() / processed;
         }
     }
 
@@ -172,7 +177,38 @@ public final class GetDashboardApiDto {
             List<TeamLoad> teamWorkload,
             @Schema(description = "마감 임박 및 지연 (D-3 이내 또는 지연, 최대 10건)")
             List<WorklogBrief> imminentAndOverdue
-    ) implements Response {}
+    ) implements Response {
+
+        /**
+         * service 가 모은 6개 raw 결과 + 부서 식별 정보를 받아 DEPARTMENT_DETAIL 응답을 조립한다.
+         * 부서 매핑은 worklog → tb_team → tb_team.department_id 기준 (DEPARTMENT_COMPARISON 과 동일 정의).
+         * 팀 부하 편중 지수와 AI 성공률 계산도 여기서 수행한다.
+         */
+        public static DepartmentDetailDashboard of(
+                Long departmentId,
+                String departmentName,
+                ProgressProjection deptProgress,
+                int weeklyCompleted,
+                AiOutcomeProjection aiOutcome,
+                List<TeamProgressProjection> teamProgresses,
+                List<TeamLoadProjection> teamLoads,
+                List<WorklogBriefProjection> imminentAndOverdue,
+                LocalDate today
+        ) {
+            int[] loads = teamLoads.stream().mapToInt(TeamLoadProjection::activeWorklogCount).toArray();
+            return new DepartmentDetailDashboard(
+                    departmentId,
+                    departmentName,
+                    Progress.from(deptProgress),
+                    LoadBalanceIndex.balance(loads),
+                    weeklyCompleted,
+                    GetDashboardApiDto.aiSuccessRate(aiOutcome),
+                    teamProgresses.stream().map(TeamCompletionRate::from).toList(),
+                    teamLoads.stream().map(TeamLoad::from).toList(),
+                    imminentAndOverdue.stream().map(p -> WorklogBrief.from(p, today)).toList()
+            );
+        }
+    }
 
     @Schema(description = "단일 팀 상세 대시보드 응답")
     public record TeamDetailDashboard(
@@ -264,8 +300,8 @@ public final class GetDashboardApiDto {
     ) {
         /**
          * (myWorklogId, predecessor) 페어 행들을 myWorklogId 기준으로 그룹핑한다.
-         * myIds 순서를 유지하기 위해 LinkedHashMap 으로 indexed 한 뒤 매칭된 것만 반환.
-         * predecessor 가 0 건인 myId 는 결과에서 제외된다.
+         * myIds 순서를 그대로 유지하되, predecessor 매칭이 0 건인 myId 는 결과에서 빠진다
+         * (LinkedHashMap 으로 myIds 순서를 보존, null 값은 stream filter 단계에서 제외).
          */
         public static List<BlockedWorklog> fromRows(List<Long> myIds, List<BlockedPredecessorRowProjection> rows) {
             Map<Long, BlockedWorklog> indexed = new LinkedHashMap<>();
@@ -283,7 +319,7 @@ public final class GetDashboardApiDto {
                     existing.predecessors().add(PredecessorBrief.from(row));
                 }
             }
-            return indexed.values().stream().filter(v -> v != null).toList();
+            return indexed.values().stream().filter(Objects::nonNull).toList();
         }
     }
 
@@ -325,12 +361,23 @@ public final class GetDashboardApiDto {
     public record TeamCompletionRate(
             Long teamId, String teamName,
             int completed, int total, double rate
-    ) {}
+    ) {
+        /** worklog 가 0 건인 팀도 LEFT JOIN 으로 행에 포함되므로 total=0 인 행은 rate=0.0 으로 안전 표현. */
+        public static TeamCompletionRate from(TeamProgressProjection r) {
+            double rate = r.total() == 0 ? 0.0 : (double) r.completed() / r.total();
+            return new TeamCompletionRate(r.teamId(), r.teamName(),
+                    r.completed(), r.total(), rate);
+        }
+    }
 
     @Schema(description = "팀별 활성 업무 부하")
     public record TeamLoad(
             Long teamId, String teamName, int activeWorklogCount
-    ) {}
+    ) {
+        public static TeamLoad from(TeamLoadProjection r) {
+            return new TeamLoad(r.teamId(), r.teamName(), r.activeWorklogCount());
+        }
+    }
 
     @Schema(description = "팀원별 활성 업무 부하")
     public record MemberLoad(

@@ -2,7 +2,14 @@ package com.ibank.axwms.domain.dashboard.service;
 
 import com.ibank.axwms.domain.dashboard.DashboardScope;
 import com.ibank.axwms.domain.dashboard.dto.GetDashboardApiDto;
+import com.ibank.axwms.domain.organization.department.DepartmentStatus;
+import com.ibank.axwms.domain.organization.department.entity.Department;
+import com.ibank.axwms.domain.organization.department.repository.DepartmentRepository;
+import com.ibank.axwms.domain.organization.team.UserTeamStatus;
+import com.ibank.axwms.domain.organization.team.repository.UserTeamRepository;
 import com.ibank.axwms.domain.organization.user.UserRole;
+import com.ibank.axwms.domain.organization.user.entity.User;
+import com.ibank.axwms.domain.organization.user.repository.UserRepository;
 import com.ibank.axwms.domain.worklog.repository.WorklogDependencyRepository;
 import com.ibank.axwms.domain.worklog.repository.WorklogRepository;
 import com.ibank.axwms.global.error.BusinessException;
@@ -26,6 +33,9 @@ public class DashboardService {
 
     private final WorklogRepository worklogRepository;
     private final WorklogDependencyRepository worklogDependencyRepository;
+    private final DepartmentRepository departmentRepository;
+    private final UserRepository userRepository;
+    private final UserTeamRepository userTeamRepository;
 
     /**
      * scope 디스크리미네이터에 따라 4가지 응답 중 하나를 반환한다.
@@ -35,14 +45,16 @@ public class DashboardService {
                                                     GetDashboardApiDto.Request request) {
         DashboardScope scope = request.scope();
         return switch (scope) {
-            case ME -> myDashboard(principal);
+            // ME 는 role 가드 없음 — 자기 데이터만 조회. 단 teamId 와 팀 멤버십은 service 안에서 검증.
+            case ME -> myDashboard(principal, request);
+            // 전사 비교는 director 전용 (exact match) — 더 상위 role 이 추가되면 명시적으로 허용 결정 필요.
             case DEPARTMENT_COMPARISON -> {
                 requireRole(principal, UserRole.DIRECTOR);
                 yield departmentComparison();
             }
             case DEPARTMENT_DETAIL -> {
                 requireRoleAtLeast(principal, UserRole.DEPT_HEAD);
-                throw new UnsupportedOperationException("DEPARTMENT_DETAIL 은 다음 단계에서 구현됩니다.");
+                yield departmentDetail(principal, request);
             }
             case TEAM_DETAIL -> {
                 requireRoleAtLeast(principal, UserRole.TEAM_LEAD);
@@ -53,30 +65,43 @@ public class DashboardService {
 
     // ===== ME =====
 
-    private GetDashboardApiDto.MyDashboard myDashboard(CustomUserPrincipal principal) {
+    /**
+     * teamId 가 null 이거나 사용자가 그 팀의 ACTIVE 멤버가 아니면 DASHBOARD_NOT_FOUND.
+     * 멤버 확인 후 (author = me) AND (team = teamId) 두 조건으로 좁혀 ME 위젯 데이터 조회.
+     * 다중 팀 사용자는 team 별로 별도 호출 (request.teamId 변경) 해서 본다.
+     */
+    private GetDashboardApiDto.MyDashboard myDashboard(CustomUserPrincipal principal,
+                                                       GetDashboardApiDto.Request request) {
         Long userId = principal.userId();
+        Long teamId = request.teamId();
+        if (teamId == null) {
+            throw new BusinessException(ErrorCode.DASHBOARD_NOT_FOUND);
+        }
+        if (!userTeamRepository.existsByUserIdAndTeamIdAndStatusCode(userId, teamId, UserTeamStatus.ACTIVE)) {
+            throw new BusinessException(ErrorCode.DASHBOARD_NOT_FOUND);
+        }
+
         LocalDate today = LocalDate.now();
         LocalDate periodFrom = today.minusDays(COMPLETED_PERIOD_DAYS);
 
         return GetDashboardApiDto.MyDashboard.of(
-                worklogRepository.countAuthorInProgress(userId),
-                periodFrom, today, worklogRepository.countAuthorCompletedSince(userId, periodFrom),
-                worklogRepository.countAuthorAiFailed(userId),
-                worklogRepository.findAuthorThisWeekDue(userId, today, LIST_LIMIT),
-                worklogRepository.findAuthorTodayItems(userId, LIST_LIMIT),
-                worklogRepository.findAuthorImminentAndOverdue(userId, today, LIST_LIMIT),
-                blockedByPredecessors(userId),
+                worklogRepository.aggregateAuthorCounts(userId, teamId, periodFrom),
+                periodFrom, today,
+                worklogRepository.findAuthorThisWeekDue(userId, teamId, today, LIST_LIMIT),
+                worklogRepository.findAuthorTodayItems(userId, teamId, LIST_LIMIT),
+                worklogRepository.findAuthorImminentAndOverdue(userId, teamId, today, LIST_LIMIT),
+                blockedByPredecessors(userId, teamId),
                 today
         );
     }
 
     /**
      * 두 repository (worklog, dependency) 호출을 묶어 BlockedWorklog 그룹핑 입력을 준비한다.
-     * grouping 과 응답 record 조립은 BlockedWorklog.fromRows 가 담당.
-     * 쿼리 수: 2개 (limit 와 무관, N+1 없음).
+     * 본인 worklog 만 (author + team) 으로 좁히고 선행 worklog 는 다른 팀일 수 있다.
+     * grouping 과 응답 record 조립은 BlockedWorklog.fromRows 가 담당. 쿼리 수: 2개 (limit 와 무관, N+1 없음).
      */
-    private List<GetDashboardApiDto.BlockedWorklog> blockedByPredecessors(Long userId) {
-        List<Long> myIds = worklogRepository.findIncompleteAuthorWorklogIdsBlockedByPredecessor(userId, LIST_LIMIT);
+    private List<GetDashboardApiDto.BlockedWorklog> blockedByPredecessors(Long userId, Long teamId) {
+        List<Long> myIds = worklogRepository.findIncompleteAuthorWorklogIdsBlockedByPredecessor(userId, teamId, LIST_LIMIT);
         if (myIds.isEmpty()) {
             return List.of();
         }
@@ -108,6 +133,53 @@ public class DashboardService {
         );
     }
 
+
+    // ===== DEPARTMENT_DETAIL =====
+
+    /**
+     * DEPT_HEAD 또는 DIRECTOR 가 단일 부서의 상세 대시보드를 조회한다.
+     * 부서 매핑은 worklog → tb_team → tb_team.department_id 기준 (DEPARTMENT_COMPARISON 과 동일 정의).
+     *
+     * <p>가드 순서 — 모든 실패 케이스를 동일하게 DASHBOARD_NOT_FOUND 로 정규화해 자원 존재 여부 leak 을 막는다:
+     * <ol>
+     *   <li>request.departmentId 가 null 이면 NOT_FOUND</li>
+     *   <li>활성(ACTIVE) 부서가 아니면 NOT_FOUND (없거나 INACTIVE)</li>
+     *   <li>DEPT_HEAD 인 경우 자기 부서가 아니면 NOT_FOUND (DIRECTOR 는 모든 부서 통과)</li>
+     * </ol>
+     * 권한 검증을 통과한 후 6개 raw 결과를 모아 DTO 의 of() 가 부하 편중 지수/AI 성공률 계산과 nested 변환을 수행.
+     */
+    private GetDashboardApiDto.DepartmentDetailDashboard departmentDetail(CustomUserPrincipal principal,
+                                                                          GetDashboardApiDto.Request request) {
+        Long departmentId = request.departmentId();
+        if (departmentId == null) {
+            throw new BusinessException(ErrorCode.DASHBOARD_NOT_FOUND);
+        }
+        Department department = departmentRepository.findByIdAndStatusCode(departmentId, DepartmentStatus.ACTIVE)
+                .orElseThrow(() -> new BusinessException(ErrorCode.DASHBOARD_NOT_FOUND));
+
+        if (parseRole(principal) == UserRole.DEPT_HEAD) {
+            User me = userRepository.findById(principal.userId())
+                    .orElseThrow(() -> new BusinessException(ErrorCode.AUTH_ACCESS_DENIED));
+            if (!departmentId.equals(me.getDepartmentId())) {
+                throw new BusinessException(ErrorCode.DASHBOARD_NOT_FOUND);
+            }
+        }
+
+        LocalDate today = LocalDate.now();
+        LocalDate weekFrom = today.minusDays(WEEKLY_DAYS);
+
+        return GetDashboardApiDto.DepartmentDetailDashboard.of(
+                departmentId,
+                department.getDepartmentName(),
+                worklogRepository.aggregateDeptProgress(departmentId),
+                worklogRepository.countDeptCompletedSince(departmentId, weekFrom),
+                worklogRepository.aggregateDeptAiOutcome(departmentId),
+                worklogRepository.findTeamCompletionRatesInDept(departmentId),
+                worklogRepository.findTeamWorkloadsInDept(departmentId),
+                worklogRepository.findDeptImminentAndOverdue(departmentId, today, LIST_LIMIT),
+                today
+        );
+    }
 
     // ===== 권한 검증 =====
 
