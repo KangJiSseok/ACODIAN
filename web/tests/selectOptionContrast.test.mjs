@@ -41,6 +41,11 @@ test("shared Select options do not force dark theme foreground into native popup
   assert.doesNotMatch(selectComponent, /option[^]*var\(--foreground\)/);
 });
 
+test("shared Select gives duplicate option values unique React keys", () => {
+  assert.match(selectComponent, /options\.map\(\(option, index\) =>/);
+  assert.match(selectComponent, /key=\{`\$\{option\.value\}-\$\{index\}`\}/);
+});
+
 test("organization forms use the same shared select sizing as worklog form", () => {
   for (const source of [departmentForm, teamForm, teamMemberSearchDialog]) {
     assert.match(source, /from "@\/components\/ui\/select"/);
