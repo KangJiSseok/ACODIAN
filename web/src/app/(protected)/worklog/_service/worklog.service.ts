@@ -21,6 +21,8 @@ import type {
   ImportanceLevel,
   SearchWorklogsParams,
   Worklog,
+  WorklogDetailApiResponse,
+  WorklogDetailStatusHistoryItem,
   WorklogFilterOptions,
   WorklogFormValues,
   WorklogListApiItem,
@@ -62,8 +64,8 @@ function toWorklogListItem(item: WorklogListApiItem): WorklogListItem {
     id: item.worklogId,
     title: item.title,
     status: worklogStatusCodeMap[item.statusCode] ?? "PENDING",
-    workContent: item.workContent,
-    actualHours: Number(item.actualHours),
+    workContent: item.workContent ?? "",
+    actualHours: toNumber(item.actualHours),
     importance: importanceCodeMap[item.importanceCode] ?? "NORMAL",
     aiSummary,
     aiStatus: aiProcessingStatusCodeMap[item.aiProcessingStatus] ?? "PENDING",
@@ -85,12 +87,12 @@ function toSearchedWorklogListItem(item: WorklogSearchApiItem): WorklogListItem 
     id: item.worklogId,
     title: item.title,
     status: worklogStatusCodeMap[item.statusCode] ?? "PENDING",
-    workContent: "",
-    actualHours: 0,
+    workContent: item.workContent ?? "",
+    actualHours: toNumber(item.actualHours),
     importance: importanceCodeMap[item.importanceCode] ?? "NORMAL",
     aiSummary,
     aiStatus: aiProcessingStatusCodeMap[item.aiProcessingStatus] ?? "PENDING",
-    aiSummaryEdited: false,
+    aiSummaryEdited: item.aiSummaryEdited ?? false,
     teamId: item.teamId,
     teamName: item.teamName,
     authorId: item.authorId,
@@ -105,6 +107,84 @@ function normalizeSearchParams(params: SearchWorklogsParams) {
   return {
     ...params,
     keyword: params.keyword?.trim() || undefined,
+  }
+}
+
+function toArray<T>(value: T[] | null | undefined): T[] {
+  return Array.isArray(value) ? value : []
+}
+
+function toNumber(value: number | string | null | undefined) {
+  const parsed = Number(value)
+  return Number.isFinite(parsed) ? parsed : 0
+}
+
+function toWorklogStatus(code: string | null | undefined): WorklogStatus {
+  return code ? worklogStatusCodeMap[code] ?? "PENDING" : "PENDING"
+}
+
+function toAiProcessingStatus(
+  code: string | null | undefined
+): AiProcessingStatus {
+  return code ? aiProcessingStatusCodeMap[code] ?? "PENDING" : "PENDING"
+}
+
+function toStatusHistory(
+  item: WorklogDetailStatusHistoryItem
+): Worklog["statusHistory"][number] {
+  return {
+    id: item.historyId,
+    previousStatus: item.previousStatusCode
+      ? toWorklogStatus(item.previousStatusCode)
+      : undefined,
+    newStatus: toWorklogStatus(item.newStatusCode),
+    changedBy: item.changedBy,
+    changedByName: item.changedByName,
+    reason: item.reason?.trim() || "-",
+    changedAt: item.changedAt,
+  }
+}
+
+function toWorklogDetail(item: WorklogDetailApiResponse): Worklog {
+  const files = toArray(item.files)
+  const tags = toArray(item.tags)
+  const dependOnWorklogs = toArray(item.dependOnWorklogs)
+  const statusHistory = toArray(item.statusHistories).map(toStatusHistory)
+  const firstHistoryAt = statusHistory[0]?.changedAt
+  const lastHistoryAt = statusHistory[statusHistory.length - 1]?.changedAt
+  const aiSummary = item.aiSummary?.trim() || "AI 요약 정보가 없습니다."
+
+  return {
+    id: item.worklogId,
+    title: item.title,
+    requestContent: item.requestContent,
+    workContent: item.workContent,
+    statusCode: item.statusCode,
+    status: toWorklogStatus(item.statusCode),
+    importance: item.importanceCode
+      ? importanceCodeMap[item.importanceCode] ?? "NORMAL"
+      : "NORMAL",
+    actualHours: toNumber(item.actualHours),
+    instructionDate: item.instructionDate,
+    dueDate: item.dueDate,
+    completionDate: undefined,
+    teamId: item.teamId,
+    teamName: item.teamName,
+    authorId: item.authorId,
+    authorName: item.authorName,
+    dependencyIds: dependOnWorklogs.map((dependency) => dependency.worklogId),
+    dependOnWorklogs,
+    aiSummary,
+    aiSummaryEdited: item.aiSummaryEdited ?? false,
+    aiStatus: toAiProcessingStatus(item.aiProcessingStatus),
+    tagIds: [],
+    tagNames: tags,
+    fileIds: files.map((file) => file.fileId),
+    fileItems: files,
+    isDeleted: false,
+    createdAt: item.createdAt ?? firstHistoryAt ?? item.instructionDate,
+    updatedAt: item.updatedAt ?? lastHistoryAt ?? firstHistoryAt ?? item.instructionDate,
+    statusHistory,
   }
 }
 
@@ -335,8 +415,11 @@ export const worklogService = {
     return apiClient.get<WorklogFilterOptions>("/worklogs/filter-options")
   },
   async getById(id: number): Promise<Worklog | undefined> {
-    const target = worklogs.find((worklog) => worklog.id === id && !worklog.isDeleted)
-    return target ? { ...target } : undefined
+    const response = await apiClient.get<WorklogDetailApiResponse>(
+      `/worklogs/${id}`
+    )
+
+    return toWorklogDetail(response)
   },
   async create(values: WorklogFormValues) {
     const { attachmentNames } = values

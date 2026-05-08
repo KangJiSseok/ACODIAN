@@ -15,6 +15,7 @@ export interface WorklogStatusHistoryRecord {
   previousStatus?: WorklogStatus
   newStatus: WorklogStatus
   changedBy: number
+  changedByName?: string
   reason: string
   changedAt: string
 }
@@ -24,6 +25,7 @@ export interface Worklog {
   title: string
   requestContent: string
   workContent: string
+  statusCode?: string
   status: WorklogStatus
   importance: ImportanceLevel
   actualHours: number
@@ -31,13 +33,18 @@ export interface Worklog {
   dueDate: string
   completionDate?: string
   teamId: number
+  teamName?: string
   authorId: number
+  authorName?: string
   dependencyIds: number[]
+  dependOnWorklogs?: WorklogDependencyItem[]
   aiSummary: string
   aiSummaryEdited: boolean
   aiStatus: AiProcessingStatus
   tagIds: number[]
+  tagNames?: string[]
   fileIds: number[]
+  fileItems?: WorklogFileItem[]
   isDeleted: boolean
   createdAt: string
   updatedAt: string
@@ -103,7 +110,10 @@ export interface WorklogListApiItem {
 export interface WorklogSearchApiItem {
   worklogId: number
   title: string
+  workContent?: string | null
+  actualHours?: number | string | null
   aiSummary: string | null
+  aiSummaryEdited: boolean | null
   statusCode: string
   importanceCode: string
   aiProcessingStatus: string
@@ -155,4 +165,53 @@ export interface WorklogFilterMember {
 export interface WorklogFilterTag {
   tagId: number
   tagName: string
+}
+
+export interface WorklogDetailApiResponse {
+  worklogId: number
+  teamId: number
+  teamName: string
+  authorId: number
+  authorName: string
+  title: string
+  requestContent: string
+  workContent: string
+  aiSummary?: string | null
+  aiSummaryEdited?: boolean | null
+  aiProcessingStatus?: string | null
+  statusCode: string
+  importanceCode?: string | null
+  actualHours: number | string
+  instructionDate: string
+  dueDate: string
+  createdAt?: string | null
+  updatedAt?: string | null
+  files?: WorklogFileItem[] | null
+  tags?: string[] | null
+  dependOnWorklogs?: WorklogDependencyItem[] | null
+  statusHistories?: WorklogDetailStatusHistoryItem[] | null
+}
+
+export interface WorklogFileItem {
+  fileId: number
+  originalName: string
+  storedPath: string
+  fileExtension: string
+  fileSizeBytes: number
+}
+
+export interface WorklogDependencyItem {
+  worklogId: number
+  title: string
+  statusCode: string
+}
+
+export interface WorklogDetailStatusHistoryItem {
+  historyId: number
+  previousStatusCode: string | null
+  newStatusCode: string
+  reason: string | null
+  changedAt: string
+  changedBy: number
+  changedByName: string
 }
