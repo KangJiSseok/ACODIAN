@@ -2,14 +2,10 @@ package com.ibank.axwms.domain.dashboard.service;
 
 import com.ibank.axwms.domain.dashboard.DashboardScope;
 import com.ibank.axwms.domain.dashboard.dto.GetDashboardApiDto;
-import com.ibank.axwms.domain.organization.department.DepartmentStatus;
-import com.ibank.axwms.domain.organization.department.entity.Department;
-import com.ibank.axwms.domain.organization.department.repository.DepartmentRepository;
-import com.ibank.axwms.domain.organization.team.UserTeamStatus;
-import com.ibank.axwms.domain.organization.team.repository.UserTeamRepository;
+import com.ibank.axwms.domain.organization.department.service.DepartmentService;
+import com.ibank.axwms.domain.organization.team.service.TeamService;
 import com.ibank.axwms.domain.organization.user.UserRole;
-import com.ibank.axwms.domain.organization.user.entity.User;
-import com.ibank.axwms.domain.organization.user.repository.UserRepository;
+import com.ibank.axwms.domain.organization.user.service.UserService;
 import com.ibank.axwms.domain.worklog.repository.WorklogDependencyRepository;
 import com.ibank.axwms.domain.worklog.repository.WorklogRepository;
 import com.ibank.axwms.global.error.BusinessException;
@@ -21,6 +17,7 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDate;
 import java.util.List;
+import java.util.Objects;
 
 @Service
 @RequiredArgsConstructor
@@ -31,11 +28,14 @@ public class DashboardService {
     private static final int COMPLETED_PERIOD_DAYS = 30;
     private static final int WEEKLY_DAYS = 7;
 
+    // 룰 없는 read-only 집계 — repo 직접 (dashboard 위젯 전용 쿼리, 다른 도메인이 쓸 일 없음).
     private final WorklogRepository worklogRepository;
     private final WorklogDependencyRepository worklogDependencyRepository;
-    private final DepartmentRepository departmentRepository;
-    private final UserRepository userRepository;
-    private final UserTeamRepository userTeamRepository;
+
+    // 룰 있는 lookup/검증 — service 통과 (entity import 없이 service contract 만 의존).
+    private final DepartmentService departmentService;
+    private final UserService userService;
+    private final TeamService teamService;
 
     /**
      * scope 디스크리미네이터에 따라 4가지 응답 중 하나를 반환한다.
@@ -74,10 +74,7 @@ public class DashboardService {
                                                        GetDashboardApiDto.Request request) {
         Long userId = principal.userId();
         Long teamId = request.teamId();
-        if (teamId == null) {
-            throw new BusinessException(ErrorCode.DASHBOARD_NOT_FOUND);
-        }
-        if (!userTeamRepository.existsByUserIdAndTeamIdAndStatusCode(userId, teamId, UserTeamStatus.ACTIVE)) {
+        if (teamId == null || !teamService.isMember(userId, teamId)) {
             throw new BusinessException(ErrorCode.DASHBOARD_NOT_FOUND);
         }
 
@@ -133,7 +130,6 @@ public class DashboardService {
         );
     }
 
-
     // ===== DEPARTMENT_DETAIL =====
 
     /**
@@ -154,15 +150,12 @@ public class DashboardService {
         if (departmentId == null) {
             throw new BusinessException(ErrorCode.DASHBOARD_NOT_FOUND);
         }
-        Department department = departmentRepository.findByIdAndStatusCode(departmentId, DepartmentStatus.ACTIVE)
+        String departmentName = departmentService.findActiveDepartmentName(departmentId)
                 .orElseThrow(() -> new BusinessException(ErrorCode.DASHBOARD_NOT_FOUND));
 
-        if (parseRole(principal) == UserRole.DEPT_HEAD) {
-            User me = userRepository.findById(principal.userId())
-                    .orElseThrow(() -> new BusinessException(ErrorCode.AUTH_ACCESS_DENIED));
-            if (!departmentId.equals(me.getDepartmentId())) {
-                throw new BusinessException(ErrorCode.DASHBOARD_NOT_FOUND);
-            }
+        if (parseRole(principal) == UserRole.DEPT_HEAD
+                && !Objects.equals(departmentId, userService.getDepartmentIdOrThrow(principal.userId()))) {
+            throw new BusinessException(ErrorCode.DASHBOARD_NOT_FOUND);
         }
 
         LocalDate today = LocalDate.now();
@@ -170,7 +163,7 @@ public class DashboardService {
 
         return GetDashboardApiDto.DepartmentDetailDashboard.of(
                 departmentId,
-                department.getDepartmentName(),
+                departmentName,
                 worklogRepository.aggregateDeptProgress(departmentId),
                 worklogRepository.countDeptCompletedSince(departmentId, weekFrom),
                 worklogRepository.aggregateDeptAiOutcome(departmentId),

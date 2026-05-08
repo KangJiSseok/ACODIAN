@@ -18,6 +18,7 @@ import com.ibank.axwms.global.error.BusinessException;
 import com.ibank.axwms.global.error.ErrorCode;
 import com.ibank.axwms.global.security.CustomUserPrincipal;
 import java.util.List;
+import java.util.Optional;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -136,6 +137,15 @@ public class DepartmentService {
     /**  외부 도메인이 활성 부서 가입 가능 여부를 재사용할 수 있도록 검증 경계를 노출한다. */
     public void validateActiveDepartment(Long departmentId) {
         getActiveDepartment(departmentId);
+    }
+
+    /**
+     * 외부 도메인(예: dashboard)이 부서 entity 를 직접 import 하지 않고도 활성 부서명만 조회할 수 있도록 노출한다.
+     * "ACTIVE 부서만" 룰은 service 가 보유 — 호출자는 부서 존재성/활성 여부 결정 없이 결과 Optional 만 다룬다.
+     */
+    public Optional<String> findActiveDepartmentName(Long departmentId) {
+        return departmentRepository.findByIdAndStatusCode(departmentId, DepartmentStatus.ACTIVE)
+                .map(Department::getDepartmentName);
     }
 
     /** JOOQ projection 을 API 응답용 부서 요약 record 로 변환한다. */
