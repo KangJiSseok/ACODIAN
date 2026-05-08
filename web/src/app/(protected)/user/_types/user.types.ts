@@ -1,4 +1,8 @@
-export type EmploymentStatusCode = "ACTIVE" | "LEAVE" | (string & {});
+export type EmploymentStatusCode =
+  | "ACTIVE"
+  | "LEAVE"
+  | "RETIRED"
+  | (string & {});
 
 export interface UserSummary {
   userId: number;
@@ -20,7 +24,7 @@ export interface GetUsersParams {
   page?: number;
   pageSize?: number;
   userName?: string;
-  departmentId?: number;
+  departmentId?: number | null;
   positionName?: string;
   employmentStatus?: EmploymentStatusCode;
 }
@@ -46,6 +50,28 @@ export interface UserDetail {
   profileImageUrl: string | null;
   employmentStatus: EmploymentStatusCode;
   teams: UserTeamSummary[];
+}
+
+export interface UpdateUserPayload {
+  userName: string | null;
+  email: string | null;
+  positionName: string | null;
+  titleName: string | null;
+  departmentId: number | null;
+  phone: string | null;
+  employmentStatus: EmploymentStatusCode;
+  joinDate: string | null;
+  primaryTeamId: number | null;
+  profileImage: File | null;
+}
+
+export interface CreateUserSkillPayload {
+  skillName: string;
+  skillLevel: number;
+}
+
+export interface CreateUserEvaluationPayload {
+  content: string;
 }
 
 export interface UserSkillSummary {

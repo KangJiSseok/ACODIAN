@@ -19,7 +19,7 @@ export interface AuthUser {
   userName: string;
   email: string;
   phone: string | null;
-  departmentId: number;
+  departmentId: number | null;
   departmentName: string;
   positionName: string | null;
   titleName: string | null;

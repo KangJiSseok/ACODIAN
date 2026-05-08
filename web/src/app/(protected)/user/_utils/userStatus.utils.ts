@@ -1,6 +1,10 @@
 import type { BadgeProps } from "@/components/ui/badge";
 
-export type EmploymentStatusCode = "ACTIVE" | "LEAVE" | (string & {});
+export type EmploymentStatusCode =
+  | "ACTIVE"
+  | "LEAVE"
+  | "RETIRED"
+  | (string & {});
 
 export function getEmploymentStatusLabel(
   status: EmploymentStatusCode | null | undefined,
@@ -12,6 +16,7 @@ export function getEmploymentStatusLabel(
   const labels: Record<string, string> = {
     ACTIVE: "재직",
     LEAVE: "휴직",
+    RETIRED: "퇴사",
   };
 
   return labels[status] ?? status;
