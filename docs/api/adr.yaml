@@ -313,7 +313,7 @@
     헤더/쿠키 쓰기 책임은 global/security/AuthTokenResponseWriter 가 단독으로 가진다. Controller 는 ResponseEntity 를 반환하지 않고 DTO 를 그대로 반환해 GlobalResponseAdvice 의 봉투 래핑을 유지한다.
     refresh 재발급도 동일 채널 규약을 따른다. 요청은 body 가 아니라 설정된 이름의 HttpOnly refresh cookie 로 받고, 성공 시 응답 바디는 비우며 새 access token 은 Authorization 헤더로만 전달한다.
     refresh token 회전은 매 요청마다 수행하지 않고, 남은 유효 시간이 전체 refresh TTL 의 절반 이하일 때만 같은 sessionId 로 새 쿠키를 다시 기록한다.
-    CORS 는 allowCredentials=true, exposedHeaders=[Authorization] 로 설정하고 허용 오리진은 auth.cors.* 프로퍼티로 환경별로 관리한다.
+    CORS 는 allowCredentials=true, allowedHeaders=[Authorization, Content-Type, X-Trace-Id], exposedHeaders=[Authorization, X-Trace-Id] 로 설정하고 허용 오리진은 auth.cors.* 프로퍼티로 환경별로 관리한다.
     본 규약은 브라우저 기반 웹 클라이언트를 전제한다. MCP, CLI, 서버 간 호출 등 비브라우저 클라이언트는 쿠키 자동 처리를 전제할 수 없으므로 별도 토큰 발급 경로로 설계한다.
   consequence: |
     refresh token 이 JS 에서 접근 불가능해져 XSS 로 인한 장기 자격 증명 탈취를 차단한다.
@@ -475,6 +475,25 @@
     리뷰어는 구현 diff 와 함께 Javadoc 누락을 명시적으로 점검하게 되어 보안/권한 helper 의 해석 차이를 줄일 수 있다.
     반대로 WHAT 재서술 주석은 계속 금지되므로, 주석 추가가 코드 설명 반복이나 장식성 문서화로 흐르지 않도록 유지한다.
     신규·변경 API 코드에는 주석 점검 비용이 조금 늘지만, private helper 를 포함한 설계 의도 누락 가능성을 낮춘다.
+
+- id: ADR-025
+  title: API Log Tracer — Filter/MDC/AOP 기반 요청 흐름 추적
+  status: adopted
+  date: 2026-05-10
+  stacks: [springboot]
+  context: |
+    API 장애 디버깅 시 HTTP 요청 진입, JWT 인증, Controller/Service/Repository 계층 호출, 정상/예외 응답 종료를 같은 키로 연결할 수 있는 근거가 필요하다.
+    현재 범위는 로그 저장소나 조회 API 가 아니라 실행 중 콘솔 로그의 상관관계 확보이며, 응답 JSON 봉투와 민감정보 비노출 정책을 유지해야 한다.
+  decision: |
+    RequestTraceFilter 를 JwtAuthenticationFilter 앞에 배치해 모든 요청의 traceId 를 먼저 확정하고 MDC 와 응답 header X-Trace-Id 에 기록한다.
+    외부 X-Trace-Id 는 Nginx/NestJS 같은 Spring 앞단에서 생성·검증된 값으로 신뢰하고, API 계층은 trim 뒤 비어 있지 않으면 재사용하며 없으면 hyphen 포함 UUID v4 를 새로 생성한다.
+    요청 시작/종료 로그는 method, HttpServletRequest#getRequestURI() 기반 path-only URI, status, durationMs 만 기록하고 query string, header dump, request/response body 는 기록하지 않는다. 인증된 CustomUserPrincipal 은 종료 시 userId/roleCode 만 요약한다.
+    LayerTraceAspect 는 Spring AOP 로 domain controller/service/repository public method enter/exit/exception 을 DEBUG/WARN 로 기록한다. method arguments, return value, raw exception message, stack trace 는 기본 기록하지 않으며 BusinessException 은 ErrorCode 만 추가한다.
+    X-Trace-Id 는 응답 body 계약을 바꾸지 않는 관측성 header 이므로 CorsConfig allowedHeaders 와 exposedHeaders 에 Authorization 정책을 유지한 채 함께 포함한다.
+  consequence: |
+    브라우저 클라이언트는 장애 신고 시 응답 header 의 X-Trace-Id 를 읽어 서버 로그와 연결할 수 있고, ApiResponse 성공/실패 envelope 는 변경되지 않는다.
+    Spring AOP proxy 한계상 self-invocation, non-bean 객체, JPA 내부 SQL, lazy loading, entity method, repository 내부 구현 세부 호출은 추적 대상이 아니다.
+    로그 파일/DB/Redis/S3 저장, 로그 조회 API, body logging, raw exception message logging 이 필요해지면 별도 ADR 로 저장·보안·마스킹 정책을 먼저 확정해야 한다.
 
 - id: ADR-024
   title: Nullable team department ownership 복구와 부서 상세 조회
