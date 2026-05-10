@@ -84,3 +84,8 @@ auth:
     allowed-origins: ${AUTH_CORS_ALLOWED_ORIGINS:}
     allowed-origin-patterns: ${AUTH_CORS_ALLOWED_ORIGIN_PATTERNS:}
 
+logging:
+  level:
+    com.ibank.axwms.global.logging.LayerTraceAspect: DEBUG
+  pattern:
+    level: "traceId:%X{traceId:-none} userId:%X{userId:-none} role:%X{roleCode:-none} %5p"
