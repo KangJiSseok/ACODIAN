@@ -248,7 +248,8 @@ class WorklogServiceTest {
                 WorklogImportance.HIGH,
                 new BigDecimal("3.10"),
                 instructionDate,
-                dueDate
+                dueDate,
+                null
         );
     }
 
