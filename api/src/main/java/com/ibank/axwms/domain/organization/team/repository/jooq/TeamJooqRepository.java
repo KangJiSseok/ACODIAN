@@ -6,11 +6,19 @@ import com.ibank.axwms.domain.organization.team.repository.jooq.projection.TeamS
 import com.ibank.axwms.domain.organization.team.repository.jooq.projection.TeamSummaryProjection;
 import com.ibank.axwms.domain.organization.team.repository.jooq.projection.TeamUserSummaryProjection;
 import com.ibank.axwms.domain.organization.team.repository.jooq.query.TeamPageQuery;
+import java.util.Collection;
 import java.util.List;
 import java.util.Optional;
+import java.util.Set;
 import org.springframework.data.domain.Page;
 
 public interface TeamJooqRepository {
+
+    /**
+     * 주어진 팀 ID 들 중 사용자가 접근 가능한 (admin grant 또는 ACTIVE membership 보유, 미삭제 팀) 팀 ID 만 반환한다.
+     * 호출 측이 set 비교로 권한 실패 팀을 식별할 수 있도록 batch 방식으로 한 번에 검사한다.
+     */
+    Set<Long> findAccessibleTeamIds(Long userId, Collection<Long> teamIds);
 
     /** 사용자에게 visible 한 팀 목록을 spec 고정 정렬과 pagination 으로 조회한다. */
     Page<TeamSummaryProjection> findTeamPage(Long userId, TeamPageQuery query);

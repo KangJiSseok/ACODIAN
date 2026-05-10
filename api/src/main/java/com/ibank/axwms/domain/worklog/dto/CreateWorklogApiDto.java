@@ -9,6 +9,7 @@ import jakarta.validation.constraints.Size;
 
 import java.math.BigDecimal;
 import java.time.LocalDate;
+import java.util.List;
 
 public final class CreateWorklogApiDto {
 
@@ -49,7 +50,9 @@ public final class CreateWorklogApiDto {
             LocalDate instructionDate,
 
             @Schema(description = "업무 마감 일자", example = "2026-04-25")
-            LocalDate dueDate
+            LocalDate dueDate,
+
+            List<Long> predecessorWorklogIds
     ) {
     }
 
