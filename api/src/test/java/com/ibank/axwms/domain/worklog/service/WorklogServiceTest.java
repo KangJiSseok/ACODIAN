@@ -56,6 +56,7 @@ class WorklogServiceTest {
     @Mock private TeamService teamService;
     @Mock private FileService fileService;
     @Mock private WorklogStatusHistoryService worklogStatusHistoryService;
+    @Mock private WorklogDependencyService worklogDependencyService;
 
     @InjectMocks private WorklogService worklogService;
 
