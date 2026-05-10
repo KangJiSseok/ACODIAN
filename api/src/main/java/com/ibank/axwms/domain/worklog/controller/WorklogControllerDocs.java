@@ -1,6 +1,7 @@
 package com.ibank.axwms.domain.worklog.controller;
 
 import com.ibank.axwms.domain.worklog.dto.CreateWorklogApiDto;
+import com.ibank.axwms.domain.worklog.dto.GetWorklogCreateOptionsApiDto;
 import com.ibank.axwms.domain.worklog.dto.GetWorklogDetailApiDto;
 import com.ibank.axwms.domain.worklog.dto.GetWorklogFilterOptionsApiDto;
 import com.ibank.axwms.domain.worklog.dto.GetWorklogsApiDto;
@@ -91,6 +92,19 @@ public interface WorklogControllerDocs {
             @ApiResponse(responseCode = "401", description = "인증이 필요하다.", content = @Content)
     })
     GetWorklogFilterOptionsApiDto.Response getFilterOptions(
+            @Parameter(hidden = true) CustomUserPrincipal principal
+    );
+
+    @Operation(summary = "업무 등록 화면 폼 옵션 조회",
+            description = "업무 등록 화면 진입 시 사용할 폼 옵션을 한 번에 반환한다. "
+                    + "선행 업무 후보는 사용자가 접근 가능한 (admin 또는 ACTIVE 멤버) 팀의 미삭제, 미완료 worklog 만 최신순으로 포함되며, "
+                    + "태그는 메타 태그 전체를 이름순으로 반환한다.")
+    @SecurityRequirement(name = "bearerAuth")
+    @ApiResponses({
+            @ApiResponse(responseCode = "200", description = "폼 옵션을 반환한다."),
+            @ApiResponse(responseCode = "401", description = "인증이 필요하다.", content = @Content)
+    })
+    GetWorklogCreateOptionsApiDto.Response getCreateOptions(
             @Parameter(hidden = true) CustomUserPrincipal principal
     );
 }

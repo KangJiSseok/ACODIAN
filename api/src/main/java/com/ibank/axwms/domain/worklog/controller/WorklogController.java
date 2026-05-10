@@ -1,6 +1,7 @@
 package com.ibank.axwms.domain.worklog.controller;
 
 import com.ibank.axwms.domain.worklog.dto.CreateWorklogApiDto;
+import com.ibank.axwms.domain.worklog.dto.GetWorklogCreateOptionsApiDto;
 import com.ibank.axwms.domain.worklog.dto.GetWorklogDetailApiDto;
 import com.ibank.axwms.domain.worklog.dto.GetWorklogFilterOptionsApiDto;
 import com.ibank.axwms.domain.worklog.dto.GetWorklogsApiDto;
@@ -82,5 +83,14 @@ public class WorklogController implements WorklogControllerDocs {
             @AuthenticationPrincipal CustomUserPrincipal principal
     ) {
         return worklogSearchService.getFilterOptions(principal);
+    }
+
+    @Override
+    @GetMapping("/create-options")
+    @PreAuthorize("hasAnyRole('DIRECTOR','DEPT_HEAD','TEAM_LEAD','MEMBER')")
+    public GetWorklogCreateOptionsApiDto.Response getCreateOptions(
+            @AuthenticationPrincipal CustomUserPrincipal principal
+    ) {
+        return worklogService.getCreateOptions(principal);
     }
 }

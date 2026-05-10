@@ -145,6 +145,37 @@ public class WorklogJooqRepositoryImpl implements WorklogJooqRepository {
                 .fetchMap(TB_WORKLOG.WORKLOG_ID, TB_WORKLOG.TEAM_ID);
     }
 
+    @Override
+    public List<WorklogListProjection> findActivePredecessorCandidates(Long userId) {
+        Condition condition = TB_WORKLOG.IS_DELETED.isFalse()
+                .and(TB_WORKLOG.STATUS_CODE.ne(WorklogStatus.COMPLETED.name()))
+                .and(visibleTeamCondition(userId));
+
+        return dsl.select(
+                        TB_WORKLOG.WORKLOG_ID,
+                        TB_WORKLOG.TITLE,
+                        TB_WORKLOG.STATUS_CODE,
+                        TB_WORKLOG.WORK_CONTENT,
+                        TB_WORKLOG.ACTUAL_HOURS,
+                        TB_WORKLOG.IMPORTANCE_CODE,
+                        TB_WORKLOG.AI_SUMMARY,
+                        TB_WORKLOG.AI_PROCESSING_STATUS,
+                        TB_WORKLOG.AI_SUMMARY_EDITED,
+                        TB_WORKLOG.TEAM_ID,
+                        TB_TEAM.TEAM_NAME,
+                        TB_WORKLOG.AUTHOR_ID,
+                        TB_USER.USER_NAME,
+                        TB_WORKLOG.INSTRUCTION_DATE,
+                        TB_WORKLOG.DUE_DATE
+                )
+                .from(TB_WORKLOG)
+                .join(TB_TEAM).on(TB_WORKLOG.TEAM_ID.eq(TB_TEAM.TEAM_ID))
+                .join(TB_USER).on(TB_WORKLOG.AUTHOR_ID.eq(TB_USER.USER_ID))
+                .where(condition)
+                .orderBy(TB_WORKLOG.CREATED_AT.desc(), TB_WORKLOG.WORKLOG_ID.desc())
+                .fetch(WorklogListProjection::from);
+    }
+
     private Condition visibleTeamCondition(Long userId) {
         return TB_TEAM.DELETED_AT.isNull()
                 .and(TB_TEAM.TEAM_ID.in(visibleTeamIds(userId)));
