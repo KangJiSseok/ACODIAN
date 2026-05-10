@@ -56,6 +56,7 @@ class WorklogServiceTest {
     @Mock private TeamService teamService;
     @Mock private FileService fileService;
     @Mock private WorklogStatusHistoryService worklogStatusHistoryService;
+    @Mock private WorklogDependencyService worklogDependencyService;
 
     @InjectMocks private WorklogService worklogService;
 
@@ -248,7 +249,8 @@ class WorklogServiceTest {
                 WorklogImportance.HIGH,
                 new BigDecimal("3.10"),
                 instructionDate,
-                dueDate
+                dueDate,
+                null
         );
     }
 

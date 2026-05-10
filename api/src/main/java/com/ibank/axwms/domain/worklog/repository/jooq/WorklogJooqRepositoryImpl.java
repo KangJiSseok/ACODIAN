@@ -30,7 +30,9 @@ import org.springframework.data.domain.PageRequest;
 import org.springframework.stereotype.Repository;
 
 import java.time.LocalDate;
+import java.util.Collection;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 
 import static com.ibank.axwms.global.jooq.Tables.TB_DEPARTMENT;
@@ -129,6 +131,18 @@ public class WorklogJooqRepositoryImpl implements WorklogJooqRepository {
                 .join(TB_USER).on(TB_WORKLOG.AUTHOR_ID.eq(TB_USER.USER_ID))
                 .where(condition)
                 .fetchOptional(WorklogDetailProjection::from);
+    }
+
+    @Override
+    public Map<Long, Long> findTeamIdsByWorklogIds(Collection<Long> worklogIds) {
+        if (worklogIds == null || worklogIds.isEmpty()) {
+            return Map.of();
+        }
+        return dsl.select(TB_WORKLOG.WORKLOG_ID, TB_WORKLOG.TEAM_ID)
+                .from(TB_WORKLOG)
+                .where(TB_WORKLOG.WORKLOG_ID.in(worklogIds))
+                .and(TB_WORKLOG.IS_DELETED.isFalse())
+                .fetchMap(TB_WORKLOG.WORKLOG_ID, TB_WORKLOG.TEAM_ID);
     }
 
     private Condition visibleTeamCondition(Long userId) {

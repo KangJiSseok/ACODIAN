@@ -22,6 +22,7 @@ import com.ibank.axwms.global.error.ErrorCode;
 import com.ibank.axwms.global.response.PageResponse;
 import com.ibank.axwms.global.security.CustomUserPrincipal;
 import java.time.LocalDateTime;
+import java.util.Collection;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Objects;
@@ -208,6 +209,18 @@ public class TeamService {
      */
     public boolean isMember(Long userId, Long teamId) {
         return userTeamRepository.existsByUserIdAndTeamIdAndStatusCode(userId, teamId, UserTeamStatus.ACTIVE);
+    }
+
+    /**
+     * 주어진 팀 ID 들 중 사용자가 접근 가능한 (admin grant 또는 ACTIVE membership 보유, 미삭제 팀) 팀 ID 만 반환한다.
+     * 호출 측이 set 비교로 권한 실패 팀을 식별할 수 있도록 batch 방식으로 한 번에 검사한다.
+     *
+     * @param userId 검증 대상 사용자 ID
+     * @param teamIds 검증 대상 팀 ID 집합
+     * @return 사용자가 접근 가능한 팀 ID 의 부분 집합
+     */
+    public Set<Long> findAccessibleTeamIds(Long userId, Collection<Long> teamIds) {
+        return teamRepository.findAccessibleTeamIds(userId, teamIds);
     }
 
     /**

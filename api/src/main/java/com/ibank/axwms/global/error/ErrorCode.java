@@ -82,6 +82,8 @@ public enum ErrorCode {
     WORKLOG_TEAM_FORBIDDEN(HttpStatus.FORBIDDEN, "해당 팀에 대한 권한이 없습니다."),
     /** 업무일지가 존재하지 않는 경우 사용한다. */
     WORKLOG_NOT_FOUND(HttpStatus.NOT_FOUND, "존재하지 않는 업무일지입니다."),
+    /** 선행 업무로 지정한 worklog 가 존재하지 않거나 접근 권한이 없을 때 사용한다. 존재 여부와 권한 여부는 정보 누출 방지를 위해 단일 코드로 통합한다. */
+    WORKLOG_PREDECESSOR_NOT_ACCESSIBLE(HttpStatus.FORBIDDEN, "선행 업무로 지정한 업무일지에 접근할 수 없습니다."),
     /** 대시보드 scope 와 함께 들어온 파라미터가 누락되었거나 형식이 올바르지 않을 때 사용한다. */
     DASHBOARD_INVALID_REQUEST(HttpStatus.BAD_REQUEST, "대시보드 요청 파라미터가 올바르지 않습니다."),
     /** 사용자 role 자체로 해당 dashboard scope 를 조회할 수 없을 때 사용한다. */

@@ -36,4 +36,18 @@ public class WorklogDependency {
     @CreationTimestamp
     @Column(name = "created_at", nullable = false, updatable = false)
     private LocalDateTime createdAt;
+
+    /**
+     * 선행 업무 등록을 위한 신규 WorklogDependency 엔티티를 만든다.
+     *
+     * @param worklogId 의존을 갖는 (자식) worklog ID
+     * @param dependsOnWorklogId 선행으로 지정된 worklog ID
+     * @return 저장 전 WorklogDependency 엔티티
+     */
+    public static WorklogDependency create(Long worklogId, Long dependsOnWorklogId) {
+        WorklogDependency dependency = new WorklogDependency();
+        dependency.worklogId = worklogId;
+        dependency.dependsOnWorklogId = dependsOnWorklogId;
+        return dependency;
+    }
 }

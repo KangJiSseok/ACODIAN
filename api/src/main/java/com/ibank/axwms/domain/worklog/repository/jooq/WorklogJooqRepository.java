@@ -17,7 +17,9 @@ import com.ibank.axwms.domain.worklog.repository.jooq.query.WorklogSearchQuery;
 import org.springframework.data.domain.Page;
 
 import java.time.LocalDate;
+import java.util.Collection;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 
 public interface WorklogJooqRepository {
@@ -25,6 +27,12 @@ public interface WorklogJooqRepository {
     Page<WorklogListProjection> findWorklogPage(Long userId, WorklogPageQuery worklogPageQuery);
 
     Optional<WorklogDetailProjection> findWorklogDetail(Long userId, Long worklogId);
+
+    /**
+     * 주어진 worklog ID 들 중 미삭제인 항목만 worklog_id → team_id 매핑으로 반환한다.
+     * 매핑에 없는 ID 는 존재하지 않거나 소프트 삭제된 worklog 다. 호출 측이 size 비교로 누락 여부를 판정한다.
+     */
+    Map<Long, Long> findTeamIdsByWorklogIds(Collection<Long> worklogIds);
 
     /** 가시 범위와 정규화된 검색 query 로 업무일지 페이지를 조회한다. */
     Page<WorklogSearchProjection> searchWorklogPage(WorklogVisibilityScope scope, WorklogSearchQuery query);

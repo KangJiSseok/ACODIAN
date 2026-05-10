@@ -8,8 +8,11 @@ import com.ibank.axwms.domain.organization.team.repository.jooq.projection.TeamU
 import com.ibank.axwms.domain.organization.team.repository.jooq.query.TeamPageQuery;
 import com.ibank.axwms.global.jooq.tables.TbUser;
 import com.ibank.axwms.global.jooq.tables.TbUserTeam;
+import java.util.Collection;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Optional;
+import java.util.Set;
 import lombok.RequiredArgsConstructor;
 import org.jooq.Condition;
 import org.jooq.DSLContext;
@@ -282,6 +285,19 @@ public class TeamJooqRepositoryImpl implements TeamJooqRepository {
                 .where(visibleTeamCondition(userId))
                 .orderBy(TB_TEAM.TEAM_NAME.asc(), TB_TEAM.TEAM_ID.asc(), TB_USER.USER_NAME.asc())
                 .fetch(TeamMemberFilterProjection::from);
+    }
+
+    @Override
+    public Set<Long> findAccessibleTeamIds(Long userId, Collection<Long> teamIds) {
+        if (teamIds == null || teamIds.isEmpty()) {
+            return Set.of();
+        }
+        List<Long> rows = dsl.selectDistinct(TB_TEAM.TEAM_ID)
+                .from(TB_TEAM)
+                .where(TB_TEAM.TEAM_ID.in(teamIds))
+                .and(visibleTeamCondition(userId))
+                .fetch(TB_TEAM.TEAM_ID);
+        return new HashSet<>(rows);
     }
 
     /** soft-delete 되지 않았고 호출자의 admin grant 또는 ACTIVE membership 에 포함된 팀만 통과시킨다. */
