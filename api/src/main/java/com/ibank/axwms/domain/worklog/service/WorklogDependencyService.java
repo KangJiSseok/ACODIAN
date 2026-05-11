@@ -1,6 +1,5 @@
 package com.ibank.axwms.domain.worklog.service;
 
-import com.ibank.axwms.domain.organization.team.service.TeamService;
 import com.ibank.axwms.domain.worklog.entity.WorklogDependency;
 import com.ibank.axwms.domain.worklog.repository.WorklogDependencyRepository;
 import com.ibank.axwms.domain.worklog.repository.WorklogRepository;
@@ -23,29 +22,28 @@ public class WorklogDependencyService {
 
     private final WorklogDependencyRepository worklogDependencyRepository;
     private final WorklogRepository worklogRepository;
-    private final TeamService teamService;
 
     /**
      * 신규 worklog 에 선행 worklog 들을 연결한다.
      * 입력 리스트는 중복을 허용하지 않으며 검증을 통과한 unique 집합만 저장한다.
      * 검증:
      *  1) 자기참조 — predecessorIds 가 worklogId 자신을 포함하면 거부 (방어적 — create 시점엔 자기 ID 모르지만 update 재사용 대비)
-     *  2) 존재/미삭제 + 사용자의 팀 접근 권한
+     *  2) 같은 팀 — 선행 worklog 는 자식 worklog 와 동일 팀 소속이어야 한다. 존재/미삭제 검증 포함.
      *  3) 순환 의존 — 사실상 create 시점엔 새 worklog 가 누구의 선행도 아니라 사이클 발생 불가지만, update 흐름과 동일 가드를 적용
      *
-     * @param userId 등록 요청자의 사용자 ID
      * @param worklogId 의존을 등록할 (자식) worklog ID
+     * @param childTeamId 자식 worklog 의 소속 팀 ID. 선행 후보는 이 팀에 속한 worklog 여야 한다.
      * @param predecessorWorklogIds 선행으로 지정할 worklog ID 목록. null 이거나 비어 있으면 아무 작업도 하지 않는다.
      */
     @Transactional
-    public void registerPredecessor(Long userId, Long worklogId, List<Long> predecessorWorklogIds) {
+    public void registerPredecessor(Long worklogId, Long childTeamId, List<Long> predecessorWorklogIds) {
         if (predecessorWorklogIds == null || predecessorWorklogIds.isEmpty()) {
             return;
         }
 
         Set<Long> uniquePredecessorIds = new LinkedHashSet<>(predecessorWorklogIds);
         validateSelfReference(worklogId, uniquePredecessorIds);
-        validateAccessibility(userId, uniquePredecessorIds);
+        validateSameTeam(childTeamId, uniquePredecessorIds);
         validateNoCycle(worklogId, uniquePredecessorIds);
 
         saveAll(worklogId, uniquePredecessorIds);
@@ -55,14 +53,14 @@ public class WorklogDependencyService {
      * 기존 선행 집합을 새 집합으로 교체한다 (수정 흐름 전용).
      *  - null 입력은 변경 없음 (호출 측에서 시멘틱 결정)
      *  - 빈 리스트는 모든 선행 제거를 의미
-     *  - 기존과의 diff 만 처리: toAdd 는 가시성/자기참조/사이클 검증, toRemove 는 단순 일괄 삭제
+     *  - 기존과의 diff 만 처리: toAdd 는 같은 팀/자기참조/사이클 검증, toRemove 는 단순 일괄 삭제
      *
-     * @param userId 수정 요청자의 사용자 ID
      * @param worklogId 의존 그래프의 자식 worklog ID
+     * @param childTeamId 자식 worklog 의 소속 팀 ID. 새로 추가되는 선행은 이 팀 소속이어야 한다.
      * @param newPredecessorWorklogIds 새 선행 집합. null 이면 변경하지 않는다.
      */
     @Transactional
-    public void replacePredecessors(Long userId, Long worklogId, List<Long> newPredecessorWorklogIds) {
+    public void replacePredecessors(Long worklogId, Long childTeamId, List<Long> newPredecessorWorklogIds) {
         if (newPredecessorWorklogIds == null) {
             return;
         }
@@ -79,7 +77,7 @@ public class WorklogDependencyService {
         toRemove.removeAll(requested);
 
         if (!toAdd.isEmpty()) {
-            validateAccessibility(userId, toAdd);
+            validateSameTeam(childTeamId, toAdd);
             validateNoCycle(worklogId, toAdd);
             saveAll(worklogId, toAdd);
         }
@@ -97,19 +95,18 @@ public class WorklogDependencyService {
     }
 
     /**
-     * 선행 worklog 의 존재/미삭제 여부와 사용자의 팀 접근 권한을 함께 검증한다.
-     * 두 가지 실패 케이스를 단일 ErrorCode 로 통합해 정보 누출을 막는다.
+     * 선행 worklog 의 존재/미삭제 여부와 자식 worklog 와의 동일 팀 소속 여부를 함께 검증한다.
+     * 다른 팀 worklog 를 선행으로 지정하거나, 없는/삭제된 worklog 를 지정하면 모두 동일 ErrorCode 로 거부 — 정보 누출 방지.
      */
-    private void validateAccessibility(Long userId, Set<Long> predecessorWorklogIds) {
+    private void validateSameTeam(Long childTeamId, Set<Long> predecessorWorklogIds) {
         Map<Long, Long> teamIdByWorklogId = worklogRepository.findTeamIdsByWorklogIds(predecessorWorklogIds);
         if (teamIdByWorklogId.size() != predecessorWorklogIds.size()) {
             throw new BusinessException(ErrorCode.WORKLOG_PREDECESSOR_NOT_ACCESSIBLE);
         }
-
-        Set<Long> uniqueTeamIds = new HashSet<>(teamIdByWorklogId.values());
-        Set<Long> accessibleTeamIds = teamService.findAccessibleTeamIds(userId, uniqueTeamIds);
-        if (!accessibleTeamIds.containsAll(uniqueTeamIds)) {
-            throw new BusinessException(ErrorCode.WORKLOG_PREDECESSOR_NOT_ACCESSIBLE);
+        for (Long predTeamId : teamIdByWorklogId.values()) {
+            if (!childTeamId.equals(predTeamId)) {
+                throw new BusinessException(ErrorCode.WORKLOG_PREDECESSOR_NOT_ACCESSIBLE);
+            }
         }
     }
 

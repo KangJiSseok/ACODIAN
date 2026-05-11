@@ -104,8 +104,9 @@ public class WorklogController implements WorklogControllerDocs {
     @GetMapping("/options")
     @PreAuthorize("hasAnyRole('DIRECTOR','DEPT_HEAD','TEAM_LEAD','MEMBER')")
     public GetWorklogOptionsApiDto.Response getWorklogOptions(
-            @AuthenticationPrincipal CustomUserPrincipal principal
+            @AuthenticationPrincipal CustomUserPrincipal principal,
+            @Valid @ModelAttribute GetWorklogOptionsApiDto.Request request
     ) {
-        return worklogService.getWorklogOptions(principal);
+        return worklogService.getWorklogOptions(principal, request);
     }
 }

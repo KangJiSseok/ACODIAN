@@ -97,8 +97,8 @@ public class WorklogService {
         );
         registerManualTags(savedWorklog.getId(), request.tagIds());
         worklogDependencyService.registerPredecessor(
-                principal.userId(),
                 savedWorklog.getId(),
+                savedWorklog.getTeamId(),
                 request.predecessorWorklogIds()
         );
 
@@ -211,8 +211,8 @@ public class WorklogService {
         );
 
         worklogDependencyService.replacePredecessors(
-                principal.userId(),
                 worklogId,
+                worklog.getTeamId(),
                 request.predecessorWorklogIds()
         );
 
@@ -225,12 +225,20 @@ public class WorklogService {
 
     /**
      * 업무 등록 화면 진입 시 사용할 폼 옵션을 한 번에 반환한다.
-     * 선행 업무 후보는 사용자가 접근 가능한 (admin 또는 ACTIVE 멤버) 팀의 미삭제, 미완료 worklog 만 최신순으로 포함한다.
+     * 의존성은 같은 팀 내에서만 등록 가능하므로 선행 후보는 요청 teamId 의 미삭제, 미완료 worklog 만 최신순으로 포함한다.
+     * 호출 사용자는 해당 팀의 ACTIVE 멤버여야 한다.
      * 태그는 메타 태그 전체를 이름순으로 포함한다.
+     *
+     * @throws BusinessException WORKLOG_TEAM_FORBIDDEN 사용자가 요청 팀의 ACTIVE 멤버가 아닐 때
      */
-    public GetWorklogOptionsApiDto.Response getWorklogOptions(CustomUserPrincipal principal) {
+    public GetWorklogOptionsApiDto.Response getWorklogOptions(CustomUserPrincipal principal,
+                                                              GetWorklogOptionsApiDto.Request request) {
+        Long teamId = request.teamId();
+        if (!teamService.isMember(principal.userId(), teamId)) {
+            throw new BusinessException(ErrorCode.WORKLOG_TEAM_FORBIDDEN);
+        }
         List<WorklogListProjection> predecessorCandidates =
-                worklogRepository.findActivePredecessorCandidates(principal.userId());
+                worklogRepository.findActivePredecessorCandidates(teamId);
         List<MetaTagDetailProjection> tags = tagService.findAllTagDetails();
         return GetWorklogOptionsApiDto.Response.of(predecessorCandidates, tags);
     }

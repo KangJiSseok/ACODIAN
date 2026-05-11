@@ -156,10 +156,10 @@ public class WorklogJooqRepositoryImpl implements WorklogJooqRepository {
     }
 
     @Override
-    public List<WorklogListProjection> findActivePredecessorCandidates(Long userId) {
+    public List<WorklogListProjection> findActivePredecessorCandidates(Long teamId) {
         Condition condition = TB_WORKLOG.IS_DELETED.isFalse()
                 .and(TB_WORKLOG.STATUS_CODE.ne(WorklogStatus.COMPLETED.name()))
-                .and(visibleTeamCondition(userId));
+                .and(TB_WORKLOG.TEAM_ID.eq(teamId));
 
         return dsl.select(
                         TB_WORKLOG.WORKLOG_ID,
