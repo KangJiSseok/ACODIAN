@@ -4,6 +4,7 @@ import {
   getAvailableDashboardAdminScopes,
   getDashboardRole,
   getDefaultDashboardScope,
+  isDashboardScopeAllowedForRole,
 } from "../src/app/(protected)/_dashboard/_utils/dashboardAccess.ts";
 
 const baseUser = {
@@ -73,5 +74,9 @@ test("member defaults to my dashboard when a primary team exists", () => {
     view: "ME",
     teamId: 114,
   });
+  assert.equal(
+    isDashboardScopeAllowedForRole({ view: "ME", teamId: 114 }, "NONE"),
+    true,
+  );
   assert.deepEqual(getAvailableDashboardAdminScopes("NONE"), []);
 });
