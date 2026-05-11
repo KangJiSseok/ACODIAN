@@ -1,5 +1,6 @@
 package com.ibank.axwms.domain.organization.team.repository;
 
+import com.ibank.axwms.domain.organization.team.TeamStatus;
 import com.ibank.axwms.domain.organization.team.entity.Team;
 import com.ibank.axwms.domain.organization.team.repository.jooq.TeamJooqRepository;
 import java.util.Optional;
@@ -13,8 +14,14 @@ public interface TeamRepository extends JpaRepository<Team, Long>, TeamJooqRepos
     /** soft-delete 되지 않은 팀을 ID로 조회한다. */
     Optional<Team> findByIdAndDeletedAtIsNull(Long id);
 
+    /** soft-delete 되지 않았고 지정 상태에 해당하는 팀을 ID로 조회한다 (예: dashboard 진입 게이트의 ACTIVE 필터). */
+    Optional<Team> findByIdAndDeletedAtIsNullAndStatusCode(Long id, TeamStatus statusCode);
+
     /** soft-delete 되지 않은 팀 ID가 존재하는지 확인한다. */
     boolean existsByIdAndDeletedAtIsNull(Long id);
+
+    /** soft-delete 되지 않았고 지정 상태에 해당하는 팀이 존재하는지 확인한다. */
+    boolean existsByIdAndDeletedAtIsNullAndStatusCode(Long id, TeamStatus statusCode);
 
     /** soft-delete 되지 않은 동일 팀명 존재 여부를 확인한다. */
     boolean existsByTeamNameAndDeletedAtIsNull(String teamName);
