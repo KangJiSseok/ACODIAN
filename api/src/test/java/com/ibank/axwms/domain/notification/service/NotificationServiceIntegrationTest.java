@@ -32,6 +32,7 @@ import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.test.util.ReflectionTestUtils;
 import org.springframework.transaction.support.TransactionTemplate;
 
+import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.util.List;
 import java.util.Map;
@@ -312,7 +313,7 @@ class NotificationServiceIntegrationTest extends IntegrationTestSupport {
                 "업무 내용",
                 status,
                 WorklogImportance.NORMAL,
-                java.math.BigDecimal.ONE,
+                BigDecimal.ZERO,
                 TODAY,
                 dueDate
         );
