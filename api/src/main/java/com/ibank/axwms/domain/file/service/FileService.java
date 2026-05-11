@@ -3,6 +3,7 @@ package com.ibank.axwms.domain.file.service;
 import com.ibank.axwms.domain.file.dto.FileWorklogItem;
 import com.ibank.axwms.domain.file.dto.GetFilesApiDto;
 import com.ibank.axwms.domain.file.entity.File;
+import com.ibank.axwms.domain.file.event.WorklogFileAiSummaryRequestedEvent;
 import com.ibank.axwms.domain.file.event.WorklogFileUploadedEvent;
 import com.ibank.axwms.domain.file.external.FilePathGenerator;
 import com.ibank.axwms.domain.file.external.ObjectStoragePort;
@@ -68,6 +69,8 @@ public class FileService {
      * 파일 목록이 비어 있으면 빈 리스트를 반환해 호출측에서 null/분기 처리를 강요하지 않는다.
      * 업로드 직후 WorklogFileUploadedEvent 를 발행해, 활성 트랜잭션이 롤백되면
      * AFTER_ROLLBACK listener 가 객체 스토리지에서 해당 key 를 보상 삭제한다.
+     * DB save 가 끝난 뒤에는 WorklogFileAiSummaryRequestedEvent 를 발행해, 트랜잭션이 커밋되면
+     * AFTER_COMMIT listener 가 AI 서버에 파일 단위 요약 요청을 fire-and-forget 으로 보낸다.
      *
      * @param worklogId  첨부 대상 업무 ID
      * @param uploaderId 업로드 수행자 사용자 ID
@@ -93,6 +96,13 @@ public class FileService {
             eventPublisher.publishEvent(new WorklogFileUploadedEvent(key));
 
             File saved = fileRepository.save(File.create(worklogId, uploaderId, key, file));
+            eventPublisher.publishEvent(new WorklogFileAiSummaryRequestedEvent(
+                    saved.getId(),
+                    worklogId,
+                    key,
+                    saved.getOriginalName(),
+                    saved.getFileExtension()
+            ));
             results.add(new UploadedFile(saved.getId(), key, file.getOriginalFilename(), file.getSize()));
         }
         return results;
