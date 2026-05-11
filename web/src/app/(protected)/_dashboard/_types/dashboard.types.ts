@@ -18,6 +18,20 @@ export interface DepartmentLoad {
   activeWorklogCount: number;
 }
 
+export interface TeamCompletionRate {
+  teamId: number;
+  teamName: string;
+  completed: number;
+  total: number;
+  rate: number;
+}
+
+export interface TeamLoad {
+  teamId: number;
+  teamName: string;
+  activeWorklogCount: number;
+}
+
 export interface DashboardWorklogBrief {
   worklogId: number;
   title: string;
@@ -29,6 +43,24 @@ export interface DashboardWorklogBrief {
   authorName: string | null;
 }
 
+export interface DashboardCompletedInPeriod {
+  from: string;
+  to: string;
+  count: number;
+}
+
+export interface DashboardPredecessorBrief {
+  worklogId: number;
+  title: string;
+  statusCode: string;
+}
+
+export interface DashboardBlockedWorklog {
+  worklogId: number;
+  title: string;
+  predecessors: DashboardPredecessorBrief[];
+}
+
 export interface DirectorDashboard {
   totalProgress: DashboardProgress;
   departmentLoadBalanceIndex: number;
@@ -38,3 +70,40 @@ export interface DirectorDashboard {
   departmentWorkload: DepartmentLoad[];
   imminentAndOverdue: DashboardWorklogBrief[];
 }
+
+export interface DepartmentDashboard {
+  departmentId: number;
+  departmentName: string;
+  totalProgress: DashboardProgress;
+  teamLoadBalanceIndex: number;
+  weeklyCompleted: number;
+  aiPipelineSuccessRate: number;
+  teamCompletionRates: TeamCompletionRate[];
+  teamWorkload: TeamLoad[];
+  imminentAndOverdue: DashboardWorklogBrief[];
+}
+
+export interface MyDashboard {
+  inProgressCount: number;
+  completedInPeriod: DashboardCompletedInPeriod;
+  aiFailedCount: number;
+  thisWeekDue: DashboardWorklogBrief[];
+  todayItems: DashboardWorklogBrief[];
+  imminentAndOverdue: DashboardWorklogBrief[];
+  blockedByPredecessors: DashboardBlockedWorklog[];
+}
+
+export type DashboardScopeSelection =
+  | {
+      view: "ADMIN";
+      adminScope: "DEPARTMENT_COMPARISON";
+    }
+  | {
+      view: "ADMIN";
+      adminScope: "DEPARTMENT_DETAIL";
+      departmentId: number;
+    }
+  | {
+      view: "ME";
+      teamId: number;
+    };

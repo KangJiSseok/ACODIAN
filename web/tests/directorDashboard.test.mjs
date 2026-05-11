@@ -48,7 +48,7 @@ test("dashboard page keeps non-director shortcut fallback", () => {
   assert.match(pageFile, /useDirectorDashboard\(isDirector\)/);
 });
 
-test("director dashboard reserves bottom-right recent notification panel", () => {
+test("director dashboard places workload above completion and imminent panels", () => {
   const componentFile = readFileSync(
     new URL(
       "../src/app/(protected)/_dashboard/_components/directorDashboard.tsx",
@@ -57,9 +57,15 @@ test("director dashboard reserves bottom-right recent notification panel", () =>
     "utf8",
   );
 
-  assert.match(componentFile, /<ImminentWorklogPanel items=\{dashboard\.imminentAndOverdue\} \/>/);
-  assert.match(componentFile, /<RecentNotificationPlaceholder \/>/);
-  assert.match(componentFile, /title="최근 알림"/);
+  const workloadIndex = componentFile.indexOf("<WorkloadPanel");
+  const completionIndex = componentFile.indexOf("<CompletionPanel");
+  const imminentIndex = componentFile.indexOf("<ImminentWorklogPanel", completionIndex);
+
+  assert.ok(workloadIndex > -1, "workload panel should render");
+  assert.ok(completionIndex > workloadIndex, "completion panel should be below workload");
+  assert.ok(imminentIndex > completionIndex, "imminent panel should share the second row");
+  assert.doesNotMatch(componentFile, /RecentNotificationPlaceholder/);
+  assert.doesNotMatch(componentFile, /title="최근 알림"/);
 });
 
 test("director dashboard metric cards follow requested order and labels", () => {

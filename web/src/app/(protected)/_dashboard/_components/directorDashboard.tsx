@@ -1,23 +1,30 @@
+"use client";
+
 import Link from "next/link";
 import type { ReactNode } from "react";
 import {
   Activity,
   AlertTriangle,
   BarChart3,
-  Bell,
   BrainCircuit,
+  CalendarClock,
   CheckCircle2,
   Gauge,
+  ListChecks,
   type LucideIcon,
   TrendingUp,
 } from "lucide-react";
+import { Pagination } from "@/app/_common/components/data-display/pagination";
+import { usePagination } from "@/app/_common/hooks/usePagination";
 import { CardContent } from "@/components/ui/card";
 import { CardSpotlight } from "@/components/ui/card-spotlight";
 import type {
+  DashboardBlockedWorklog,
+  DashboardProgress,
   DashboardWorklogBrief,
-  DepartmentCompletionRate,
-  DepartmentLoad,
+  DepartmentDashboard,
   DirectorDashboard,
+  MyDashboard,
 } from "../_types/dashboard.types";
 import {
   clampRate,
@@ -28,48 +35,247 @@ import {
   formatPercent,
 } from "../_utils/dashboardFormat";
 
+const IMMINENT_WORKLOG_PAGE_SIZE = 3;
+
+interface CompletionItem {
+  id: number;
+  href: string;
+  label: string;
+  completed: number;
+  total: number;
+  rate: number;
+}
+
+interface WorkloadItem {
+  id: number;
+  href: string;
+  label: string;
+  activeWorklogCount: number;
+}
+
+interface ComparisonDashboardViewModel {
+  totalProgress: DashboardProgress;
+  loadBalanceIndex: number;
+  loadMetricLabel: string;
+  loadMetricDetail: string;
+  weeklyCompleted: number;
+  weeklyMetricDetail: string;
+  aiPipelineSuccessRate: number;
+  aiMetricDetail: string;
+  completionTitle: string;
+  completionDescription: string;
+  completionCountLabel: string;
+  completionItems: CompletionItem[];
+  workloadTitle: string;
+  workloadDescription: string;
+  workloadCountLabel: string;
+  workloadItems: WorkloadItem[];
+  imminentDescription: string;
+  imminentAndOverdue: DashboardWorklogBrief[];
+}
+
 export function DirectorDashboardView({
   dashboard,
 }: {
   dashboard: DirectorDashboard;
 }) {
   return (
+    <ComparisonDashboardView
+      viewModel={{
+        totalProgress: dashboard.totalProgress,
+        loadBalanceIndex: dashboard.departmentLoadBalanceIndex,
+        // 전체 부서 비교에서는 부서 간 업무량 분산도를 같은 카드 위치에 표시합니다.
+        loadMetricLabel: "부서 부하 편중 지수",
+        loadMetricDetail: "부서 간 업무량 분산도, 1에 가까울수록 균형",
+        weeklyCompleted: dashboard.weeklyCompleted,
+        weeklyMetricDetail: "전체 부서 비교 최근 7일 완료 산출",
+        aiPipelineSuccessRate: dashboard.aiPipelineSuccessRate,
+        aiMetricDetail: "전체 부서 비교 업무·파일 통합",
+        completionTitle: "부서별 완료율 비교",
+        completionDescription: "부서별 완료 업무 비중을 비교합니다.",
+        completionCountLabel: `${dashboard.departmentCompletionRates.length}개 부서`,
+        completionItems: dashboard.departmentCompletionRates.map((item) => ({
+          id: item.departmentId,
+          href: `/department/detail/${item.departmentId}`,
+          label: item.departmentName,
+          completed: item.completed,
+          total: item.total,
+          rate: item.rate,
+        })),
+        workloadTitle: "부서별 업무 부하",
+        workloadDescription: "완료되지 않은 업무량의 분포를 확인합니다.",
+        workloadCountLabel: `${dashboard.departmentWorkload.length}개 부서`,
+        workloadItems: dashboard.departmentWorkload.map((item) => ({
+          id: item.departmentId,
+          href: `/department/detail/${item.departmentId}`,
+          label: item.departmentName,
+          activeWorklogCount: item.activeWorklogCount,
+        })),
+        imminentDescription:
+          "관리자 뷰와 동일한 D-3 이내 + 지연 기준입니다.",
+        // <ImminentWorklogPanel items={dashboard.imminentAndOverdue} />를 scope별 viewModel로 일반화합니다.
+        imminentAndOverdue: dashboard.imminentAndOverdue,
+      }}
+    />
+  );
+}
+
+export function DepartmentDashboardView({
+  dashboard,
+}: {
+  dashboard: DepartmentDashboard;
+}) {
+  return (
+    <ComparisonDashboardView
+      viewModel={{
+        totalProgress: dashboard.totalProgress,
+        loadBalanceIndex: dashboard.teamLoadBalanceIndex,
+        loadMetricLabel: "팀 부하 편중 지수",
+        loadMetricDetail: "팀 간 업무량 분산도, 1에 가까울수록 균형",
+        weeklyCompleted: dashboard.weeklyCompleted,
+        weeklyMetricDetail: `${dashboard.departmentName} 최근 7일 완료 산출`,
+        aiPipelineSuccessRate: dashboard.aiPipelineSuccessRate,
+        aiMetricDetail: `${dashboard.departmentName} 업무·파일 통합`,
+        completionTitle: "팀별 완료율 비교",
+        completionDescription: "선택 부서 안에서 팀별 완료 업무 비중을 비교합니다.",
+        completionCountLabel: `${dashboard.teamCompletionRates.length}개 팀`,
+        completionItems: dashboard.teamCompletionRates.map((item) => ({
+          id: item.teamId,
+          href: `/team/detail/${item.teamId}`,
+          label: item.teamName,
+          completed: item.completed,
+          total: item.total,
+          rate: item.rate,
+        })),
+        workloadTitle: "팀별 업무 부하",
+        workloadDescription: "선택 부서 안에서 완료되지 않은 업무량을 확인합니다.",
+        workloadCountLabel: `${dashboard.teamWorkload.length}개 팀`,
+        workloadItems: dashboard.teamWorkload.map((item) => ({
+          id: item.teamId,
+          href: `/team/detail/${item.teamId}`,
+          label: item.teamName,
+          activeWorklogCount: item.activeWorklogCount,
+        })),
+        imminentDescription:
+          "선택 부서 기준 D-3 이내 또는 지연된 미완료 업무입니다.",
+        imminentAndOverdue: dashboard.imminentAndOverdue,
+      }}
+    />
+  );
+}
+
+export function MyDashboardView({ dashboard }: { dashboard: MyDashboard }) {
+  return (
     <div className="space-y-6">
       <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
         <MetricCard
           icon={Gauge}
-          label="전체 진행률"
-          value={formatPercent(dashboard.totalProgress.rate)}
-          detail={`${formatCount(dashboard.totalProgress.completed)} / ${formatCount(dashboard.totalProgress.total)}건 완료`}
+          label="진행 중인 내 업무"
+          value={`${formatCount(dashboard.inProgressCount)}건`}
+          detail="선택한 소속 팀 기준 진행 중 업무"
         />
         <MetricCard
+          icon={CheckCircle2}
+          label="최근 30일 완료"
+          value={`${formatCount(dashboard.completedInPeriod.count)}건`}
+          detail={`${formatDueDate(dashboard.completedInPeriod.from)} - ${formatDueDate(dashboard.completedInPeriod.to)}`}
+        />
+        <MetricCard
+          icon={BrainCircuit}
+          label="AI 처리 실패"
+          value={`${formatCount(dashboard.aiFailedCount)}건`}
+          detail="선택한 소속 팀의 내 업무 기준"
+        />
+        <MetricCard
+          icon={CalendarClock}
+          label="이번 주 마감"
+          value={`${formatCount(dashboard.thisWeekDue.length)}건`}
+          detail="D-7 이내 미완료 업무"
+        />
+      </div>
+
+      <div className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_minmax(0,1fr)]">
+        <WorklogListPanel
+          icon={ListChecks}
+          title="오늘의 업무"
+          description="진행 중인 업무를 우선으로 마감 가까운 순서로 표시합니다."
+          emptyMessage="오늘 확인할 업무가 없습니다."
+          items={dashboard.todayItems}
+        />
+        <WorklogListPanel
+          icon={CalendarClock}
+          title="이번 주 마감"
+          description="D-7 이내 마감 예정인 미완료 업무입니다."
+          emptyMessage="이번 주 마감 예정 업무가 없습니다."
+          items={dashboard.thisWeekDue}
+        />
+      </div>
+
+      <div className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_minmax(0,1fr)]">
+        <ImminentWorklogPanel
+          description="선택한 소속 팀 기준 D-3 이내 또는 지연된 미완료 업무입니다."
+          items={dashboard.imminentAndOverdue}
+        />
+        <BlockedWorklogPanel items={dashboard.blockedByPredecessors} />
+      </div>
+    </div>
+  );
+}
+
+function ComparisonDashboardView({
+  viewModel,
+}: {
+  viewModel: ComparisonDashboardViewModel;
+}) {
+  return (
+    <div className="space-y-6">
+      {/* 관리자 scope들은 같은 구조를 쓰고, 라벨/목록 단위만 viewModel에서 바꿉니다. */}
+      <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+        <MetricCard
+          icon={Gauge}
+          label="전체 진행률"
+          value={formatPercent(viewModel.totalProgress.rate)}
+          detail={`${formatCount(viewModel.totalProgress.completed)} / ${formatCount(viewModel.totalProgress.total)}건 완료`}
+        />
+        {/* 전체 부서 비교 기준 카드: label="부서 부하 편중 지수" */}
+        <MetricCard
           icon={Activity}
-          label="부서 부하 편중 지수"
-          value={formatIndex(dashboard.departmentLoadBalanceIndex)}
-          detail="부서 간 업무량 분산도, 1에 가까울수록 균형"
+          label={viewModel.loadMetricLabel}
+          value={formatIndex(viewModel.loadBalanceIndex)}
+          detail={viewModel.loadMetricDetail}
         />
         <MetricCard
           icon={CheckCircle2}
           label="주간 처리 업무 수"
-          value={`${formatCount(dashboard.weeklyCompleted)}건`}
-          detail="전체 부서 비교 최근 7일 완료 산출"
+          value={`${formatCount(viewModel.weeklyCompleted)}건`}
+          detail={viewModel.weeklyMetricDetail}
         />
         <MetricCard
           icon={BrainCircuit}
           label="AI 파이프라인 성공률"
-          value={formatPercent(dashboard.aiPipelineSuccessRate)}
-          detail="전체 부서 비교 업무·파일 통합"
+          value={formatPercent(viewModel.aiPipelineSuccessRate)}
+          detail={viewModel.aiMetricDetail}
         />
       </div>
 
-      <div className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_minmax(0,1fr)]">
-        <CompletionPanel items={dashboard.departmentCompletionRates} />
-        <WorkloadPanel items={dashboard.departmentWorkload} />
-      </div>
+      <WorkloadPanel
+        title={viewModel.workloadTitle}
+        description={viewModel.workloadDescription}
+        countLabel={viewModel.workloadCountLabel}
+        items={viewModel.workloadItems}
+      />
 
       <div className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_minmax(0,1fr)]">
-        <ImminentWorklogPanel items={dashboard.imminentAndOverdue} />
-        <RecentNotificationPlaceholder />
+        <CompletionPanel
+          title={viewModel.completionTitle}
+          description={viewModel.completionDescription}
+          countLabel={viewModel.completionCountLabel}
+          items={viewModel.completionItems}
+        />
+        <ImminentWorklogPanel
+          description={viewModel.imminentDescription}
+          items={viewModel.imminentAndOverdue}
+        />
       </div>
     </div>
   );
@@ -86,10 +292,7 @@ export function DirectorDashboardLoading() {
           />
         ))}
       </div>
-      <div className="grid gap-4 xl:grid-cols-2">
-        <div className="workspace-panel-soft h-80 animate-pulse rounded-2xl" />
-        <div className="workspace-panel-soft h-80 animate-pulse rounded-2xl" />
-      </div>
+      <div className="workspace-panel-soft h-80 animate-pulse rounded-2xl" />
       <div className="workspace-panel-soft h-80 animate-pulse rounded-2xl" />
     </div>
   );
@@ -98,7 +301,7 @@ export function DirectorDashboardLoading() {
 export function DirectorDashboardError() {
   return (
     <div className="rounded-2xl border border-destructive/30 bg-destructive/5 px-6 py-5 text-sm text-destructive">
-      본부장 대시보드를 불러오지 못했습니다.
+      대시보드를 불러오지 못했습니다.
     </div>
   );
 }
@@ -136,20 +339,30 @@ function MetricCard({
   );
 }
 
-function CompletionPanel({ items }: { items: DepartmentCompletionRate[] }) {
+function CompletionPanel({
+  title,
+  description,
+  countLabel,
+  items,
+}: {
+  title: string;
+  description: string;
+  countLabel: string;
+  items: CompletionItem[];
+}) {
   return (
     <DashboardPanel
       icon={TrendingUp}
-      title="부서별 완료율"
-      description="부서별 완료 업무 비중을 비교합니다."
-      countLabel={`${items.length}개 부서`}
+      title={title}
+      description={description}
+      countLabel={countLabel}
     >
       <div className="space-y-4">
         {items.map((item) => (
           <RateRow
-            key={item.departmentId}
-            href={`/department/detail/${item.departmentId}`}
-            label={item.departmentName}
+            key={item.id}
+            href={item.href}
+            label={item.label}
             value={formatPercent(item.rate)}
             detail={`${formatCount(item.completed)} / ${formatCount(item.total)}건`}
             rate={item.rate}
@@ -160,7 +373,17 @@ function CompletionPanel({ items }: { items: DepartmentCompletionRate[] }) {
   );
 }
 
-function WorkloadPanel({ items }: { items: DepartmentLoad[] }) {
+function WorkloadPanel({
+  title,
+  description,
+  countLabel,
+  items,
+}: {
+  title: string;
+  description: string;
+  countLabel: string;
+  items: WorkloadItem[];
+}) {
   const maxCount = Math.max(
     ...items.map((item) => item.activeWorklogCount),
     1,
@@ -169,37 +392,171 @@ function WorkloadPanel({ items }: { items: DepartmentLoad[] }) {
   return (
     <DashboardPanel
       icon={BarChart3}
-      title="부서별 활성 업무량"
-      description="완료되지 않은 업무일지 분포를 확인합니다."
-      countLabel={`${items.length}개 부서`}
+      title={title}
+      description={description}
+      countLabel={countLabel}
     >
-      <div className="space-y-4">
-        {items.map((item) => (
-          <RateRow
-            key={item.departmentId}
-            href={`/department/detail/${item.departmentId}`}
-            label={item.departmentName}
-            value={`${formatCount(item.activeWorklogCount)}건`}
-            detail="미완료 업무"
-            rate={item.activeWorklogCount / maxCount}
-          />
-        ))}
-      </div>
+      {items.length === 0 ? (
+        <div className="workspace-empty rounded-2xl px-6 py-10 text-center text-sm">
+          표시할 업무 부하 데이터가 없습니다.
+        </div>
+      ) : (
+        <div className="overflow-x-auto pb-1">
+          <div
+            className="grid min-w-[34rem] items-end gap-4"
+            style={{
+              gridTemplateColumns: `repeat(${items.length}, minmax(7rem, 1fr))`,
+            }}
+          >
+            {items.map((item) => {
+              const rate = item.activeWorklogCount / maxCount;
+              const barHeight = `${Math.max(clampRate(rate) * 100, 3)}%`;
+
+              return (
+                <Link
+                  key={item.id}
+                  href={item.href}
+                  className="group flex min-h-72 flex-col justify-end rounded-2xl border border-border/60 bg-background/35 px-4 py-4 transition hover:border-primary/30 hover:bg-background/55 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                >
+                  <div className="mb-3 text-center">
+                    <p className="text-sm font-semibold text-primary">
+                      {formatCount(item.activeWorklogCount)}건
+                    </p>
+                    <p className="mt-1 truncate text-xs text-muted-foreground">
+                      미완료 업무
+                    </p>
+                  </div>
+                  <div className="flex h-44 items-end rounded-2xl bg-muted/40 px-3 pt-3">
+                    <div
+                      className="w-full rounded-t-2xl bg-primary transition-all"
+                      style={{ height: barHeight }}
+                    />
+                  </div>
+                  <p className="mt-3 truncate text-center text-sm font-semibold text-foreground">
+                    {item.label}
+                  </p>
+                </Link>
+              );
+            })}
+          </div>
+        </div>
+      )}
     </DashboardPanel>
   );
 }
 
-function ImminentWorklogPanel({ items }: { items: DashboardWorklogBrief[] }) {
+function ImminentWorklogPanel({
+  description,
+  items,
+}: {
+  description: string;
+  items: DashboardWorklogBrief[];
+}) {
+  const pagination = usePagination(items, IMMINENT_WORKLOG_PAGE_SIZE);
+
   return (
     <DashboardPanel
       icon={AlertTriangle}
       title="마감 임박 및 지연 업무"
-      description="전사 기준 D-3 이내 또는 지연된 미완료 업무입니다."
+      description={description}
       countLabel={`${items.length}건`}
     >
       {items.length === 0 ? (
         <div className="workspace-empty rounded-2xl px-6 py-10 text-center text-sm">
           마감 임박 또는 지연 업무가 없습니다.
+        </div>
+      ) : (
+        <div className="space-y-4">
+          <div className="grid gap-3">
+            {pagination.items.map((item) => (
+              <WorklogBriefLink key={item.worklogId} item={item} />
+            ))}
+          </div>
+          <Pagination
+            page={pagination.page}
+            totalPages={pagination.totalPages}
+            onPageChange={pagination.setPage}
+          />
+        </div>
+      )}
+    </DashboardPanel>
+  );
+}
+
+function WorklogListPanel({
+  icon,
+  title,
+  description,
+  emptyMessage,
+  items,
+}: {
+  icon: LucideIcon;
+  title: string;
+  description: string;
+  emptyMessage: string;
+  items: DashboardWorklogBrief[];
+}) {
+  return (
+    <DashboardPanel
+      icon={icon}
+      title={title}
+      description={description}
+      countLabel={`${items.length}건`}
+    >
+      {items.length === 0 ? (
+        <div className="workspace-empty rounded-2xl px-6 py-10 text-center text-sm">
+          {emptyMessage}
+        </div>
+      ) : (
+        <div className="grid gap-3">
+          {items.map((item) => (
+            <WorklogBriefLink key={item.worklogId} item={item} />
+          ))}
+        </div>
+      )}
+    </DashboardPanel>
+  );
+}
+
+function WorklogBriefLink({ item }: { item: DashboardWorklogBrief }) {
+  return (
+    <Link
+      href={`/worklog/detail/${item.worklogId}`}
+      className="rounded-2xl border border-border/70 bg-muted/30 px-4 py-4 transition hover:border-primary/30 hover:bg-muted/45 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+    >
+      <div className="flex min-h-16 items-start justify-between gap-3">
+        <div className="min-w-0">
+          <p className="line-clamp-2 text-sm font-semibold leading-6 text-foreground">
+            {item.title}
+          </p>
+          <p className="mt-2 truncate text-xs text-muted-foreground">
+            {[item.departmentName, item.teamName, item.authorName]
+              .filter(Boolean)
+              .join(" · ") || "-"}
+          </p>
+        </div>
+        <span className="shrink-0 rounded-full border border-warning/30 bg-warning/10 px-2.5 py-1 text-xs font-semibold text-warning">
+          {formatOverdueDays(item.daysOverdue)}
+        </span>
+      </div>
+      <p className="mt-3 text-xs font-medium text-muted-foreground">
+        마감 {formatDueDate(item.dueDate)} · {item.statusCode}
+      </p>
+    </Link>
+  );
+}
+
+function BlockedWorklogPanel({ items }: { items: DashboardBlockedWorklog[] }) {
+  return (
+    <DashboardPanel
+      icon={AlertTriangle}
+      title="선행 업무 대기"
+      description="완료되지 않은 선행 업무 때문에 막힌 내 업무입니다."
+      countLabel={`${items.length}건`}
+    >
+      {items.length === 0 ? (
+        <div className="workspace-empty rounded-2xl px-6 py-10 text-center text-sm">
+          선행 업무 대기 항목이 없습니다.
         </div>
       ) : (
         <div className="grid gap-3">
@@ -209,41 +566,16 @@ function ImminentWorklogPanel({ items }: { items: DashboardWorklogBrief[] }) {
               href={`/worklog/detail/${item.worklogId}`}
               className="rounded-2xl border border-border/70 bg-muted/30 px-4 py-4 transition hover:border-primary/30 hover:bg-muted/45 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
             >
-              <div className="flex min-h-16 items-start justify-between gap-3">
-                <div className="min-w-0">
-                  <p className="line-clamp-2 text-sm font-semibold leading-6 text-foreground">
-                    {item.title}
-                  </p>
-                  <p className="mt-2 truncate text-xs text-muted-foreground">
-                    {[item.departmentName, item.teamName, item.authorName]
-                      .filter(Boolean)
-                      .join(" · ") || "-"}
-                  </p>
-                </div>
-                <span className="shrink-0 rounded-full border border-warning/30 bg-warning/10 px-2.5 py-1 text-xs font-semibold text-warning">
-                  {formatOverdueDays(item.daysOverdue)}
-                </span>
-              </div>
-              <p className="mt-3 text-xs font-medium text-muted-foreground">
-                마감 {formatDueDate(item.dueDate)} · {item.statusCode}
+              <p className="line-clamp-2 text-sm font-semibold leading-6 text-foreground">
+                {item.title}
+              </p>
+              <p className="mt-2 text-xs text-muted-foreground">
+                선행 {formatCount(item.predecessors.length)}건
               </p>
             </Link>
           ))}
         </div>
       )}
-    </DashboardPanel>
-  );
-}
-
-function RecentNotificationPlaceholder() {
-  return (
-    <DashboardPanel
-      icon={Bell}
-      title="최근 알림"
-      description=""
-      countLabel=""
-    >
-      <div className="min-h-[20rem]" />
     </DashboardPanel>
   );
 }
