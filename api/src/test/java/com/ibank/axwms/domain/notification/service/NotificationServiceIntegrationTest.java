@@ -310,7 +310,9 @@ class NotificationServiceIntegrationTest extends IntegrationTestSupport {
                 title,
                 "요청 내용",
                 "업무 내용",
+                status,
                 WorklogImportance.NORMAL,
+                java.math.BigDecimal.ONE,
                 TODAY,
                 dueDate
         );
