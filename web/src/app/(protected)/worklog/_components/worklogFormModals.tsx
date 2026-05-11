@@ -24,7 +24,6 @@ interface WorklogFormModalsProps {
   controlClassName: string
   searchControlClassName: string
   teamOptions: SelectOption[]
-  authorOptions: SelectOption[]
   statusOptions: SelectOption[]
   dependencyKeywordInput: string
   onDependencyKeywordInputChange: (value: string) => void
@@ -54,7 +53,6 @@ export function WorklogFormModals({
   controlClassName,
   searchControlClassName,
   teamOptions,
-  authorOptions,
   statusOptions,
   dependencyKeywordInput,
   onDependencyKeywordInputChange,
@@ -103,7 +101,6 @@ export function WorklogFormModals({
         onValuesChange={onValuesChange}
         controlClassName={controlClassName}
         teamOptions={teamOptions}
-        authorOptions={authorOptions}
         statusOptions={statusOptions}
       />
 

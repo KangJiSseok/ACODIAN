@@ -1,10 +1,8 @@
 import {
-  departments,
   files,
   getNextFileId,
   getNextNotificationId,
   getNextStatusHistoryId,
-  getNextWorklogId,
   notifications,
   notifyMockDb,
   tags,
@@ -17,6 +15,7 @@ import type { PageResponse } from "@/app/_common/types/api.types"
 
 import type {
   AiProcessingStatus,
+  CreateWorklogResponse,
   GetWorklogsParams,
   ImportanceLevel,
   SearchWorklogsParams,
@@ -27,6 +26,7 @@ import type {
   WorklogFormValues,
   WorklogListApiItem,
   WorklogListItem,
+  WorklogOptionsApiResponse,
   WorklogRecord,
   WorklogSearchApiItem,
   WorklogStatus,
@@ -55,6 +55,14 @@ const aiProcessingStatusCodeMap: Record<string, AiProcessingStatus> = {
   COMPLETED: "DONE",
   DONE: "DONE",
   FAILED: "FAILED",
+}
+
+const worklogStatusApiCodeMap: Partial<Record<WorklogStatus, string>> = {
+  PENDING: "PENDING",
+  IN_PROGRESS: "IN_PROGRESS",
+  DONE: "COMPLETED",
+  ON_HOLD: "ON_HOLD",
+  CANCELLED: "CANCELLED",
 }
 
 function toWorklogListItem(item: WorklogListApiItem): WorklogListItem {
@@ -349,32 +357,6 @@ function addDependencyNotifications(sourceWorklog: WorklogRecord) {
     })
 }
 
-function addUrgentNotifications(created: WorklogRecord) {
-  if (created.importance !== "URGENT") return
-
-  const team = teams.find((item) => item.id === created.teamId)
-  const department = departments.find((item) => item.id === team?.departmentId)
-  const targets = [team?.leaderId, department?.leaderId].filter(
-    (targetId): targetId is number =>
-      typeof targetId === "number" && targetId !== created.authorId
-  )
-
-  targets.forEach((targetId) => {
-    notifications.unshift({
-      id: getNextNotificationId(),
-      userId: targetId,
-      type: "URGENT",
-      title: "긴급 업무가 등록되었습니다",
-      content: `${created.title} 업무가 긴급 우선순위로 등록되었습니다.`,
-      referenceId: created.id,
-      isRead: false,
-      createdAt: new Date().toISOString(),
-      sourceScope: "TEAM",
-      deepLink: `/worklog/detail/${created.id}`,
-    })
-  })
-}
-
 export const worklogService = {
   async getWorklogs({
     page = 1,
@@ -412,6 +394,9 @@ export const worklogService = {
   async getFilterOptions(): Promise<WorklogFilterOptions> {
     return apiClient.get<WorklogFilterOptions>("/worklogs/filter-options")
   },
+  async getOptions(): Promise<WorklogOptionsApiResponse> {
+    return apiClient.get<WorklogOptionsApiResponse>("/worklogs/options")
+  },
   async getById(id: number): Promise<Worklog | undefined> {
     const response = await apiClient.get<WorklogDetailApiResponse>(
       `/worklogs/${id}`
@@ -420,50 +405,34 @@ export const worklogService = {
     return toWorklogDetail(response)
   },
   async create(values: WorklogFormValues) {
-    const { attachmentNames } = values
-    const worklogValues = {
+    const request = {
+      teamId: values.teamId,
       title: values.title,
-      requestContent: values.requestContent,
+      requestContent: values.requestContent || null,
       workContent: values.workContent,
-      status: values.status,
-      importance: values.importance,
+      statusCode: worklogStatusApiCodeMap[values.status] ?? "PENDING",
+      importanceCode: values.importance,
       actualHours: values.actualHours,
       instructionDate: values.instructionDate,
       dueDate: values.dueDate,
-      teamId: values.teamId,
-      authorId: values.authorId,
-      dependencyIds: values.dependencyIds,
+      tagIds: values.tagIds,
+      predecessorWorklogIds: values.dependencyIds,
     }
-    const today = new Date().toISOString().slice(0, 10)
-    const created: Worklog = {
-      id: getNextWorklogId(),
-      completionDate: values.status === "DONE" ? today : undefined,
-      aiSummary:
-        "업무 저장 직후 AI 파이프라인 mock 상태가 시작되며 요약/태그/임베딩을 비동기로 처리합니다.",
-      aiSummaryEdited: false,
-      aiStatus: "PROCESSING",
-      tagIds: mergeSelectedAndAiTags(values),
-      fileIds: [],
-      isDeleted: false,
-      createdAt: new Date().toISOString(),
-      updatedAt: new Date().toISOString(),
-      statusHistory: [
-        {
-          id: getNextStatusHistoryId(),
-          newStatus: values.status,
-          changedBy: values.authorId,
-          reason: "업무일지 생성",
-          changedAt: new Date().toISOString(),
-        },
-      ],
-      ...worklogValues,
+    const formData = new FormData()
+
+    formData.append(
+      "request",
+      new Blob([JSON.stringify(request)], { type: "application/json" })
+    )
+    if (values.attachmentFiles.length > 0) {
+      values.attachmentFiles.forEach((file) => {
+        formData.append("files", file, file.name)
+      })
+    } else {
+      formData.append("files", new Blob([]), "__empty__")
     }
 
-    syncFiles(created, attachmentNames, values.authorId)
-    worklogs.unshift(created)
-    addUrgentNotifications(created)
-    notifyMockDb()
-    return created
+    return apiClient.post<CreateWorklogResponse, FormData>("/worklogs", formData)
   },
   async update(id: number, values: WorklogFormValues) {
     const target = worklogs.find((worklog) => worklog.id === id)
@@ -471,11 +440,13 @@ export const worklogService = {
 
     const {
       attachmentNames,
+      attachmentFiles: _attachmentFiles,
       tagIds,
       aiSummary,
       aiSummaryEdited,
       ...worklogValues
     } = values
+    void _attachmentFiles
 
     if (
       hasCircularDependency(
@@ -521,14 +492,14 @@ export const worklogService = {
         : Array.from(new Set(tagIds)),
     })
 
-    syncFiles(target, attachmentNames, values.authorId)
+    syncFiles(target, attachmentNames, target.authorId)
 
     if (statusChanged) {
       target.statusHistory.unshift({
         id: getNextStatusHistoryId(),
         previousStatus,
         newStatus: values.status,
-        changedBy: values.authorId,
+        changedBy: target.authorId,
         reason: "수정 화면에서 상태가 변경되었습니다.",
         changedAt: new Date().toISOString(),
       })

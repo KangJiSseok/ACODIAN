@@ -6,17 +6,18 @@ import PageHeader from "@/app/_common/components/layout/pageHeader"
 import { WorklogForm } from "../../_components/worklogForm"
 import {
   useWorklogDetail,
-  useWorklogFilterOptions,
+  useWorklogOptions,
 } from "../../_hooks/useWorklogList"
 import { worklogService } from "../../_service/worklog.service"
+import { useTeamList } from "../../../team/_hooks/useTeamList"
+import type { TeamSummary } from "../../../team/_types/team.types"
 import type {
   Worklog,
-  WorklogFilterOptions,
   WorklogFormDependencyOption,
   WorklogFormTagOption,
   WorklogFormTeamOption,
-  WorklogFormUserOption,
   WorklogFormValues,
+  WorklogOptionsApiResponse,
   WorklogStatus,
 } from "../../_types/worklog.types"
 
@@ -40,29 +41,31 @@ export default function WorklogEditPage() {
     isLoading: isWorklogLoading,
   } = useWorklogDetail(worklogId)
   const {
-    data: filterOptions,
-    isLoading: isFilterOptionsLoading,
-  } = useWorklogFilterOptions()
+    data: teamPage,
+    isLoading: isTeamListLoading,
+  } = useTeamList({ pageSize: 100 })
+  const {
+    data: worklogOptions,
+    isLoading: isWorklogOptionsLoading,
+  } = useWorklogOptions()
 
   const formContext = useMemo(() => {
-    if (!worklog) return null
+    if (!worklog || !worklogOptions) return null
 
-    const teamOptionsSource = buildTeamOptions(worklog, filterOptions)
-    const authorOptionsSource = buildAuthorOptions(worklog, filterOptions)
-    const tagOptionsSource = buildTagOptions(filterOptions)
-    const dependencyOptionsSource = buildDependencyOptions(worklog)
+    const teamOptionsSource = buildTeamOptions(worklog, teamPage?.items ?? [])
+    const tagOptionsSource = buildTagOptions(worklogOptions)
+    const dependencyOptionsSource = buildDependencyOptions(worklog, worklogOptions)
     const tagIds = resolveTagIds(worklog.tagNames ?? [], tagOptionsSource)
 
     return {
       initialValues: toWorklogFormValues(worklog, tagIds),
       teamOptionsSource,
-      authorOptionsSource,
       dependencyOptionsSource,
       tagOptionsSource,
     }
-  }, [filterOptions, worklog])
+  }, [teamPage?.items, worklog, worklogOptions])
 
-  if (isWorklogLoading || isFilterOptionsLoading) {
+  if (isWorklogLoading || isTeamListLoading || isWorklogOptionsLoading) {
     return <div>업무를 불러오는 중입니다.</div>
   }
 
@@ -79,7 +82,6 @@ export default function WorklogEditPage() {
         currentWorklogId={worklog.id}
         submitLabel="수정 저장"
         teamOptionsSource={formContext.teamOptionsSource}
-        authorOptionsSource={formContext.authorOptionsSource}
         dependencyOptionsSource={formContext.dependencyOptionsSource}
         tagOptionsSource={formContext.tagOptionsSource}
         onSubmit={async (values) => {
@@ -105,10 +107,10 @@ function toWorklogFormValues(
     instructionDate: worklog.instructionDate,
     dueDate: worklog.dueDate,
     teamId: worklog.teamId,
-    authorId: worklog.authorId,
     dependencyIds: worklog.dependencyIds,
     attachmentNames:
       worklog.fileItems?.map((file) => file.originalName).filter(Boolean) ?? [],
+    attachmentFiles: [],
     tagIds,
     aiSummary: worklog.aiSummary,
     aiSummaryEdited: worklog.aiSummaryEdited,
@@ -117,13 +119,12 @@ function toWorklogFormValues(
 
 function buildTeamOptions(
   worklog: Worklog,
-  filterOptions: WorklogFilterOptions | undefined
+  teams: TeamSummary[]
 ): WorklogFormTeamOption[] {
-  const options =
-    filterOptions?.teams.map((team) => ({
-      id: team.teamId,
-      name: team.teamName,
-    })) ?? []
+  const options = teams.map((team) => ({
+    id: team.teamId,
+    name: team.teamName,
+  }))
 
   return ensureOption(options, {
     id: worklog.teamId,
@@ -131,51 +132,46 @@ function buildTeamOptions(
   })
 }
 
-function buildAuthorOptions(
-  worklog: Worklog,
-  filterOptions: WorklogFilterOptions | undefined
-): WorklogFormUserOption[] {
-  const indexed = new Map<number, WorklogFormUserOption>()
-
-  filterOptions?.teams.forEach((team) => {
-    team.members.forEach((member) => {
-      indexed.set(member.userId, {
-        id: member.userId,
-        name: member.userName,
-      })
-    })
-  })
-
-  return ensureOption(Array.from(indexed.values()), {
-    id: worklog.authorId,
-    name: worklog.authorName ?? `사용자 ${worklog.authorId}`,
-  })
-}
-
 function buildTagOptions(
-  filterOptions: WorklogFilterOptions | undefined
+  worklogOptions: WorklogOptionsApiResponse
 ): WorklogFormTagOption[] {
-  return (
-    filterOptions?.tags.map((tag) => ({
-      id: tag.tagId,
-      name: tag.tagName,
-      usageCount: 0,
-      category: "업무",
-      source: "MANUAL",
-      reuseHint: "",
-    })) ?? []
-  )
+  return worklogOptions.tags.map((tag) => ({
+    id: tag.tagId,
+    name: tag.tagName,
+    usageCount: tag.usageCount,
+    category: "업무",
+    source: "MANUAL",
+    reuseHint: "",
+  }))
 }
 
-function buildDependencyOptions(worklog: Worklog): WorklogFormDependencyOption[] {
+function buildDependencyOptions(
+  worklog: Worklog,
+  worklogOptions: WorklogOptionsApiResponse
+): WorklogFormDependencyOption[] {
+  const options: WorklogFormDependencyOption[] =
+    worklogOptions.predecessorCandidates.map((candidate) => ({
+      id: candidate.worklogId,
+      title: candidate.title,
+      status: statusCodeMap[candidate.statusCode] ?? "PENDING",
+      teamId: candidate.teamId,
+      teamName: candidate.teamName,
+      authorId: candidate.authorId,
+      authorName: candidate.authorName,
+      aiSummary: candidate.aiSummary ?? "",
+      workContent: candidate.workContent,
+      isDeleted: false,
+      dependencyIds: [],
+    }))
+
   return (
-    worklog.dependOnWorklogs?.map((dependency) => ({
+    worklog.dependOnWorklogs?.reduce((acc, dependency) => ensureOption(acc, {
       id: dependency.worklogId,
       title: dependency.title,
       status: statusCodeMap[dependency.statusCode] ?? "PENDING",
       isDeleted: false,
       dependencyIds: [],
-    })) ?? []
+    }), options) ?? options
   )
 }
 

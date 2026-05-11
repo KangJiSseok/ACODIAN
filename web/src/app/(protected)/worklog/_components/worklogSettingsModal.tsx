@@ -27,7 +27,6 @@ interface WorklogSettingsModalProps {
   onValuesChange: (values: WorklogFormValues) => void
   controlClassName: string
   teamOptions: SelectOption[]
-  authorOptions: SelectOption[]
   statusOptions: SelectOption[]
 }
 
@@ -38,7 +37,6 @@ export function WorklogSettingsModal({
   onValuesChange,
   controlClassName,
   teamOptions,
-  authorOptions,
   statusOptions,
 }: WorklogSettingsModalProps) {
   return (
@@ -47,7 +45,7 @@ export function WorklogSettingsModal({
         <DialogHeader>
           <DialogTitle>작업 설정</DialogTitle>
           <DialogDescription>
-            업무 상태, 담당자, 소요 시간과 진행 일정을 설정합니다.
+            업무 상태, 담당자, 업무 소요 예상 시간과 진행 일정을 설정합니다.
           </DialogDescription>
         </DialogHeader>
         <div className="grid gap-5">
@@ -83,8 +81,8 @@ export function WorklogSettingsModal({
             </div>
           </ModalField>
 
-          <ModalField label="담당자">
-            <div className="grid gap-3 sm:grid-cols-2">
+          <ModalField label="담당 팀">
+            <div className="grid gap-3">
               <Select
                 className={controlClassName}
                 value={String(values.teamId)}
@@ -93,18 +91,10 @@ export function WorklogSettingsModal({
                   onValuesChange({ ...values, teamId: Number(event.target.value) })
                 }
               />
-              <Select
-                className={controlClassName}
-                value={String(values.authorId)}
-                options={authorOptions}
-                onChange={(event) =>
-                  onValuesChange({ ...values, authorId: Number(event.target.value) })
-                }
-              />
             </div>
           </ModalField>
 
-          <ModalField label="시간">
+          <ModalField label="업무 소요 예상 시간">
             <div className="space-y-2">
               <Input
                 className={controlClassName}
