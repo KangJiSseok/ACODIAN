@@ -474,7 +474,6 @@ export const worklogService = {
       tagIds,
       aiSummary,
       aiSummaryEdited,
-      aiRegenerateRequested,
       ...worklogValues
     } = values
 
@@ -504,10 +503,7 @@ export const worklogService = {
       target.title !== values.title ||
       target.workContent !== values.workContent ||
       target.requestContent !== values.requestContent
-    const shouldReprocess =
-      contentChanged || attachmentsChanged || Boolean(aiRegenerateRequested)
-    const summaryChanged =
-      aiSummary !== undefined && aiSummary.trim() !== target.aiSummary.trim()
+    const shouldReprocess = contentChanged || attachmentsChanged
 
     Object.assign(target, worklogValues, {
       dependencyIds: values.dependencyIds.filter((dependencyId) => dependencyId !== id),
@@ -515,15 +511,11 @@ export const worklogService = {
       completionDate: values.status === "DONE" ? today : undefined,
       aiStatus: shouldReprocess ? "PROCESSING" : target.aiStatus,
       aiSummary: shouldReprocess
-        ? aiRegenerateRequested
-          ? "사용자가 AI 요약 재생성을 요청하여 요약/태그/임베딩을 다시 계산하는 mock 상태입니다."
-          : "업무 내용 또는 첨부 파일 변경이 감지되어 AI 요약/태그/임베딩을 다시 계산하는 mock 상태입니다."
+        ? "업무 내용 또는 첨부 파일 변경이 감지되어 AI 요약/태그/임베딩을 다시 계산하는 mock 상태입니다."
         : aiSummary ?? target.aiSummary,
       aiSummaryEdited: shouldReprocess
         ? false
-        : summaryChanged
-          ? true
-          : aiSummaryEdited ?? target.aiSummaryEdited,
+        : aiSummaryEdited ?? target.aiSummaryEdited,
       tagIds: shouldReprocess
         ? mergeSelectedAndAiTags({ ...values, tagIds })
         : Array.from(new Set(tagIds)),

@@ -3,7 +3,6 @@
 import { useMemo } from "react"
 import { useParams, useRouter } from "next/navigation"
 import PageHeader from "@/app/_common/components/layout/pageHeader"
-import { tags, worklogs } from "../../_mock/worklog.mock"
 import { WorklogForm } from "../../_components/worklogForm"
 import {
   useWorklogDetail,
@@ -50,7 +49,7 @@ export default function WorklogEditPage() {
 
     const teamOptionsSource = buildTeamOptions(worklog, filterOptions)
     const authorOptionsSource = buildAuthorOptions(worklog, filterOptions)
-    const tagOptionsSource = buildTagOptions(worklog, filterOptions)
+    const tagOptionsSource = buildTagOptions(filterOptions)
     const dependencyOptionsSource = buildDependencyOptions(worklog)
     const tagIds = resolveTagIds(worklog.tagNames ?? [], tagOptionsSource)
 
@@ -113,7 +112,6 @@ function toWorklogFormValues(
     tagIds,
     aiSummary: worklog.aiSummary,
     aiSummaryEdited: worklog.aiSummaryEdited,
-    aiRegenerateRequested: false,
   }
 }
 
@@ -155,75 +153,30 @@ function buildAuthorOptions(
 }
 
 function buildTagOptions(
-  worklog: Worklog,
   filterOptions: WorklogFilterOptions | undefined
 ): WorklogFormTagOption[] {
-  const indexed = new Map<number, WorklogFormTagOption>()
-
-  tags.forEach((tag) => {
-    indexed.set(tag.id, tag)
-  })
-
-  filterOptions?.tags.forEach((tag) => {
-    indexed.set(tag.tagId, {
+  return (
+    filterOptions?.tags.map((tag) => ({
       id: tag.tagId,
       name: tag.tagName,
       usageCount: 0,
       category: "업무",
       source: "MANUAL",
       reuseHint: "",
-    })
-  })
-
-  worklog.tagNames?.forEach((tagName, index) => {
-    const exists = Array.from(indexed.values()).some(
-      (tag) => tag.name === tagName
-    )
-
-    if (!exists) {
-      indexed.set(-index - 1, {
-        id: -index - 1,
-        name: tagName,
-        usageCount: 0,
-        category: "업무",
-        source: "MANUAL",
-        reuseHint: "",
-      })
-    }
-  })
-
-  return Array.from(indexed.values())
+    })) ?? []
+  )
 }
 
 function buildDependencyOptions(worklog: Worklog): WorklogFormDependencyOption[] {
-  const indexed = new Map<number, WorklogFormDependencyOption>()
-
-  worklogs.forEach((candidate) => {
-    indexed.set(candidate.id, {
-      id: candidate.id,
-      title: candidate.title,
-      status: candidate.status,
-      teamId: candidate.teamId,
-      authorId: candidate.authorId,
-      aiSummary: candidate.aiSummary,
-      workContent: candidate.workContent,
-      requestContent: candidate.requestContent,
-      isDeleted: candidate.isDeleted,
-      dependencyIds: candidate.dependencyIds,
-    })
-  })
-
-  worklog.dependOnWorklogs?.forEach((dependency) => {
-    indexed.set(dependency.worklogId, {
+  return (
+    worklog.dependOnWorklogs?.map((dependency) => ({
       id: dependency.worklogId,
       title: dependency.title,
       status: statusCodeMap[dependency.statusCode] ?? "PENDING",
       isDeleted: false,
       dependencyIds: [],
-    })
-  })
-
-  return Array.from(indexed.values())
+    })) ?? []
+  )
 }
 
 function resolveTagIds(

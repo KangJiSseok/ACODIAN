@@ -264,7 +264,7 @@ export function WorklogForm({
   )
   const circularDependencyDetected =
     currentWorklogId !== undefined &&
-    hasCircularDependency(currentWorklogId, values.dependencyIds, worklogs)
+    hasCircularDependency(currentWorklogId, values.dependencyIds, dependencySource)
 
   const addDependency = (dependencyId: number) => {
     setValues((previous) => ({

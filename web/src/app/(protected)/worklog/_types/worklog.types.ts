@@ -69,7 +69,6 @@ export interface WorklogFormValues {
   tagIds: number[]
   aiSummary?: string
   aiSummaryEdited?: boolean
-  aiRegenerateRequested?: boolean
 }
 
 export interface WorklogFormTeamOption {
