@@ -1,12 +1,15 @@
 package com.ibank.axwms.domain.file.service;
 
+import com.ibank.axwms.domain.file.dto.GetFilesApiDto;
 import com.ibank.axwms.domain.file.entity.File;
 import com.ibank.axwms.domain.file.event.WorklogFileUploadedEvent;
 import com.ibank.axwms.domain.file.external.FilePathGenerator;
 import com.ibank.axwms.domain.file.external.ObjectStoragePort;
 import com.ibank.axwms.domain.file.repository.FileRepository;
+import com.ibank.axwms.domain.file.repository.jooq.query.FilePageQuery;
 import com.ibank.axwms.global.error.BusinessException;
 import com.ibank.axwms.global.error.ErrorCode;
+import com.ibank.axwms.global.response.PageResponse;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.context.ApplicationEventPublisher;
@@ -108,5 +111,14 @@ public class FileService {
             throw new BusinessException(ErrorCode.WORKLOG_FILE_NOT_FOUND);
         }
         files.forEach(File::markDeleted);
+    }
+
+    /**
+     * 삭제되지 않은 파일 목록을 최신 등록순으로 페이지 조회한다.
+     * 별도 가시성 필터를 적용하지 않으며, 호출 권한은 controller 의 @PreAuthorize 로 가드한다.
+     */
+    public PageResponse<GetFilesApiDto.Response.Item> getFiles(GetFilesApiDto.Request request) {
+        FilePageQuery query = FilePageQuery.from(request);
+        return GetFilesApiDto.Response.fromPage(fileRepository.findFilePage(query));
     }
 }
