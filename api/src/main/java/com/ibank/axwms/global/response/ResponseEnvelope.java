@@ -4,6 +4,7 @@ import org.springframework.core.MethodParameter;
 import org.springframework.core.io.Resource;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.method.HandlerMethod;
+import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
 import org.springframework.web.servlet.mvc.method.annotation.StreamingResponseBody;
 
 /**
@@ -54,7 +55,7 @@ public final class ResponseEnvelope {
     /**
      * 봉투로 감쌀 수 있는 반환 타입인지 판정한다.
      * 이미 봉투이거나(ApiResponse) 호출자가 응답 제어권을 가진(ResponseEntity) 경우는 이중 래핑을 막기 위해 제외하고,
-     * JSON 객체로 감싸면 직렬화가 깨지는 타입(CharSequence 기반 텍스트, void, Resource 바이너리, StreamingResponseBody 스트림)도 제외한다.
+     * JSON 객체로 감싸면 직렬화가 깨지는 타입(CharSequence 기반 텍스트, void, Resource 바이너리, SseEmitter/StreamingResponseBody 스트림)도 제외한다.
      */
     private static boolean isWrappableReturnType(Class<?> returnType) {
         return !ApiResponse.class.isAssignableFrom(returnType)
@@ -63,6 +64,7 @@ public final class ResponseEnvelope {
                 && !Void.TYPE.equals(returnType)
                 && !Void.class.equals(returnType)
                 && !Resource.class.isAssignableFrom(returnType)
+                && !SseEmitter.class.isAssignableFrom(returnType)
                 && !StreamingResponseBody.class.isAssignableFrom(returnType);
     }
 }

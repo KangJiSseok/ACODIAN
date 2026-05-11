@@ -77,6 +77,10 @@ notification:
     cron: ${NOTIFICATION_WORKLOG_DUE_SOON_REMINDER_CRON:0 0 9 * * *}
   stream:
     key: ${NOTIFICATION_STREAM_KEY:notifications:stream}
+    poll-timeout-millis: ${NOTIFICATION_STREAM_POLL_TIMEOUT_MILLIS:2000}
+  sse:
+    timeout-millis: ${NOTIFICATION_SSE_TIMEOUT_MILLIS:1800000}
+    heartbeat-delay-millis: ${NOTIFICATION_SSE_HEARTBEAT_DELAY_MILLIS:25000}
 
 auth:
   refresh-cookie:

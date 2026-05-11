@@ -43,18 +43,18 @@ public class NotificationRedisStreamPublisher {
     }
 
     /**
-     * Redis Stream consumer 가 serializer 차이에 흔들리지 않도록 모든 field 값을 문자열로 고정한다.
+     * 필수 field 는 원본 계약을 그대로 드러내고, 선택 field 만 Redis hash field 유지를 위해 빈 문자열로 표현한다.
      */
     private Map<String, String> toStreamFields(NotificationCreatedEvent event) {
         Map<String, String> fields = new LinkedHashMap<>();
-        fields.put("notificationId", String.valueOf(event.notificationId()));
-        fields.put("userId", String.valueOf(event.userId()));
-        fields.put("type", nullToEmpty(event.type()));
-        fields.put("title", nullToEmpty(event.title()));
+        fields.put("notificationId", event.notificationId().toString());
+        fields.put("userId", event.userId().toString());
+        fields.put("type", event.type());
+        fields.put("title", event.title());
         fields.put("content", nullToEmpty(event.content()));
         fields.put("referenceType", nullToEmpty(event.referenceType()));
         fields.put("referenceId", event.referenceId() == null ? "" : String.valueOf(event.referenceId()));
-        fields.put("createdAt", event.createdAt() == null ? "" : event.createdAt().toString());
+        fields.put("createdAt", event.createdAt().toString());
         return fields;
     }
 

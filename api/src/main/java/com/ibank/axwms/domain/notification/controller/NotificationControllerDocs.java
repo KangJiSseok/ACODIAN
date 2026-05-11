@@ -11,9 +11,21 @@ import io.swagger.v3.oas.annotations.responses.ApiResponses;
 import io.swagger.v3.oas.annotations.security.SecurityRequirement;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import org.springdoc.core.annotations.ParameterObject;
+import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
 
 @Tag(name = "Notification", description = "알림 API")
 public interface NotificationControllerDocs {
+
+    @Operation(summary = "내 알림 SSE 구독",
+            description = "현재 로그인 사용자의 새 알림을 Server-Sent Events 로 실시간 수신한다. "
+                    + "재접속 replay 와 누락 복구는 이 엔드포인트의 책임이 아니다.")
+    @SecurityRequirement(name = "bearerAuth")
+    @ApiResponses({
+            @ApiResponse(responseCode = "200", description = "SSE 연결이 열린다."),
+            @ApiResponse(responseCode = "401", description = "인증이 필요하다.", content = @Content),
+            @ApiResponse(responseCode = "403", description = "알림 구독 권한이 없다.", content = @Content)
+    })
+    SseEmitter subscribeNotificationStream(@Parameter(hidden = true) CustomUserPrincipal principal);
 
     @Operation(summary = "내 알림 목록 조회",
             description = "현재 로그인 사용자의 알림을 읽음 상태, 부서 ID, 팀 ID 조건으로 필터링해 페이지네이션으로 조회한다. "
