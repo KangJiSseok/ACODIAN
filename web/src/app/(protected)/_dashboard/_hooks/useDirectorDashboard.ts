@@ -6,6 +6,8 @@ export const dashboardKeys = {
   director: () => [...dashboardKeys.all, "department-comparison"] as const,
   departmentDetail: (departmentId: number) =>
     [...dashboardKeys.all, "department-detail", departmentId] as const,
+  teamDetail: (teamId: number) =>
+    [...dashboardKeys.all, "team-detail", teamId] as const,
   my: (teamId: number) => [...dashboardKeys.all, "my", teamId] as const,
 };
 
@@ -14,6 +16,14 @@ export function useDirectorDashboard(enabled: boolean) {
     queryKey: dashboardKeys.director(),
     queryFn: dashboardService.getDirectorDashboard,
     enabled,
+  });
+}
+
+export function useTeamDashboard(teamId: number | undefined, enabled: boolean) {
+  return useQuery({
+    queryKey: dashboardKeys.teamDetail(teamId ?? 0),
+    queryFn: () => dashboardService.getTeamDashboard(teamId ?? 0),
+    enabled: enabled && Number.isFinite(teamId),
   });
 }
 
