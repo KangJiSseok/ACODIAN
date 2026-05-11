@@ -19,16 +19,6 @@ export default function DepartmentPage() {
       <PageHeader
         title="부서 관리"
         description="관리 가능한 부서와 운영 현황을 확인합니다."
-        actions={
-          <Button
-            asChild
-            type="button"
-            variant="default"
-            className="h-10 min-w-32 px-6 text-sm font-semibold !text-primary-foreground hover:!text-primary-foreground"
-          >
-            <Link href="/department/create">부서 등록</Link>
-          </Button>
-        }
       />
 
       <div className="grid gap-4 md:grid-cols-3">
@@ -48,7 +38,7 @@ export default function DepartmentPage() {
 
       <section className="space-y-4">
         <div className="border-t-2 border-foreground/70 pt-5">
-          <div className="flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
+          <div className="grid gap-3 sm:grid-cols-[minmax(0,1fr)_auto] sm:items-end">
             <div>
               <h2 className="text-[20px] font-semibold tracking-[-0.04em] text-foreground">
                 부서 목록
@@ -57,9 +47,19 @@ export default function DepartmentPage() {
                 활성 팀이 남아 있는 부서는 삭제할 수 없습니다.
               </p>
             </div>
-            <p className="text-sm font-medium text-muted-foreground">
-              총 {departments.length}개
-            </p>
+            <div className="flex flex-col gap-3 sm:items-end">
+              <Button
+                asChild
+                type="button"
+                variant="default"
+                className="h-10 min-w-32 px-6 text-sm font-semibold !text-primary-foreground hover:!text-primary-foreground"
+              >
+                <Link href="/department/create">부서 등록</Link>
+              </Button>
+              <p className="text-sm font-medium text-muted-foreground">
+                표시 중인 부서 {departments.length}개
+              </p>
+            </div>
           </div>
         </div>
 
