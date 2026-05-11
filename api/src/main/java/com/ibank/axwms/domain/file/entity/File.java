@@ -90,6 +90,14 @@ public class File {
         return entity;
     }
 
+    /**
+     * 첨부 파일을 소프트 삭제 상태로 표시한다.
+     * S3 객체 자체의 삭제는 별도 cleanup 으로 처리하고, 본 엔티티는 isDeleted 플래그만 토글한다.
+     */
+    public void markDeleted() {
+        this.isDeleted = Boolean.TRUE;
+    }
+
     private static String extensionOf(String originalName) {
         if (originalName == null) {
             return DEFAULT_EXTENSION;

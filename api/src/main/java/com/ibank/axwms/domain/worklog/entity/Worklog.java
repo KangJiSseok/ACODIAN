@@ -129,6 +129,32 @@ public class Worklog {
         this.aiSummary = summary;
     }
 
+    /**
+     * 부분 수정 — null 인 인자는 변경하지 않는다.
+     * aiSummary 가 새로 들어오면 aiSummaryEdited 를 true 로 표시한다 (사용자 편집 흔적).
+     * teamId 는 수정 대상에서 제외 — 팀 변경은 다른 엔드포인트로 분리.
+     */
+    public void updatePartial(String title,
+                              String requestContent,
+                              String workContent,
+                              WorklogImportance importanceCode,
+                              BigDecimal actualHours,
+                              LocalDate instructionDate,
+                              LocalDate dueDate,
+                              String aiSummary) {
+        if (title != null) this.title = title;
+        if (requestContent != null) this.requestContent = requestContent;
+        if (workContent != null) this.workContent = workContent;
+        if (importanceCode != null) this.importanceCode = importanceCode;
+        if (actualHours != null) this.actualHours = actualHours;
+        if (instructionDate != null) this.instructionDate = instructionDate;
+        if (dueDate != null) this.dueDate = dueDate;
+        if (aiSummary != null) {
+            this.aiSummary = aiSummary;
+            this.aiSummaryEdited = Boolean.TRUE;
+        }
+    }
+
     public void completeAiSummaryProcessing() {
         this.aiProcessingStatus = AiProcessingStatus.COMPLETED;
     }

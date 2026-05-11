@@ -5,6 +5,8 @@ import com.ibank.axwms.domain.file.event.WorklogFileUploadedEvent;
 import com.ibank.axwms.domain.file.external.FilePathGenerator;
 import com.ibank.axwms.domain.file.external.ObjectStoragePort;
 import com.ibank.axwms.domain.file.repository.FileRepository;
+import com.ibank.axwms.global.error.BusinessException;
+import com.ibank.axwms.global.error.ErrorCode;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.context.ApplicationEventPublisher;
@@ -13,7 +15,10 @@ import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.multipart.MultipartFile;
 
 import java.util.ArrayList;
+import java.util.Collection;
+import java.util.LinkedHashSet;
 import java.util.List;
+import java.util.Set;
 
 @Slf4j
 @Service
@@ -81,5 +86,27 @@ public class FileService {
             results.add(new UploadedFile(saved.getId(), key, file.getOriginalFilename(), file.getSize()));
         }
         return results;
+    }
+
+    /**
+     * 주어진 worklog 의 첨부 파일 중 fileIds 에 해당하는 파일들을 일괄 소프트 삭제한다.
+     * 보안 가드: 요청된 fileId 가 worklog 소속이 아니거나 이미 삭제된 경우 size 불일치로 감지해 단일 ErrorCode 로 거부한다.
+     * 실제 S3 객체 삭제는 별도 cleanup 책임이며, 본 메서드는 DB isDeleted 플래그만 토글한다.
+     *
+     * @param worklogId 삭제 대상 파일들이 속한 worklog ID
+     * @param fileIds 삭제할 file ID 들. null/빈 컬렉션은 no-op.
+     * @throws BusinessException WORKLOG_FILE_NOT_FOUND 일부 fileId 가 해당 worklog 에 속하지 않거나 이미 삭제됨
+     */
+    @Transactional
+    public void softDeleteWorklogFiles(Long worklogId, Collection<Long> fileIds) {
+        if (fileIds == null || fileIds.isEmpty()) {
+            return;
+        }
+        Set<Long> uniqueIds = new LinkedHashSet<>(fileIds);
+        List<File> files = fileRepository.findAllByIdInAndWorklogIdAndIsDeletedFalse(uniqueIds, worklogId);
+        if (files.size() != uniqueIds.size()) {
+            throw new BusinessException(ErrorCode.WORKLOG_FILE_NOT_FOUND);
+        }
+        files.forEach(File::markDeleted);
     }
 }

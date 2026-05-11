@@ -6,6 +6,7 @@ import com.ibank.axwms.domain.worklog.dto.GetWorklogFilterOptionsApiDto;
 import com.ibank.axwms.domain.worklog.dto.GetWorklogOptionsApiDto;
 import com.ibank.axwms.domain.worklog.dto.GetWorklogsApiDto;
 import com.ibank.axwms.domain.worklog.dto.SearchWorklogsApiDto;
+import com.ibank.axwms.domain.worklog.dto.UpdateWorklogApiDto;
 import com.ibank.axwms.domain.worklog.service.WorklogService;
 import com.ibank.axwms.domain.worklog.service.search.WorklogSearchService;
 import com.ibank.axwms.global.response.PageResponse;
@@ -17,6 +18,7 @@ import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.ModelAttribute;
+import org.springframework.web.bind.annotation.PatchMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
@@ -83,6 +85,19 @@ public class WorklogController implements WorklogControllerDocs {
             @AuthenticationPrincipal CustomUserPrincipal principal
     ) {
         return worklogSearchService.getFilterOptions(principal);
+    }
+
+    @Override
+    @PatchMapping("/{worklogId}")
+    @ResponseStatus(HttpStatus.OK)
+    @PreAuthorize("hasAnyRole('DIRECTOR','DEPT_HEAD','TEAM_LEAD','MEMBER')")
+    public void updateWorklog(
+            @AuthenticationPrincipal CustomUserPrincipal principal,
+            @PathVariable Long worklogId,
+            @Valid @RequestPart UpdateWorklogApiDto.Request request,
+            @RequestPart(value = "files", required = false) List<MultipartFile> files
+    ) {
+        worklogService.updateWorklog(principal, worklogId, request, files);
     }
 
     @Override

@@ -9,6 +9,7 @@ import com.ibank.axwms.domain.worklog.dto.CreateWorklogApiDto;
 import com.ibank.axwms.domain.worklog.dto.GetWorklogOptionsApiDto;
 import com.ibank.axwms.domain.worklog.dto.GetWorklogDetailApiDto;
 import com.ibank.axwms.domain.worklog.dto.GetWorklogsApiDto;
+import com.ibank.axwms.domain.worklog.dto.UpdateWorklogApiDto;
 import com.ibank.axwms.domain.worklog.entity.Worklog;
 import com.ibank.axwms.domain.worklog.repository.WorklogDependencyRepository;
 import com.ibank.axwms.domain.worklog.repository.WorklogRepository;
@@ -137,6 +138,65 @@ public class WorklogService {
         List<WorklogStatusHistoryProjection> statusHistories = worklogStatusHistoryRepository.findStatusHistories(worklogId);
 
         return GetWorklogDetailApiDto.Response.of(detail, files, tags, dependencies, statusHistories);
+    }
+
+    /**
+     * 작성자 본인이 자기 업무일지를 한 번의 multipart 요청으로 부분 수정한다.
+     * 본문 부분 수정 + 선행 업무 replace + 첨부 파일 추가/삭제를 단일 트랜잭션으로 처리한다.
+     * null 필드는 변경되지 않으며, predecessorWorklogIds 는 null=변경없음 / []=모두 제거 / [...]=전체 replace 시멘틱.
+     * teamId 는 수정 불가. 일자 범위는 변경 후 합산값 기준으로 검증.
+     * aiSummary 가 들어오면 aiSummaryEdited 가 true 로 자동 표시.
+     * 파일 추가/삭제 중 어느 단계든 실패하면 본문 수정까지 함께 롤백된다.
+     *
+     * @param principal 현재 로그인 사용자
+     * @param worklogId 수정 대상 worklog ID
+     * @param request   부분 수정 요청 (multipart 의 JSON part)
+     * @param newFiles  새로 추가할 첨부 파일들 (multipart 의 file parts). null/빈 리스트 허용.
+     * @throws BusinessException WORKLOG_NOT_FOUND        worklog 가 없거나 소프트 삭제됨
+     * @throws BusinessException WORKLOG_EDIT_FORBIDDEN   작성자 본인이 아님
+     * @throws BusinessException WORKLOG_INVALID_DATE_RANGE  마감 일자가 지시 일자보다 앞섬
+     * @throws BusinessException WORKLOG_PREDECESSOR_*    선행 업무 검증 실패 (자기참조 / 접근 불가 / 순환)
+     * @throws BusinessException WORKLOG_FILE_NOT_FOUND   삭제 대상 fileId 가 해당 worklog 에 속하지 않거나 이미 삭제됨
+     */
+    @Transactional
+    public void updateWorklog(CustomUserPrincipal principal,
+                              Long worklogId,
+                              UpdateWorklogApiDto.Request request,
+                              List<MultipartFile> newFiles) {
+        Worklog worklog = worklogRepository.findById(worklogId)
+                .filter(w -> !Boolean.TRUE.equals(w.getIsDeleted()))
+                .orElseThrow(() -> new BusinessException(ErrorCode.WORKLOG_NOT_FOUND));
+
+        if (!worklog.getAuthorId().equals(principal.userId())) {
+            throw new BusinessException(ErrorCode.WORKLOG_EDIT_FORBIDDEN);
+        }
+
+        LocalDate effectiveInstructionDate = request.instructionDate() != null ? request.instructionDate() : worklog.getInstructionDate();
+        LocalDate effectiveDueDate = request.dueDate() != null ? request.dueDate() : worklog.getDueDate();
+        validateDateRange(effectiveInstructionDate, effectiveDueDate);
+
+        worklog.updatePartial(
+                request.title(),
+                request.requestContent(),
+                request.workContent(),
+                request.importanceCode(),
+                request.actualHours(),
+                request.instructionDate(),
+                request.dueDate(),
+                request.aiSummary()
+        );
+
+        worklogDependencyService.replacePredecessors(
+                principal.userId(),
+                worklogId,
+                request.predecessorWorklogIds()
+        );
+
+        if (request.removeFileIds() != null && !request.removeFileIds().isEmpty()) {
+            fileService.softDeleteWorklogFiles(worklogId, request.removeFileIds());
+        }
+
+        fileService.uploadWorklogFiles(worklogId, principal.userId(), newFiles);
     }
 
     /**
