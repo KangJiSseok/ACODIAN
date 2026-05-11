@@ -110,7 +110,7 @@ class TeamRepositoryIntegrationTest extends IntegrationTestSupport {
                         tuple(fixture.leaderTeamId(), "리더팀", "ACTIVE", fixture.callerId(), "호출자", 2L, true, "리더", "겸임", false),
                         tuple(fixture.primaryTeamId(), "주담당팀", "ACTIVE", null, null, 1L, false, "주담당", "주담당", true),
                         tuple(fixture.adminOnlyTeamId(), "관리전용팀", "ACTIVE", fixture.adminOnlyLeaderId(), "관리전용리더", 1L, false, null, null, false),
-                        tuple(fixture.inactiveDuplicateTeamId(), "중복권한비활성팀", "INACTIVE", fixture.callerId(), "호출자", 1L, true, "중복", "주담당", true)
+                        tuple(fixture.inactiveDuplicateTeamId(), "중복권한비활성팀", "INACTIVE", fixture.callerId(), "호출자", 1L, true, "중복", "겸임", false)
                 );
         assertThat(result.getContent())
                 .extracting(TeamSummaryProjection::teamId)
@@ -277,7 +277,7 @@ class TeamRepositoryIntegrationTest extends IntegrationTestSupport {
         userTeamRepository.save(UserTeam.create(leftMember.getId(), leaderTeam.getId(), false, "이탈", "겸임", false, UserTeamStatus.LEFT));
         userTeamRepository.save(UserTeam.create(caller.getId(), primaryTeam.getId(), false, "주담당", "주담당", true, UserTeamStatus.ACTIVE));
         userTeamRepository.save(UserTeam.create(adminOnlyLeader.getId(), adminOnlyTeam.getId(), true, "관리전용", "겸임", false, UserTeamStatus.ACTIVE));
-        userTeamRepository.save(UserTeam.create(caller.getId(), inactiveDuplicateTeam.getId(), true, "중복", "주담당", true, UserTeamStatus.ACTIVE));
+        userTeamRepository.save(UserTeam.create(caller.getId(), inactiveDuplicateTeam.getId(), true, "중복", "겸임", false, UserTeamStatus.ACTIVE));
         userTeamRepository.save(UserTeam.create(caller.getId(), leftOnlyTeam.getId(), false, "이탈", "주담당", true, UserTeamStatus.LEFT));
 
         teamAdminRepository.save(TeamAdmin.grant(caller.getId(), adminOnlyTeam.getId()));

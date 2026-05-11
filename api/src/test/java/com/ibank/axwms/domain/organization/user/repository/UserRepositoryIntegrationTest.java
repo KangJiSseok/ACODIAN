@@ -1,6 +1,7 @@
 package com.ibank.axwms.domain.organization.user.repository;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.assertj.core.groups.Tuple.tuple;
 
 import com.ibank.axwms.domain.organization.department.DepartmentStatus;
@@ -26,6 +27,7 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.data.domain.Page;
 
 class UserRepositoryIntegrationTest extends IntegrationTestSupport {
@@ -141,6 +143,78 @@ class UserRepositoryIntegrationTest extends IntegrationTestSupport {
         assertThat(result.getTotalPages()).isEqualTo(2);
         assertThat(result.getNumber()).isEqualTo(1);
         assertThat(result.getSize()).isEqualTo(2);
+    }
+
+    @Test
+    @DisplayName("사용자 목록은 복수 팀 소속 사용자를 한 행으로 조회하고 대표 팀을 표시한다")
+    void 사용자_목록은_복수_팀_소속_사용자를_한_행으로_조회하고_대표_팀을_표시한다() {
+        Department department = departmentRepository.save(createDepartment("물류본부"));
+        Team primaryTeam = teamRepository.save(createTeam("대표팀"));
+        Team nonPrimaryTeam = teamRepository.save(createTeam("겸임팀"));
+        User user = userRepository.save(createUser(department.getId(), "복수소속", "multi@example.com", UserRole.MEMBER, EmploymentStatus.ACTIVE, "사원", "팀원", "010-0000-0021"));
+
+        userTeamRepository.save(UserTeam.create(user.getId(), primaryTeam.getId(), false, "주담당", "100%", true, UserTeamStatus.ACTIVE));
+        userTeamRepository.save(UserTeam.create(user.getId(), nonPrimaryTeam.getId(), false, "겸임", "20%", false, UserTeamStatus.ACTIVE));
+
+        Page<UserSummaryProjection> result = userRepository.findUsers(new UserListQuery(null, null, null, null, 1, 20));
+
+        assertThat(result.getContent())
+                .extracting(UserSummaryProjection::userId, UserSummaryProjection::teamId, UserSummaryProjection::teamName)
+                .containsExactly(tuple(user.getId(), primaryTeam.getId(), "대표팀"));
+        assertThat(result.getTotalElements()).isEqualTo(1);
+    }
+
+    @Test
+    @DisplayName("사용자 목록은 대표 팀이 없는 복수 팀 소속 사용자의 팀 필드를 비워 둔다")
+    void 사용자_목록은_대표_팀이_없는_복수_팀_소속_사용자의_팀_필드를_비워_둔다() {
+        Department department = departmentRepository.save(createDepartment("지원본부"));
+        Team firstTeam = teamRepository.save(createTeam("지원1팀"));
+        Team secondTeam = teamRepository.save(createTeam("지원2팀"));
+        User user = userRepository.save(createUser(department.getId(), "대표없음", "no-primary@example.com", UserRole.MEMBER, EmploymentStatus.ACTIVE, "사원", "팀원", "010-0000-0022"));
+
+        userTeamRepository.save(UserTeam.create(user.getId(), firstTeam.getId(), false, "겸임", "50%", false, UserTeamStatus.ACTIVE));
+        userTeamRepository.save(UserTeam.create(user.getId(), secondTeam.getId(), false, "겸임", "50%", false, UserTeamStatus.ACTIVE));
+
+        Page<UserSummaryProjection> result = userRepository.findUsers(new UserListQuery(null, null, null, null, 1, 20));
+
+        assertThat(result.getContent())
+                .extracting(UserSummaryProjection::userId, UserSummaryProjection::teamId, UserSummaryProjection::teamName)
+                .containsExactly(tuple(user.getId(), null, null));
+        assertThat(result.getTotalElements()).isEqualTo(1);
+    }
+
+    @Test
+    @DisplayName("사용자 목록은 부서가 없는 사용자도 조회하고 부서와 팀 필드를 비워 둔다")
+    void 사용자_목록은_부서가_없는_사용자도_조회하고_부서와_팀_필드를_비워_둔다() {
+        User user = userRepository.save(createUser(null, "무소속", "no-department@example.com", UserRole.MEMBER, EmploymentStatus.ACTIVE, "사원", "팀원", "010-0000-0023"));
+
+        Page<UserSummaryProjection> result = userRepository.findUsers(new UserListQuery(null, null, null, null, 1, 20));
+
+        assertThat(result.getContent())
+                .extracting(
+                        UserSummaryProjection::userId,
+                        UserSummaryProjection::departmentId,
+                        UserSummaryProjection::departmentName,
+                        UserSummaryProjection::teamId,
+                        UserSummaryProjection::teamName
+                )
+                .containsExactly(tuple(user.getId(), null, null, null, null));
+        assertThat(result.getTotalElements()).isEqualTo(1);
+    }
+
+    @Test
+    @DisplayName("사용자 팀 소속은 사용자별 ACTIVE 대표 팀을 하나만 허용한다")
+    void 사용자_팀_소속은_사용자별_ACTIVE_대표_팀을_하나만_허용한다() {
+        Department department = departmentRepository.save(createDepartment("제약본부"));
+        Team firstTeam = teamRepository.save(createTeam("제약1팀"));
+        Team secondTeam = teamRepository.save(createTeam("제약2팀"));
+        User user = userRepository.save(createUser(department.getId(), "대표중복", "duplicate-primary@example.com", UserRole.MEMBER, EmploymentStatus.ACTIVE, "사원", "팀원", "010-0000-0024"));
+
+        userTeamRepository.saveAndFlush(UserTeam.create(user.getId(), firstTeam.getId(), false, "주담당", "100%", true, UserTeamStatus.ACTIVE));
+
+        assertThatThrownBy(() -> userTeamRepository.saveAndFlush(
+                UserTeam.create(user.getId(), secondTeam.getId(), false, "겸임", "50%", true, UserTeamStatus.ACTIVE)
+        )).isInstanceOf(DataIntegrityViolationException.class);
     }
 
     @Test

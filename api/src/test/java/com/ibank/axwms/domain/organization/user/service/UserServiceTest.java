@@ -455,6 +455,41 @@ class UserServiceTest {
     }
 
     @Test
+    @DisplayName("사용자 목록 조회는 부서와 대표 팀이 없어도 null 필드를 그대로 응답한다")
+    void 사용자_목록_조회는_부서와_대표_팀이_없어도_null_필드를_그대로_응답한다() {
+        GetUsersApiDto.Request request = new GetUsersApiDto.Request(1, 20, null, null, null, null);
+        UserSummaryProjection projection = new UserSummaryProjection(
+                102L,
+                "무소속",
+                "no-department@example.com",
+                "010-0000-0023",
+                null,
+                null,
+                null,
+                null,
+                null,
+                "사원",
+                "팀원",
+                EmploymentStatus.ACTIVE
+        );
+        given(userRepository.findUsers(UserListQuery.from(request)))
+                .willReturn(new PageImpl<>(List.of(projection), PageRequest.of(0, 20), 1));
+
+        PageResponse<GetUsersApiDto.Response> result = userService.getUsers(request);
+
+        assertThat(result.items())
+                .extracting(
+                        GetUsersApiDto.Response::userId,
+                        GetUsersApiDto.Response::departmentId,
+                        GetUsersApiDto.Response::departmentName,
+                        GetUsersApiDto.Response::teamId,
+                        GetUsersApiDto.Response::teamName
+                )
+                .containsExactly(Tuple.tuple(102L, null, null, null, null));
+        assertThat(result.totalCount()).isEqualTo(1);
+    }
+
+    @Test
     @DisplayName("현재 사용자 부분 수정은 principal 사용자만 수정하고 titleName 으로 roleCode 를 동기화한다")
     void 현재_사용자_부분_수정은_principal_사용자만_수정하고_titleName으로_roleCode를_동기화한다() {
         CustomUserPrincipal principal = new CustomUserPrincipal(101L, "member@ibank.com", "MEMBER");
@@ -593,7 +628,6 @@ class UserServiceTest {
         given(userRepository.findById(101L)).willReturn(Optional.of(user));
         given(departmentRepository.existsById(20L)).willReturn(true);
         given(teamRepository.existsByIdAndDeletedAtIsNull(22L)).willReturn(true);
-        given(userTeamRepository.findByUserIdAndTeamId(101L, 22L)).willReturn(Optional.of(newPrimary));
         given(userTeamRepository.findAllByUserId(101L)).willReturn(List.of(oldPrimary, newPrimary));
 
         userService.updateUser(directorPrincipal(), 101L, request, null);
@@ -757,7 +791,7 @@ class UserServiceTest {
         UpdateUserApiDto.Request request = new UpdateUserApiDto.Request(null, null, null, null, null, null, null, null, 22L);
         given(userRepository.findById(101L)).willReturn(Optional.of(user));
         given(teamRepository.existsByIdAndDeletedAtIsNull(22L)).willReturn(true);
-        given(userTeamRepository.findByUserIdAndTeamId(101L, 22L)).willReturn(Optional.empty());
+        given(userTeamRepository.findAllByUserId(101L)).willReturn(List.of());
 
         assertThatThrownBy(() -> userService.updateUser(directorPrincipal(), 101L, request, null))
                 .isInstanceOf(BusinessException.class)
@@ -774,7 +808,6 @@ class UserServiceTest {
         UpdateUserApiDto.Request request = new UpdateUserApiDto.Request(null, null, null, null, null, null, null, null, 22L);
         given(userRepository.findById(101L)).willReturn(Optional.of(user));
         given(teamRepository.existsByIdAndDeletedAtIsNull(22L)).willReturn(true);
-        given(userTeamRepository.findByUserIdAndTeamId(101L, 22L)).willReturn(Optional.of(requestedMembership));
         given(userTeamRepository.findAllByUserId(101L)).willReturn(List.of(firstMembership, requestedMembership));
 
         userService.updateUser(directorPrincipal(), 101L, request, null);
