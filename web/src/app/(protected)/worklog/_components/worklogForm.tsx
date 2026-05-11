@@ -13,13 +13,10 @@ import { CardSpotlight } from "@/components/ui/card-spotlight"
 import { Input } from "@/components/ui/input"
 import { Textarea } from "@/components/ui/textarea"
 import { cn } from "@/lib/utils"
-import { useAuth } from "../_hooks/useAuth"
-import { tags, teams, users, worklogs } from "../_mock/worklog.mock"
 import type {
   WorklogFormDependencyOption,
   WorklogFormTagOption,
   WorklogFormTeamOption,
-  WorklogFormUserOption,
   WorklogFormValues,
   WorklogStatus,
 } from "../_types/worklog.types"
@@ -38,6 +35,41 @@ const editableStatusTransitionMap: Record<WorklogStatus, WorklogStatus[]> = {
   ON_HOLD: ["IN_PROGRESS", "FAILED"],
   FAILED: ["IN_PROGRESS"],
   CANCELLED: [],
+}
+
+const creatableStatusOptions = worklogStatusLegendOrder.filter(
+  (status) => status !== "FAILED",
+)
+
+type SettingsValidationErrors = {
+  actualHours?: string
+}
+
+function parseActualHoursInput(value: string) {
+  const trimmedValue = value.trim()
+  if (!trimmedValue) return 0
+  return Number(trimmedValue)
+}
+
+function getSettingsValidationErrors(
+  actualHoursInput: string,
+  options: { validateInvalidNumber?: boolean } = {},
+): SettingsValidationErrors {
+  const errors: SettingsValidationErrors = {}
+  const shouldValidateInvalidNumber = options.validateInvalidNumber ?? false
+  const actualHours = parseActualHoursInput(actualHoursInput)
+
+  if (!Number.isFinite(actualHours) && shouldValidateInvalidNumber) {
+    errors.actualHours = "업무 소요 예상 시간을 숫자로 입력해주세요."
+  } else if (actualHours < 0) {
+    errors.actualHours = "업무 소요 예상 시간은 음수로 입력할 수 없습니다."
+  }
+
+  return errors
+}
+
+function hasSettingsValidationErrors(errors: SettingsValidationErrors) {
+  return Boolean(errors.actualHours)
 }
 
 function hasCircularDependency(
@@ -76,7 +108,6 @@ export function WorklogForm({
   submitLabel,
   currentWorklogId,
   teamOptionsSource,
-  authorOptionsSource,
   dependencyOptionsSource,
   tagOptionsSource,
 }: {
@@ -85,7 +116,6 @@ export function WorklogForm({
   submitLabel: string
   currentWorklogId?: number
   teamOptionsSource?: WorklogFormTeamOption[]
-  authorOptionsSource?: WorklogFormUserOption[]
   dependencyOptionsSource?: WorklogFormDependencyOption[]
   tagOptionsSource?: WorklogFormTagOption[]
 }) {
@@ -93,70 +123,51 @@ export function WorklogForm({
   const searchControlClassName = "h-11 rounded-2xl pl-11 pr-4 text-sm"
   const textareaClassName =
     "dashboard-scrollbar resize-none rounded-[1.25rem] px-4 py-3 text-base overflow-y-auto [scrollbar-gutter:stable]"
-  const { user } = useAuth()
   const isEditMode = currentWorklogId !== undefined
+  const resolvedInitialValues = initialValues ?? {
+    title: "",
+    requestContent: "",
+    workContent: "",
+    status: "PENDING" as const,
+    importance: "NORMAL" as const,
+    actualHours: 0,
+    instructionDate: "2026-04-13",
+    dueDate: "2026-04-16",
+    teamId: teamOptionsSource?.[0]?.id ?? 0,
+    dependencyIds: [],
+    attachmentNames: [],
+    attachmentFiles: [],
+    tagIds: [],
+  }
   const [activeModal, setActiveModal] = useState<WorklogFormModalKey | null>(null)
-  const [values, setValues] = useState<WorklogFormValues>(
-    initialValues ?? {
-      title: "",
-      requestContent: "",
-      workContent: "",
-      status: "PENDING",
-      importance: "NORMAL",
-      actualHours: 1,
-      instructionDate: "2026-04-13",
-      dueDate: "2026-04-16",
-      teamId: user?.primaryTeamId ?? 11,
-      authorId: user?.id ?? 7,
-      dependencyIds: [],
-      attachmentNames: [],
-      tagIds: [],
-    },
+  const [values, setValues] = useState<WorklogFormValues>(resolvedInitialValues)
+  const [actualHoursInput, setActualHoursInput] = useState(() =>
+    String(resolvedInitialValues.actualHours),
   )
   const [submitError, setSubmitError] = useState("")
+  const [showSettingsValidationErrors, setShowSettingsValidationErrors] =
+    useState(false)
   const [dependencyKeywordInput, setDependencyKeywordInput] = useState("")
   const [dependencySearchOpen, setDependencySearchOpen] = useState(false)
   const [tagKeywordInput, setTagKeywordInput] = useState("")
   const [tagSearchOpen, setTagSearchOpen] = useState(false)
+  const settingsValidationErrors = getSettingsValidationErrors(
+    actualHoursInput,
+    {
+      validateInvalidNumber: showSettingsValidationErrors,
+    },
+  )
 
   const teamSource = useMemo<WorklogFormTeamOption[]>(
-    () =>
-      teamOptionsSource ??
-      teams.map((team) => ({
-        id: team.id,
-        name: team.name,
-      })),
+    () => teamOptionsSource ?? [],
     [teamOptionsSource],
   )
-  const authorSource = useMemo<WorklogFormUserOption[]>(
-    () =>
-      authorOptionsSource ??
-      users.map((member) => ({
-        id: member.id,
-        name: member.name,
-        title: member.title,
-      })),
-    [authorOptionsSource],
-  )
   const dependencySource = useMemo<WorklogFormDependencyOption[]>(
-    () =>
-      dependencyOptionsSource ??
-      worklogs.map((worklog) => ({
-        id: worklog.id,
-        title: worklog.title,
-        status: worklog.status,
-        teamId: worklog.teamId,
-        authorId: worklog.authorId,
-        aiSummary: worklog.aiSummary,
-        workContent: worklog.workContent,
-        requestContent: worklog.requestContent,
-        isDeleted: worklog.isDeleted,
-        dependencyIds: worklog.dependencyIds,
-      })),
+    () => dependencyOptionsSource ?? [],
     [dependencyOptionsSource],
   )
   const tagSource = useMemo<WorklogFormTagOption[]>(
-    () => tagOptionsSource ?? tags,
+    () => tagOptionsSource ?? [],
     [tagOptionsSource],
   )
 
@@ -164,19 +175,11 @@ export function WorklogForm({
     () => teamSource.map((team) => ({ label: team.name, value: String(team.id) })),
     [teamSource],
   )
-  const authorOptions = useMemo(
-    () =>
-      authorSource.map((member) => ({
-        label: member.title ? `${member.name} / ${member.title}` : member.name,
-        value: String(member.id),
-      })),
-    [authorSource],
-  )
   const statusOptions = useMemo(() => {
     const currentStatus = initialValues?.status ?? values.status
     const statusCandidates = isEditMode
       ? [currentStatus, ...editableStatusTransitionMap[currentStatus]]
-      : worklogStatusLegendOrder
+      : creatableStatusOptions
 
     return statusCandidates.map((status) => ({
       label: getWorklogStatusLabel(status),
@@ -199,9 +202,9 @@ export function WorklogForm({
         if (values.dependencyIds.includes(dependency.id)) return false
 
         const teamName =
-          teamSource.find((team) => team.id === dependency.teamId)?.name ?? ""
-        const authorName =
-          authorSource.find((member) => member.id === dependency.authorId)?.name ?? ""
+          dependency.teamName ??
+          teamSource.find((team) => team.id === dependency.teamId)?.name ??
+          ""
 
         const searchableText = [
           dependency.title,
@@ -210,7 +213,7 @@ export function WorklogForm({
           dependency.requestContent ?? "",
           getWorklogStatusLabel(dependency.status),
           teamName,
-          authorName,
+          dependency.authorName ?? "",
         ]
           .join(" ")
           .toLowerCase()
@@ -219,7 +222,6 @@ export function WorklogForm({
       })
       .slice(0, 6)
   }, [
-    authorSource,
     dependencyCandidates,
     dependencyKeywordInput,
     teamSource,
@@ -282,11 +284,26 @@ export function WorklogForm({
     }))
   }
 
-  const addAttachmentNames = (names: string[]) => {
+  const addAttachmentFiles = (files: File[]) => {
     setValues((previous) => ({
       ...previous,
+      attachmentFiles: [
+        ...previous.attachmentFiles,
+        ...files.filter(
+          (file) =>
+            !previous.attachmentFiles.some(
+              (item) =>
+                item.name === file.name &&
+                item.size === file.size &&
+                item.lastModified === file.lastModified,
+            ),
+        ),
+      ],
       attachmentNames: Array.from(
-        new Set([...previous.attachmentNames, ...names.filter(Boolean)]),
+        new Set([
+          ...previous.attachmentNames,
+          ...files.map((file) => file.name).filter(Boolean),
+        ]),
       ),
     }))
   }
@@ -295,6 +312,9 @@ export function WorklogForm({
     setValues((previous) => ({
       ...previous,
       attachmentNames: previous.attachmentNames.filter((item) => item !== name),
+      attachmentFiles: previous.attachmentFiles.filter(
+        (file) => file.name !== name,
+      ),
     }))
   }
 
@@ -314,6 +334,43 @@ export function WorklogForm({
     }))
   }
 
+  const updateValues = (nextValues: WorklogFormValues) => {
+    setValues(nextValues)
+    if (
+      showSettingsValidationErrors &&
+      !hasSettingsValidationErrors(
+        getSettingsValidationErrors(actualHoursInput, {
+          validateInvalidNumber: true,
+        }),
+      )
+    ) {
+      setSubmitError("")
+    }
+  }
+
+  const updateActualHoursInput = (nextInput: string) => {
+    setActualHoursInput(nextInput)
+
+    const nextActualHours = parseActualHoursInput(nextInput)
+    if (Number.isFinite(nextActualHours)) {
+      setValues((previous) => ({
+        ...previous,
+        actualHours: nextActualHours,
+      }))
+    }
+
+    if (
+      showSettingsValidationErrors &&
+      !hasSettingsValidationErrors(
+        getSettingsValidationErrors(nextInput, {
+          validateInvalidNumber: true,
+        }),
+      )
+    ) {
+      setSubmitError("")
+    }
+  }
+
   return (
     <form
       className="registration-surface flex w-full max-w-[1760px] flex-col gap-5 pb-10"
@@ -327,8 +384,25 @@ export function WorklogForm({
           return
         }
 
+        const nextSettingsErrors = getSettingsValidationErrors(actualHoursInput, {
+          validateInvalidNumber: true,
+        })
+        if (hasSettingsValidationErrors(nextSettingsErrors)) {
+          setShowSettingsValidationErrors(true)
+          setActiveModal("settings")
+          setSubmitError(
+            "작업 설정에서 업무 소요 예상 시간을 확인해주세요.",
+          )
+          return
+        }
+
+        const submitValues = {
+          ...values,
+          actualHours: parseActualHoursInput(actualHoursInput),
+        }
+
         setSubmitError("")
-        await onSubmit(values)
+        await onSubmit(submitValues)
       }}
     >
       <div className="grid gap-5">
@@ -414,7 +488,7 @@ export function WorklogForm({
             <div className="border-t border-border/70 pt-6">
               <WorklogFileUpload
                 attachmentNames={values.attachmentNames}
-                onAddAttachmentNames={addAttachmentNames}
+                onAddAttachmentFiles={addAttachmentFiles}
                 onRemoveAttachmentName={removeAttachmentName}
               />
             </div>
@@ -436,12 +510,14 @@ export function WorklogForm({
         activeModal={activeModal}
         onActiveModalChange={setActiveModal}
         values={values}
-        onValuesChange={setValues}
+        onValuesChange={updateValues}
         controlClassName={controlClassName}
         searchControlClassName={searchControlClassName}
         teamOptions={teamOptions}
-        authorOptions={authorOptions}
         statusOptions={statusOptions}
+        settingsValidationErrors={settingsValidationErrors}
+        actualHoursInput={actualHoursInput}
+        onActualHoursInputChange={updateActualHoursInput}
         dependencyKeywordInput={dependencyKeywordInput}
         onDependencyKeywordInputChange={setDependencyKeywordInput}
         dependencySearchOpen={dependencySearchOpen}

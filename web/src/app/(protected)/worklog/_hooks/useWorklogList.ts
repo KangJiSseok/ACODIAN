@@ -19,6 +19,7 @@ export const worklogKeys = {
   search: (params: SearchWorklogsParams = {}) =>
     [...worklogKeys.all, "search", params] as const,
   filterOptions: () => [...worklogKeys.all, "filter-options"] as const,
+  options: () => [...worklogKeys.all, "options"] as const,
   detail: (worklogId: number) => [...worklogKeys.all, "detail", worklogId] as const,
 }
 
@@ -48,6 +49,13 @@ export function useWorklogFilterOptions() {
   return useQuery({
     queryKey: worklogKeys.filterOptions(),
     queryFn: () => worklogService.getFilterOptions(),
+  })
+}
+
+export function useWorklogOptions() {
+  return useQuery({
+    queryKey: worklogKeys.options(),
+    queryFn: () => worklogService.getOptions(),
   })
 }
 

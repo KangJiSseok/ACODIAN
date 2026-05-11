@@ -1,4 +1,3 @@
-import { files } from "../_mock/worklog.mock"
 import type { WorklogFileItem } from "../_types/worklog.types"
 import { FileAiStatusBadge } from "./fileAiStatusBadge"
 
@@ -9,15 +8,11 @@ function formatFileSize(bytes: number) {
 }
 
 export function FileAttachment({
-  fileIds,
   files: apiFiles,
 }: {
-  fileIds: number[]
   files?: WorklogFileItem[]
 }) {
-  const hasApiFiles = Array.isArray(apiFiles)
-  const attached = hasApiFiles
-    ? apiFiles.map((file) => ({
+  const attached = (apiFiles ?? []).map((file) => ({
       id: file.fileId,
       originalName: file.originalName,
       summaryPreview: file.storedPath,
@@ -25,7 +20,6 @@ export function FileAttachment({
       size: formatFileSize(file.fileSizeBytes),
       aiStatus: "DONE" as const,
     }))
-    : files.filter((file) => fileIds.includes(file.id))
 
   if (attached.length === 0) {
     return <p className="text-sm text-muted-foreground">첨부 파일이 없습니다.</p>

@@ -63,9 +63,9 @@ export interface WorklogFormValues {
   instructionDate: string
   dueDate: string
   teamId: number
-  authorId: number
   dependencyIds: number[]
   attachmentNames: string[]
+  attachmentFiles: File[]
   tagIds: number[]
   aiSummary?: string
   aiSummaryEdited?: boolean
@@ -76,18 +76,14 @@ export interface WorklogFormTeamOption {
   name: string
 }
 
-export interface WorklogFormUserOption {
-  id: number
-  name: string
-  title?: string
-}
-
 export interface WorklogFormDependencyOption {
   id: number
   title: string
   status: WorklogStatus
   teamId?: number
+  teamName?: string
   authorId?: number
+  authorName?: string
   aiSummary?: string
   workContent?: string
   requestContent?: string
@@ -197,6 +193,41 @@ export interface WorklogFilterMember {
 export interface WorklogFilterTag {
   tagId: number
   tagName: string
+}
+
+export interface WorklogOptionsApiResponse {
+  predecessorCandidates: WorklogOptionPredecessorCandidate[]
+  tags: WorklogOptionTagItem[]
+}
+
+export interface WorklogOptionPredecessorCandidate {
+  worklogId: number
+  title: string
+  statusCode: string
+  workContent: string
+  actualHours: number | string | null
+  importanceCode: string
+  aiSummary: string | null
+  aiProcessingStatus: string
+  aiSummaryEdited: boolean | null
+  teamId: number
+  teamName: string
+  authorId: number
+  authorName: string
+  instructionDate: string
+  dueDate: string
+}
+
+export interface WorklogOptionTagItem {
+  tagId: number
+  tagName: string
+  usageCount: number
+  createdAt: string
+  updatedAt: string
+}
+
+export interface CreateWorklogResponse {
+  worklogId: number
 }
 
 export interface WorklogDetailApiResponse {

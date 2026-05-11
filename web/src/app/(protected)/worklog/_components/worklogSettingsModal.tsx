@@ -20,6 +20,10 @@ type SelectOption = {
   value: string
 }
 
+type WorklogSettingsValidationErrors = {
+  actualHours?: string
+}
+
 interface WorklogSettingsModalProps {
   open: boolean
   onOpenChange: (open: boolean) => void
@@ -27,8 +31,10 @@ interface WorklogSettingsModalProps {
   onValuesChange: (values: WorklogFormValues) => void
   controlClassName: string
   teamOptions: SelectOption[]
-  authorOptions: SelectOption[]
   statusOptions: SelectOption[]
+  validationErrors?: WorklogSettingsValidationErrors
+  actualHoursInput: string
+  onActualHoursInputChange: (value: string) => void
 }
 
 export function WorklogSettingsModal({
@@ -38,8 +44,10 @@ export function WorklogSettingsModal({
   onValuesChange,
   controlClassName,
   teamOptions,
-  authorOptions,
   statusOptions,
+  validationErrors,
+  actualHoursInput,
+  onActualHoursInputChange,
 }: WorklogSettingsModalProps) {
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -47,7 +55,7 @@ export function WorklogSettingsModal({
         <DialogHeader>
           <DialogTitle>작업 설정</DialogTitle>
           <DialogDescription>
-            업무 상태, 담당자, 소요 시간과 진행 일정을 설정합니다.
+            업무 상태, 담당자, 업무 소요 예상 시간과 진행 일정을 설정합니다.
           </DialogDescription>
         </DialogHeader>
         <div className="grid gap-5">
@@ -83,8 +91,8 @@ export function WorklogSettingsModal({
             </div>
           </ModalField>
 
-          <ModalField label="담당자">
-            <div className="grid gap-3 sm:grid-cols-2">
+          <ModalField label="담당 팀">
+            <div className="grid gap-3">
               <Select
                 className={controlClassName}
                 value={String(values.teamId)}
@@ -93,33 +101,26 @@ export function WorklogSettingsModal({
                   onValuesChange({ ...values, teamId: Number(event.target.value) })
                 }
               />
-              <Select
-                className={controlClassName}
-                value={String(values.authorId)}
-                options={authorOptions}
-                onChange={(event) =>
-                  onValuesChange({ ...values, authorId: Number(event.target.value) })
-                }
-              />
             </div>
           </ModalField>
 
-          <ModalField label="시간">
+          <ModalField label="업무 소요 예상 시간">
             <div className="space-y-2">
               <Input
                 className={controlClassName}
                 type="number"
-                min="0"
                 step="0.5"
-                value={values.actualHours}
-                onChange={(event) =>
-                  onValuesChange({
-                    ...values,
-                    actualHours: Number(event.target.value),
-                  })
-                }
+                value={actualHoursInput}
+                aria-invalid={Boolean(validationErrors?.actualHours)}
+                onFocus={(event) => event.currentTarget.select()}
+                onChange={(event) => onActualHoursInputChange(event.target.value)}
                 placeholder="예: 1.5"
               />
+              {validationErrors?.actualHours ? (
+                <p className="text-xs font-medium text-destructive">
+                  {validationErrors.actualHours}
+                </p>
+              ) : null}
               <p className="text-xs leading-5 text-muted-foreground">
                 소수 입력이 가능합니다. 예: 1.5 = 1시간 30분
               </p>

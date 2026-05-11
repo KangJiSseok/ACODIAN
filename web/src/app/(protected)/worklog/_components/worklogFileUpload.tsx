@@ -6,13 +6,13 @@ import { Button } from "@/components/ui/button"
 
 interface WorklogFileUploadProps {
   attachmentNames: string[]
-  onAddAttachmentNames: (names: string[]) => void
+  onAddAttachmentFiles: (files: File[]) => void
   onRemoveAttachmentName: (name: string) => void
 }
 
 export function WorklogFileUpload({
   attachmentNames,
-  onAddAttachmentNames,
+  onAddAttachmentFiles,
   onRemoveAttachmentName,
 }: WorklogFileUploadProps) {
   const fileInputRef = useRef<HTMLInputElement>(null)
@@ -86,10 +86,7 @@ export function WorklogFileUpload({
         multiple
         className="hidden"
         onChange={(event) => {
-          const nextNames = Array.from(event.target.files ?? []).map(
-            (file) => file.name,
-          )
-          onAddAttachmentNames(nextNames)
+          onAddAttachmentFiles(Array.from(event.target.files ?? []))
           event.target.value = ""
         }}
       />

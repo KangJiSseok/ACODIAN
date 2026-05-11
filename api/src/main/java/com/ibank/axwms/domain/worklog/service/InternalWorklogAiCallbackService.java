@@ -2,6 +2,7 @@ package com.ibank.axwms.domain.worklog.service;
 
 import com.ibank.axwms.domain.tag.entity.MetaTag;
 import com.ibank.axwms.domain.tag.repository.TagRepository;
+import com.ibank.axwms.domain.tag.service.TagService;
 import com.ibank.axwms.domain.worklog.dto.ApplyWorklogTagsAiApiDto;
 import com.ibank.axwms.domain.worklog.dto.UpdateWorklogAiApiDto;
 import com.ibank.axwms.domain.worklog.entity.Worklog;
@@ -28,6 +29,7 @@ public class InternalWorklogAiCallbackService {
     private final WorklogRepository worklogRepository;
     private final WorklogTagRepository worklogTagRepository;
     private final TagRepository tagRepository;
+    private final TagService tagService;
 
     /**
      * AI 요약 처리 결과를 업무일지에 반영하고 성공/실패 상태를 갱신한다.
@@ -60,7 +62,7 @@ public class InternalWorklogAiCallbackService {
 
         List<Long> newlyLinkedTagIds = linkTagsToWorklog(worklogId, tagIds);
 
-        increaseUsageCount(newlyLinkedTagIds);
+        tagService.incrementUsageCountByIds(newlyLinkedTagIds);
     }
 
     /**
@@ -142,17 +144,6 @@ public class InternalWorklogAiCallbackService {
         return worklogTagRepository.saveAll(newLinks).stream()
                 .map(WorklogTag::getTagId)
                 .toList();
-    }
-
-    /**
-     * 사용 횟수 캐시는 업무일지 연결에 성공한 태그에 대해서만 증가시킨다.
-     */
-    private void increaseUsageCount(List<Long> tagIds) {
-        if (tagIds.isEmpty()) {
-            return;
-        }
-
-        tagRepository.incrementUsageCountByIds(tagIds);
     }
 
     /**

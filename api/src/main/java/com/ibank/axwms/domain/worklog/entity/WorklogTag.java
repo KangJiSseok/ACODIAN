@@ -50,4 +50,15 @@ public class WorklogTag {
         worklogTag.isAiGenerated = Boolean.TRUE;
         return worklogTag;
     }
+
+    /**
+     * 사용자가 등록 폼에서 직접 선택한 태그를 업무일지에 연결하는 관계 엔티티를 생성한다.
+     */
+    public static WorklogTag createManualSelected(Long worklogId, Long tagId) {
+        WorklogTag worklogTag = new WorklogTag();
+        worklogTag.worklogId = worklogId;
+        worklogTag.tagId = tagId;
+        worklogTag.isAiGenerated = Boolean.FALSE;
+        return worklogTag;
+    }
 }

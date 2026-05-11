@@ -10,7 +10,7 @@ import { StatusBadge } from "./statusBadge"
 import { StatusHistory } from "./statusHistory"
 import { StatusTransition } from "./statusTransition"
 import { TagList } from "./tagList"
-import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
+import { Avatar, AvatarFallback } from "@/components/ui/avatar"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { cn } from "@/lib/utils"
@@ -82,7 +82,7 @@ export function WorklogDetail({
             <section>
               <p className="text-sm font-medium">메타 태그</p>
               <div className="mt-2">
-                <TagList tagIds={worklog.tagIds} tagNames={worklog.tagNames} />
+                <TagList tagNames={worklog.tagNames} />
               </div>
             </section>
           </CardContent>
@@ -95,7 +95,7 @@ export function WorklogDetail({
             <CardTitle>첨부 파일</CardTitle>
           </CardHeader>
           <CardContent>
-            <FileAttachment fileIds={worklog.fileIds} files={worklog.fileItems} />
+            <FileAttachment files={worklog.fileItems} />
           </CardContent>
         </Card>
 
@@ -109,7 +109,6 @@ export function WorklogDetail({
           <CardContent className="space-y-4">
             <div className="flex items-center gap-3 rounded-xl bg-muted/40 p-4">
               <Avatar className="size-11">
-                <AvatarImage src="" alt={authorName} />
                 <AvatarFallback>{authorName.slice(0, 1)}</AvatarFallback>
               </Avatar>
               <div>
@@ -122,7 +121,7 @@ export function WorklogDetail({
             <div className="grid gap-3">
               <InfoRow label="지시일" value={formatDate(worklog.instructionDate)} />
               <InfoRow label="마감일" value={formatDate(worklog.dueDate)} />
-              <InfoRow label="실제 업무시간" value={formatHours(worklog.actualHours)} />
+              <InfoRow label="업무 소요 예상 시간" value={formatHours(worklog.actualHours)} />
               <InfoRow
                 label="완료일"
                 value={worklog.completionDate ? formatDate(worklog.completionDate) : "-"}
@@ -143,7 +142,6 @@ export function WorklogDetail({
           </CardHeader>
           <CardContent>
             <DependencyGraph
-              dependencyIds={worklog.dependencyIds}
               dependencies={worklog.dependOnWorklogs}
             />
           </CardContent>

@@ -2,7 +2,6 @@
 
 import { useMemo, useState } from "react"
 import type { WorklogStatus, Worklog } from "../_types/worklog.types"
-import { worklogs } from "../_mock/worklog.mock"
 import { Button } from "@/components/ui/button"
 import { Select } from "@/components/ui/select"
 import { Textarea } from "@/components/ui/textarea"
@@ -57,18 +56,10 @@ export function StatusTransition({
   }))
   const dependencyWarning = useMemo(() => {
     if (!canTransition) return false
-    if (worklog.dependOnWorklogs) {
-      return worklog.dependOnWorklogs.some(
-        (dependency) => dependency.statusCode !== "COMPLETED" && dependency.statusCode !== "DONE"
-      )
-    }
-
-    // 선행 업무 미완료 여부는 차단이 아니라 전환 전 경고 표시 용도로만 사용합니다.
-    return worklog.dependencyIds.some((dependencyId) => {
-      const dependency = worklogs.find((item) => item.id === dependencyId)
-      return dependency && dependency.status !== "DONE"
-    })
-  }, [canTransition, worklog.dependOnWorklogs, worklog.dependencyIds])
+    return (worklog.dependOnWorklogs ?? []).some(
+      (dependency) => dependency.statusCode !== "COMPLETED" && dependency.statusCode !== "DONE"
+    )
+  }, [canTransition, worklog.dependOnWorklogs])
   const hasNextStatus = nextMap[worklog.status].length > 0
   const isStatusChanged = nextStatus !== worklog.status
   const canSubmit = canTransition && hasNextStatus && isStatusChanged

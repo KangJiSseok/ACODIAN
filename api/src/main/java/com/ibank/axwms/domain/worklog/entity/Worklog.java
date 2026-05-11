@@ -96,7 +96,9 @@ public class Worklog {
      * @param title 업무 제목
      * @param requestContent 업무 요청/지시 내용
      * @param workContent 실제 수행 업무 내용
+     * @param statusCode 최초 업무 상태 코드
      * @param importanceCode 중요도 코드
+     * @param actualHours 업무 소요 예상 시간
      * @param instructionDate 지시 일자
      * @param dueDate 마감 일자
      * @return 저장 전 Worklog 엔티티
@@ -106,7 +108,9 @@ public class Worklog {
                                  String title,
                                  String requestContent,
                                  String workContent,
+                                 WorklogStatus statusCode,
                                  WorklogImportance importanceCode,
+                                 BigDecimal actualHours,
                                  LocalDate instructionDate,
                                  LocalDate dueDate) {
         Worklog worklog = new Worklog();
@@ -115,8 +119,9 @@ public class Worklog {
         worklog.title = title;
         worklog.requestContent = requestContent;
         worklog.workContent = workContent;
-        worklog.statusCode = WorklogStatus.PENDING;
+        worklog.statusCode = statusCode;
         worklog.importanceCode = importanceCode;
+        worklog.actualHours = actualHours;
         worklog.instructionDate = instructionDate;
         worklog.dueDate = dueDate;
         worklog.aiSummaryEdited = Boolean.FALSE;

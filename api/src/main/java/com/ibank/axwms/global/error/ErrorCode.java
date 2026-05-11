@@ -76,6 +76,8 @@ public enum ErrorCode {
     EVALUATION_NOT_FOUND(HttpStatus.NOT_FOUND, "평가를 찾을 수 없습니다."),
     /** 현재 로그인 사용자가 자기 자신에게 평가를 작성하려 할 때 사용한다. */
     EVALUATION_SELF_WRITE_FORBIDDEN(HttpStatus.FORBIDDEN, "자기 자신에게 평가는 작성할 수 없습니다."),
+    /** 업무일지에 연결하려는 태그 ID 가 메타 태그 풀에 없을 때 사용한다. */
+    TAG_NOT_FOUND(HttpStatus.NOT_FOUND, "태그를 찾을 수 없습니다."),
     /** 업무 지시 일자와 마감 일자 범위가 올바르지 않은 경우 사용한다. */
     WORKLOG_INVALID_DATE_RANGE(HttpStatus.BAD_REQUEST, "업무 날짜 정보가 유효하지 않습니다."),
     /** 로그인 사용자가 대상 팀 소속이 아니어서 업무를 등록/변경할 수 없는 경우 사용한다. */
