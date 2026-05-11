@@ -28,6 +28,12 @@ public class Notification {
     @Column(name = "user_id", nullable = false)
     private Long userId;
 
+    @Column(name = "department_id")
+    private Long departmentId;
+
+    @Column(name = "team_id")
+    private Long teamId;
+
     @Column(name = "notification_type", nullable = false, length = 50)
     private String notificationType;
 

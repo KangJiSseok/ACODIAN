@@ -446,6 +446,12 @@ CREATE TABLE tb_file (
 --   - tb_notification (N) : tb_user (1)
 --     -> 여러 알림이 1명의 사용자에게 귀속될 수 있음.
 --
+--   [조직 조회 범위 관계]
+--   - tb_notification (N) : tb_department (1)
+--   - tb_notification (N) : tb_team (1)
+--     -> 알림의 부서/팀 조회·권한 필터와 발생 맥락을 저장하기 위한 nullable 참조임.
+--     -> team_id가 가리키는 팀의 department_id와 notification.department_id 일치 여부는 DB에서 강제하지 않음.
+--
 --   [다형 참조 관계]
 --   - reference_type / reference_id는 WORKLOG, FILE 등 다양한 엔티티를 느슨하게 참조하기 위한 용도임.
 --   - 다형 참조이므로 DB 레벨 FK는 강제하지 않음.
@@ -453,6 +459,8 @@ CREATE TABLE tb_file (
 CREATE TABLE tb_notification (
     notification_id       BIGSERIAL PRIMARY KEY,                -- PK, 알림 식별자
     user_id               BIGINT NOT NULL,                     -- N:1, 수신 사용자 ID -> tb_user.user_id
+    department_id         BIGINT,                              -- N:1, 조직 조회 범위 부서 ID -> tb_department.department_id
+    team_id               BIGINT,                              -- N:1, 조직 조회 범위 팀 ID -> tb_team.team_id
     notification_type     VARCHAR(50) NOT NULL,                -- 알림 유형 코드
     title                 VARCHAR(200) NOT NULL,               -- 알림 제목
     content               TEXT,                                -- 알림 본문
@@ -463,7 +471,11 @@ CREATE TABLE tb_notification (
     created_at            TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP, -- 생성 시각
     updated_at            TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP, -- 수정 시각
     CONSTRAINT fk_notification_user
-        FOREIGN KEY (user_id) REFERENCES tb_user(user_id) ON DELETE CASCADE
+        FOREIGN KEY (user_id) REFERENCES tb_user(user_id) ON DELETE CASCADE,
+    CONSTRAINT fk_notification_department
+        FOREIGN KEY (department_id) REFERENCES tb_department(department_id),
+    CONSTRAINT fk_notification_team
+        FOREIGN KEY (team_id) REFERENCES tb_team(team_id)
 );
 
 -- =====================================================================
