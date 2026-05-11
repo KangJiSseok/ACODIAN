@@ -25,6 +25,7 @@ import type {
   DepartmentDashboard,
   DirectorDashboard,
   MyDashboard,
+  TeamDashboard,
 } from "../_types/dashboard.types";
 import {
   clampRate,
@@ -158,6 +159,48 @@ export function DepartmentDashboardView({
         })),
         imminentDescription:
           "선택 부서 기준 D-3 이내 또는 지연된 미완료 업무입니다.",
+        imminentAndOverdue: dashboard.imminentAndOverdue,
+      }}
+    />
+  );
+}
+
+export function TeamDashboardView({ dashboard }: { dashboard: TeamDashboard }) {
+  return (
+    <ComparisonDashboardView
+      viewModel={{
+        totalProgress: dashboard.totalProgress,
+        loadBalanceIndex: dashboard.memberLoadBalanceIndex,
+        loadMetricLabel: "팀원 부하 편중 지수",
+        loadMetricDetail: "팀원 간 업무량 분산도, 1에 가까울수록 균형",
+        weeklyCompleted: dashboard.weeklyCompleted,
+        weeklyMetricDetail: `${dashboard.teamName} 최근 7일 완료 산출`,
+        aiPipelineSuccessRate: dashboard.aiPipelineSuccessRate,
+        aiMetricDetail: `${dashboard.teamName} 업무·파일 통합`,
+        completionTitle: "팀 완료율",
+        completionDescription: "선택 팀의 전체 완료 업무 비중을 확인합니다.",
+        completionCountLabel: "1개 팀",
+        completionItems: [
+          {
+            id: dashboard.teamId,
+            href: `/team/detail/${dashboard.teamId}`,
+            label: dashboard.teamName,
+            completed: dashboard.totalProgress.completed,
+            total: dashboard.totalProgress.total,
+            rate: dashboard.completionRate,
+          },
+        ],
+        workloadTitle: "팀원별 업무 부하",
+        workloadDescription: "선택 팀 안에서 완료되지 않은 업무량 분포를 확인합니다.",
+        workloadCountLabel: `${dashboard.memberWorkload.length}명`,
+        workloadItems: dashboard.memberWorkload.map((item) => ({
+          id: item.userId,
+          href: `/user/detail/${item.userId}`,
+          label: item.userName,
+          activeWorklogCount: item.activeWorklogCount,
+        })),
+        imminentDescription:
+          "선택 팀 기준 D-3 이내 또는 지연된 미완료 업무입니다.",
         imminentAndOverdue: dashboard.imminentAndOverdue,
       }}
     />
@@ -540,7 +583,7 @@ function WorklogBriefLink({ item }: { item: DashboardWorklogBrief }) {
         </span>
       </div>
       <p className="mt-3 text-xs font-medium text-muted-foreground">
-        마감 {formatDueDate(item.dueDate)} · {item.statusCode}
+        마감 {formatDueDate(item.dueDate)}
       </p>
     </Link>
   );
