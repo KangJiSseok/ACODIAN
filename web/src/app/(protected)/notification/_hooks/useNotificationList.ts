@@ -1,51 +1,42 @@
-"use client"
+"use client";
 
-import { useEffect, useState, useSyncExternalStore } from "react"
-import { subscribeMockDb } from "../../worklog/_mock/worklog.mock"
-import { useAuth } from "../../worklog/_hooks/useAuth"
-import {
-  getVisibleNotifications,
-  notificationService,
-} from "../_service/notification.service"
+import { useQuery } from "@tanstack/react-query";
+import { selectIsAuthenticated, useAuthStore } from "@/app/_common/store/auth.store";
+import { notificationService } from "../_service/notification.service";
+import type { GetNotificationsParams } from "../_types/notification.types";
 
-function subscribeClientReady() {
-  return () => undefined
-}
+export const notificationKeys = {
+  all: ["notifications"] as const,
+  list: (params: GetNotificationsParams = {}) =>
+    [...notificationKeys.all, "list", params] as const,
+};
 
-function getClientReadySnapshot() {
-  return true
-}
+export function useNotificationList(params: GetNotificationsParams = {}) {
+  const isAuthenticated = useAuthStore(selectIsAuthenticated);
 
-function getServerReadySnapshot() {
-  return false
-}
-
-export function useNotificationList() {
-  const { user } = useAuth()
-  const isClientReady = useSyncExternalStore(
-    subscribeClientReady,
-    getClientReadySnapshot,
-    getServerReadySnapshot,
-  )
-  const [, setVersion] = useState(0)
-
-  useEffect(
-    () => subscribeMockDb(() => setVersion((current) => current + 1)),
-    [],
-  )
-
-  const notifications = isClientReady
-    ? getVisibleNotifications(user, notificationService.list())
-    : []
-  const unreadCount = notifications.filter((notification) => !notification.isRead).length
-  const recentUnreadNotifications = notifications
-    .filter((notification) => !notification.isRead)
-    .slice(0, 3)
+  const query = useQuery({
+    queryKey: notificationKeys.list(params),
+    queryFn: () => notificationService.getNotifications(params),
+    enabled: isAuthenticated,
+  });
 
   return {
-    notifications,
-    unreadCount,
-    readCount: notifications.length - unreadCount,
-    recentUnreadNotifications,
-  }
+    ...query,
+    notificationPage: query.data,
+    notifications: query.data?.items ?? [],
+  };
+}
+
+export function useNotificationCenter() {
+  const query = useNotificationList({
+    isRead: false,
+    page: 1,
+    pageSize: 3,
+  });
+
+  return {
+    ...query,
+    unreadCount: query.notificationPage?.totalCount ?? 0,
+    recentUnreadNotifications: query.notifications,
+  };
 }

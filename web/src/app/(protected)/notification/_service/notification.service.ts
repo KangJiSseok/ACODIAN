@@ -1,52 +1,49 @@
-import {
-  notifications,
-  notifyMockDb,
-} from "../../worklog/_mock/worklog.mock"
-import type { AuthUser } from "../../worklog/_store/authStore"
-import type { NotificationItem } from "../_types/notification.types"
+import { apiClient } from "@/app/_common/service/api-client";
+import type { EmptyResponse, PageResponse } from "@/app/_common/types/api.types";
+import type {
+  GetNotificationsParams,
+  MarkAllNotificationsReadResponse,
+  NotificationApiItem,
+  NotificationItem,
+  NotificationPageResponse,
+} from "../_types/notification.types";
 
-export function getVisibleNotifications(
-  user: AuthUser | null | undefined,
-  items: NotificationItem[],
-) {
-  if (!user) return []
-
-  // 부서장은 전체 알림을 확인할 수 있고, 일반 사용자는 본인 알림만 노출합니다.
-  if (user.role === "DIRECTOR") return items
-
-  return items.filter((notification) => notification.userId === user.id)
+function normalizeNotification(item: NotificationApiItem): NotificationItem {
+  return {
+    ...item,
+    id: item.notificationId,
+    type: item.notificationType,
+  };
 }
 
-// API 연동 전까지 mock DB를 단일 진입점으로 다루기 위한 알림 서비스입니다.
+function buildNotificationParams(params: GetNotificationsParams) {
+  return {
+    isRead: params.isRead,
+    departmentId: params.departmentId,
+    teamId: params.teamId,
+    page: params.page,
+    pageSize: params.pageSize,
+  };
+}
+
 export const notificationService = {
-  list(): NotificationItem[] {
-    // 최신 알림이 화면 상단에 오도록 조회 시점에만 정렬합니다.
-    return [...notifications].sort(
-      (left, right) =>
-        new Date(right.createdAt).getTime() - new Date(left.createdAt).getTime(),
-    )
+  async getNotifications(
+    params: GetNotificationsParams = {},
+  ): Promise<NotificationPageResponse> {
+    const response = await apiClient.get<PageResponse<NotificationApiItem>>(
+      "/notifications/me",
+      { params: buildNotificationParams(params) },
+    );
+
+    return {
+      ...response,
+      items: response.items.map(normalizeNotification),
+    };
   },
 
-  markRead(id: number) {
-    const target = notifications.find((notification) => notification.id === id)
-    if (!target || target.isRead) return target
+  markRead: (id: number) =>
+    apiClient.patch<EmptyResponse>(`/notifications/${id}/read`),
 
-    target.isRead = true
-    target.readAt = new Date().toISOString()
-    // mock DB 구독자에게 변경을 알려 GNB 배지와 알림 목록을 즉시 갱신합니다.
-    notifyMockDb()
-    return target
-  },
-
-  markAllRead(userId: number) {
-    notifications
-      .filter((notification) => notification.userId === userId && !notification.isRead)
-      .forEach((notification) => {
-        notification.isRead = true
-        notification.readAt = new Date().toISOString()
-      })
-
-    // 현재 사용자의 미읽음 알림이 모두 읽음 처리된 뒤 화면 상태를 동기화합니다.
-    notifyMockDb()
-  },
-}
+  markAllRead: () =>
+    apiClient.patch<MarkAllNotificationsReadResponse>("/notifications/me/read-all"),
+};
