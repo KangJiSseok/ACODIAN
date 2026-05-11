@@ -94,6 +94,8 @@ public enum ErrorCode {
     WORKLOG_EDIT_FORBIDDEN(HttpStatus.FORBIDDEN, "업무일지 수정 권한이 없습니다."),
     /** 삭제 요청 대상 파일이 존재하지 않거나 해당 worklog 에 속해 있지 않을 때 사용한다. */
     WORKLOG_FILE_NOT_FOUND(HttpStatus.NOT_FOUND, "삭제 대상 첨부 파일을 찾을 수 없습니다."),
+    /** AI 콜백 등 fileId 단건 조회에서 대상 파일이 존재하지 않을 때 사용한다. */
+    FILE_NOT_FOUND(HttpStatus.NOT_FOUND, "대상 파일을 찾을 수 없습니다."),
     /** 대시보드 scope 와 함께 들어온 파라미터가 누락되었거나 형식이 올바르지 않을 때 사용한다. */
     DASHBOARD_INVALID_REQUEST(HttpStatus.BAD_REQUEST, "대시보드 요청 파라미터가 올바르지 않습니다."),
     /** 사용자 role 자체로 해당 dashboard scope 를 조회할 수 없을 때 사용한다. */
