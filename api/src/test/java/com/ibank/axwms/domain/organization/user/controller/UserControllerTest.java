@@ -392,6 +392,52 @@ class UserControllerTest {
     }
 
     @Test
+    @DisplayName("사용자 목록 HTTP 응답은 부서와 대표 팀이 없어도 null 필드를 반환한다")
+    void 사용자_목록_HTTP_응답은_부서와_대표_팀이_없어도_null_필드를_반환한다() throws Exception {
+        PageResponse<GetUsersApiDto.Response> responseFromService = new PageResponse<>(
+                List.of(new GetUsersApiDto.Response(
+                                102L,
+                                "무소속",
+                                "no-department@example.com",
+                                "010-0000-0023",
+                                null,
+                                null,
+                                null,
+                                null,
+                                null,
+                                "사원",
+                                "팀원",
+                                EmploymentStatus.ACTIVE
+                        )
+                ),
+                1,
+                20,
+                1,
+                1,
+                true,
+                true,
+                false,
+                false
+        );
+        given(userService.getUsers(new GetUsersApiDto.Request(null, null, null, null, null, null)))
+                .willReturn(responseFromService);
+
+        MvcResult result = mockMvc.perform(org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get("/users"))
+                .andExpect(status().isOk())
+                .andReturn();
+
+        JsonNode item = objectMapper.readTree(result.getResponse().getContentAsString())
+                .get("data")
+                .get("items")
+                .get(0);
+
+        assertThat(item.get("departmentId").isNull()).isTrue();
+        assertThat(item.get("departmentName").isNull()).isTrue();
+        assertThat(item.get("teamId").isNull()).isTrue();
+        assertThat(item.get("teamName").isNull()).isTrue();
+    }
+
+    @Test
     @DisplayName("사용자 부분 수정 메서드는 서비스에 위임하고 빈 응답을 반환한다")
     void 사용자_부분_수정_메서드는_서비스에_위임하고_빈_응답을_반환한다() {
         CustomUserPrincipal principal = new CustomUserPrincipal(201L, "dept-head@ibank.com", "DEPT_HEAD");
