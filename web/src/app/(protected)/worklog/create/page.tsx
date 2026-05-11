@@ -100,7 +100,7 @@ function buildInitialValues(teamId: number): WorklogFormValues {
     workContent: "",
     status: "PENDING",
     importance: "NORMAL",
-    actualHours: 1,
+    actualHours: 0,
     instructionDate: "2026-04-13",
     dueDate: "2026-04-16",
     teamId,

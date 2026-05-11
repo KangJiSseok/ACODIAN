@@ -16,6 +16,10 @@ type SelectOption = {
   value: string
 }
 
+type SettingsValidationErrors = {
+  actualHours?: string
+}
+
 interface WorklogFormModalsProps {
   activeModal: WorklogFormModalKey | null
   onActiveModalChange: (modal: WorklogFormModalKey | null) => void
@@ -25,6 +29,9 @@ interface WorklogFormModalsProps {
   searchControlClassName: string
   teamOptions: SelectOption[]
   statusOptions: SelectOption[]
+  settingsValidationErrors: SettingsValidationErrors
+  actualHoursInput: string
+  onActualHoursInputChange: (value: string) => void
   dependencyKeywordInput: string
   onDependencyKeywordInputChange: (value: string) => void
   dependencySearchOpen: boolean
@@ -54,6 +61,9 @@ export function WorklogFormModals({
   searchControlClassName,
   teamOptions,
   statusOptions,
+  settingsValidationErrors,
+  actualHoursInput,
+  onActualHoursInputChange,
   dependencyKeywordInput,
   onDependencyKeywordInputChange,
   dependencySearchOpen,
@@ -102,6 +112,9 @@ export function WorklogFormModals({
         controlClassName={controlClassName}
         teamOptions={teamOptions}
         statusOptions={statusOptions}
+        validationErrors={settingsValidationErrors}
+        actualHoursInput={actualHoursInput}
+        onActualHoursInputChange={onActualHoursInputChange}
       />
 
       <WorklogTagModal

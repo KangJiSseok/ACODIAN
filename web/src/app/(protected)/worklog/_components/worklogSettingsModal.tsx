@@ -20,6 +20,10 @@ type SelectOption = {
   value: string
 }
 
+type WorklogSettingsValidationErrors = {
+  actualHours?: string
+}
+
 interface WorklogSettingsModalProps {
   open: boolean
   onOpenChange: (open: boolean) => void
@@ -28,6 +32,9 @@ interface WorklogSettingsModalProps {
   controlClassName: string
   teamOptions: SelectOption[]
   statusOptions: SelectOption[]
+  validationErrors?: WorklogSettingsValidationErrors
+  actualHoursInput: string
+  onActualHoursInputChange: (value: string) => void
 }
 
 export function WorklogSettingsModal({
@@ -38,6 +45,9 @@ export function WorklogSettingsModal({
   controlClassName,
   teamOptions,
   statusOptions,
+  validationErrors,
+  actualHoursInput,
+  onActualHoursInputChange,
 }: WorklogSettingsModalProps) {
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -99,17 +109,18 @@ export function WorklogSettingsModal({
               <Input
                 className={controlClassName}
                 type="number"
-                min="0"
                 step="0.5"
-                value={values.actualHours}
-                onChange={(event) =>
-                  onValuesChange({
-                    ...values,
-                    actualHours: Number(event.target.value),
-                  })
-                }
+                value={actualHoursInput}
+                aria-invalid={Boolean(validationErrors?.actualHours)}
+                onFocus={(event) => event.currentTarget.select()}
+                onChange={(event) => onActualHoursInputChange(event.target.value)}
                 placeholder="예: 1.5"
               />
+              {validationErrors?.actualHours ? (
+                <p className="text-xs font-medium text-destructive">
+                  {validationErrors.actualHours}
+                </p>
+              ) : null}
               <p className="text-xs leading-5 text-muted-foreground">
                 소수 입력이 가능합니다. 예: 1.5 = 1시간 30분
               </p>

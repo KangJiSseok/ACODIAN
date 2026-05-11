@@ -41,6 +41,37 @@ const creatableStatusOptions = worklogStatusLegendOrder.filter(
   (status) => status !== "FAILED",
 )
 
+type SettingsValidationErrors = {
+  actualHours?: string
+}
+
+function parseActualHoursInput(value: string) {
+  const trimmedValue = value.trim()
+  if (!trimmedValue) return 0
+  return Number(trimmedValue)
+}
+
+function getSettingsValidationErrors(
+  actualHoursInput: string,
+  options: { validateInvalidNumber?: boolean } = {},
+): SettingsValidationErrors {
+  const errors: SettingsValidationErrors = {}
+  const shouldValidateInvalidNumber = options.validateInvalidNumber ?? false
+  const actualHours = parseActualHoursInput(actualHoursInput)
+
+  if (!Number.isFinite(actualHours) && shouldValidateInvalidNumber) {
+    errors.actualHours = "업무 소요 예상 시간을 숫자로 입력해주세요."
+  } else if (actualHours < 0) {
+    errors.actualHours = "업무 소요 예상 시간은 음수로 입력할 수 없습니다."
+  }
+
+  return errors
+}
+
+function hasSettingsValidationErrors(errors: SettingsValidationErrors) {
+  return Boolean(errors.actualHours)
+}
+
 function hasCircularDependency(
   worklogId: number,
   dependencyIds: number[],
@@ -93,29 +124,39 @@ export function WorklogForm({
   const textareaClassName =
     "dashboard-scrollbar resize-none rounded-[1.25rem] px-4 py-3 text-base overflow-y-auto [scrollbar-gutter:stable]"
   const isEditMode = currentWorklogId !== undefined
+  const resolvedInitialValues = initialValues ?? {
+    title: "",
+    requestContent: "",
+    workContent: "",
+    status: "PENDING" as const,
+    importance: "NORMAL" as const,
+    actualHours: 0,
+    instructionDate: "2026-04-13",
+    dueDate: "2026-04-16",
+    teamId: teamOptionsSource?.[0]?.id ?? 0,
+    dependencyIds: [],
+    attachmentNames: [],
+    attachmentFiles: [],
+    tagIds: [],
+  }
   const [activeModal, setActiveModal] = useState<WorklogFormModalKey | null>(null)
-  const [values, setValues] = useState<WorklogFormValues>(
-    initialValues ?? {
-      title: "",
-      requestContent: "",
-      workContent: "",
-      status: "PENDING",
-      importance: "NORMAL",
-      actualHours: 1,
-      instructionDate: "2026-04-13",
-      dueDate: "2026-04-16",
-      teamId: teamOptionsSource?.[0]?.id ?? 0,
-      dependencyIds: [],
-      attachmentNames: [],
-      attachmentFiles: [],
-      tagIds: [],
-    },
+  const [values, setValues] = useState<WorklogFormValues>(resolvedInitialValues)
+  const [actualHoursInput, setActualHoursInput] = useState(() =>
+    String(resolvedInitialValues.actualHours),
   )
   const [submitError, setSubmitError] = useState("")
+  const [showSettingsValidationErrors, setShowSettingsValidationErrors] =
+    useState(false)
   const [dependencyKeywordInput, setDependencyKeywordInput] = useState("")
   const [dependencySearchOpen, setDependencySearchOpen] = useState(false)
   const [tagKeywordInput, setTagKeywordInput] = useState("")
   const [tagSearchOpen, setTagSearchOpen] = useState(false)
+  const settingsValidationErrors = getSettingsValidationErrors(
+    actualHoursInput,
+    {
+      validateInvalidNumber: showSettingsValidationErrors,
+    },
+  )
 
   const teamSource = useMemo<WorklogFormTeamOption[]>(
     () => teamOptionsSource ?? [],
@@ -293,6 +334,43 @@ export function WorklogForm({
     }))
   }
 
+  const updateValues = (nextValues: WorklogFormValues) => {
+    setValues(nextValues)
+    if (
+      showSettingsValidationErrors &&
+      !hasSettingsValidationErrors(
+        getSettingsValidationErrors(actualHoursInput, {
+          validateInvalidNumber: true,
+        }),
+      )
+    ) {
+      setSubmitError("")
+    }
+  }
+
+  const updateActualHoursInput = (nextInput: string) => {
+    setActualHoursInput(nextInput)
+
+    const nextActualHours = parseActualHoursInput(nextInput)
+    if (Number.isFinite(nextActualHours)) {
+      setValues((previous) => ({
+        ...previous,
+        actualHours: nextActualHours,
+      }))
+    }
+
+    if (
+      showSettingsValidationErrors &&
+      !hasSettingsValidationErrors(
+        getSettingsValidationErrors(nextInput, {
+          validateInvalidNumber: true,
+        }),
+      )
+    ) {
+      setSubmitError("")
+    }
+  }
+
   return (
     <form
       className="registration-surface flex w-full max-w-[1760px] flex-col gap-5 pb-10"
@@ -306,8 +384,25 @@ export function WorklogForm({
           return
         }
 
+        const nextSettingsErrors = getSettingsValidationErrors(actualHoursInput, {
+          validateInvalidNumber: true,
+        })
+        if (hasSettingsValidationErrors(nextSettingsErrors)) {
+          setShowSettingsValidationErrors(true)
+          setActiveModal("settings")
+          setSubmitError(
+            "작업 설정에서 업무 소요 예상 시간을 확인해주세요.",
+          )
+          return
+        }
+
+        const submitValues = {
+          ...values,
+          actualHours: parseActualHoursInput(actualHoursInput),
+        }
+
         setSubmitError("")
-        await onSubmit(values)
+        await onSubmit(submitValues)
       }}
     >
       <div className="grid gap-5">
@@ -415,11 +510,14 @@ export function WorklogForm({
         activeModal={activeModal}
         onActiveModalChange={setActiveModal}
         values={values}
-        onValuesChange={setValues}
+        onValuesChange={updateValues}
         controlClassName={controlClassName}
         searchControlClassName={searchControlClassName}
         teamOptions={teamOptions}
         statusOptions={statusOptions}
+        settingsValidationErrors={settingsValidationErrors}
+        actualHoursInput={actualHoursInput}
+        onActualHoursInputChange={updateActualHoursInput}
         dependencyKeywordInput={dependencyKeywordInput}
         onDependencyKeywordInputChange={setDependencyKeywordInput}
         dependencySearchOpen={dependencySearchOpen}
