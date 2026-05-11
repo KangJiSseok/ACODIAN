@@ -2,6 +2,7 @@ package com.ibank.axwms.domain.notification.service;
 
 import com.ibank.axwms.domain.notification.NotificationReferenceType;
 import com.ibank.axwms.domain.notification.NotificationType;
+import com.ibank.axwms.domain.notification.entity.Notification;
 import com.ibank.axwms.domain.notification.repository.NotificationRepository;
 import com.ibank.axwms.domain.notification.repository.jooq.projection.WorklogDueSoonReminderCandidateProjection;
 import com.ibank.axwms.domain.organization.department.DepartmentStatus;
@@ -93,6 +94,7 @@ class NotificationServiceIntegrationTest extends IntegrationTestSupport {
                 .extracting(
                         WorklogDueSoonReminderCandidateProjection::worklogId,
                         WorklogDueSoonReminderCandidateProjection::recipientUserId,
+                        WorklogDueSoonReminderCandidateProjection::departmentId,
                         WorklogDueSoonReminderCandidateProjection::teamId,
                         WorklogDueSoonReminderCandidateProjection::dueDate,
                         WorklogDueSoonReminderCandidateProjection::notificationType,
@@ -103,6 +105,7 @@ class NotificationServiceIntegrationTest extends IntegrationTestSupport {
                         tuple(
                                 pending.getId(),
                                 fixture.author().getId(),
+                                fixture.department().getId(),
                                 fixture.team().getId(),
                                 TARGET_DUE_DATE,
                                 WORKLOG_DUE_SOON_NOTIFICATION_TYPE,
@@ -112,6 +115,7 @@ class NotificationServiceIntegrationTest extends IntegrationTestSupport {
                         tuple(
                                 inProgress.getId(),
                                 fixture.author().getId(),
+                                fixture.department().getId(),
                                 fixture.team().getId(),
                                 TARGET_DUE_DATE,
                                 WORKLOG_DUE_SOON_NOTIFICATION_TYPE,
@@ -121,6 +125,7 @@ class NotificationServiceIntegrationTest extends IntegrationTestSupport {
                         tuple(
                                 onHold.getId(),
                                 fixture.author().getId(),
+                                fixture.department().getId(),
                                 fixture.team().getId(),
                                 TARGET_DUE_DATE,
                                 WORKLOG_DUE_SOON_NOTIFICATION_TYPE,
@@ -128,6 +133,85 @@ class NotificationServiceIntegrationTest extends IntegrationTestSupport {
                                 onHold.getId()
                         )
                 );
+    }
+
+    @Test
+    @DisplayName("동일 업무 마감 알림이 이미 있으면 후보에서 제외한다")
+    void 동일_업무_마감_알림이_이미_있으면_후보에서_제외한다() {
+        // given
+        ReminderBaseFixture fixture = seedReminderBaseFixture();
+        Worklog worklog = saveWorklog(fixture.author(), fixture.team(), "중복 제외 대상", WorklogStatus.PENDING, TARGET_DUE_DATE, false);
+        notificationRepository.save(Notification.createWorklogDueSoonReminder(
+                fixture.author().getId(),
+                fixture.department().getId(),
+                fixture.team().getId(),
+                worklog.getId(),
+                "기존 알림",
+                "이미 생성된 알림"
+        ));
+
+        // when
+        List<WorklogDueSoonReminderCandidateProjection> candidates =
+                notificationService.findWorklogDueSoonReminderCandidates(TODAY);
+
+        // then
+        assertThat(candidates).isEmpty();
+    }
+
+    @Test
+    @DisplayName("D-3 후보를 Notification row로 저장한다")
+    void d3_후보를_Notification_row로_저장한다() {
+        // given
+        ReminderBaseFixture fixture = seedReminderBaseFixture();
+        Worklog worklog = saveWorklog(fixture.author(), fixture.team(), "저장 대상 업무", WorklogStatus.IN_PROGRESS, TARGET_DUE_DATE, false);
+
+        // when
+        int createdCount = notificationService.createWorklogDueSoonReminderNotifications(TODAY);
+
+        // then
+        assertThat(createdCount).isOne();
+        List<Notification> notifications = notificationRepository.findAll();
+        assertThat(notifications)
+                .extracting(
+                        Notification::getUserId,
+                        Notification::getDepartmentId,
+                        Notification::getTeamId,
+                        Notification::getNotificationType,
+                        Notification::getReferenceType,
+                        Notification::getReferenceId,
+                        Notification::getIsRead
+                )
+                .containsExactly(tuple(
+                        fixture.author().getId(),
+                        fixture.department().getId(),
+                        fixture.team().getId(),
+                        WORKLOG_DUE_SOON_NOTIFICATION_TYPE,
+                        WORKLOG_REFERENCE_TYPE,
+                        worklog.getId(),
+                        Boolean.FALSE
+                ));
+        Notification notification = notifications.getFirst();
+        assertThat(notification.getTitle()).isEqualTo("업무 마감 3일 전 알림");
+        assertThat(notification.getContent()).isEqualTo(
+                fixture.team().getTeamName() + "의 저장 대상 업무 마감일이 3일 남았습니다. 마감일 : " + TARGET_DUE_DATE
+        );
+    }
+
+    @Test
+    @DisplayName("같은 기준일로 반복 실행해도 동일 identity 알림은 중복 저장하지 않는다")
+    void 같은_기준일로_반복_실행해도_동일_identity_알림은_중복_저장하지_않는다() {
+        // given
+        ReminderBaseFixture fixture = seedReminderBaseFixture();
+        saveWorklog(fixture.author(), fixture.team(), "반복 실행 대상", WorklogStatus.ON_HOLD, TARGET_DUE_DATE, false);
+
+        // when
+        int firstCreatedCount = notificationService.createWorklogDueSoonReminderNotifications(TODAY);
+        int secondCreatedCount = notificationService.createWorklogDueSoonReminderNotifications(TODAY);
+
+        // then
+        assertThat(firstCreatedCount).isOne();
+        assertThat(secondCreatedCount).isZero();
+        assertThat(notificationRepository.findAll()).hasSize(1);
     }
 
     /**

@@ -25,6 +25,10 @@ storage:
       temp-prefix: temp/
       retention-days: 0
 
+notification:
+  worklog-due-soon-reminder:
+    cron: 0 0 9 * * *
+
 auth:
   refresh-cookie:
     name: refreshToken

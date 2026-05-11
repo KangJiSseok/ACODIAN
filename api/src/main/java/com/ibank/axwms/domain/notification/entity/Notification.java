@@ -1,5 +1,7 @@
 package com.ibank.axwms.domain.notification.entity;
 
+import com.ibank.axwms.domain.notification.NotificationReferenceType;
+import com.ibank.axwms.domain.notification.NotificationType;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.GeneratedValue;
@@ -62,6 +64,29 @@ public class Notification {
     @UpdateTimestamp
     @Column(name = "updated_at", nullable = false)
     private LocalDateTime updatedAt;
+
+    /**
+     * D-3 업무 알림의 중복 방지 identity 가 엔티티 생성 시점부터 같은 값으로 저장되게 한다.
+     */
+    public static Notification createWorklogDueSoonReminder(Long userId,
+                                                            Long departmentId,
+                                                            Long teamId,
+                                                            Long worklogId,
+                                                            String title,
+                                                            String content) {
+        Notification notification = new Notification();
+        notification.userId = userId;
+        notification.departmentId = departmentId;
+        notification.teamId = teamId;
+        notification.notificationType = NotificationType.WORKLOG_DUE_SOON.name();
+        notification.title = title;
+        notification.content = content;
+        notification.referenceType = NotificationReferenceType.WORKLOG.name();
+        notification.referenceId = worklogId;
+        notification.isRead = Boolean.FALSE;
+        notification.readAt = null;
+        return notification;
+    }
 
     /**
      * 신규 알림을 생성한다.

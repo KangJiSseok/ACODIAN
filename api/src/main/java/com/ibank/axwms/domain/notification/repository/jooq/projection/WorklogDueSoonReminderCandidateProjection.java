@@ -6,6 +6,7 @@ import org.jooq.Record;
 
 import java.time.LocalDate;
 
+import static com.ibank.axwms.global.jooq.Tables.TB_TEAM;
 import static com.ibank.axwms.global.jooq.Tables.TB_WORKLOG;
 
 /**
@@ -14,7 +15,9 @@ import static com.ibank.axwms.global.jooq.Tables.TB_WORKLOG;
 public record WorklogDueSoonReminderCandidateProjection(
         Long worklogId,
         Long recipientUserId,
+        Long departmentId,
         Long teamId,
+        String teamName,
         String worklogTitle,
         LocalDate dueDate,
         String notificationType,
@@ -30,7 +33,9 @@ public record WorklogDueSoonReminderCandidateProjection(
         return new WorklogDueSoonReminderCandidateProjection(
                 worklogId,
                 record.get(TB_WORKLOG.AUTHOR_ID),
+                record.get(TB_TEAM.DEPARTMENT_ID),
                 record.get(TB_WORKLOG.TEAM_ID),
+                record.get(TB_TEAM.TEAM_NAME),
                 record.get(TB_WORKLOG.TITLE),
                 record.get(TB_WORKLOG.DUE_DATE),
                 NotificationType.WORKLOG_DUE_SOON.name(),

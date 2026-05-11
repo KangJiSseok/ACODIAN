@@ -1,5 +1,7 @@
 package com.ibank.axwms.domain.notification.repository.jooq;
 
+import com.ibank.axwms.domain.notification.NotificationReferenceType;
+import com.ibank.axwms.domain.notification.NotificationType;
 import com.ibank.axwms.domain.notification.repository.jooq.projection.WorklogDueSoonReminderCandidateProjection;
 import com.ibank.axwms.domain.worklog.WorklogStatus;
 import static com.ibank.axwms.global.jooq.Tables.TB_NOTIFICATION;
@@ -17,7 +19,10 @@ import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageImpl;
 import org.springframework.data.domain.PageRequest;
 
+import static com.ibank.axwms.global.jooq.Tables.TB_TEAM;
 import static com.ibank.axwms.global.jooq.Tables.TB_WORKLOG;
+import static org.jooq.impl.DSL.notExists;
+import static org.jooq.impl.DSL.selectOne;
 
 @Repository
 @RequiredArgsConstructor
@@ -39,14 +44,20 @@ public class NotificationJooqRepositoryImpl implements NotificationJooqRepositor
         return dsl.select(
                         TB_WORKLOG.WORKLOG_ID,
                         TB_WORKLOG.AUTHOR_ID,
+                        TB_TEAM.DEPARTMENT_ID,
                         TB_WORKLOG.TEAM_ID,
+                        TB_TEAM.TEAM_NAME,
                         TB_WORKLOG.TITLE,
                         TB_WORKLOG.DUE_DATE
                 )
                 .from(TB_WORKLOG)
+                .leftJoin(TB_TEAM).on(TB_TEAM.TEAM_ID.eq(TB_WORKLOG.TEAM_ID))
                 .where(TB_WORKLOG.DUE_DATE.eq(targetDueDate)
                         .and(TB_WORKLOG.IS_DELETED.isFalse())
-                        .and(TB_WORKLOG.STATUS_CODE.in(REMINDABLE_WORKLOG_STATUSES)))
+                        .and(TB_WORKLOG.STATUS_CODE.in(REMINDABLE_WORKLOG_STATUSES))
+                        .and(notExists(selectOne()
+                                .from(TB_NOTIFICATION)
+                                .where(hasSameWorklogDueSoonReminderIdentity()))))
                 .orderBy(TB_WORKLOG.WORKLOG_ID.asc())
                 .fetch(WorklogDueSoonReminderCandidateProjection::from);
     }
@@ -108,4 +119,14 @@ public class NotificationJooqRepositoryImpl implements NotificationJooqRepositor
         }
         return condition;
     }
+    /**
+     * 저장 단계 재시도 전에도 이미 만든 동일 업무/수신자 알림은 후보에서 제외하도록 identity 비교를 한곳에 고정한다.
+     */
+    private Condition hasSameWorklogDueSoonReminderIdentity() {
+        return TB_NOTIFICATION.NOTIFICATION_TYPE.eq(NotificationType.WORKLOG_DUE_SOON.name())
+                .and(TB_NOTIFICATION.USER_ID.eq(TB_WORKLOG.AUTHOR_ID))
+                .and(TB_NOTIFICATION.REFERENCE_TYPE.eq(NotificationReferenceType.WORKLOG.name()))
+                .and(TB_NOTIFICATION.REFERENCE_ID.eq(TB_WORKLOG.WORKLOG_ID));
+    }
+
 }
