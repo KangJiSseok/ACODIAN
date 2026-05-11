@@ -329,20 +329,13 @@ public class UserService {
                 .findFirst()
                 .orElseThrow(() -> new BusinessException(ErrorCode.TEAM_NOT_FOUND));
 
-
-        boolean requestedAlreadyPrimary = Boolean.TRUE.equals(requestedMembership.getIsPrimary());
-
-        // 내가 소속한 기존 대표팀이 있으면 해제
-        boolean clearedOtherPrimary = false;
         for (UserTeam membership : memberships) {
             if (!primaryTeamId.equals(membership.getTeamId()) && Boolean.TRUE.equals(membership.getIsPrimary())) {
                 membership.markAsSecondary();
-                clearedOtherPrimary = true;
             }
         }
-        if (clearedOtherPrimary && !requestedAlreadyPrimary) {
-            userTeamRepository.flush();
-        }
+
+        userTeamRepository.flush();
         requestedMembership.markAsPrimary();
     }
 
