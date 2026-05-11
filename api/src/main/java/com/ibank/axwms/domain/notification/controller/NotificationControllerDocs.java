@@ -1,5 +1,6 @@
 package com.ibank.axwms.domain.notification.controller;
 
+import com.ibank.axwms.domain.notification.dto.MarkAllNotificationsReadApiDto;
 import com.ibank.axwms.domain.notification.dto.SearchNotificationsApiDto;
 import com.ibank.axwms.global.response.PageResponse;
 import com.ibank.axwms.global.security.CustomUserPrincipal;
@@ -28,5 +29,17 @@ public interface NotificationControllerDocs {
     PageResponse<SearchNotificationsApiDto.Response.Item> searchNotifications(
             @Parameter(hidden = true) CustomUserPrincipal principal,
             @ParameterObject SearchNotificationsApiDto.Request request
+    );
+
+    @Operation(summary = "내 알림 전체 읽음 처리",
+            description = "현재 로그인 사용자의 안읽은 알림을 모두 읽음 상태로 변경하고, 실제 변경된 건수를 반환한다.")
+    @SecurityRequirement(name = "bearerAuth")
+    @ApiResponses({
+            @ApiResponse(responseCode = "200", description = "안읽은 알림 전체 읽음 처리를 완료한다."),
+            @ApiResponse(responseCode = "401", description = "인증이 필요하다.", content = @Content),
+            @ApiResponse(responseCode = "403", description = "알림 변경 권한이 없다.", content = @Content)
+    })
+    MarkAllNotificationsReadApiDto.Response markAllNotificationsRead(
+            @Parameter(hidden = true) CustomUserPrincipal principal
     );
 }
