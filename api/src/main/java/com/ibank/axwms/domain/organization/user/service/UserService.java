@@ -314,7 +314,7 @@ public class UserService {
         });
     }
 
-    /** 대표 소속 팀 요청이 있으면 기존 대표 플래그를 모두 해제하고 요청 membership 만 대표로 둔다. */
+    /** 대표 소속 팀 요청이 있으면 DB 유니크 제약과 충돌하지 않도록 기존 대표 해제를 먼저 확정한 뒤 요청 membership 만 대표로 둔다. */
     private void updatePrimaryTeam(Long userId, Long primaryTeamId) {
         if (primaryTeamId == null) {
             return;
@@ -323,16 +323,27 @@ public class UserService {
             throw new BusinessException(ErrorCode.TEAM_NOT_FOUND);
         }
 
-        userTeamRepository.findByUserIdAndTeamId(userId, primaryTeamId)
+        List<UserTeam> memberships = userTeamRepository.findAllByUserId(userId);
+        UserTeam requestedMembership = memberships.stream()
+                .filter(membership -> primaryTeamId.equals(membership.getTeamId()))
+                .findFirst()
                 .orElseThrow(() -> new BusinessException(ErrorCode.TEAM_NOT_FOUND));
 
-        for (UserTeam membership : userTeamRepository.findAllByUserId(userId)) {
-            if (primaryTeamId.equals(membership.getTeamId())) {
-                membership.markAsPrimary();
-            } else {
+
+        boolean requestedAlreadyPrimary = Boolean.TRUE.equals(requestedMembership.getIsPrimary());
+
+        // 내가 소속한 기존 대표팀이 있으면 해제
+        boolean clearedOtherPrimary = false;
+        for (UserTeam membership : memberships) {
+            if (!primaryTeamId.equals(membership.getTeamId()) && Boolean.TRUE.equals(membership.getIsPrimary())) {
                 membership.markAsSecondary();
+                clearedOtherPrimary = true;
             }
         }
+        if (clearedOtherPrimary && !requestedAlreadyPrimary) {
+            userTeamRepository.flush();
+        }
+        requestedMembership.markAsPrimary();
     }
 
     /**
