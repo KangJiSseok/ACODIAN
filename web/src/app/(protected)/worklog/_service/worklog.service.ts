@@ -150,8 +150,6 @@ function toWorklogDetail(item: WorklogDetailApiResponse): Worklog {
   const tags = toArray(item.tags)
   const dependOnWorklogs = toArray(item.dependOnWorklogs)
   const statusHistory = toArray(item.statusHistories).map(toStatusHistory)
-  const firstHistoryAt = statusHistory[0]?.changedAt
-  const lastHistoryAt = statusHistory[statusHistory.length - 1]?.changedAt
   const aiSummary = item.aiSummary?.trim() || "AI 요약 정보가 없습니다."
 
   return {
@@ -182,8 +180,8 @@ function toWorklogDetail(item: WorklogDetailApiResponse): Worklog {
     fileIds: files.map((file) => file.fileId),
     fileItems: files,
     isDeleted: false,
-    createdAt: item.createdAt ?? firstHistoryAt ?? item.instructionDate,
-    updatedAt: item.updatedAt ?? lastHistoryAt ?? firstHistoryAt ?? item.instructionDate,
+    createdAt: item.createdAt,
+    updatedAt: item.updatedAt,
     statusHistory,
   }
 }

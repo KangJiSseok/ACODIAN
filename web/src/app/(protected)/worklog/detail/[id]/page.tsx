@@ -31,6 +31,7 @@ export default function WorklogDetailPage() {
     const changedAt = new Date().toISOString()
     const statusCode = nextStatus === "DONE" ? "COMPLETED" : nextStatus
 
+    // TODO: 상태 변경 API 연동 후 로컬 낙관 업데이트 로직을 서버 응답 기반 갱신으로 교체.
     setDisplayWorklog((current) => {
       const target = current?.id === selectedWorklog.id ? current : selectedWorklog
 

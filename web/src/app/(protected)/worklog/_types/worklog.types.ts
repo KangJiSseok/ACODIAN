@@ -185,8 +185,8 @@ export interface WorklogDetailApiResponse {
   instructionDate: string
   dueDate: string
   completionDate?: string | null
-  createdAt?: string | null
-  updatedAt?: string | null
+  createdAt: string
+  updatedAt: string
   files?: WorklogFileItem[] | null
   tags?: string[] | null
   dependOnWorklogs?: WorklogDependencyItem[] | null

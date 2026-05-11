@@ -13,6 +13,7 @@ import { TagList } from "./tagList"
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
+import { cn } from "@/lib/utils"
 import { formatDate, formatDateTime, formatHours } from "../_utils/worklogFormat"
 import { ChevronDown } from "lucide-react"
 
@@ -217,11 +218,9 @@ function CollapsibleCard({
           />
         </Button>
       </CardHeader>
-      {open ? (
-        <CardContent className="space-y-3">
-          {children}
-        </CardContent>
-      ) : null}
+      <CardContent className={cn("space-y-3", !open && "hidden")}>
+        {children}
+      </CardContent>
     </Card>
   )
 }
