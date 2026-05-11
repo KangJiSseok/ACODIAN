@@ -28,6 +28,8 @@ storage:
 notification:
   worklog-due-soon-reminder:
     cron: 0 0 9 * * *
+  stream:
+    key: notifications:stream
 
 auth:
   refresh-cookie:
