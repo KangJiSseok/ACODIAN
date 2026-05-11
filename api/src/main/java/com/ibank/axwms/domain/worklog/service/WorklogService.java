@@ -11,6 +11,7 @@ import com.ibank.axwms.domain.worklog.dto.GetWorklogDetailApiDto;
 import com.ibank.axwms.domain.worklog.dto.GetWorklogsApiDto;
 import com.ibank.axwms.domain.worklog.dto.UpdateWorklogApiDto;
 import com.ibank.axwms.domain.worklog.entity.Worklog;
+import com.ibank.axwms.domain.worklog.entity.WorklogTag;
 import com.ibank.axwms.domain.worklog.repository.WorklogDependencyRepository;
 import com.ibank.axwms.domain.worklog.repository.WorklogRepository;
 import com.ibank.axwms.domain.worklog.repository.WorklogStatusHistoryRepository;
@@ -81,13 +82,20 @@ public class WorklogService {
                 request.title(),
                 request.requestContent(),
                 request.workContent(),
+                request.statusCode(),
                 request.importanceCode(),
+                request.actualHours(),
                 request.instructionDate(),
                 request.dueDate()
         ));
 
         fileService.uploadWorklogFiles(savedWorklog.getId(), principal.userId(), files);
-        worklogStatusHistoryService.createStatusHistory(savedWorklog.getId(), principal.userId());
+        worklogStatusHistoryService.createStatusHistory(
+                savedWorklog.getId(),
+                request.statusCode(),
+                principal.userId()
+        );
+        registerManualTags(savedWorklog.getId(), request.tagIds());
         worklogDependencyService.registerPredecessor(
                 principal.userId(),
                 savedWorklog.getId(),
@@ -95,6 +103,22 @@ public class WorklogService {
         );
 
         return CreateWorklogApiDto.Response.of(savedWorklog.getId());
+    }
+
+    /**
+     * 등록 화면에서 직접 선택한 태그만 수동 태그로 연결하고 사용 횟수 캐시를 증가시킨다.
+     */
+    private void registerManualTags(Long worklogId, List<Long> tagIds) {
+        List<Long> normalizedTagIds = tagService.normalizeExistingTagIds(tagIds);
+        if (normalizedTagIds.isEmpty()) {
+            return;
+        }
+
+        List<WorklogTag> worklogTags = normalizedTagIds.stream()
+                .map(tagId -> WorklogTag.createManualSelected(worklogId, tagId))
+                .toList();
+        worklogTagRepository.saveAll(worklogTags);
+        tagService.incrementUsageCountByIds(normalizedTagIds);
     }
 
     /**
