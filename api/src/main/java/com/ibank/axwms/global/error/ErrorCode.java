@@ -99,7 +99,9 @@ public enum ErrorCode {
     /** 사용자 role 자체로 해당 dashboard scope 를 조회할 수 없을 때 사용한다. */
     DASHBOARD_FORBIDDEN(HttpStatus.FORBIDDEN, "대시보드를 조회할 권한이 없습니다."),
     /** role 은 허용되지만 특정 부서/팀 자원에 대한 접근 권한이 없거나 자원이 없을 때 사용한다. */
-    DASHBOARD_NOT_FOUND(HttpStatus.NOT_FOUND, "대시보드를 찾을 수 없습니다.");
+    DASHBOARD_NOT_FOUND(HttpStatus.NOT_FOUND, "대시보드를 찾을 수 없습니다."),
+    /** 알림이 없거나 현재 사용자가 수신자가 아니어서 알림을 노출할 수 없을 때 사용한다. */
+    NOTIFICATION_NOT_FOUND(HttpStatus.NOT_FOUND, "알림을 찾을 수 없습니다.");
 
     private final HttpStatus status;
     private final String message;

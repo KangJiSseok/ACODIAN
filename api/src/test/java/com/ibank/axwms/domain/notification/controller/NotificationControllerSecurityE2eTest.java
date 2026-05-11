@@ -34,6 +34,17 @@ class NotificationControllerSecurityE2eTest extends E2eTestSupport {
     }
 
     @Test
+    @DisplayName("인증 없이 알림 읽음 처리를 호출하면 AUTH_UNAUTHORIZED 응답을 반환한다")
+    void 인증_없이_알림_읽음_처리를_호출하면_AUTH_UNAUTHORIZED_응답을_반환한다() throws Exception {
+        mockMvc.perform(apiPatch("/notifications/1001/read"))
+                .andExpect(status().isUnauthorized())
+                .andExpect(jsonPath("$.success", is(false)))
+                .andExpect(jsonPath("$.error.code", is("AUTH_UNAUTHORIZED")))
+                .andExpect(jsonPath("$.error.statusCode", is(401)))
+                .andExpect(jsonPath("$.timestamp").exists());
+    }
+
+    @Test
     @DisplayName("인증된 사용자는 알림 SSE 구독을 text/event-stream 으로 시작한다")
     void 인증된_사용자는_알림_SSE_구독을_text_event_stream으로_시작한다() throws Exception {
         mockMvc.perform(apiGet("/notifications/stream")

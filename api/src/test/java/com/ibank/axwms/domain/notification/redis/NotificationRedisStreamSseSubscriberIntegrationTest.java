@@ -44,7 +44,6 @@ class NotificationRedisStreamSseSubscriberIntegrationTest extends IntegrationTes
 
         try {
             subscriber.start();
-            Thread.sleep(300L);
             stringRedisTemplate.opsForStream().add(streamKey, fields(101L));
 
             awaitSendCount(targetEmitter, 1);

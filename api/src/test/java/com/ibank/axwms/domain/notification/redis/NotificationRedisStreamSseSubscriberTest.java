@@ -3,12 +3,19 @@ package com.ibank.axwms.domain.notification.redis;
 import com.ibank.axwms.domain.notification.sse.NotificationSseEmitterRegistry;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
+import org.springframework.data.domain.Range;
+import org.springframework.data.redis.connection.Limit;
+import org.springframework.data.redis.connection.RedisConnection;
+import org.springframework.data.redis.connection.RedisConnectionFactory;
+import org.springframework.data.redis.connection.RedisStreamCommands;
+import org.springframework.data.redis.connection.stream.ByteRecord;
 import org.springframework.data.redis.connection.stream.MapRecord;
 import org.springframework.data.redis.connection.stream.ReadOffset;
 import org.springframework.data.redis.connection.stream.RecordId;
 import org.springframework.test.util.ReflectionTestUtils;
 
 import java.util.LinkedHashMap;
+import java.util.List;
 import java.util.Map;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -17,6 +24,7 @@ import static org.mockito.ArgumentMatchers.argThat;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.when;
 
 class NotificationRedisStreamSseSubscriberTest {
 
@@ -46,15 +54,47 @@ class NotificationRedisStreamSseSubscriberTest {
     }
 
     @Test
-    @DisplayName("live 구독 offset 은 첫 read 이후 마지막 수신 ID 기준으로 전진한다")
-    void live_구독_offset은_첫_read_이후_마지막_수신_ID_기준으로_전진한다() {
-        NotificationRedisStreamSseSubscriber subscriber = new NotificationRedisStreamSseSubscriber(null, mock(NotificationSseEmitterRegistry.class));
+    @DisplayName("live 구독 offset 은 구독 시작 시점의 stream 마지막 ID 부터 전진한다")
+    void live_구독_offset은_구독_시작_시점의_stream_마지막_ID부터_전진한다() {
+        RedisConnectionFactory connectionFactory = mock(RedisConnectionFactory.class);
+        RedisConnection connection = mock(RedisConnection.class);
+        RedisStreamCommands streamCommands = mock(RedisStreamCommands.class);
+        ByteRecord record = mock(ByteRecord.class);
+        when(connectionFactory.getConnection()).thenReturn(connection);
+        when(connection.streamCommands()).thenReturn(streamCommands);
+        when(streamCommands.xRevRange(any(byte[].class), anyRange(), any(Limit.class))).thenReturn(List.of(record));
+        when(record.getId()).thenReturn(RecordId.of("1-0"));
+        NotificationRedisStreamSseSubscriber subscriber = new NotificationRedisStreamSseSubscriber(
+                connectionFactory,
+                mock(NotificationSseEmitterRegistry.class)
+        );
         ReflectionTestUtils.setField(subscriber, "streamKey", "notifications:stream");
 
         org.springframework.data.redis.connection.stream.StreamOffset<String> offset = subscriber.liveStreamOffset();
 
         assertThat(offset.getKey()).isEqualTo("notifications:stream");
-        assertThat(offset.getOffset()).isEqualTo(ReadOffset.lastConsumed());
+        assertThat(offset.getOffset()).isEqualTo(ReadOffset.from("1-0"));
+    }
+
+    @Test
+    @DisplayName("stream 이 아직 없으면 live 구독 offset 은 시작 이후 첫 record 부터 읽는다")
+    void stream이_아직_없으면_live_구독_offset은_시작_이후_첫_record부터_읽는다() {
+        RedisConnectionFactory connectionFactory = mock(RedisConnectionFactory.class);
+        RedisConnection connection = mock(RedisConnection.class);
+        RedisStreamCommands streamCommands = mock(RedisStreamCommands.class);
+        when(connectionFactory.getConnection()).thenReturn(connection);
+        when(connection.streamCommands()).thenReturn(streamCommands);
+        when(streamCommands.xRevRange(any(byte[].class), anyRange(), any(Limit.class))).thenReturn(List.of());
+        NotificationRedisStreamSseSubscriber subscriber = new NotificationRedisStreamSseSubscriber(
+                connectionFactory,
+                mock(NotificationSseEmitterRegistry.class)
+        );
+        ReflectionTestUtils.setField(subscriber, "streamKey", "notifications:stream");
+
+        org.springframework.data.redis.connection.stream.StreamOffset<String> offset = subscriber.liveStreamOffset();
+
+        assertThat(offset.getKey()).isEqualTo("notifications:stream");
+        assertThat(offset.getOffset()).isEqualTo(ReadOffset.from("0-0"));
     }
 
     @Test
@@ -70,6 +110,11 @@ class NotificationRedisStreamSseSubscriberTest {
 
     private static MapRecord<String, String, String> record(Map<String, String> fields) {
         return MapRecord.create("notifications:stream", fields).withId(RecordId.of("1-0"));
+    }
+
+    /** Mockito raw matcher 경고가 테스트 실패 원인 분석을 흐리지 않도록 Redis range 타입을 한 곳에서 고정한다. */
+    private static Range<String> anyRange() {
+        return org.mockito.ArgumentMatchers.any();
     }
 
     private static Map<String, String> fields() {

@@ -2,11 +2,13 @@ package com.ibank.axwms.domain.notification.controller;
 
 import com.ibank.axwms.domain.notification.dto.MarkAllNotificationsReadApiDto;
 import com.ibank.axwms.domain.notification.dto.SearchNotificationsApiDto;
+import com.ibank.axwms.global.response.EmptyResponse;
 import com.ibank.axwms.global.response.PageResponse;
 import com.ibank.axwms.global.security.CustomUserPrincipal;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.media.Content;
+import io.swagger.v3.oas.annotations.media.Schema;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.responses.ApiResponses;
 import io.swagger.v3.oas.annotations.security.SecurityRequirement;
@@ -53,5 +55,22 @@ public interface NotificationControllerDocs {
     })
     MarkAllNotificationsReadApiDto.Response markAllNotificationsRead(
             @Parameter(hidden = true) CustomUserPrincipal principal
+    );
+
+    @Operation(summary = "내 알림 읽음 처리",
+            description = "현재 로그인 사용자의 특정 알림을 읽음 상태로 변경한다. "
+                    + "이미 읽은 알림은 최초 읽음 시각을 유지한 채 성공 처리한다.")
+    @SecurityRequirement(name = "bearerAuth")
+    @ApiResponses({
+            @ApiResponse(responseCode = "200",
+                    description = "알림 읽음 처리가 완료된다.",
+                    content = @Content(schema = @Schema(implementation = EmptyResponse.class))),
+            @ApiResponse(responseCode = "401", description = "인증이 필요하다.", content = @Content),
+            @ApiResponse(responseCode = "403", description = "알림 변경 권한이 없다.", content = @Content),
+            @ApiResponse(responseCode = "404", description = "알림이 없거나 현재 사용자의 알림이 아니다.", content = @Content)
+    })
+    EmptyResponse markNotificationAsRead(
+            @Parameter(hidden = true) CustomUserPrincipal principal,
+            @Parameter(description = "알림 ID", example = "1001") Long id
     );
 }
