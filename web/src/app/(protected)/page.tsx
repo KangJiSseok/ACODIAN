@@ -43,6 +43,8 @@ export default function DashboardPage() {
   const isDirector = dashboardRole === "DIRECTOR";
   const isDepartmentHead = dashboardRole === "DEPARTMENT_HEAD";
   const isDashboardAdmin = dashboardRole !== "NONE";
+  const hasTeamDashboard = teams.length > 0;
+  const canUseDashboard = isDashboardAdmin || hasTeamDashboard;
   const defaultScope = useMemo(() => getDefaultDashboardScope(user), [user]);
   const [selectedScope, setSelectedScope] =
     useState<DashboardScopeSelection | null>(null);
@@ -91,7 +93,7 @@ export default function DashboardPage() {
     scopeSelection.view === "ADMIN" &&
     scopeSelection.adminScope === "TEAM_DETAIL";
   const isMyDashboardSelected =
-    isDashboardAdmin && scopeSelection.view === "ME";
+    canUseDashboard && scopeSelection.view === "ME";
 
   const directorDashboardQuery = useDirectorDashboard(
     isDepartmentComparisonSelected,
@@ -130,9 +132,9 @@ export default function DashboardPage() {
 
   return (
     <ScaffoldPage
-      title={getDashboardTitle(dashboardRole)}
+      title={getDashboardTitle(dashboardRole, hasTeamDashboard)}
       description={
-        isDashboardAdmin
+        canUseDashboard
           ? getDashboardDescription(
               scopeSelection,
               departments,
@@ -143,7 +145,7 @@ export default function DashboardPage() {
           : "도메인별 라우트와 기본 레이아웃이 연결된 상태입니다."
       }
       actions={
-        isDashboardAdmin ? (
+        canUseDashboard ? (
           <DashboardScopeSelector
             value={scopeSelection}
             dashboardRole={dashboardRole}
@@ -155,12 +157,12 @@ export default function DashboardPage() {
           />
         ) : undefined
       }
-      contentVariant={isDashboardAdmin ? "plain" : "panel"}
+      contentVariant={canUseDashboard ? "plain" : "panel"}
     >
-      {!isDashboardAdmin ? <DashboardShortcutGrid user={user} /> : null}
+      {!canUseDashboard ? <DashboardShortcutGrid user={user} /> : null}
 
-      {isDashboardAdmin && isLoading ? <DirectorDashboardLoading /> : null}
-      {isDashboardAdmin && hasError ? <DirectorDashboardError /> : null}
+      {canUseDashboard && isLoading ? <DirectorDashboardLoading /> : null}
+      {canUseDashboard && hasError ? <DirectorDashboardError /> : null}
       {isDepartmentComparisonSelected && directorDashboardQuery.data ? (
         <DirectorDashboardView dashboard={directorDashboardQuery.data} />
       ) : null}
@@ -177,13 +179,17 @@ export default function DashboardPage() {
   );
 }
 
-function getDashboardTitle(role: DashboardRole) {
+function getDashboardTitle(role: DashboardRole, hasTeamDashboard: boolean) {
   if (role === "DIRECTOR") {
     return "본부장 대시보드";
   }
 
   if (role === "DEPARTMENT_HEAD") {
     return "사업부장 대시보드";
+  }
+
+  if (hasTeamDashboard) {
+    return "내 업무 대시보드";
   }
 
   return "AX-WMS 대시보드";
