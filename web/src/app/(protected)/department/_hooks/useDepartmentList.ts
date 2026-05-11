@@ -7,10 +7,11 @@ export const departmentKeys = {
   detail: (departmentId: number) => [...departmentKeys.all, "detail", departmentId] as const,
 };
 
-export function useDepartmentList() {
+export function useDepartmentList(enabled = true) {
   return useQuery({
     queryKey: departmentKeys.list(),
     queryFn: departmentService.getDepartments,
+    enabled,
   });
 }
 
