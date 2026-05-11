@@ -1,7 +1,7 @@
 import type { AuthUser } from "@/app/_common/store/auth.store";
-import type { TeamDetail, TeamSummary } from "../_types/team.types";
+import type { TeamDetail } from "../_types/team.types";
 
-type ManageableTeam = Pick<TeamSummary | TeamDetail, "deptHeadAdminUserId">;
+type ManageableTeam = Pick<TeamDetail, "deptHeadAdminUserId">;
 const DIRECTOR_KEYWORD = "본부장";
 const DEPARTMENT_HEAD_KEYWORD = "사업부장";
 
