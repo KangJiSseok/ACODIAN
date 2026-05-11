@@ -6,6 +6,7 @@ import com.ibank.axwms.domain.worklog.dto.GetWorklogDetailApiDto;
 import com.ibank.axwms.domain.worklog.dto.GetWorklogFilterOptionsApiDto;
 import com.ibank.axwms.domain.worklog.dto.GetWorklogsApiDto;
 import com.ibank.axwms.domain.worklog.dto.SearchWorklogsApiDto;
+import com.ibank.axwms.domain.worklog.dto.UpdateWorklogApiDto;
 import com.ibank.axwms.global.response.PageResponse;
 import com.ibank.axwms.global.security.CustomUserPrincipal;
 import io.swagger.v3.oas.annotations.Operation;
@@ -93,6 +94,30 @@ public interface WorklogControllerDocs {
     })
     GetWorklogFilterOptionsApiDto.Response getFilterOptions(
             @Parameter(hidden = true) CustomUserPrincipal principal
+    );
+
+    @Operation(summary = "업무일지 부분 수정 (본문 + 선행 + 첨부 파일 통합)",
+            description = "작성자 본인이 자기 업무일지를 한 번의 multipart 요청으로 부분 수정한다. "
+                    + "본문 / 선행 업무 / 첨부 파일 추가/삭제를 단일 트랜잭션으로 처리한다. "
+                    + "request part: null 필드는 변경 없음, predecessorWorklogIds 는 null=변경없음/[]=모두제거/[...]=replace, "
+                    + "removeFileIds 는 삭제할 기존 첨부 파일 ID. "
+                    + "files part: 새로 추가할 파일들 (선택). "
+                    + "teamId 는 수정 불가. dueDate 는 instructionDate 보다 빠를 수 없다. "
+                    + "선행 업무 변경 시 자기참조 / 접근 권한 / 순환 의존을 검증한다. "
+                    + "aiSummary 가 들어오면 aiSummaryEdited 가 true 로 표시된다.")
+    @SecurityRequirement(name = "bearerAuth")
+    @ApiResponses({
+            @ApiResponse(responseCode = "200", description = "수정에 성공한다."),
+            @ApiResponse(responseCode = "400", description = "요청 값이 올바르지 않거나 일자/선행 검증 실패", content = @Content),
+            @ApiResponse(responseCode = "401", description = "인증이 필요하다.", content = @Content),
+            @ApiResponse(responseCode = "403", description = "작성자가 아님", content = @Content),
+            @ApiResponse(responseCode = "404", description = "업무가 없거나 소프트 삭제됨, 또는 삭제 대상 첨부 파일을 찾을 수 없음", content = @Content)
+    })
+    void updateWorklog(
+            @Parameter(hidden = true) CustomUserPrincipal principal,
+            @Parameter(description = "수정 대상 업무 ID", example = "501") Long worklogId,
+            UpdateWorklogApiDto.Request request,
+            List<MultipartFile> files
     );
 
     @Operation(summary = "업무 등록 화면 폼 옵션 조회",
