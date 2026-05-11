@@ -1,7 +1,8 @@
 package com.ibank.axwms.domain.notification.service;
 
-import com.ibank.axwms.domain.notification.dto.SearchNotificationsApiDto;
 import com.ibank.axwms.domain.notification.repository.NotificationRepository;
+import com.ibank.axwms.domain.notification.repository.jooq.projection.WorklogDueSoonReminderCandidateProjection;
+import com.ibank.axwms.domain.notification.dto.SearchNotificationsApiDto;
 import com.ibank.axwms.domain.notification.repository.jooq.query.NotificationSearchQuery;
 import com.ibank.axwms.global.response.PageResponse;
 import com.ibank.axwms.global.security.CustomUserPrincipal;
@@ -9,10 +10,15 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.time.LocalDate;
+import java.util.List;
+
 @Service
 @RequiredArgsConstructor
 @Transactional(readOnly = true)
 public class NotificationService {
+
+    private static final int WORKLOG_DUE_SOON_DAYS = 3;
 
     private final NotificationRepository notificationRepository;
 
@@ -26,4 +32,13 @@ public class NotificationService {
                 notificationRepository.searchNotifications(principal.userId(), query)
         );
     }
+
+    /**
+     * 기준일을 외부에서 주입받아 배치/테스트가 같은 날짜 계산으로 D-3 업무 알림 후보를 검수하게 한다.
+     */
+    public List<WorklogDueSoonReminderCandidateProjection> findWorklogDueSoonReminderCandidates(LocalDate today) {
+        LocalDate targetDueDate = today.plusDays(3);
+        return notificationRepository.findWorklogDueSoonReminderCandidates(targetDueDate);
+    }
+
 }
