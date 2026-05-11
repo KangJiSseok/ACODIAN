@@ -127,6 +127,7 @@ public class WorklogJooqRepositoryImpl implements WorklogJooqRepository {
                         TB_WORKLOG.ACTUAL_HOURS,
                         TB_WORKLOG.INSTRUCTION_DATE,
                         TB_WORKLOG.DUE_DATE,
+                        TB_WORKLOG.COMPLETION_DATE,
                         TB_WORKLOG.CREATED_AT,
                         TB_WORKLOG.UPDATED_AT
                 )

@@ -50,6 +50,8 @@ public final class GetWorklogDetailApiDto {
             LocalDate instructionDate,
             @Schema(description = "업무 마감 일자")
             LocalDate dueDate,
+            @Schema(description = "업무 완료 일자")
+            LocalDate completionDate,
             @Schema(description = "업무일지 생성일자")
             LocalDateTime createdAt,
             @Schema(description = "업무일지 마지막 수정일자")
@@ -91,6 +93,7 @@ public final class GetWorklogDetailApiDto {
                     detail.actualHours(),
                     detail.instructionDate(),
                     detail.dueDate(),
+                    detail.completionDate(),
                     detail.createdAt(),
                     detail.updatedAt(),
                     files.stream().map(FileItem::from).toList(),

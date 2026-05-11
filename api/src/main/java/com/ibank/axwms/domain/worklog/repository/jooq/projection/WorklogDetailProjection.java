@@ -30,6 +30,7 @@ public record WorklogDetailProjection(
         BigDecimal actualHours,
         LocalDate instructionDate,
         LocalDate dueDate,
+        LocalDate completionDate,
         LocalDateTime createdAt,
         LocalDateTime updatedAt
 ) {
@@ -55,6 +56,7 @@ public record WorklogDetailProjection(
                 record.get(TB_WORKLOG.ACTUAL_HOURS),
                 record.get(TB_WORKLOG.INSTRUCTION_DATE),
                 record.get(TB_WORKLOG.DUE_DATE),
+                record.get(TB_WORKLOG.COMPLETION_DATE),
                 record.get(TB_WORKLOG.CREATED_AT),
                 record.get(TB_WORKLOG.UPDATED_AT)
         );
