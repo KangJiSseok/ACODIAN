@@ -62,4 +62,32 @@ public class Notification {
     @UpdateTimestamp
     @Column(name = "updated_at", nullable = false)
     private LocalDateTime updatedAt;
+
+    /**
+     * 신규 알림을 생성한다.
+     * 읽음 상태가 생략되면 DB 기본값과 같은 false 로 보정하고, 읽지 않은 알림이면 readAt 은 null 로 전달한다.
+     */
+    public static Notification create(Long userId,
+                                      Long departmentId,
+                                      Long teamId,
+                                      String notificationType,
+                                      String title,
+                                      String content,
+                                      String referenceType,
+                                      Long referenceId,
+                                      Boolean isRead,
+                                      LocalDateTime readAt) {
+        Notification notification = new Notification();
+        notification.userId = userId;
+        notification.departmentId = departmentId;
+        notification.teamId = teamId;
+        notification.notificationType = notificationType;
+        notification.title = title;
+        notification.content = content;
+        notification.referenceType = referenceType;
+        notification.referenceId = referenceId;
+        notification.isRead = Boolean.TRUE.equals(isRead);
+        notification.readAt = readAt;
+        return notification;
+    }
 }
