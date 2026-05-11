@@ -1,7 +1,10 @@
 "use client"
 
-import type { tags, worklogs } from "../_mock/worklog.mock"
-import type { WorklogFormValues } from "../_types/worklog.types"
+import type {
+  WorklogFormDependencyOption,
+  WorklogFormTagOption,
+  WorklogFormValues,
+} from "../_types/worklog.types"
 import { WorklogDependencyModal } from "./worklogDependencyModal"
 import { WorklogSettingsModal } from "./worklogSettingsModal"
 import { WorklogTagModal } from "./worklogTagModal"
@@ -12,9 +15,6 @@ type SelectOption = {
   label: string
   value: string
 }
-
-type WorklogItem = (typeof worklogs)[number]
-type TagItem = (typeof tags)[number]
 
 interface WorklogFormModalsProps {
   activeModal: WorklogFormModalKey | null
@@ -30,18 +30,18 @@ interface WorklogFormModalsProps {
   onDependencyKeywordInputChange: (value: string) => void
   dependencySearchOpen: boolean
   onDependencySearchOpenChange: (open: boolean) => void
-  filteredDependencyCandidates: WorklogItem[]
-  selectedDependencies: WorklogItem[]
+  filteredDependencyCandidates: WorklogFormDependencyOption[]
+  selectedDependencies: WorklogFormDependencyOption[]
   onAddDependency: (dependencyId: number) => void
   onRemoveDependency: (dependencyId: number) => void
-  incompleteDependencies: WorklogItem[]
+  incompleteDependencies: WorklogFormDependencyOption[]
   circularDependencyDetected: boolean
   tagKeywordInput: string
   onTagKeywordInputChange: (value: string) => void
   tagSearchOpen: boolean
   onTagSearchOpenChange: (open: boolean) => void
-  filteredTagCandidates: TagItem[]
-  selectedTags: TagItem[]
+  filteredTagCandidates: WorklogFormTagOption[]
+  selectedTags: WorklogFormTagOption[]
   onAddTag: (tagId: number) => void
   onRemoveTag: (tagId: number) => void
 }

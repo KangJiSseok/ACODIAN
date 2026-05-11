@@ -14,10 +14,8 @@ import {
 } from "@/components/ui/dialog"
 import { Input } from "@/components/ui/input"
 import { cn } from "@/lib/utils"
-import type { tags } from "../_mock/worklog.mock"
+import type { WorklogFormTagOption } from "../_types/worklog.types"
 import { getTagSourceBadgeClass } from "../_utils/tagBadge"
-
-type TagItem = (typeof tags)[number]
 
 interface WorklogTagModalProps {
   open: boolean
@@ -27,8 +25,8 @@ interface WorklogTagModalProps {
   onTagKeywordInputChange: (value: string) => void
   tagSearchOpen: boolean
   onTagSearchOpenChange: (open: boolean) => void
-  filteredTagCandidates: TagItem[]
-  selectedTags: TagItem[]
+  filteredTagCandidates: WorklogFormTagOption[]
+  selectedTags: WorklogFormTagOption[]
   onAddTag: (tagId: number) => void
   onRemoveTag: (tagId: number) => void
 }

@@ -69,7 +69,39 @@ export interface WorklogFormValues {
   tagIds: number[]
   aiSummary?: string
   aiSummaryEdited?: boolean
-  aiRegenerateRequested?: boolean
+}
+
+export interface WorklogFormTeamOption {
+  id: number
+  name: string
+}
+
+export interface WorklogFormUserOption {
+  id: number
+  name: string
+  title?: string
+}
+
+export interface WorklogFormDependencyOption {
+  id: number
+  title: string
+  status: WorklogStatus
+  teamId?: number
+  authorId?: number
+  aiSummary?: string
+  workContent?: string
+  requestContent?: string
+  isDeleted?: boolean
+  dependencyIds?: number[]
+}
+
+export interface WorklogFormTagOption {
+  id: number
+  name: string
+  usageCount: number
+  category: string
+  source: "AI" | "MANUAL"
+  reuseHint: string
 }
 
 export interface GetWorklogsParams {

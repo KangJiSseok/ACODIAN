@@ -5,7 +5,6 @@ import {
   ChevronRight,
   FileText,
   GitBranchPlus,
-  RefreshCw,
   Settings2,
   Tag,
 } from "lucide-react"
@@ -16,7 +15,14 @@ import { Textarea } from "@/components/ui/textarea"
 import { cn } from "@/lib/utils"
 import { useAuth } from "../_hooks/useAuth"
 import { tags, teams, users, worklogs } from "../_mock/worklog.mock"
-import type { WorklogFormValues, WorklogStatus } from "../_types/worklog.types"
+import type {
+  WorklogFormDependencyOption,
+  WorklogFormTagOption,
+  WorklogFormTeamOption,
+  WorklogFormUserOption,
+  WorklogFormValues,
+  WorklogStatus,
+} from "../_types/worklog.types"
 import { getWorklogStatusLabel } from "../_utils/worklogFormat"
 import { worklogStatusLegendOrder } from "./worklogBadgeConfig"
 import { WorklogFileUpload } from "./worklogFileUpload"
@@ -37,10 +43,10 @@ const editableStatusTransitionMap: Record<WorklogStatus, WorklogStatus[]> = {
 function hasCircularDependency(
   worklogId: number,
   dependencyIds: number[],
-  pool: typeof worklogs,
+  pool: WorklogFormDependencyOption[],
 ) {
   const adjacency = new Map<number, number[]>()
-  pool.forEach((worklog) => adjacency.set(worklog.id, worklog.dependencyIds))
+  pool.forEach((worklog) => adjacency.set(worklog.id, worklog.dependencyIds ?? []))
   adjacency.set(worklogId, dependencyIds)
 
   const visited = new Set<number>()
@@ -69,11 +75,19 @@ export function WorklogForm({
   onSubmit,
   submitLabel,
   currentWorklogId,
+  teamOptionsSource,
+  authorOptionsSource,
+  dependencyOptionsSource,
+  tagOptionsSource,
 }: {
   initialValues?: WorklogFormValues
   onSubmit: (values: WorklogFormValues) => Promise<void> | void
   submitLabel: string
   currentWorklogId?: number
+  teamOptionsSource?: WorklogFormTeamOption[]
+  authorOptionsSource?: WorklogFormUserOption[]
+  dependencyOptionsSource?: WorklogFormDependencyOption[]
+  tagOptionsSource?: WorklogFormTagOption[]
 }) {
   const controlClassName = "h-11 rounded-2xl px-4 text-sm"
   const searchControlClassName = "h-11 rounded-2xl pl-11 pr-4 text-sm"
@@ -105,17 +119,58 @@ export function WorklogForm({
   const [tagKeywordInput, setTagKeywordInput] = useState("")
   const [tagSearchOpen, setTagSearchOpen] = useState(false)
 
+  const teamSource = useMemo<WorklogFormTeamOption[]>(
+    () =>
+      teamOptionsSource ??
+      teams.map((team) => ({
+        id: team.id,
+        name: team.name,
+      })),
+    [teamOptionsSource],
+  )
+  const authorSource = useMemo<WorklogFormUserOption[]>(
+    () =>
+      authorOptionsSource ??
+      users.map((member) => ({
+        id: member.id,
+        name: member.name,
+        title: member.title,
+      })),
+    [authorOptionsSource],
+  )
+  const dependencySource = useMemo<WorklogFormDependencyOption[]>(
+    () =>
+      dependencyOptionsSource ??
+      worklogs.map((worklog) => ({
+        id: worklog.id,
+        title: worklog.title,
+        status: worklog.status,
+        teamId: worklog.teamId,
+        authorId: worklog.authorId,
+        aiSummary: worklog.aiSummary,
+        workContent: worklog.workContent,
+        requestContent: worklog.requestContent,
+        isDeleted: worklog.isDeleted,
+        dependencyIds: worklog.dependencyIds,
+      })),
+    [dependencyOptionsSource],
+  )
+  const tagSource = useMemo<WorklogFormTagOption[]>(
+    () => tagOptionsSource ?? tags,
+    [tagOptionsSource],
+  )
+
   const teamOptions = useMemo(
-    () => teams.map((team) => ({ label: team.name, value: String(team.id) })),
-    [],
+    () => teamSource.map((team) => ({ label: team.name, value: String(team.id) })),
+    [teamSource],
   )
   const authorOptions = useMemo(
     () =>
-      users.map((member) => ({
-        label: `${member.name} / ${member.title}`,
+      authorSource.map((member) => ({
+        label: member.title ? `${member.name} / ${member.title}` : member.name,
         value: String(member.id),
       })),
-    [],
+    [authorSource],
   )
   const statusOptions = useMemo(() => {
     const currentStatus = initialValues?.status ?? values.status
@@ -130,10 +185,10 @@ export function WorklogForm({
   }, [initialValues?.status, isEditMode, values.status])
   const dependencyCandidates = useMemo(
     () =>
-      worklogs.filter(
+      dependencySource.filter(
         (worklog) => !worklog.isDeleted && worklog.id !== currentWorklogId,
       ),
-    [currentWorklogId],
+    [currentWorklogId, dependencySource],
   )
   const filteredDependencyCandidates = useMemo(() => {
     const normalizedKeyword = dependencyKeywordInput.trim().toLowerCase()
@@ -144,15 +199,15 @@ export function WorklogForm({
         if (values.dependencyIds.includes(dependency.id)) return false
 
         const teamName =
-          teams.find((team) => team.id === dependency.teamId)?.name ?? ""
+          teamSource.find((team) => team.id === dependency.teamId)?.name ?? ""
         const authorName =
-          users.find((member) => member.id === dependency.authorId)?.name ?? ""
+          authorSource.find((member) => member.id === dependency.authorId)?.name ?? ""
 
         const searchableText = [
           dependency.title,
-          dependency.aiSummary,
-          dependency.workContent,
-          dependency.requestContent,
+          dependency.aiSummary ?? "",
+          dependency.workContent ?? "",
+          dependency.requestContent ?? "",
           getWorklogStatusLabel(dependency.status),
           teamName,
           authorName,
@@ -163,7 +218,13 @@ export function WorklogForm({
         return searchableText.includes(normalizedKeyword)
       })
       .slice(0, 6)
-  }, [dependencyCandidates, dependencyKeywordInput, values.dependencyIds])
+  }, [
+    authorSource,
+    dependencyCandidates,
+    dependencyKeywordInput,
+    teamSource,
+    values.dependencyIds,
+  ])
   const selectedDependencies = useMemo(
     () =>
       dependencyCandidates.filter((dependency) =>
@@ -172,14 +233,14 @@ export function WorklogForm({
     [dependencyCandidates, values.dependencyIds],
   )
   const selectedTags = useMemo(
-    () => tags.filter((tag) => values.tagIds.includes(tag.id)),
-    [values.tagIds],
+    () => tagSource.filter((tag) => values.tagIds.includes(tag.id)),
+    [tagSource, values.tagIds],
   )
   const filteredTagCandidates = useMemo(() => {
     const normalizedKeyword = tagKeywordInput.trim().toLowerCase()
     if (!normalizedKeyword) return []
 
-    return tags
+    return tagSource
       .filter((tag) => {
         if (values.tagIds.includes(tag.id)) return false
 
@@ -195,7 +256,7 @@ export function WorklogForm({
         return searchableText.includes(normalizedKeyword)
       })
       .slice(0, 8)
-  }, [tagKeywordInput, values.tagIds])
+  }, [tagKeywordInput, tagSource, values.tagIds])
 
   const incompleteDependencies = dependencyCandidates.filter(
     (worklog) =>
@@ -203,7 +264,7 @@ export function WorklogForm({
   )
   const circularDependencyDetected =
     currentWorklogId !== undefined &&
-    hasCircularDependency(currentWorklogId, values.dependencyIds, worklogs)
+    hasCircularDependency(currentWorklogId, values.dependencyIds, dependencySource)
 
   const addDependency = (dependencyId: number) => {
     setValues((previous) => ({
@@ -339,47 +400,13 @@ export function WorklogForm({
 
             {isEditMode ? (
               <Field label="AI 요약">
-                <div className="space-y-3">
-                  <Textarea
-                    value={values.aiSummary ?? ""}
-                    onChange={(event) =>
-                      setValues({
-                        ...values,
-                        aiSummary: event.target.value,
-                        aiSummaryEdited: true,
-                        aiRegenerateRequested: false,
-                      })
-                    }
-                    className={`h-[132px] ${textareaClassName}`}
-                    placeholder="AI가 생성한 요약을 확인하고 필요하면 직접 수정하세요."
-                  />
-                  <div className="flex flex-wrap items-center justify-between gap-3">
-                    <p className="text-xs text-muted-foreground">
-                      {values.aiRegenerateRequested
-                        ? "저장하면 AI 요약 재생성 요청이 비동기로 시작됩니다."
-                        : values.aiSummaryEdited
-                          ? "직접 수정한 요약으로 저장됩니다."
-                          : "현재 완료된 AI 요약입니다."}
-                    </p>
-                    <Button
-                      type="button"
-                      variant="secondary"
-                      className="h-10 rounded-2xl px-4 text-sm"
-                      disabled={values.aiRegenerateRequested}
-                      onClick={() =>
-                        setValues({
-                          ...values,
-                          aiRegenerateRequested: true,
-                          aiSummaryEdited: false,
-                        })
-                      }
-                    >
-                      <RefreshCw className="size-4" />
-                      {values.aiRegenerateRequested
-                        ? "재생성 요청됨"
-                        : "AI 요약 재생성 요청"}
-                    </Button>
-                  </div>
+                <div
+                  className="min-h-[132px] rounded-[1.25rem] border border-dashed border-border bg-muted/45 px-4 py-4 shadow-inner shadow-background/60"
+                  aria-readonly="true"
+                >
+                  <p className="whitespace-pre-wrap text-sm leading-7 text-muted-foreground">
+                    {values.aiSummary?.trim() || "AI 요약 정보가 없습니다."}
+                  </p>
                 </div>
               </Field>
             ) : null}
