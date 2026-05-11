@@ -25,6 +25,12 @@ storage:
       temp-prefix: temp/
       retention-days: 0
 
+notification:
+  worklog-due-soon-reminder:
+    cron: 0 0 9 * * *
+  stream:
+    key: notifications:stream
+
 auth:
   refresh-cookie:
     name: refreshToken

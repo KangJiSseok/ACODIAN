@@ -72,6 +72,12 @@ ai:
     connect-timeout: ${AI_WORKLOG_SEARCH_CONNECT_TIMEOUT:2s}
     read-timeout: ${AI_WORKLOG_SEARCH_READ_TIMEOUT:10s}
 
+notification:
+  worklog-due-soon-reminder:
+    cron: ${NOTIFICATION_WORKLOG_DUE_SOON_REMINDER_CRON:0 0 9 * * *}
+  stream:
+    key: ${NOTIFICATION_STREAM_KEY:notifications:stream}
+
 auth:
   refresh-cookie:
     name: ${AUTH_REFRESH_COOKIE_NAME:refreshToken}
