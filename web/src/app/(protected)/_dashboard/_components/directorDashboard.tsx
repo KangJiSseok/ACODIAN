@@ -18,6 +18,7 @@ import { Pagination } from "@/app/_common/components/data-display/pagination";
 import { usePagination } from "@/app/_common/hooks/usePagination";
 import { CardContent } from "@/components/ui/card";
 import { CardSpotlight } from "@/components/ui/card-spotlight";
+import { cn } from "@/lib/utils";
 import type {
   DashboardBlockedWorklog,
   DashboardProgress,
@@ -37,6 +38,7 @@ import {
 } from "../_utils/dashboardFormat";
 
 const IMMINENT_WORKLOG_PAGE_SIZE = 3;
+const TODAY_WORKLOG_PAGE_SIZE = 3;
 
 interface CompletionItem {
   id: number;
@@ -73,6 +75,7 @@ interface ComparisonDashboardViewModel {
   workloadItems: WorkloadItem[];
   imminentDescription: string;
   imminentAndOverdue: DashboardWorklogBrief[];
+  showWorklogContext?: boolean;
 }
 
 export function DirectorDashboardView({
@@ -202,6 +205,7 @@ export function TeamDashboardView({ dashboard }: { dashboard: TeamDashboard }) {
         imminentDescription:
           "선택 팀 기준 D-3 이내 또는 지연된 미완료 업무입니다.",
         imminentAndOverdue: dashboard.imminentAndOverdue,
+        showWorklogContext: false,
       }}
     />
   );
@@ -231,7 +235,7 @@ export function MyDashboardView({ dashboard }: { dashboard: MyDashboard }) {
         />
         <MetricCard
           icon={CalendarClock}
-          label="이번 주 마감"
+          label="7일 내 마감"
           value={`${formatCount(dashboard.thisWeekDue.length)}건`}
           detail="D-7 이내 미완료 업무"
         />
@@ -244,13 +248,16 @@ export function MyDashboardView({ dashboard }: { dashboard: MyDashboard }) {
           description="진행 중인 업무를 우선으로 마감 가까운 순서로 표시합니다."
           emptyMessage="오늘 확인할 업무가 없습니다."
           items={dashboard.todayItems}
+          showContext={false}
+          pageSize={TODAY_WORKLOG_PAGE_SIZE}
         />
         <WorklogListPanel
           icon={CalendarClock}
-          title="이번 주 마감"
+          title="7일 내 마감"
           description="D-7 이내 마감 예정인 미완료 업무입니다."
-          emptyMessage="이번 주 마감 예정 업무가 없습니다."
+          emptyMessage="7일 내 마감 예정 업무가 없습니다."
           items={dashboard.thisWeekDue}
+          showContext={false}
         />
       </div>
 
@@ -258,6 +265,7 @@ export function MyDashboardView({ dashboard }: { dashboard: MyDashboard }) {
         <ImminentWorklogPanel
           description="선택한 소속 팀 기준 D-3 이내 또는 지연된 미완료 업무입니다."
           items={dashboard.imminentAndOverdue}
+          showContext={false}
         />
         <BlockedWorklogPanel items={dashboard.blockedByPredecessors} />
       </div>
@@ -318,6 +326,7 @@ function ComparisonDashboardView({
         <ImminentWorklogPanel
           description={viewModel.imminentDescription}
           items={viewModel.imminentAndOverdue}
+          showContext={viewModel.showWorklogContext ?? true}
         />
       </div>
     </div>
@@ -491,9 +500,11 @@ function WorkloadPanel({
 function ImminentWorklogPanel({
   description,
   items,
+  showContext = true,
 }: {
   description: string;
   items: DashboardWorklogBrief[];
+  showContext?: boolean;
 }) {
   const pagination = usePagination(items, IMMINENT_WORKLOG_PAGE_SIZE);
 
@@ -512,7 +523,11 @@ function ImminentWorklogPanel({
         <div className="space-y-4">
           <div className="grid gap-3">
             {pagination.items.map((item) => (
-              <WorklogBriefLink key={item.worklogId} item={item} />
+              <WorklogBriefLink
+                key={item.worklogId}
+                item={item}
+                showContext={showContext}
+              />
             ))}
           </div>
           <Pagination
@@ -532,13 +547,20 @@ function WorklogListPanel({
   description,
   emptyMessage,
   items,
+  showContext = true,
+  pageSize,
 }: {
   icon: LucideIcon;
   title: string;
   description: string;
   emptyMessage: string;
   items: DashboardWorklogBrief[];
+  showContext?: boolean;
+  pageSize?: number;
 }) {
+  const listPageSize = pageSize ?? Math.max(items.length, 1);
+  const pagination = usePagination(items, listPageSize);
+
   return (
     <DashboardPanel
       icon={icon}
@@ -551,39 +573,73 @@ function WorklogListPanel({
           {emptyMessage}
         </div>
       ) : (
-        <div className="grid gap-3">
-          {items.map((item) => (
-            <WorklogBriefLink key={item.worklogId} item={item} />
-          ))}
+        <div className="space-y-4">
+          <div className="grid gap-3">
+            {pagination.items.map((item) => (
+              <WorklogBriefLink
+                key={item.worklogId}
+                item={item}
+                showContext={showContext}
+              />
+            ))}
+          </div>
+          {pagination.totalPages > 1 ? (
+            <Pagination
+              page={pagination.page}
+              totalPages={pagination.totalPages}
+              onPageChange={pagination.setPage}
+            />
+          ) : null}
         </div>
       )}
     </DashboardPanel>
   );
 }
 
-function WorklogBriefLink({ item }: { item: DashboardWorklogBrief }) {
+function WorklogBriefLink({
+  item,
+  showContext = true,
+}: {
+  item: DashboardWorklogBrief;
+  showContext?: boolean;
+}) {
+  const contextLabel = [item.departmentName, item.teamName, item.authorName]
+    .filter(Boolean)
+    .join(" · ");
+  const hasContext = showContext && Boolean(contextLabel);
+
   return (
     <Link
       href={`/worklog/detail/${item.worklogId}`}
       className="rounded-2xl border border-border/70 bg-muted/30 px-4 py-4 transition hover:border-primary/30 hover:bg-muted/45 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
     >
-      <div className="flex min-h-16 items-start justify-between gap-3">
+      <div
+        className={cn(
+          "flex items-start justify-between gap-3",
+          hasContext ? "min-h-16" : null,
+        )}
+      >
         <div className="min-w-0">
           <p className="line-clamp-2 text-sm font-semibold leading-6 text-foreground">
             {item.title}
           </p>
-          <p className="mt-2 truncate text-xs text-muted-foreground">
-            {[item.departmentName, item.teamName, item.authorName]
-              .filter(Boolean)
-              .join(" · ") || "-"}
-          </p>
+          {hasContext ? (
+            <p className="mt-2 truncate text-xs text-muted-foreground">
+              {contextLabel}
+            </p>
+          ) : null}
         </div>
         <span className="shrink-0 rounded-full border border-warning/30 bg-warning/10 px-2.5 py-1 text-xs font-semibold text-warning">
           {formatOverdueDays(item.daysOverdue)}
         </span>
       </div>
-      <p className="mt-3 text-xs font-medium text-muted-foreground">
-        마감 {formatDueDate(item.dueDate)}
+      <p
+        className={cn(
+          "text-xs font-medium text-muted-foreground",
+          hasContext ? "mt-3" : "mt-2",
+        )}
+      >
+        마감일 {formatDueDate(item.dueDate)}
       </p>
     </Link>
   );
