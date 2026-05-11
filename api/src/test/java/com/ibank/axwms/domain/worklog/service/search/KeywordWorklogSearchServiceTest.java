@@ -20,6 +20,7 @@ import com.ibank.axwms.domain.worklog.repository.jooq.query.WorklogSearchQuery;
 import com.ibank.axwms.global.enums.PeriodOption;
 import com.ibank.axwms.global.response.PageResponse;
 import com.ibank.axwms.global.security.CustomUserPrincipal;
+import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.util.List;
 import org.junit.jupiter.api.DisplayName;
@@ -231,7 +232,10 @@ class KeywordWorklogSearchServiceTest {
         return new WorklogSearchProjection(
                 WORKLOG_ID,
                 "결산 보고서 작성",
+                "결산 보고서 초안을 작성하고 검토 의견을 반영했습니다.",
+                BigDecimal.valueOf(2.5),
                 "AI 요약",
+                false,
                 "IN_PROGRESS",
                 "HIGH",
                 "COMPLETED",

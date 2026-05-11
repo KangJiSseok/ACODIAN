@@ -4,6 +4,7 @@ import static com.ibank.axwms.global.jooq.Tables.TB_TEAM;
 import static com.ibank.axwms.global.jooq.Tables.TB_USER;
 import static com.ibank.axwms.global.jooq.Tables.TB_WORKLOG;
 
+import java.math.BigDecimal;
 import java.time.LocalDate;
 import org.jooq.Field;
 import org.jooq.Record;
@@ -12,7 +13,10 @@ import org.jooq.Record;
 public record WorklogSearchProjection(
         Long worklogId,
         String title,
+        String workContent,
+        BigDecimal actualHours,
         String aiSummary,
+        Boolean aiSummaryEdited,
         String statusCode,
         String importanceCode,
         String aiProcessingStatus,
@@ -31,7 +35,10 @@ public record WorklogSearchProjection(
         return new WorklogSearchProjection(
                 record.get(TB_WORKLOG.WORKLOG_ID),
                 record.get(TB_WORKLOG.TITLE),
+                record.get(TB_WORKLOG.WORK_CONTENT),
+                record.get(TB_WORKLOG.ACTUAL_HOURS),
                 record.get(TB_WORKLOG.AI_SUMMARY),
+                record.get(TB_WORKLOG.AI_SUMMARY_EDITED),
                 record.get(TB_WORKLOG.STATUS_CODE),
                 record.get(TB_WORKLOG.IMPORTANCE_CODE),
                 record.get(TB_WORKLOG.AI_PROCESSING_STATUS),

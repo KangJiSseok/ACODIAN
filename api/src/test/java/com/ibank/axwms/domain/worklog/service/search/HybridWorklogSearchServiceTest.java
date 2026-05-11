@@ -22,6 +22,7 @@ import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.web.client.RestClientException;
 
+import java.math.BigDecimal;
 import java.time.Duration;
 import java.time.LocalDate;
 import java.util.List;
@@ -238,7 +239,10 @@ class HybridWorklogSearchServiceTest {
         return new WorklogSearchProjection(
                 WORKLOG_ID,
                 "결산 보고서 작성",
+                "결산 보고서 초안을 작성하고 검토 의견을 반영했습니다.",
+                BigDecimal.valueOf(2.5),
                 "AI 요약",
+                false,
                 "IN_PROGRESS",
                 "HIGH",
                 "COMPLETED",

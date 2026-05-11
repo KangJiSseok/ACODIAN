@@ -11,6 +11,7 @@ import { useAuth } from "./_hooks/useAuth"
 import { ImportanceBadge } from "./_components/importanceBadge"
 import { StatusBadge } from "./_components/statusBadge"
 import {
+  useWorklogList,
   useWorklogFilterOptions,
   useWorklogSearch,
 } from "./_hooks/useWorklogList"
@@ -49,6 +50,7 @@ type WorklogFilterState = typeof DEFAULT_FILTERS
 export default function WorklogPage() {
   const { user } = useAuth()
   const [page, setPage] = useState(1)
+  const [searchInput, setSearchInput] = useState("")
   const [query, setQuery] = useState("")
   const [showFilters, setShowFilters] = useState(false)
   const [filters, setFilters] = useState<WorklogFilterState>(DEFAULT_FILTERS)
@@ -65,6 +67,16 @@ export default function WorklogPage() {
 
     return Array.from(indexed, ([userId, userName]) => ({ userId, userName }))
   }, [filterOptions])
+  const hasSearchCondition =
+    query.trim().length > 0 ||
+    Object.values(filters).some((value) => value !== "all" && value !== "ALL")
+  const listParams = useMemo(
+    () => ({
+      page,
+      pageSize: WORKLOG_PAGE_SIZE,
+    }),
+    [page]
+  )
   const searchParams = useMemo<SearchWorklogsParams>(
     () => ({
       page,
@@ -87,11 +99,16 @@ export default function WorklogPage() {
     }),
     [filters, page, query]
   )
-  const {
-    data: worklogPage,
-    isLoading,
-    isError,
-  } = useWorklogSearch(searchParams)
+  const listQuery = useWorklogList(listParams, {
+    enabled: !hasSearchCondition,
+  })
+  const searchQuery = useWorklogSearch(searchParams, {
+    enabled: hasSearchCondition,
+  })
+  const activeQuery = hasSearchCondition ? searchQuery : listQuery
+  const worklogPage = activeQuery.data
+  const isLoading = activeQuery.isLoading
+  const isError = activeQuery.isError
   const worklogs = worklogPage?.items ?? []
   const activeFilterCount = Object.values(filters).filter(
     (value) => value !== "all" && value !== "ALL"
@@ -99,6 +116,11 @@ export default function WorklogPage() {
 
   function updateFilters(nextFilters: WorklogFilterState) {
     setFilters(nextFilters)
+    setPage(1)
+  }
+
+  function submitSearch() {
+    setQuery(searchInput.trim())
     setPage(1)
   }
 
@@ -113,23 +135,35 @@ export default function WorklogPage() {
         </div>
 
         <div className="flex flex-col gap-4">
-          <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
+          <form
+            className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between"
+            onSubmit={(event) => {
+              event.preventDefault()
+              submitSearch()
+            }}
+          >
             <div className="relative flex-1">
               <Search className="pointer-events-none absolute left-4 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
               <Input
-                value={query}
-                onChange={(event) => {
-                  setQuery(event.target.value)
-                  setPage(1)
-                }}
+                value={searchInput}
+                onChange={(event) => setSearchInput(event.target.value)}
                 className="h-12 pl-11"
                 placeholder="업무 제목으로 검색하세요"
               />
             </div>
             <div className="flex w-full items-center gap-2 sm:w-auto">
               <Button
+                type="submit"
+                variant="default"
+                className="h-12 min-w-24 justify-center px-5 text-sm font-semibold"
+              >
+                <Search className="size-4" />
+                검색
+              </Button>
+              <Button
+                type="button"
                 variant="outline"
-                className="h-10 justify-center"
+                className="h-12 justify-center"
                 onClick={() => setShowFilters((prev) => !prev)}
               >
                 <SlidersHorizontal className="size-4" />
@@ -147,7 +181,7 @@ export default function WorklogPage() {
                 />
               </Button>
             </div>
-          </div>
+          </form>
 
           <div
             className={cn(
@@ -169,6 +203,7 @@ export default function WorklogPage() {
                     className="h-9 w-9"
                     aria-label="필터 초기화"
                     onClick={() => {
+                      setSearchInput("")
                       setQuery("")
                       updateFilters(DEFAULT_FILTERS)
                     }}
