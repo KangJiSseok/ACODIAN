@@ -24,7 +24,7 @@ import { cn } from "@/lib/utils";
 
 // 이메일 검증 정규식
 const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-const TEST_EMAIL = "director@ibank.com";
+const TEST_EMAIL = "director@ibank.local";
 const TEST_PASSWORD = "password1!";
 
 const departmentOptions = [
