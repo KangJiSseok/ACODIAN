@@ -6,6 +6,7 @@ import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.BDDMockito.given;
 import static org.mockito.BDDMockito.then;
 
+import com.ibank.axwms.domain.notification.dto.MarkAllNotificationsReadApiDto;
 import com.ibank.axwms.domain.notification.dto.SearchNotificationsApiDto;
 import com.ibank.axwms.domain.notification.repository.NotificationRepository;
 import com.ibank.axwms.domain.notification.repository.jooq.projection.NotificationSearchProjection;
@@ -80,6 +81,20 @@ class NotificationServiceTest {
         assertThat(queryCaptor.getValue().page()).isEqualTo(1);
         assertThat(queryCaptor.getValue().pageSize()).isEqualTo(20);
         assertThat(queryCaptor.getValue().pageIndex()).isZero();
+    }
+
+    @Test
+    @DisplayName("markAllNotificationsRead 는 principal userId 로 안읽은 알림 전체 읽음 처리를 위임한다")
+    void markAllNotificationsRead_는_principal_userId로_안읽은_알림_전체_읽음_처리를_위임한다() {
+        CustomUserPrincipal principal = principal();
+        given(notificationRepository.markUnreadAsReadByUserId(eq(101L), any(LocalDateTime.class))).willReturn(3);
+
+        MarkAllNotificationsReadApiDto.Response response = notificationService.markAllNotificationsRead(principal);
+
+        ArgumentCaptor<LocalDateTime> readAtCaptor = ArgumentCaptor.forClass(LocalDateTime.class);
+        then(notificationRepository).should().markUnreadAsReadByUserId(eq(101L), readAtCaptor.capture());
+        assertThat(response.updatedCount()).isEqualTo(3);
+        assertThat(readAtCaptor.getValue()).isNotNull();
     }
 
     private CustomUserPrincipal principal() {
