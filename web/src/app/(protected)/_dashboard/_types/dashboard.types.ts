@@ -96,15 +96,14 @@ export interface MyDashboard {
 export type DashboardScopeSelection =
   | {
       view: "ADMIN";
-      scope: "DEPARTMENT_COMPARISON";
+      adminScope: "DEPARTMENT_COMPARISON";
     }
   | {
       view: "ADMIN";
-      scope: "DEPARTMENT_DETAIL";
+      adminScope: "DEPARTMENT_DETAIL";
       departmentId: number;
     }
   | {
       view: "ME";
-      scope: "ME";
       teamId: number;
     };

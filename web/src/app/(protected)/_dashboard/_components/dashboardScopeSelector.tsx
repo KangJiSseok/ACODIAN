@@ -36,10 +36,10 @@ export function DashboardScopeSelector({
   const [open, setOpen] = useState(false);
   const [draftView, setDraftView] = useState<DraftView>(value.view);
   const [draftAdminScope, setDraftAdminScope] = useState<DraftAdminScope>(
-    value.view === "ADMIN" ? value.scope : "DEPARTMENT_COMPARISON",
+    value.view === "ADMIN" ? value.adminScope : "DEPARTMENT_COMPARISON",
   );
   const [draftDepartmentId, setDraftDepartmentId] = useState<number | null>(
-    value.view === "ADMIN" && value.scope === "DEPARTMENT_DETAIL"
+    value.view === "ADMIN" && value.adminScope === "DEPARTMENT_DETAIL"
       ? value.departmentId
       : departments[0]?.departmentId ?? null,
   );
@@ -51,10 +51,10 @@ export function DashboardScopeSelector({
   const handleOpen = () => {
     setDraftView(value.view);
     setDraftAdminScope(
-      value.view === "ADMIN" ? value.scope : "DEPARTMENT_COMPARISON",
+      value.view === "ADMIN" ? value.adminScope : "DEPARTMENT_COMPARISON",
     );
     setDraftDepartmentId(
-      value.view === "ADMIN" && value.scope === "DEPARTMENT_DETAIL"
+      value.view === "ADMIN" && value.adminScope === "DEPARTMENT_DETAIL"
         ? value.departmentId
         : departments[0]?.departmentId ?? null,
     );
@@ -96,7 +96,6 @@ export function DashboardScopeSelector({
     if (draftView === "ME") {
       onChange({
         view: "ME",
-        scope: "ME",
         teamId: draftTeamId as number,
       });
       setOpen(false);
@@ -106,7 +105,7 @@ export function DashboardScopeSelector({
     if (draftAdminScope === "DEPARTMENT_DETAIL") {
       onChange({
         view: "ADMIN",
-        scope: "DEPARTMENT_DETAIL",
+        adminScope: "DEPARTMENT_DETAIL",
         departmentId: draftDepartmentId as number,
       });
       setOpen(false);
@@ -115,7 +114,7 @@ export function DashboardScopeSelector({
 
     onChange({
       view: "ADMIN",
-      scope: "DEPARTMENT_COMPARISON",
+      adminScope: "DEPARTMENT_COMPARISON",
     });
     setOpen(false);
   };
@@ -299,7 +298,7 @@ function getScopeLabel(
     return `내 업무 / ${teamName}`;
   }
 
-  if (value.scope === "DEPARTMENT_DETAIL") {
+  if (value.adminScope === "DEPARTMENT_DETAIL") {
     const departmentName =
       departments.find(
         (department) => department.departmentId === value.departmentId,

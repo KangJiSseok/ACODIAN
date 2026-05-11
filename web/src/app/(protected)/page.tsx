@@ -26,7 +26,7 @@ import type { DashboardScopeSelection } from "./_dashboard/_types/dashboard.type
 // 본부장 대시보드 초기 보기 상태 정의 상수
 const DEFAULT_DIRECTOR_SCOPE: DashboardScopeSelection = {
   view: "ADMIN",
-  scope: "DEPARTMENT_COMPARISON",
+  adminScope: "DEPARTMENT_COMPARISON",
 };
 
 export default function DashboardPage() {
@@ -41,7 +41,7 @@ export default function DashboardPage() {
   const departments = departmentList?.departments ?? [];
   const selectedDepartmentId =
     scopeSelection.view === "ADMIN" &&
-    scopeSelection.scope === "DEPARTMENT_DETAIL"
+    scopeSelection.adminScope === "DEPARTMENT_DETAIL"
       ? scopeSelection.departmentId
       : undefined;
   const selectedTeamId =
@@ -52,11 +52,11 @@ export default function DashboardPage() {
   const isDepartmentComparisonSelected =
     isDirector &&
     scopeSelection.view === "ADMIN" &&
-    scopeSelection.scope === "DEPARTMENT_COMPARISON";
+    scopeSelection.adminScope === "DEPARTMENT_COMPARISON";
   const isDepartmentDetailSelected =
     isDirector &&
     scopeSelection.view === "ADMIN" &&
-    scopeSelection.scope === "DEPARTMENT_DETAIL";
+    scopeSelection.adminScope === "DEPARTMENT_DETAIL";
   const isMyDashboardSelected = isDirector && scopeSelection.view === "ME";
 
   const directorDashboardQuery = useDirectorDashboard(
@@ -128,7 +128,7 @@ function getDashboardDescription(
     return `내 업무 · ${teamName} 기준 - 구성원 관점으로 내가 맡은 업무와 리스크를 확인합니다.`;
   }
 
-  if (value.scope === "DEPARTMENT_DETAIL") {
+  if (value.adminScope === "DEPARTMENT_DETAIL") {
     const departmentName =
       departments.find(
         (department) => department.departmentId === value.departmentId,
