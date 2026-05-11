@@ -32,6 +32,12 @@ export interface TeamLoad {
   activeWorklogCount: number;
 }
 
+export interface MemberLoad {
+  userId: number;
+  userName: string;
+  activeWorklogCount: number;
+}
+
 export interface DashboardWorklogBrief {
   worklogId: number;
   title: string;
@@ -93,6 +99,24 @@ export interface MyDashboard {
   blockedByPredecessors: DashboardBlockedWorklog[];
 }
 
+export interface TeamDashboard {
+  teamId: number;
+  teamName: string;
+  totalProgress: DashboardProgress;
+  memberLoadBalanceIndex: number;
+  weeklyCompleted: number;
+  aiPipelineSuccessRate: number;
+  completionRate: number;
+  memberWorkload: MemberLoad[];
+  imminentAndOverdue: DashboardWorklogBrief[];
+}
+
+export type DashboardRole = "DIRECTOR" | "DEPARTMENT_HEAD" | "NONE";
+export type DashboardAdminScope =
+  | "DEPARTMENT_COMPARISON"
+  | "DEPARTMENT_DETAIL"
+  | "TEAM_DETAIL";
+
 export type DashboardScopeSelection =
   | {
       view: "ADMIN";
@@ -102,6 +126,11 @@ export type DashboardScopeSelection =
       view: "ADMIN";
       adminScope: "DEPARTMENT_DETAIL";
       departmentId: number;
+    }
+  | {
+      view: "ADMIN";
+      adminScope: "TEAM_DETAIL";
+      teamId: number;
     }
   | {
       view: "ME";
