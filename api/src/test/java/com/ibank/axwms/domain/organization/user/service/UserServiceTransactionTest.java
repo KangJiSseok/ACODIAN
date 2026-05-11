@@ -1,5 +1,6 @@
 package com.ibank.axwms.domain.organization.user.service;
 
+import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.BDDMockito.given;
 import static org.mockito.BDDMockito.then;
@@ -7,9 +8,16 @@ import static org.mockito.Mockito.never;
 
 import com.ibank.axwms.domain.organization.department.entity.Department;
 import com.ibank.axwms.domain.organization.department.repository.DepartmentRepository;
+import com.ibank.axwms.domain.organization.team.TeamStatus;
+import com.ibank.axwms.domain.organization.team.UserTeamStatus;
+import com.ibank.axwms.domain.organization.team.entity.Team;
+import com.ibank.axwms.domain.organization.team.entity.UserTeam;
+import com.ibank.axwms.domain.organization.team.repository.TeamRepository;
+import com.ibank.axwms.domain.organization.team.repository.UserTeamRepository;
 import com.ibank.axwms.domain.organization.user.EmploymentStatus;
 import com.ibank.axwms.domain.organization.user.UserRole;
 import com.ibank.axwms.domain.organization.user.dto.UpdateMyProfileApiDto;
+import com.ibank.axwms.domain.organization.user.dto.UpdateUserApiDto;
 import com.ibank.axwms.domain.organization.user.entity.User;
 import com.ibank.axwms.domain.organization.user.repository.UserRepository;
 import com.ibank.axwms.domain.organization.user.service.ProfileImageStorageService.FinalUploadResult;
@@ -38,6 +46,12 @@ class UserServiceTransactionTest extends IntegrationTestSupport {
     private DepartmentRepository departmentRepository;
 
     @Autowired
+    private TeamRepository teamRepository;
+
+    @Autowired
+    private UserTeamRepository userTeamRepository;
+
+    @Autowired
     private TransactionTemplate transactionTemplate;
 
     @MockitoBean
@@ -45,6 +59,8 @@ class UserServiceTransactionTest extends IntegrationTestSupport {
 
     @BeforeEach
     void setUp() {
+        userTeamRepository.deleteAllInBatch();
+        teamRepository.deleteAllInBatch();
         userRepository.deleteAllInBatch();
         departmentRepository.deleteAllInBatch();
     }
@@ -113,13 +129,63 @@ class UserServiceTransactionTest extends IntegrationTestSupport {
         then(profileImageStorageService).should(never()).deleteBestEffort("profile/old.png");
     }
 
+    @Test
+    @DisplayName("대표 팀 변경은 ACTIVE 대표 팀 유니크 인덱스와 충돌하지 않는다")
+    void 대표_팀_변경은_ACTIVE_대표_팀_유니크_인덱스와_충돌하지_않는다() {
+        Department department = departmentRepository.save(Department.create(
+                "대표팀변경부서",
+                "대표팀 변경 테스트 부서"
+        ));
+        User user = saveUser(department.getId(), "primary-switch@ibank.com", null);
+        Team requestedPrimaryTeam = saveTeam(department.getId(), "신규대표팀");
+        Team oldPrimaryTeam = saveTeam(department.getId(), "기존대표팀");
+        UserTeam requestedMembership = userTeamRepository.saveAndFlush(UserTeam.create(
+                user.getId(),
+                requestedPrimaryTeam.getId(),
+                false,
+                "신규 역할",
+                "겸임",
+                false,
+                UserTeamStatus.ACTIVE
+        ));
+        UserTeam oldPrimaryMembership = userTeamRepository.saveAndFlush(UserTeam.create(
+                user.getId(),
+                oldPrimaryTeam.getId(),
+                false,
+                "기존 역할",
+                "주담당",
+                true,
+                UserTeamStatus.ACTIVE
+        ));
+
+        transactionTemplate.executeWithoutResult(status -> userService.updateUser(
+                new CustomUserPrincipal(user.getId(), user.getEmail(), UserRole.DIRECTOR.name()),
+                user.getId(),
+                new UpdateUserApiDto.Request(null, null, null, null, null, null, null, null, requestedPrimaryTeam.getId()),
+                null
+        ));
+
+        assertThat(userTeamRepository.findById(requestedMembership.getId()))
+                .get()
+                .extracting(UserTeam::getIsPrimary)
+                .isEqualTo(true);
+        assertThat(userTeamRepository.findById(oldPrimaryMembership.getId()))
+                .get()
+                .extracting(UserTeam::getIsPrimary)
+                .isEqualTo(false);
+    }
+
     private User saveUser(String email, String profileImageUrl) {
         Department department = departmentRepository.save(Department.create(
                 "트랜잭션부서-" + email,
                 "이미지 트랜잭션 테스트 부서"
         ));
+        return saveUser(department.getId(), email, profileImageUrl);
+    }
+
+    private User saveUser(Long departmentId, String email, String profileImageUrl) {
         return userRepository.saveAndFlush(User.create(
-                department.getId(),
+                departmentId,
                 "트랜잭션사용자",
                 email,
                 "$2a$10$fake-hashed",
@@ -130,6 +196,17 @@ class UserServiceTransactionTest extends IntegrationTestSupport {
                 LocalDate.of(2025, 1, 1),
                 "010-0000-0000",
                 profileImageUrl
+        ));
+    }
+
+    private Team saveTeam(Long departmentId, String teamName) {
+        return teamRepository.saveAndFlush(Team.create(
+                departmentId,
+                teamName,
+                TeamStatus.ACTIVE,
+                teamName + " 설명",
+                LocalDate.of(2026, 4, 1),
+                null
         ));
     }
 

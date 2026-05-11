@@ -628,7 +628,6 @@ class UserServiceTest {
         given(userRepository.findById(101L)).willReturn(Optional.of(user));
         given(departmentRepository.existsById(20L)).willReturn(true);
         given(teamRepository.existsByIdAndDeletedAtIsNull(22L)).willReturn(true);
-        given(userTeamRepository.findByUserIdAndTeamId(101L, 22L)).willReturn(Optional.of(newPrimary));
         given(userTeamRepository.findAllByUserId(101L)).willReturn(List.of(oldPrimary, newPrimary));
 
         userService.updateUser(directorPrincipal(), 101L, request, null);
@@ -792,7 +791,7 @@ class UserServiceTest {
         UpdateUserApiDto.Request request = new UpdateUserApiDto.Request(null, null, null, null, null, null, null, null, 22L);
         given(userRepository.findById(101L)).willReturn(Optional.of(user));
         given(teamRepository.existsByIdAndDeletedAtIsNull(22L)).willReturn(true);
-        given(userTeamRepository.findByUserIdAndTeamId(101L, 22L)).willReturn(Optional.empty());
+        given(userTeamRepository.findAllByUserId(101L)).willReturn(List.of());
 
         assertThatThrownBy(() -> userService.updateUser(directorPrincipal(), 101L, request, null))
                 .isInstanceOf(BusinessException.class)
@@ -809,7 +808,6 @@ class UserServiceTest {
         UpdateUserApiDto.Request request = new UpdateUserApiDto.Request(null, null, null, null, null, null, null, null, 22L);
         given(userRepository.findById(101L)).willReturn(Optional.of(user));
         given(teamRepository.existsByIdAndDeletedAtIsNull(22L)).willReturn(true);
-        given(userTeamRepository.findByUserIdAndTeamId(101L, 22L)).willReturn(Optional.of(requestedMembership));
         given(userTeamRepository.findAllByUserId(101L)).willReturn(List.of(firstMembership, requestedMembership));
 
         userService.updateUser(directorPrincipal(), 101L, request, null);

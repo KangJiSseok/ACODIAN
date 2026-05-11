@@ -1,6 +1,7 @@
 package com.ibank.axwms.domain.organization.user.repository;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.assertj.core.groups.Tuple.tuple;
 
 import com.ibank.axwms.domain.organization.department.DepartmentStatus;
@@ -26,6 +27,7 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.data.domain.Page;
 
 class UserRepositoryIntegrationTest extends IntegrationTestSupport {
@@ -198,6 +200,21 @@ class UserRepositoryIntegrationTest extends IntegrationTestSupport {
                 )
                 .containsExactly(tuple(user.getId(), null, null, null, null));
         assertThat(result.getTotalElements()).isEqualTo(1);
+    }
+
+    @Test
+    @DisplayName("사용자 팀 소속은 사용자별 ACTIVE 대표 팀을 하나만 허용한다")
+    void 사용자_팀_소속은_사용자별_ACTIVE_대표_팀을_하나만_허용한다() {
+        Department department = departmentRepository.save(createDepartment("제약본부"));
+        Team firstTeam = teamRepository.save(createTeam("제약1팀"));
+        Team secondTeam = teamRepository.save(createTeam("제약2팀"));
+        User user = userRepository.save(createUser(department.getId(), "대표중복", "duplicate-primary@example.com", UserRole.MEMBER, EmploymentStatus.ACTIVE, "사원", "팀원", "010-0000-0024"));
+
+        userTeamRepository.saveAndFlush(UserTeam.create(user.getId(), firstTeam.getId(), false, "주담당", "100%", true, UserTeamStatus.ACTIVE));
+
+        assertThatThrownBy(() -> userTeamRepository.saveAndFlush(
+                UserTeam.create(user.getId(), secondTeam.getId(), false, "겸임", "50%", true, UserTeamStatus.ACTIVE)
+        )).isInstanceOf(DataIntegrityViolationException.class);
     }
 
     @Test
