@@ -1,10 +1,20 @@
 import type { AuthUser } from "../_store/authStore"
-import type {
-  DepartmentRecord,
-  TeamRecord,
-  UserRecord,
-} from "../_mock/worklog.mock"
 import type { WorklogRecord } from "../_types/worklog.types"
+
+interface DepartmentLike {
+  id: number
+}
+
+interface TeamLike {
+  id: number
+  departmentId: number
+}
+
+interface UserLike {
+  id: number
+  departmentId: number
+  teamIds: number[]
+}
 
 export function isDirector(user: AuthUser | null | undefined) {
   return user?.role === "DIRECTOR"
@@ -24,14 +34,14 @@ export function canCreateWorklog(user: AuthUser | null | undefined) {
 
 export function getVisibleDepartments(
   user: AuthUser | null | undefined,
-  items: DepartmentRecord[]
+  items: DepartmentLike[]
 ) {
   if (!user) return []
   if (isDirector(user)) return items
   return items.filter((department) => department.id === user.departmentId)
 }
 
-export function getVisibleTeams(user: AuthUser | null | undefined, items: TeamRecord[]) {
+export function getVisibleTeams(user: AuthUser | null | undefined, items: TeamLike[]) {
   if (!user) return []
   if (isDirector(user)) return items
   if (isDepartmentHead(user)) {
@@ -40,7 +50,7 @@ export function getVisibleTeams(user: AuthUser | null | undefined, items: TeamRe
   return items.filter((team) => user.teamIds.includes(team.id))
 }
 
-export function getVisibleUsers(user: AuthUser | null | undefined, items: UserRecord[]) {
+export function getVisibleUsers(user: AuthUser | null | undefined, items: UserLike[]) {
   if (!user) return []
   if (isDirector(user)) return items
   if (isDepartmentHead(user)) {
@@ -57,7 +67,7 @@ export function getVisibleUsers(user: AuthUser | null | undefined, items: UserRe
 export function getVisibleWorklogs(
   user: AuthUser | null | undefined,
   items: WorklogRecord[],
-  teams: TeamRecord[]
+  teams: TeamLike[]
 ) {
   if (!user) return []
   const activeItems = items.filter((worklog) => !worklog.isDeleted)

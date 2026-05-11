@@ -1,4 +1,3 @@
-import { users } from "../_mock/worklog.mock"
 import type { Worklog } from "../_types/worklog.types"
 import { formatDateTime, getWorklogStatusLabel } from "../_utils/worklogFormat"
 
@@ -26,10 +25,7 @@ export function StatusHistory({ worklog }: { worklog: Worklog }) {
               </span>
             </div>
             <p className="mt-2 text-muted-foreground">
-              변경자:{" "}
-              {history.changedByName ??
-                users.find((user) => user.id === history.changedBy)?.name ??
-                "-"}
+              변경자: {history.changedByName ?? "-"}
             </p>
             <p className="mt-1 text-muted-foreground">사유: {history.reason}</p>
           </div>
