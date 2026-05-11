@@ -5,9 +5,14 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.SmartLifecycle;
+import org.springframework.data.domain.Range;
+import org.springframework.data.redis.connection.Limit;
+import org.springframework.data.redis.connection.RedisConnection;
 import org.springframework.data.redis.connection.RedisConnectionFactory;
+import org.springframework.data.redis.connection.stream.ByteRecord;
 import org.springframework.data.redis.connection.stream.MapRecord;
 import org.springframework.data.redis.connection.stream.ReadOffset;
+import org.springframework.data.redis.connection.stream.RecordId;
 import org.springframework.data.redis.connection.stream.StreamOffset;
 import org.springframework.data.redis.serializer.StringRedisSerializer;
 import org.springframework.data.redis.stream.StreamMessageListenerContainer;
@@ -15,6 +20,7 @@ import org.springframework.data.redis.stream.Subscription;
 import org.springframework.stereotype.Component;
 
 import java.time.Duration;
+import java.util.List;
 import java.util.concurrent.atomic.AtomicBoolean;
 
 /**
@@ -24,6 +30,8 @@ import java.util.concurrent.atomic.AtomicBoolean;
 @Component
 @RequiredArgsConstructor
 public class NotificationRedisStreamSseSubscriber implements SmartLifecycle {
+
+    private static final RecordId EMPTY_STREAM_OFFSET = RecordId.of("0-0");
 
     private final RedisConnectionFactory redisConnectionFactory;
     private final NotificationSseEmitterRegistry notificationSseEmitterRegistry;
@@ -90,10 +98,27 @@ public class NotificationRedisStreamSseSubscriber implements SmartLifecycle {
     }
 
     /**
-     * 구독 시작 전 record 는 건너뛰되 이후 polling 사이에 도착한 record 는 마지막 수신 ID 기준으로 이어 읽는다.
+     * 구독 시작 시점의 마지막 record ID 를 기준으로 고정해 listener thread 준비 지연 중 들어온 신규 record 도 놓치지 않는다.
      */
     StreamOffset<String> liveStreamOffset() {
-        return StreamOffset.create(streamKey, ReadOffset.lastConsumed());
+        return StreamOffset.create(streamKey, ReadOffset.from(currentLastRecordId()));
+    }
+
+    /**
+     * 기존 record 는 replay 하지 않기 위해 현재 stream 끝을 읽고, stream 이 없으면 시작 이후 첫 record 부터 받게 한다.
+     */
+    private RecordId currentLastRecordId() {
+        try (RedisConnection connection = redisConnectionFactory.getConnection()) {
+            List<ByteRecord> records = connection.streamCommands().xRevRange(
+                    StringRedisSerializer.UTF_8.serialize(streamKey),
+                    Range.unbounded(),
+                    Limit.limit().count(1)
+            );
+            if (records == null || records.isEmpty()) {
+                return EMPTY_STREAM_OFFSET;
+            }
+            return records.getFirst().getId();
+        }
     }
 
     /**
