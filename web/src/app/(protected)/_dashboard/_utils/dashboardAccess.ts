@@ -45,7 +45,7 @@ export function isDashboardScopeAllowedForRole(
   role: DashboardRole,
 ) {
   if (value.view === "ME") {
-    return role !== "NONE";
+    return true;
   }
 
   return getAvailableDashboardAdminScopes(role).includes(value.adminScope);

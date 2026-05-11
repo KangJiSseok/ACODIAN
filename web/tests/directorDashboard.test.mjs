@@ -50,10 +50,19 @@ test("director dashboard query key is scoped to department comparison", () => {
   assert.match(hookFile, /enabled,/);
 });
 
-test("dashboard page keeps non-director shortcut fallback", () => {
+test("dashboard page keeps shortcut fallback for users without teams", () => {
   assert.match(pageFile, /getDashboardRole\(user\)/);
-  assert.match(pageFile, /!isDashboardAdmin \? <DashboardShortcutGrid user=\{user\} \/> : null/);
+  assert.match(pageFile, /!canUseDashboard \? <DashboardShortcutGrid user=\{user\} \/> : null/);
   assert.match(pageFile, /useDirectorDashboard\(\s*isDepartmentComparisonSelected,\s*\)/);
+});
+
+test("team leaders and members with teams use my dashboard", () => {
+  assert.match(pageFile, /const hasTeamDashboard = teams\.length > 0/);
+  assert.match(pageFile, /const canUseDashboard = isDashboardAdmin \|\| hasTeamDashboard/);
+  assert.match(pageFile, /const isMyDashboardSelected =\s*canUseDashboard && scopeSelection\.view === "ME"/);
+  assert.match(pageFile, /title=\{getDashboardTitle\(dashboardRole, hasTeamDashboard\)\}/);
+  assert.match(pageFile, /canUseDashboard\s*\?\s*\(/);
+  assert.match(pageFile, /<MyDashboardView dashboard=\{myDashboardQuery\.data\} \/>/);
 });
 
 test("department head dashboard uses own department and team detail scopes", () => {
@@ -107,8 +116,61 @@ test("dashboard worklog cards show due date without raw status code", () => {
     "utf8",
   );
 
-  assert.match(componentFile, /마감 \{formatDueDate\(item\.dueDate\)\}/);
+  assert.match(componentFile, /마감일 \{formatDueDate\(item\.dueDate\)\}/);
   assert.doesNotMatch(componentFile, /· \{item\.statusCode\}/);
+});
+
+test("single team dashboard worklog cards hide redundant context metadata", () => {
+  const componentFile = readFileSync(
+    new URL(
+      "../src/app/(protected)/_dashboard/_components/directorDashboard.tsx",
+      import.meta.url,
+    ),
+    "utf8",
+  );
+
+  assert.match(componentFile, /showWorklogContext:\s*false/);
+  assert.match(componentFile, /showContext=\{false\}/);
+  assert.match(componentFile, /showContext\?: boolean/);
+  assert.match(componentFile, /const contextLabel = \[item\.departmentName, item\.teamName, item\.authorName\]/);
+  assert.match(componentFile, /const hasContext = showContext && Boolean\(contextLabel\)/);
+  assert.match(componentFile, /hasContext \? "min-h-16" : null/);
+  assert.match(componentFile, /hasContext \? "mt-3" : "mt-2"/);
+  assert.doesNotMatch(componentFile, /\.join\(".*"\) \|\| "-"/);
+});
+
+test("today worklog panel uses frontend pagination with three items per page", () => {
+  const componentFile = readFileSync(
+    new URL(
+      "../src/app/(protected)/_dashboard/_components/directorDashboard.tsx",
+      import.meta.url,
+    ),
+    "utf8",
+  );
+
+  assert.match(componentFile, /const TODAY_WORKLOG_PAGE_SIZE = 3/);
+  assert.match(componentFile, /pageSize=\{TODAY_WORKLOG_PAGE_SIZE\}/);
+  assert.match(componentFile, /pageSize\?: number/);
+  assert.match(componentFile, /const listPageSize = pageSize \?\? Math\.max\(items\.length, 1\)/);
+  assert.match(componentFile, /usePagination\(items,\s*listPageSize\)/);
+  assert.match(componentFile, /pagination\.items\.map/);
+  assert.match(componentFile, /pagination\.totalPages > 1 \? \(/);
+});
+
+test("my dashboard uses rolling seven day due copy", () => {
+  const componentFile = readFileSync(
+    new URL(
+      "../src/app/(protected)/_dashboard/_components/directorDashboard.tsx",
+      import.meta.url,
+    ),
+    "utf8",
+  );
+
+  assert.match(componentFile, /label="7일 내 마감"/);
+  assert.match(componentFile, /title="7일 내 마감"/);
+  assert.match(componentFile, /emptyMessage="7일 내 마감 예정 업무가 없습니다\."/);
+  assert.match(componentFile, /D-7 이내 마감 예정인 미완료 업무입니다\./);
+  assert.doesNotMatch(componentFile, /이번 주 마감/);
 });
 
 test("director dashboard metric cards follow requested order and labels", () => {
