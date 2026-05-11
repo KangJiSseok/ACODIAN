@@ -1,5 +1,6 @@
 package com.ibank.axwms.domain.notification.service;
 
+import com.ibank.axwms.domain.notification.event.NotificationCreatedEvent;
 import com.ibank.axwms.domain.notification.entity.Notification;
 import com.ibank.axwms.domain.notification.repository.NotificationRepository;
 import com.ibank.axwms.domain.notification.repository.jooq.projection.WorklogDueSoonReminderCandidateProjection;
@@ -8,6 +9,7 @@ import com.ibank.axwms.domain.notification.repository.jooq.query.NotificationSea
 import com.ibank.axwms.global.response.PageResponse;
 import com.ibank.axwms.global.security.CustomUserPrincipal;
 import lombok.RequiredArgsConstructor;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -23,6 +25,7 @@ public class NotificationService {
     private static final String WORKLOG_DUE_SOON_TITLE = "업무 마감 3일 전 알림";
 
     private final NotificationRepository notificationRepository;
+    private final ApplicationEventPublisher applicationEventPublisher;
 
     /**
      * 현재 로그인 사용자가 수신자인 알림만 조회한다.
@@ -59,8 +62,27 @@ public class NotificationService {
                                 + " 마감일이 3일 남았습니다. 마감일 : " + candidate.dueDate()
                 ))
                 .toList();
-        notificationRepository.saveAll(notifications);
+        List<Notification> savedNotifications = notificationRepository.saveAllAndFlush(notifications);
+        publishNotificationCreatedEvents(savedNotifications);
         return notifications.size();
+    }
+
+    /**
+     * DB flush 로 확정된 식별자/생성시각만 snapshot 으로 발행해 AFTER_COMMIT 리스너가 JPA 엔티티에 의존하지 않게 한다.
+     */
+    private void publishNotificationCreatedEvents(List<Notification> notifications) {
+        notifications.stream()
+                .map(notification -> new NotificationCreatedEvent(
+                        notification.getId(),
+                        notification.getUserId(),
+                        notification.getNotificationType(),
+                        notification.getTitle(),
+                        notification.getContent(),
+                        notification.getReferenceType(),
+                        notification.getReferenceId(),
+                        notification.getCreatedAt()
+                ))
+                .forEach(applicationEventPublisher::publishEvent);
     }
 
 }

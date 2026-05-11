@@ -75,6 +75,8 @@ ai:
 notification:
   worklog-due-soon-reminder:
     cron: ${NOTIFICATION_WORKLOG_DUE_SOON_REMINDER_CRON:0 0 9 * * *}
+  stream:
+    key: ${NOTIFICATION_STREAM_KEY:notifications:stream}
 
 auth:
   refresh-cookie:

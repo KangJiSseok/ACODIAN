@@ -26,12 +26,18 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.data.domain.Range;
+import org.springframework.data.redis.connection.stream.MapRecord;
+import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.test.util.ReflectionTestUtils;
+import org.springframework.transaction.support.TransactionTemplate;
 
 import java.time.LocalDate;
 import java.util.List;
+import java.util.Map;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.assertj.core.groups.Tuple.tuple;
 
 class NotificationServiceIntegrationTest extends IntegrationTestSupport {
@@ -40,6 +46,7 @@ class NotificationServiceIntegrationTest extends IntegrationTestSupport {
     private static final LocalDate TARGET_DUE_DATE = TODAY.plusDays(3);
     private static final String WORKLOG_DUE_SOON_NOTIFICATION_TYPE = NotificationType.WORKLOG_DUE_SOON.name();
     private static final String WORKLOG_REFERENCE_TYPE = NotificationReferenceType.WORKLOG.name();
+    private static final String NOTIFICATION_STREAM_KEY = "notifications:stream";
 
     @Autowired
     private NotificationService notificationService;
@@ -65,9 +72,16 @@ class NotificationServiceIntegrationTest extends IntegrationTestSupport {
     @Autowired
     private UserTeamRepository userTeamRepository;
 
+    @Autowired
+    private StringRedisTemplate stringRedisTemplate;
+
+    @Autowired
+    private TransactionTemplate transactionTemplate;
+
     @BeforeEach
     void setUp() {
         clearDatabase();
+        stringRedisTemplate.delete(NOTIFICATION_STREAM_KEY);
     }
 
     @Test
@@ -195,6 +209,20 @@ class NotificationServiceIntegrationTest extends IntegrationTestSupport {
         assertThat(notification.getContent()).isEqualTo(
                 fixture.team().getTeamName() + "의 저장 대상 업무 마감일이 3일 남았습니다. 마감일 : " + TARGET_DUE_DATE
         );
+
+        List<MapRecord<String, Object, Object>> streamRecords = streamRecords();
+        assertThat(streamRecords).hasSize(1);
+        Map<Object, Object> streamFields = streamRecords.getFirst().getValue();
+        assertThat(streamFields)
+                .containsEntry("notificationId", String.valueOf(notification.getId()))
+                .containsEntry("userId", String.valueOf(fixture.author().getId()))
+                .containsEntry("type", WORKLOG_DUE_SOON_NOTIFICATION_TYPE)
+                .containsEntry("title", "업무 마감 3일 전 알림")
+                .containsEntry("content", fixture.team().getTeamName()
+                        + "의 저장 대상 업무 마감일이 3일 남았습니다. 마감일 : " + TARGET_DUE_DATE)
+                .containsEntry("referenceType", WORKLOG_REFERENCE_TYPE)
+                .containsEntry("referenceId", String.valueOf(worklog.getId()));
+        assertThat(streamFields.get("createdAt")).isEqualTo(notification.getCreatedAt().toString());
     }
 
     @Test
@@ -214,6 +242,23 @@ class NotificationServiceIntegrationTest extends IntegrationTestSupport {
         assertThat(notificationRepository.findAll()).hasSize(1);
     }
 
+    @Test
+    @DisplayName("알림 생성 트랜잭션이 rollback 되면 Redis Stream record를 발행하지 않는다")
+    void 알림_생성_트랜잭션이_rollback_되면_Redis_Stream_record를_발행하지_않는다() {
+        // given
+        ReminderBaseFixture fixture = seedReminderBaseFixture();
+        saveWorklog(fixture.author(), fixture.team(), "rollback 대상", WorklogStatus.PENDING, TARGET_DUE_DATE, false);
+
+        // when & then
+        assertThatThrownBy(() -> transactionTemplate.executeWithoutResult(status -> {
+            notificationService.createWorklogDueSoonReminderNotifications(TODAY);
+            throw new RuntimeException("rollback");
+        })).isInstanceOf(RuntimeException.class)
+                .hasMessage("rollback");
+        assertThat(notificationRepository.findAll()).isEmpty();
+        assertThat(streamRecords()).isEmpty();
+    }
+
     /**
      * 다른 통합 테스트가 같은 컨테이너를 공유해도 FK 제약에 걸리지 않도록 알림과 팀/사용자 연결 데이터를 먼저 제거한다.
      */
@@ -231,6 +276,13 @@ class NotificationServiceIntegrationTest extends IntegrationTestSupport {
         teamRepository.deleteAllInBatch();
         userRepository.deleteAllInBatch();
         departmentRepository.deleteAllInBatch();
+    }
+
+    /**
+     * Stream 검증은 Phase 3 계약 field 만 확인하고 후속 phase 의 구독 동작은 포함하지 않는다.
+     */
+    private List<MapRecord<String, Object, Object>> streamRecords() {
+        return stringRedisTemplate.opsForStream().range(NOTIFICATION_STREAM_KEY, Range.unbounded());
     }
 
     /**
