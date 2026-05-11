@@ -1,5 +1,6 @@
 package com.ibank.axwms.domain.worklog.repository.jooq;
 
+import com.ibank.axwms.domain.organization.team.TeamStatus;
 import com.ibank.axwms.domain.organization.team.UserTeamStatus;
 import com.ibank.axwms.domain.worklog.WorklogStatus;
 import com.ibank.axwms.domain.worklog.policy.WorklogVisibilityScope;
@@ -50,6 +51,8 @@ public class WorklogJooqRepositoryImpl implements WorklogJooqRepository {
 
     // STATUS_COMPLETED 와 같은 패턴 — enum.name() 으로 정의해 enum 리네임/삭제 시 컴파일 에러로 잡히도록.
     private static final String ACTIVE_USER_TEAM_STATUS = UserTeamStatus.ACTIVE.name();
+    // dashboard 의 모든 팀 가시성 가드 — soft-delete (deleted_at) 와 별개로 INACTIVE 팀도 제외해야 한다.
+    private static final String ACTIVE_TEAM_STATUS = TeamStatus.ACTIVE.name();
 
     private final DSLContext dsl;
 
@@ -479,31 +482,34 @@ public class WorklogJooqRepositoryImpl implements WorklogJooqRepository {
 
     /**
      * 전사(ORG) scope — 활성 팀의 worklog 만 잡기 위한 공통 JOIN 조건.
-     * 삭제된 팀의 worklog 는 dashboard 정책상 조회 X.
+     * "활성 팀" = deleted_at IS NULL AND status_code = ACTIVE. soft-delete 와 별개로 INACTIVE 팀도 제외.
      */
     private static Condition orgScope() {
         return TB_TEAM.TEAM_ID.eq(TB_WORKLOG.TEAM_ID)
-                .and(TB_TEAM.DELETED_AT.isNull());
+                .and(TB_TEAM.DELETED_AT.isNull())
+                .and(TB_TEAM.STATUS_CODE.eq(ACTIVE_TEAM_STATUS));
     }
 
     /**
      * 부서 소속 팀의 worklog 만 잡기 위한 공통 JOIN 조건.
-     * worklog → team 으로 join 하고 team.department_id 로 부서를 좁힌다 (삭제 팀 제외).
+     * worklog → team 으로 join 하고 team.department_id 로 부서를 좁힌다. 삭제 팀과 INACTIVE 팀 모두 제외.
      */
     private static Condition deptScope(Long departmentId) {
         return TB_TEAM.TEAM_ID.eq(TB_WORKLOG.TEAM_ID)
                 .and(TB_TEAM.DEPARTMENT_ID.eq(departmentId))
-                .and(TB_TEAM.DELETED_AT.isNull());
+                .and(TB_TEAM.DELETED_AT.isNull())
+                .and(TB_TEAM.STATUS_CODE.eq(ACTIVE_TEAM_STATUS));
     }
 
     /**
      * 단일 팀 의 worklog 만 잡기 위한 공통 JOIN 조건.
-     * 삭제된 팀은 service 의 lookup 단계에서 차단되지만 동시성 대비로 가드 유지.
+     * 삭제/INACTIVE 팀은 service 의 lookup 단계에서도 차단하지만 동시성 대비로 가드 유지.
      */
     private static Condition teamScope(Long teamId) {
         return TB_TEAM.TEAM_ID.eq(TB_WORKLOG.TEAM_ID)
                 .and(TB_TEAM.TEAM_ID.eq(teamId))
-                .and(TB_TEAM.DELETED_AT.isNull());
+                .and(TB_TEAM.DELETED_AT.isNull())
+                .and(TB_TEAM.STATUS_CODE.eq(ACTIVE_TEAM_STATUS));
     }
 
     /**
@@ -628,7 +634,8 @@ public class WorklogJooqRepositoryImpl implements WorklogJooqRepository {
         return dsl.select(TB_DEPARTMENT.DEPARTMENT_ID, TB_DEPARTMENT.DEPARTMENT_NAME, completed, total)
                 .from(TB_DEPARTMENT)
                 .leftJoin(TB_TEAM).on(TB_TEAM.DEPARTMENT_ID.eq(TB_DEPARTMENT.DEPARTMENT_ID)
-                        .and(TB_TEAM.DELETED_AT.isNull()))
+                        .and(TB_TEAM.DELETED_AT.isNull())
+                        .and(TB_TEAM.STATUS_CODE.eq(ACTIVE_TEAM_STATUS)))
                 .leftJoin(TB_WORKLOG).on(TB_WORKLOG.TEAM_ID.eq(TB_TEAM.TEAM_ID)
                         .and(TB_WORKLOG.IS_DELETED.isFalse()))
                 .groupBy(TB_DEPARTMENT.DEPARTMENT_ID, TB_DEPARTMENT.DEPARTMENT_NAME)
@@ -638,7 +645,7 @@ public class WorklogJooqRepositoryImpl implements WorklogJooqRepository {
 
     /**
      * 부서별 활성(미완료) worklog 수. 부서 baseline LEFT JOIN.
-     * 부서 매핑은 worklog → tb_team → tb_team.department_id 기준.
+     * 부서 매핑은 worklog → tb_team → tb_team.department_id 기준. 삭제/INACTIVE 팀은 매핑에서 제외.
      */
     @Override
     public List<DepartmentLoadProjection> findDepartmentWorkloads() {
@@ -646,7 +653,8 @@ public class WorklogJooqRepositoryImpl implements WorklogJooqRepository {
         return dsl.select(TB_DEPARTMENT.DEPARTMENT_ID, TB_DEPARTMENT.DEPARTMENT_NAME, activeCount)
                 .from(TB_DEPARTMENT)
                 .leftJoin(TB_TEAM).on(TB_TEAM.DEPARTMENT_ID.eq(TB_DEPARTMENT.DEPARTMENT_ID)
-                        .and(TB_TEAM.DELETED_AT.isNull()))
+                        .and(TB_TEAM.DELETED_AT.isNull())
+                        .and(TB_TEAM.STATUS_CODE.eq(ACTIVE_TEAM_STATUS)))
                 .leftJoin(TB_WORKLOG).on(TB_WORKLOG.TEAM_ID.eq(TB_TEAM.TEAM_ID)
                         .and(TB_WORKLOG.IS_DELETED.isFalse())
                         .and(TB_WORKLOG.STATUS_CODE.ne(STATUS_COMPLETED)))
@@ -674,6 +682,7 @@ public class WorklogJooqRepositoryImpl implements WorklogJooqRepository {
                         .and(TB_WORKLOG.IS_DELETED.isFalse()))
                 .where(TB_TEAM.DEPARTMENT_ID.eq(departmentId))
                 .and(TB_TEAM.DELETED_AT.isNull())
+                .and(TB_TEAM.STATUS_CODE.eq(ACTIVE_TEAM_STATUS))
                 .groupBy(TB_TEAM.TEAM_ID, TB_TEAM.TEAM_NAME)
                 .orderBy(TB_TEAM.TEAM_NAME.asc(), TB_TEAM.TEAM_ID.asc())
                 .fetch(record -> TeamProgressProjection.from(record, completed, total));
@@ -681,6 +690,7 @@ public class WorklogJooqRepositoryImpl implements WorklogJooqRepository {
 
     /**
      * 팀 baseline LEFT JOIN — 부서 소속이지만 활성 worklog 0 건인 팀도 행에 포함.
+     * 삭제/INACTIVE 팀은 baseline 에서 제외.
      */
     @Override
     public List<TeamLoadProjection> findTeamWorkloadsInDept(Long departmentId) {
@@ -692,6 +702,7 @@ public class WorklogJooqRepositoryImpl implements WorklogJooqRepository {
                         .and(TB_WORKLOG.STATUS_CODE.ne(STATUS_COMPLETED)))
                 .where(TB_TEAM.DEPARTMENT_ID.eq(departmentId))
                 .and(TB_TEAM.DELETED_AT.isNull())
+                .and(TB_TEAM.STATUS_CODE.eq(ACTIVE_TEAM_STATUS))
                 .groupBy(TB_TEAM.TEAM_ID, TB_TEAM.TEAM_NAME)
                 .orderBy(TB_TEAM.TEAM_NAME.asc(), TB_TEAM.TEAM_ID.asc())
                 .fetch(record -> TeamLoadProjection.from(record, activeCount));

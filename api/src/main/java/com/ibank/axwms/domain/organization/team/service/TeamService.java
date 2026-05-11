@@ -1,5 +1,6 @@
 package com.ibank.axwms.domain.organization.team.service;
 
+import com.ibank.axwms.domain.organization.team.TeamStatus;
 import com.ibank.axwms.domain.organization.team.UserTeamStatus;
 import com.ibank.axwms.domain.organization.team.dto.CreateTeamApiDto;
 import com.ibank.axwms.domain.organization.team.dto.GetTeamApiDto;
@@ -225,28 +226,29 @@ public class TeamService {
 
     /**
      * dashboard 같은 진입 게이트가 "ACTIVE 멤버 + 활성 팀" 두 조건을 한 번에 검증할 때 사용.
+     * "활성 팀" = soft-delete 안 됐고 status_code 도 ACTIVE — INACTIVE 팀도 제외.
      * 팀이 soft-delete 됐는데 cascade 가 안 돼 멤버십 row 가 ACTIVE 로 남아있는 edge case 도 차단.
      */
     public boolean canAccessActiveTeam(Long userId, Long teamId) {
-        return teamRepository.existsByIdAndDeletedAtIsNull(teamId)
+        return teamRepository.existsByIdAndDeletedAtIsNullAndStatusCode(teamId, TeamStatus.ACTIVE)
                 && userTeamRepository.existsByUserIdAndTeamIdAndStatusCode(userId, teamId, UserTeamStatus.ACTIVE);
     }
 
     /**
      * 외부 도메인(예: dashboard)이 Team entity 를 직접 import 하지 않고도 활성 팀명만 조회할 수 있도록 노출한다.
-     * "soft-delete 안 됨" 룰은 service 가 보유 — 호출자는 결과 Optional 만 다룬다.
+     * "활성" = soft-delete 안 됐고 status_code = ACTIVE — INACTIVE 팀은 Optional.empty.
      */
     public Optional<String> findActiveTeamName(Long teamId) {
-        return teamRepository.findByIdAndDeletedAtIsNull(teamId)
+        return teamRepository.findByIdAndDeletedAtIsNullAndStatusCode(teamId, TeamStatus.ACTIVE)
                 .map(Team::getTeamName);
     }
 
     /**
      * DEPT_HEAD ownership 검증 등 외부 도메인이 팀의 소속 부서 ID 만 알아야 할 때 노출한다.
-     * 팀이 soft-delete 됐거나 부서 미배치면 Optional.empty.
+     * 팀이 soft-delete 됐거나 status_code 가 INACTIVE 이거나 부서 미배치면 Optional.empty.
      */
     public Optional<Long> findActiveTeamDepartmentId(Long teamId) {
-        return teamRepository.findByIdAndDeletedAtIsNull(teamId)
+        return teamRepository.findByIdAndDeletedAtIsNullAndStatusCode(teamId, TeamStatus.ACTIVE)
                 .map(Team::getDepartmentId);
     }
 
