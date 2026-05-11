@@ -1,18 +1,22 @@
 package com.ibank.axwms.domain.file.service;
 
+import com.ibank.axwms.domain.file.dto.FileWorklogItem;
 import com.ibank.axwms.domain.file.dto.GetFilesApiDto;
 import com.ibank.axwms.domain.file.entity.File;
 import com.ibank.axwms.domain.file.event.WorklogFileUploadedEvent;
 import com.ibank.axwms.domain.file.external.FilePathGenerator;
 import com.ibank.axwms.domain.file.external.ObjectStoragePort;
 import com.ibank.axwms.domain.file.repository.FileRepository;
+import com.ibank.axwms.domain.file.repository.jooq.projection.FileSummaryProjection;
 import com.ibank.axwms.domain.file.repository.jooq.query.FilePageQuery;
 import com.ibank.axwms.global.error.BusinessException;
 import com.ibank.axwms.global.error.ErrorCode;
 import com.ibank.axwms.global.response.PageResponse;
+import com.ibank.axwms.global.security.CustomUserPrincipal;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.context.ApplicationEventPublisher;
+import org.springframework.data.domain.Page;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.multipart.MultipartFile;
@@ -21,7 +25,10 @@ import java.util.ArrayList;
 import java.util.Collection;
 import java.util.LinkedHashSet;
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
+import java.util.function.Function;
+import java.util.stream.Collectors;
 
 @Slf4j
 @Service
@@ -114,11 +121,27 @@ public class FileService {
     }
 
     /**
-     * 삭제되지 않은 파일 목록을 최신 등록순으로 페이지 조회한다.
-     * 별도 가시성 필터를 적용하지 않으며, 호출 권한은 controller 의 @PreAuthorize 로 가드한다.
+     * 사용자가 접근 가능한 (admin grant ∪ ACTIVE membership 의 미삭제 team) worklog 들의 첨부 파일을
+     * 최신 등록순으로 페이지 조회한다. 각 행에 해당 worklog 의 요약(제목/팀/작성자/마감일/업무시간/AI/선행업무수)도 박는다.
+     *
+     * 성능:
+     *  - file page 1 쿼리 + worklog batch 1 쿼리 (= 총 2 쿼리). 가시성 필터가 file page 에 이미 들어가 있어
+     *    batch 결과는 정상 케이스에서 입력 ID 와 1:1 매핑된다.
      */
-    public PageResponse<GetFilesApiDto.Response.Item> getFiles(GetFilesApiDto.Request request) {
+    public PageResponse<GetFilesApiDto.Response.Item> getFiles(CustomUserPrincipal principal, GetFilesApiDto.Request request) {
         FilePageQuery query = FilePageQuery.from(request);
-        return GetFilesApiDto.Response.fromPage(fileRepository.findFilePage(query));
+        Page<FileSummaryProjection> page = fileRepository.findFilePage(principal.userId(), query);
+
+        Set<Long> uniqueWorklogIds = page.getContent().stream()
+                .map(FileSummaryProjection::worklogId)
+                .collect(Collectors.toSet());
+
+        Map<Long, FileWorklogItem> worklogByWorklogId = fileRepository
+                .findFileWorklogsByIds(principal.userId(), uniqueWorklogIds)
+                .stream()
+                .map(FileWorklogItem::from)
+                .collect(Collectors.toMap(FileWorklogItem::worklogId, Function.identity()));
+
+        return GetFilesApiDto.Response.fromPage(page, worklogByWorklogId);
     }
 }

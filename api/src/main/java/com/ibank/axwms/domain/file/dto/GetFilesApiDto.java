@@ -11,6 +11,7 @@ import lombok.NoArgsConstructor;
 import org.springframework.data.domain.Page;
 
 import java.time.LocalDateTime;
+import java.util.Map;
 
 @NoArgsConstructor(access = AccessLevel.PRIVATE)
 public final class GetFilesApiDto {
@@ -41,9 +42,14 @@ public final class GetFilesApiDto {
     @NoArgsConstructor(access = AccessLevel.PRIVATE)
     public static final class Response {
 
-        /** repository projection 페이지를 API 응답 페이지로 변환한다. */
-        public static PageResponse<Item> fromPage(Page<FileSummaryProjection> page) {
-            return PageResponse.from(page.map(Item::from));
+        /**
+         * repository projection 페이지를 API 응답 페이지로 변환하고,
+         * worklogId → FileWorklogItem 매핑이 있으면 각 item 에 함께 박아준다.
+         * 매핑에 없는 worklog (사용자가 못 보거나 조회 실패) 는 null 로 남는다.
+         */
+        public static PageResponse<Item> fromPage(Page<FileSummaryProjection> page,
+                                                  Map<Long, FileWorklogItem> worklogByWorklogId) {
+            return PageResponse.from(page.map(p -> Item.from(p, worklogByWorklogId.get(p.worklogId()))));
         }
 
         @Schema(description = "파일 목록 항목")
@@ -65,9 +71,11 @@ public final class GetFilesApiDto {
                 @Schema(description = "AI 처리 상태", example = "COMPLETED")
                 AiProcessingStatus aiProcessingStatus,
                 @Schema(description = "업로드 시각")
-                LocalDateTime createdAt
+                LocalDateTime createdAt,
+                @Schema(description = "소속 업무 요약")
+                FileWorklogItem worklog
         ) {
-            public static Item from(FileSummaryProjection p) {
+            public static Item from(FileSummaryProjection p, FileWorklogItem worklog) {
                 return new Item(
                         p.id(),
                         p.worklogId(),
@@ -77,7 +85,8 @@ public final class GetFilesApiDto {
                         p.fileSizeBytes(),
                         p.aiSummary(),
                         p.aiProcessingStatus(),
-                        p.createdAt()
+                        p.createdAt(),
+                        worklog
                 );
             }
         }
