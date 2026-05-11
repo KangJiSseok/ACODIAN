@@ -115,6 +115,7 @@ export default function DashboardPage() {
         : [],
     [isDepartmentHead, departmentDashboardQuery.data],
   );
+  const adminTeamsLoading = isDepartmentHead && departmentDashboardQuery.isLoading;
 
   const isLoading =
     (isDepartmentComparisonSelected && directorDashboardQuery.isLoading) ||
@@ -148,6 +149,7 @@ export default function DashboardPage() {
             dashboardRole={dashboardRole}
             departments={departments}
             adminTeams={adminTeams}
+            adminTeamsLoading={adminTeamsLoading}
             teams={teams}
             onChange={setSelectedScope}
           />

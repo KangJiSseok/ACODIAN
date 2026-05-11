@@ -32,6 +32,7 @@ interface DashboardScopeSelectorProps {
   dashboardRole: DashboardRole;
   departments: DepartmentSummary[];
   adminTeams: DashboardTeamOption[];
+  adminTeamsLoading?: boolean;
   teams: AuthUserTeam[];
   onChange: (value: DashboardScopeSelection) => void;
 }
@@ -43,6 +44,7 @@ export function DashboardScopeSelector({
   dashboardRole,
   departments,
   adminTeams,
+  adminTeamsLoading = false,
   teams,
   onChange,
 }: DashboardScopeSelectorProps) {
@@ -111,13 +113,21 @@ export function DashboardScopeSelector({
   );
 
   const selectedLabel = getScopeLabel(value, departments, adminTeams, teams);
-  const canApply = canApplyDraft(
-    draftView,
-    draftAdminScope,
-    draftDepartmentId,
-    draftAdminTeamId,
-    draftTeamId,
-  );
+  const isAdminTeamSelectDisabled =
+    adminTeamsLoading || adminTeamOptions.length === 0;
+  const isAdminTeamScopeDisabled =
+    draftView === "ADMIN" &&
+    draftAdminScope === "TEAM_DETAIL" &&
+    isAdminTeamSelectDisabled;
+  const canApply = isAdminTeamScopeDisabled
+    ? false
+    : canApplyDraft(
+        draftView,
+        draftAdminScope,
+        draftDepartmentId,
+        draftAdminTeamId,
+        draftTeamId,
+      );
 
   const handleApply = () => {
     if (!canApply) {
@@ -254,11 +264,21 @@ export function DashboardScopeSelector({
                             : String(draftAdminTeamId)
                         }
                         options={adminTeamOptions}
-                        disabled={adminTeamOptions.length === 0}
+                        disabled={isAdminTeamSelectDisabled}
                         onChange={(event) =>
                           setDraftAdminTeamId(Number(event.target.value))
                         }
                       />
+                      {adminTeamsLoading ? (
+                        <span className="block text-sm text-muted-foreground">
+                          팀 목록을 불러오는 중입니다.
+                        </span>
+                      ) : null}
+                      {!adminTeamsLoading && adminTeamOptions.length === 0 ? (
+                        <span className="block text-sm text-muted-foreground">
+                          조회 가능한 팀이 없습니다.
+                        </span>
+                      ) : null}
                     </label>
                   ) : null}
                 </div>

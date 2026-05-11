@@ -31,6 +31,14 @@ const pageFile = readFileSync(
   "utf8",
 );
 
+const selectorFile = readFileSync(
+  new URL(
+    "../src/app/(protected)/_dashboard/_components/dashboardScopeSelector.tsx",
+    import.meta.url,
+  ),
+  "utf8",
+);
+
 test("director dashboard service uses the real single dashboard endpoint", () => {
   assert.match(serviceFile, /apiClient\.get<DirectorDashboard>\("\/dashboard"/);
   assert.match(serviceFile, /params:\s*\{\s*scope:\s*"DEPARTMENT_COMPARISON"\s*\}/);
@@ -58,6 +66,16 @@ test("department head dashboard uses own department and team detail scopes", () 
   assert.match(pageFile, /<TeamDashboardView dashboard=\{teamDashboardQuery\.data\} \/>/);
   assert.match(serviceFile, /apiClient\.get<TeamDashboard>\("\/dashboard"/);
   assert.match(serviceFile, /scope:\s*"TEAM_DETAIL"/);
+});
+
+test("department head team detail selector shows loading state until admin teams resolve", () => {
+  assert.match(pageFile, /const adminTeamsLoading =\s*isDepartmentHead && departmentDashboardQuery\.isLoading/);
+  assert.match(pageFile, /adminTeamsLoading=\{adminTeamsLoading\}/);
+  assert.match(selectorFile, /adminTeamsLoading\?: boolean/);
+  assert.match(selectorFile, /const isAdminTeamSelectDisabled =\s*adminTeamsLoading \|\| adminTeamOptions\.length === 0/);
+  assert.match(selectorFile, /disabled=\{isAdminTeamSelectDisabled\}/);
+  assert.match(selectorFile, /const isAdminTeamScopeDisabled =[\s\S]*draftAdminScope === "TEAM_DETAIL"[\s\S]*isAdminTeamSelectDisabled/);
+  assert.match(selectorFile, /const canApply = isAdminTeamScopeDisabled\s*\?\s*false\s*:\s*canApplyDraft/);
 });
 
 test("director dashboard places workload above completion and imminent panels", () => {
