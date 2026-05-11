@@ -35,7 +35,7 @@ public class UserJooqRepositoryImpl implements UserJooqRepository {
 
     private final DSLContext dsl;
 
-    /** 사용자 목록을 부서/직급/재직 상태 optional filter 와 role 우선순위 기준으로 페이지 조회한다. */
+    /** 부서 배정 전 사용자도 누락하지 않고 optional filter 와 role 우선순위 기준으로 페이지 조회한다. */
     @Override
     public Page<UserSummaryProjection> findUsers(UserListQuery query) {
         int pageIndex = query.pageIndex();
@@ -45,7 +45,7 @@ public class UserJooqRepositoryImpl implements UserJooqRepository {
 
         long total = dsl.selectCount()
                 .from(TB_USER)
-                .join(TB_DEPARTMENT).on(TB_DEPARTMENT.DEPARTMENT_ID.eq(TB_USER.DEPARTMENT_ID))
+                .leftJoin(TB_DEPARTMENT).on(TB_DEPARTMENT.DEPARTMENT_ID.eq(TB_USER.DEPARTMENT_ID))
                 .where(filters)
                 .fetchSingle(0, Integer.class)
                 .longValue();
@@ -76,7 +76,7 @@ public class UserJooqRepositoryImpl implements UserJooqRepository {
                         rolePriority
                 )
                 .from(TB_USER)
-                .join(TB_DEPARTMENT).on(TB_DEPARTMENT.DEPARTMENT_ID.eq(TB_USER.DEPARTMENT_ID))
+                .leftJoin(TB_DEPARTMENT).on(TB_DEPARTMENT.DEPARTMENT_ID.eq(TB_USER.DEPARTMENT_ID))
                 .leftJoin(primaryMembership).on(primaryMembership.USER_ID.eq(TB_USER.USER_ID)
                         .and(primaryMembership.IS_PRIMARY.isTrue())
                         .and(primaryMembership.STATUS_CODE.eq(ACTIVE_USER_TEAM_STATUS)))
