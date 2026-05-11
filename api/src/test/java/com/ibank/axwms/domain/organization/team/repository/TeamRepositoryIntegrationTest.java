@@ -346,7 +346,9 @@ class TeamRepositoryIntegrationTest extends IntegrationTestSupport {
                 "팀 상세 집계 검증",
                 "요청 내용",
                 "업무 내용",
+                statusCode,
                 WorklogImportance.NORMAL,
+                java.math.BigDecimal.ONE,
                 LocalDate.of(2026, 4, 1),
                 LocalDate.of(2026, 4, 2)
         );

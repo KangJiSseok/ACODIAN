@@ -9,7 +9,9 @@ import static org.mockito.Mockito.verifyNoMoreInteractions;
 
 import com.ibank.axwms.domain.tag.entity.MetaTag;
 import com.ibank.axwms.domain.tag.repository.TagRepository;
+import com.ibank.axwms.domain.tag.service.TagService;
 import com.ibank.axwms.domain.worklog.WorklogImportance;
+import com.ibank.axwms.domain.worklog.WorklogStatus;
 import com.ibank.axwms.domain.worklog.dto.ApplyWorklogTagsAiApiDto;
 import com.ibank.axwms.domain.worklog.dto.UpdateWorklogAiApiDto;
 import com.ibank.axwms.domain.worklog.entity.Worklog;
@@ -44,6 +46,9 @@ class InternalWorklogAiCallbackServiceTest {
 
     @Mock
     private TagRepository tagRepository;
+
+    @Mock
+    private TagService tagService;
 
     @InjectMocks
     private InternalWorklogAiCallbackService internalWorklogAiCallbackService;
@@ -123,7 +128,7 @@ class InternalWorklogAiCallbackServiceTest {
 
         verify(tagRepository).saveAll(org.mockito.ArgumentMatchers.<List<MetaTag>>any());
         verify(worklogTagRepository).saveAll(org.mockito.ArgumentMatchers.<List<WorklogTag>>any());
-        verify(tagRepository).incrementUsageCountByIds(List.of(1L, 3L));
+        verify(tagService).incrementUsageCountByIds(List.of(1L, 3L));
     }
 
     @Test
@@ -142,7 +147,7 @@ class InternalWorklogAiCallbackServiceTest {
 
         verify(tagRepository, never()).saveAll(org.mockito.ArgumentMatchers.<List<MetaTag>>any());
         verify(worklogTagRepository, never()).saveAll(org.mockito.ArgumentMatchers.<List<WorklogTag>>any());
-        verify(tagRepository, never()).incrementUsageCountByIds(org.mockito.ArgumentMatchers.any());
+        verify(tagService, never()).incrementUsageCountByIds(org.mockito.ArgumentMatchers.any());
     }
 
     private Worklog createWorklog() {
@@ -152,7 +157,9 @@ class InternalWorklogAiCallbackServiceTest {
                 "결산 보고서 작성",
                 "재무팀 요청사항 반영",
                 "데이터 집계와 초안 작성",
+                WorklogStatus.PENDING,
                 WorklogImportance.HIGH,
+                java.math.BigDecimal.ONE,
                 LocalDate.of(2026, 4, 22),
                 LocalDate.of(2026, 4, 25)
         );
