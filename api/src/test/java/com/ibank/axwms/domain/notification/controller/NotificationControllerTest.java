@@ -4,6 +4,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.BDDMockito.given;
 import static org.mockito.BDDMockito.then;
 
+import com.ibank.axwms.domain.notification.dto.MarkAllNotificationsReadApiDto;
 import com.ibank.axwms.domain.notification.dto.SearchNotificationsApiDto;
 import com.ibank.axwms.domain.notification.service.NotificationService;
 import com.ibank.axwms.domain.notification.sse.NotificationSseEmitterRegistry;
@@ -93,6 +94,19 @@ class NotificationControllerTest {
                 notificationController.searchNotifications(principal, request);
 
         then(notificationService).should().searchNotifications(principal, request);
+        assertThat(response).isSameAs(serviceResponse);
+    }
+
+    @Test
+    @DisplayName("내 알림 전체 읽음 처리 메서드는 인증 사용자를 서비스에 위임한다")
+    void 내_알림_전체_읽음_처리_메서드는_인증_사용자를_서비스에_위임한다() {
+        CustomUserPrincipal principal = new CustomUserPrincipal(101L, "user@ibank.com", "MEMBER");
+        MarkAllNotificationsReadApiDto.Response serviceResponse = new MarkAllNotificationsReadApiDto.Response(3);
+        given(notificationService.markAllNotificationsRead(principal)).willReturn(serviceResponse);
+
+        MarkAllNotificationsReadApiDto.Response response = notificationController.markAllNotificationsRead(principal);
+
+        then(notificationService).should().markAllNotificationsRead(principal);
         assertThat(response).isSameAs(serviceResponse);
     }
 

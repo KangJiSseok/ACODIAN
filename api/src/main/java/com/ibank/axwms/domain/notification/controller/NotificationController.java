@@ -1,5 +1,6 @@
 package com.ibank.axwms.domain.notification.controller;
 
+import com.ibank.axwms.domain.notification.dto.MarkAllNotificationsReadApiDto;
 import com.ibank.axwms.domain.notification.dto.SearchNotificationsApiDto;
 import com.ibank.axwms.domain.notification.service.NotificationService;
 import com.ibank.axwms.domain.notification.sse.NotificationSseEmitterRegistry;
@@ -12,6 +13,7 @@ import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.ModelAttribute;
+import org.springframework.web.bind.annotation.PatchMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
@@ -41,4 +43,12 @@ public class NotificationController implements NotificationControllerDocs {
         return notificationService.searchNotifications(principal, request);
     }
 
+    @Override
+    @PatchMapping("/me/read-all")
+    @PreAuthorize("hasAnyRole('DIRECTOR','DEPT_HEAD','TEAM_LEAD','MEMBER')")
+    public MarkAllNotificationsReadApiDto.Response markAllNotificationsRead(
+            @AuthenticationPrincipal CustomUserPrincipal principal
+    ) {
+        return notificationService.markAllNotificationsRead(principal);
+    }
 }

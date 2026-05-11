@@ -1,20 +1,21 @@
 package com.ibank.axwms.domain.notification.service;
 
+import com.ibank.axwms.domain.notification.dto.MarkAllNotificationsReadApiDto;
+import com.ibank.axwms.domain.notification.dto.SearchNotificationsApiDto;
 import com.ibank.axwms.domain.notification.event.NotificationCreatedEvent;
 import com.ibank.axwms.domain.notification.entity.Notification;
 import com.ibank.axwms.domain.notification.repository.NotificationRepository;
 import com.ibank.axwms.domain.notification.repository.jooq.projection.WorklogDueSoonReminderCandidateProjection;
-import com.ibank.axwms.domain.notification.dto.SearchNotificationsApiDto;
 import com.ibank.axwms.domain.notification.repository.jooq.query.NotificationSearchQuery;
 import com.ibank.axwms.global.response.PageResponse;
 import com.ibank.axwms.global.security.CustomUserPrincipal;
+import java.time.LocalDate;
+import java.time.LocalDateTime;
+import java.util.List;
 import lombok.RequiredArgsConstructor;
 import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
-
-import java.time.LocalDate;
-import java.util.List;
 
 @Service
 @RequiredArgsConstructor
@@ -36,6 +37,16 @@ public class NotificationService {
         return SearchNotificationsApiDto.Response.fromPage(
                 notificationRepository.searchNotifications(principal.userId(), query)
         );
+    }
+
+    /**
+     * 현재 로그인 사용자의 안읽은 알림만 읽음 처리한다.
+     * 이미 읽은 알림의 readAt 은 보존하고, 변경된 건수만 응답해 클라이언트가 배지를 즉시 갱신할 수 있게 한다.
+     */
+    @Transactional
+    public MarkAllNotificationsReadApiDto.Response markAllNotificationsRead(CustomUserPrincipal principal) {
+        int updatedCount = notificationRepository.markUnreadAsReadByUserId(principal.userId(), LocalDateTime.now());
+        return MarkAllNotificationsReadApiDto.Response.of(updatedCount);
     }
 
     /**

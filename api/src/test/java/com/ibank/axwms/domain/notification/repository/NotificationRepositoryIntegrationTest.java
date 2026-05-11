@@ -25,6 +25,7 @@ import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.data.domain.Page;
+import org.springframework.transaction.annotation.Transactional;
 
 class NotificationRepositoryIntegrationTest extends IntegrationTestSupport {
 
@@ -86,6 +87,25 @@ class NotificationRepositoryIntegrationTest extends IntegrationTestSupport {
                         NotificationSearchProjection::isRead
                 )
                 .containsExactly("안읽은 알림", fixture.departmentId(), fixture.teamId(), false);
+    }
+
+    @Test
+    @Transactional
+    @DisplayName("내 알림 전체 읽음 처리는 JPA 로 내 안읽은 알림만 읽음 처리한다")
+    void 내_알림_전체_읽음_처리는_JPA로_내_안읽은_알림만_읽음_처리한다() {
+        Fixture fixture = seedFixture();
+        LocalDateTime readAt = LocalDateTime.of(2026, 5, 11, 11, 0);
+
+        int updatedCount = notificationRepository.markUnreadAsReadByUserId(fixture.callerId(), readAt);
+
+        assertThat(updatedCount).isEqualTo(1);
+        assertThat(notificationRepository.findAll())
+                .extracting(Notification::getTitle, Notification::getIsRead, Notification::getReadAt)
+                .contains(
+                        tuple("안읽은 알림", true, readAt),
+                        tuple("읽은 알림", true, LocalDateTime.of(2026, 5, 11, 10, 0)),
+                        tuple("다른 사용자 알림", false, null)
+                );
     }
 
     private void clearDatabase() {
