@@ -184,6 +184,7 @@ export interface WorklogDetailApiResponse {
   actualHours: number | string
   instructionDate: string
   dueDate: string
+  completionDate?: string | null
   createdAt?: string | null
   updatedAt?: string | null
   files?: WorklogFileItem[] | null

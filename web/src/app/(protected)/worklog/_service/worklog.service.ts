@@ -167,7 +167,7 @@ function toWorklogDetail(item: WorklogDetailApiResponse): Worklog {
     actualHours: toNumber(item.actualHours),
     instructionDate: item.instructionDate,
     dueDate: item.dueDate,
-    completionDate: undefined,
+    completionDate: item.completionDate ?? undefined,
     teamId: item.teamId,
     teamName: item.teamName,
     authorId: item.authorId,
