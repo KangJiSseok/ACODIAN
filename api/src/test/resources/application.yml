@@ -30,6 +30,10 @@ notification:
     cron: 0 0 9 * * *
   stream:
     key: notifications:stream
+    poll-timeout-millis: 2000
+  sse:
+    timeout-millis: 1800000
+    heartbeat-delay-millis: 25000
 
 auth:
   refresh-cookie:
