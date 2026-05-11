@@ -15,6 +15,24 @@ export interface GetDepartmentsResponse {
   departments: DepartmentSummary[];
 }
 
+export interface DepartmentDetailTeamSummary {
+  teamId: number;
+  teamName: string;
+  leaderId: number | null;
+  leaderName: string | null;
+  startDate: string | null;
+  expectedEndDate: string | null;
+  memberCount: number;
+}
+
+export interface DepartmentDetail {
+  departmentId: number;
+  departmentName: string;
+  departmentHeadUserId: number | null;
+  departmentHeadUserName: string | null;
+  teams: DepartmentDetailTeamSummary[];
+}
+
 export interface DepartmentFormValues {
   departmentName: string;
   description: string | null;
