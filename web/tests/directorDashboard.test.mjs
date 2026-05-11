@@ -43,9 +43,21 @@ test("director dashboard query key is scoped to department comparison", () => {
 });
 
 test("dashboard page keeps non-director shortcut fallback", () => {
-  assert.match(pageFile, /isDirectorProfile\(user\)/);
-  assert.match(pageFile, /!isDirector \? <DashboardShortcutGrid user=\{user\} \/> : null/);
-  assert.match(pageFile, /useDirectorDashboard\(isDirector\)/);
+  assert.match(pageFile, /getDashboardRole\(user\)/);
+  assert.match(pageFile, /!isDashboardAdmin \? <DashboardShortcutGrid user=\{user\} \/> : null/);
+  assert.match(pageFile, /useDirectorDashboard\(\s*isDepartmentComparisonSelected,\s*\)/);
+});
+
+test("department head dashboard uses own department and team detail scopes", () => {
+  assert.match(pageFile, /const isDepartmentHead = dashboardRole === "DEPARTMENT_HEAD"/);
+  assert.doesNotMatch(pageFile, /useTeamList\(TEAM_LIST_PARAMS, isDepartmentHead\)/);
+  assert.match(pageFile, /getDepartmentDashboardTeamOptions\(departmentDashboardQuery\.data\)/);
+  assert.match(pageFile, /teamCompletionRates/);
+  assert.match(pageFile, /teamWorkload/);
+  assert.match(pageFile, /useTeamDashboard\(\s*selectedTeamDetailId,\s*isTeamDetailSelected,\s*\)/);
+  assert.match(pageFile, /<TeamDashboardView dashboard=\{teamDashboardQuery\.data\} \/>/);
+  assert.match(serviceFile, /apiClient\.get<TeamDashboard>\("\/dashboard"/);
+  assert.match(serviceFile, /scope:\s*"TEAM_DETAIL"/);
 });
 
 test("director dashboard places workload above completion and imminent panels", () => {
@@ -66,6 +78,19 @@ test("director dashboard places workload above completion and imminent panels", 
   assert.ok(imminentIndex > completionIndex, "imminent panel should share the second row");
   assert.doesNotMatch(componentFile, /RecentNotificationPlaceholder/);
   assert.doesNotMatch(componentFile, /title="최근 알림"/);
+});
+
+test("dashboard worklog cards show due date without raw status code", () => {
+  const componentFile = readFileSync(
+    new URL(
+      "../src/app/(protected)/_dashboard/_components/directorDashboard.tsx",
+      import.meta.url,
+    ),
+    "utf8",
+  );
+
+  assert.match(componentFile, /마감 \{formatDueDate\(item\.dueDate\)\}/);
+  assert.doesNotMatch(componentFile, /· \{item\.statusCode\}/);
 });
 
 test("director dashboard metric cards follow requested order and labels", () => {
