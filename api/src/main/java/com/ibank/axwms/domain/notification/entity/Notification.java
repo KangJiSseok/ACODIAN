@@ -115,4 +115,15 @@ public class Notification {
         notification.readAt = readAt;
         return notification;
     }
+
+    /**
+     * 최초 읽음 시각을 보존해 같은 알림을 반복 확인해도 사용자 읽음 이력이 덮어써지지 않게 한다.
+     */
+    public void markAsRead(LocalDateTime readAt) {
+        if (Boolean.TRUE.equals(isRead)) {
+            return;
+        }
+        this.isRead = Boolean.TRUE;
+        this.readAt = readAt;
+    }
 }

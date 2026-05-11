@@ -7,6 +7,8 @@ import com.ibank.axwms.domain.notification.entity.Notification;
 import com.ibank.axwms.domain.notification.repository.NotificationRepository;
 import com.ibank.axwms.domain.notification.repository.jooq.projection.WorklogDueSoonReminderCandidateProjection;
 import com.ibank.axwms.domain.notification.repository.jooq.query.NotificationSearchQuery;
+import com.ibank.axwms.global.error.BusinessException;
+import com.ibank.axwms.global.error.ErrorCode;
 import com.ibank.axwms.global.response.PageResponse;
 import com.ibank.axwms.global.security.CustomUserPrincipal;
 import java.time.LocalDate;
@@ -47,6 +49,17 @@ public class NotificationService {
     public MarkAllNotificationsReadApiDto.Response markAllNotificationsRead(CustomUserPrincipal principal) {
         int updatedCount = notificationRepository.markUnreadAsReadByUserId(principal.userId(), LocalDateTime.now());
         return MarkAllNotificationsReadApiDto.Response.of(updatedCount);
+    }
+
+    /**
+     * 알림 수신자 본인만 읽음 처리할 수 있게 notificationId 와 principal userId 를 같은 조회 경계에서 검증한다.
+     *
+     * @throws BusinessException NOTIFICATION_NOT_FOUND 알림이 없거나 현재 사용자의 알림이 아닐 때
+     */
+    @Transactional
+    public void markNotificationAsRead(CustomUserPrincipal principal, Long notificationId) {
+        Notification notification = getNotificationOrThrow(notificationId, principal.userId());
+        notification.markAsRead(LocalDateTime.now());
     }
 
     /**
@@ -94,6 +107,14 @@ public class NotificationService {
                         notification.getCreatedAt()
                 ))
                 .forEach(applicationEventPublisher::publishEvent);
+    }
+
+    /**
+     * 알림 존재 여부와 소유권 실패를 같은 NOT_FOUND 로 접어 사용자 간 알림 ID 탐색을 차단한다.
+     */
+    private Notification getNotificationOrThrow(Long notificationId, Long userId) {
+        return notificationRepository.findByIdAndUserId(notificationId, userId)
+                .orElseThrow(() -> new BusinessException(ErrorCode.NOTIFICATION_NOT_FOUND));
     }
 
 }
