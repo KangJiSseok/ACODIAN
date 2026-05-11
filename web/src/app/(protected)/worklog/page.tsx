@@ -192,7 +192,7 @@ export default function WorklogPage() {
             )}
           >
             <div className="overflow-hidden">
-              <div className="space-y-4 pt-3">
+              <div className="space-y-4 pb-4 pt-3">
                 <div className="flex items-center justify-between gap-3">
                   <p className="text-[11px] font-bold uppercase tracking-[0.16em] text-muted-foreground">
                     Worklog Filters

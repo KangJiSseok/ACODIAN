@@ -12,11 +12,11 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog"
 import { Input } from "@/components/ui/input"
-import type { worklogs } from "../_mock/worklog.mock"
 import { getWorklogStatusLabel } from "../_utils/worklogFormat"
-import type { WorklogFormValues } from "../_types/worklog.types"
-
-type WorklogItem = (typeof worklogs)[number]
+import type {
+  WorklogFormDependencyOption,
+  WorklogFormValues,
+} from "../_types/worklog.types"
 
 interface WorklogDependencyModalProps {
   open: boolean
@@ -27,11 +27,11 @@ interface WorklogDependencyModalProps {
   onDependencyKeywordInputChange: (value: string) => void
   dependencySearchOpen: boolean
   onDependencySearchOpenChange: (open: boolean) => void
-  filteredDependencyCandidates: WorklogItem[]
-  selectedDependencies: WorklogItem[]
+  filteredDependencyCandidates: WorklogFormDependencyOption[]
+  selectedDependencies: WorklogFormDependencyOption[]
   onAddDependency: (dependencyId: number) => void
   onRemoveDependency: (dependencyId: number) => void
-  incompleteDependencies: WorklogItem[]
+  incompleteDependencies: WorklogFormDependencyOption[]
   circularDependencyDetected: boolean
 }
 
@@ -146,7 +146,7 @@ function DependencySelectionList({
   dependencies,
   onRemoveDependency,
 }: {
-  dependencies: WorklogItem[]
+  dependencies: WorklogFormDependencyOption[]
   onRemoveDependency: (dependencyId: number) => void
 }) {
   if (dependencies.length === 0) {
