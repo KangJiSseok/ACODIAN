@@ -523,11 +523,22 @@ Nginx 를 EC2 systemd 로 운영해 **모든 외부 요청의 단일 진입점**
 
 ### 13-2. Nginx 설정의 SSOT
 
-저장소의 `infra/nginx/sites-available/axwms.conf` 와 `infra/nginx/snippets/proxy-headers.conf` 가 SSOT 다(OPS-017). EC2 의 `/etc/nginx/sites-available/axwms.conf` 는 deploy job 이 매 배포마다 저장소 conf 로 덮어쓴다 — SSH 로 EC2 에 접속해서 직접 수정하지 말 것. 변경은 PR 리뷰 후 dev/master push pipeline 의 `deploy_dev` / `deploy_prod` 가 자동 동기화한다.
+저장소의 다음 3개 파일이 SSOT 다(OPS-017, OPS-020).
 
-본문 골격은 아래와 같다(저장소 conf 와 1:1 일치).
+| 저장소 경로 | EC2 경로 | 역할 |
+|---|---|---|
+| `infra/nginx/sites-available/axwms.conf` | `/etc/nginx/sites-available/axwms.conf` | server 블록 본체 + 라우팅 |
+| `infra/nginx/snippets/proxy-headers.conf` | `/etc/nginx/snippets/proxy-headers.conf` | upstream 공통 proxy header set |
+| `infra/nginx/snippets/rate-limit.conf` | `/etc/nginx/snippets/rate-limit.conf` | per-IP rate/connection limit + slowloris timeout (ADR-018) |
+
+EC2 측 세 파일은 deploy job 이 매 배포마다 저장소 conf 로 덮어쓴다 — SSH 로 EC2 에 접속해서 직접 수정하지 말 것. 변경은 PR 리뷰 후 dev/master push pipeline 의 `deploy_dev` / `deploy_prod` 가 자동 동기화한다.
+
+본문 골격은 아래와 같다(저장소 conf 와 1:1 일치). server 블록 밖에 둔 `include` 는 nginx.conf 의 `http {}` 가 `sites-enabled/*` 를 include 하므로 http 컨텍스트로 진입한다.
 
 ```nginx
+# http 컨텍스트로 진입 — zone 정의·응답 코드·timeout 은 모두 snippet 안에서 관리.
+include /etc/nginx/snippets/rate-limit.conf;
+
 upstream axwms_web_prod      { server 127.0.0.1:8000; }
 upstream axwms_web_staging   { server 127.0.0.1:8001; }
 upstream axwms_api_prod      { server 127.0.0.1:8100; }
@@ -556,12 +567,15 @@ server {
     ssl_certificate     /etc/letsencrypt/live/k14s209.p.ssafy.io/fullchain.pem;
     ssl_certificate_key /etc/letsencrypt/live/k14s209.p.ssafy.io/privkey.pem;
 
-    location /api/ { proxy_pass http://axwms_api_prod; include /etc/nginx/snippets/proxy-headers.conf; }
-    location /ai/  { proxy_pass http://axwms_ai_prod;  include /etc/nginx/snippets/proxy-headers.conf; }
-    location /     { proxy_pass http://axwms_web_prod; include /etc/nginx/snippets/proxy-headers.conf; }
+    limit_conn perip 100;
+
+    location /api/auth/ { limit_req zone=req_auth    burst=30  nodelay; proxy_pass http://axwms_api_prod; include /etc/nginx/snippets/proxy-headers.conf; }
+    location /api/      { limit_req zone=req_general burst=200 nodelay; proxy_pass http://axwms_api_prod; include /etc/nginx/snippets/proxy-headers.conf; }
+    location /ai/       { limit_req zone=req_ai      burst=60  nodelay; proxy_read_timeout 180s; proxy_pass http://axwms_ai_prod; include /etc/nginx/snippets/proxy-headers.conf; }
+    location /          { limit_req zone=req_general burst=200 nodelay; proxy_pass http://axwms_web_prod; include /etc/nginx/snippets/proxy-headers.conf; }
 }
 
-# staging (HTTPS)
+# staging (HTTPS) — production 과 동일 패턴, upstream 만 staging 쪽
 server {
     listen 8080;
     server_name k14s209.p.ssafy.io;
@@ -574,9 +588,12 @@ server {
     ssl_certificate     /etc/letsencrypt/live/k14s209.p.ssafy.io/fullchain.pem;
     ssl_certificate_key /etc/letsencrypt/live/k14s209.p.ssafy.io/privkey.pem;
 
-    location /api/ { proxy_pass http://axwms_api_staging; include /etc/nginx/snippets/proxy-headers.conf; }
-    location /ai/  { proxy_pass http://axwms_ai_staging;  include /etc/nginx/snippets/proxy-headers.conf; }
-    location /     { proxy_pass http://axwms_web_staging; include /etc/nginx/snippets/proxy-headers.conf; }
+    limit_conn perip 100;
+
+    location /api/auth/ { limit_req zone=req_auth    burst=30  nodelay; proxy_pass http://axwms_api_staging; include /etc/nginx/snippets/proxy-headers.conf; }
+    location /api/      { limit_req zone=req_general burst=200 nodelay; proxy_pass http://axwms_api_staging; include /etc/nginx/snippets/proxy-headers.conf; }
+    location /ai/       { limit_req zone=req_ai      burst=60  nodelay; proxy_read_timeout 180s; proxy_pass http://axwms_ai_staging; include /etc/nginx/snippets/proxy-headers.conf; }
+    location /          { limit_req zone=req_general burst=200 nodelay; proxy_pass http://axwms_web_staging; include /etc/nginx/snippets/proxy-headers.conf; }
 }
 ```
 
@@ -590,14 +607,17 @@ proxy_set_header X-Forwarded-For   $proxy_add_x_forwarded_for;
 proxy_set_header X-Forwarded-Proto $scheme;
 ```
 
+`/etc/nginx/snippets/rate-limit.conf` 의 zone 정의는 13-7 절에서 별도로 다룬다.
+
 ### 13-3. deploy user 의 sudoers 등록 (1회)
 
-deploy job 이 EC2 의 nginx conf 를 덮어쓰고 reload 하려면 deploy user(보통 `ubuntu`)가 비밀번호 없이 sudo 로 5개 명령을 실행할 수 있어야 한다(OPS-018). EC2 에서 1회 등록한다.
+deploy job 이 EC2 의 nginx conf 를 덮어쓰고 reload 하려면 deploy user(보통 `ubuntu`)가 비밀번호 없이 sudo 로 6개 명령을 실행할 수 있어야 한다(OPS-018). EC2 에서 1회 등록한다. ADR-018 의 `rate-limit.conf` 가 동일 흐름으로 편입되면서 5개 → 6개로 늘었다.
 
 ```bash
 sudo tee /etc/sudoers.d/axwms-deploy <<'EOF'
 ubuntu ALL=(root) NOPASSWD: /usr/bin/install -o root -g root -m 0644 /tmp/axwms.conf /etc/nginx/sites-available/axwms.conf
 ubuntu ALL=(root) NOPASSWD: /usr/bin/install -o root -g root -m 0644 /tmp/proxy-headers.conf /etc/nginx/snippets/proxy-headers.conf
+ubuntu ALL=(root) NOPASSWD: /usr/bin/install -o root -g root -m 0644 /tmp/rate-limit.conf /etc/nginx/snippets/rate-limit.conf
 ubuntu ALL=(root) NOPASSWD: /usr/bin/mkdir -p /etc/nginx/snippets
 ubuntu ALL=(root) NOPASSWD: /usr/sbin/nginx -t
 ubuntu ALL=(root) NOPASSWD: /usr/bin/systemctl reload nginx
@@ -634,13 +654,15 @@ sudo systemctl reload nginx
 ```bash
 scp infra/nginx/sites-available/axwms.conf  $DEPLOY_USER@$TARGET_HOST:/tmp/axwms.conf
 scp infra/nginx/snippets/proxy-headers.conf $DEPLOY_USER@$TARGET_HOST:/tmp/proxy-headers.conf
+scp infra/nginx/snippets/rate-limit.conf    $DEPLOY_USER@$TARGET_HOST:/tmp/rate-limit.conf
 ssh $DEPLOY_USER@$TARGET_HOST '
   sudo install -o root -g root -m 0644 /tmp/axwms.conf /etc/nginx/sites-available/axwms.conf &&
   sudo mkdir -p /etc/nginx/snippets &&
   sudo install -o root -g root -m 0644 /tmp/proxy-headers.conf /etc/nginx/snippets/proxy-headers.conf &&
+  sudo install -o root -g root -m 0644 /tmp/rate-limit.conf /etc/nginx/snippets/rate-limit.conf &&
   sudo nginx -t &&
   sudo systemctl reload nginx &&
-  rm -f /tmp/axwms.conf /tmp/proxy-headers.conf
+  rm -f /tmp/axwms.conf /tmp/proxy-headers.conf /tmp/rate-limit.conf
 '
 ```
 
@@ -679,6 +701,57 @@ sudo chmod +x /etc/letsencrypt/renewal-hooks/deploy/reload-nginx.sh
 3. staging `.env` 의 `API_HOST_PORT=8101` / production `.env` 의 `API_HOST_PORT=8100` 이 실제 compose 와 일치하는지 (+1 오프셋 규칙 재확인)
 4. Nginx reload 전에 `sudo nginx -t` 로 설정 검증을 했는지
 5. `sudo certbot certificates` 로 인증서 만료 일자 확인 (갱신 실패 시 수동 `certbot renew`)
+6. `/etc/nginx/nginx.conf` 의 `server_tokens` 가 활성 정의되어 있지 않은지 — `grep -nE '^[^#]*server_tokens' /etc/nginx/nginx.conf` 가 0줄이어야 snippet 의 `server_tokens off;` 가 충돌 없이 적용된다. 활성 정의가 있다면 nginx.conf 측을 코멘트 처리.
+7. `/etc/nginx/nginx.conf` 의 `keepalive_timeout` 값 — Debian/Ubuntu 기본 65s 와 본 snippet 이 중복 정의되면 `nginx -t` 가 `directive is duplicate` 로 실패한다(OPS-020). slowloris 강화가 필요하면 snippet 이 아니라 nginx.conf 측 값을 조정한다.
+
+### 13-7. Per-IP rate limit / connection limit (ADR-018)
+
+#### 무엇을 막는가
+- 한 IP 가 만드는 비정상 부하(brute-force, scraper, 실수 무한루프, slowloris) 를 nginx 진입 시점에 즉시 거부(429) 한다.
+- 분산 DDoS 는 단일 nginx 만으로 흡수 불가 — CDN/WAF 가 별도 트랙으로 필요(섹션 17 참고).
+
+#### 동작 모델 — leaky bucket
+nginx `limit_req` 는 **시간 차단이 아니라 토큰 잔량 검사** 다.
+- `rate` 는 평균 처리 속도(= 토큰 회복 속도). 예: `20r/s` = 50ms 마다 토큰 1개.
+- `burst` 는 토큰 부족 시 임시로 쌓을 수 있는 큐 크기. 큐가 차면 즉시 429.
+- `nodelay` 는 큐의 요청을 평균 rate 로 천천히 풀지 않고 즉시 처리(burst 까지는 빠르게 통과, 그 이상은 즉시 거부).
+- "IP 를 N분 차단" 같은 영속 차단은 하지 않는다 — 토큰 회복되면 자동으로 다시 통과. 영속 차단이 필요하면 fail2ban 또는 CDN/WAF.
+
+#### 적용 zone
+
+zone 키는 모두 `$binary_remote_addr` 라 **IP 당** 카운터다. 같은 IP 뒤 다수 유저(NAT) 는 공동 영향.
+
+**값 가정**: SSAFY 캠퍼스 NAT 환경에서 **한 외부 IP 뒤 약 30명 동시 사용자** (ADR-018).
+
+| zone | 대상 | rate | burst | 의미 |
+|---|---|---|---|---|
+| `perip` | 모든 라우트 | 동시 100 connection | — | 30명 × 1 connection + HTTP/1.1 fallback 마진 |
+| `req_auth` | `/api/auth/*` | 5r/m | 30 | brute-force 페이스 cap 유지(5r/m), burst 만 30명 동시 로그인 흡수 |
+| `req_ai` | `/ai/*` | 30r/m | 60 | 30명 × 분당 1회 검색 + 2회 burst. Gemini 비용 보호선 |
+| `req_general` | `/`, `/api/*` 일반 | 30r/s | 200 | 30명 × 평균 1 req/s + 첫 페이지 로드 burst 흡수 |
+
+값은 `infra/nginx/snippets/rate-limit.conf` 한 파일에서 관리한다(OPS-020). 튜닝은 PR 리뷰 후 자동 동기화 흐름(13-4) 으로 반영하고, EC2 SSH 직접 수정 금지.
+
+NAT 가정이 안 맞는 환경(사용자 대부분이 분산 IP)이라면 값이 과도하게 느슨할 수 있다 — 운영 관측에서 정상 사용자 429 가 거의 안 나오면 값 하향 또는 `geo` map 분기(별 MR) 검토.
+
+#### 운영 점검 — 1주 관측 후 튜닝
+
+```bash
+# 429 응답 빈도 — 이상치 IP 와 시간대 파악
+sudo grep ' 429 ' /var/log/nginx/access.log | awk '{print $1}' | sort | uniq -c | sort -rn | head
+
+# 특정 zone 의 거부량 — error.log 에서 limit_req 로그 (기본 level=error)
+sudo grep 'limiting requests' /var/log/nginx/error.log | tail
+```
+
+- 정상 사용자 IP 가 429 를 받고 있으면 → 값 완화(또는 인증된 사용자 IP 화이트리스트 별 MR).
+- 의심 IP 만 429 를 받고 있고 빈도가 반복적이면 → fail2ban 도입 시그널(섹션 17 #1).
+
+#### 운영자 1회 후속 작업 — 새 EC2 부트스트랩 시
+
+1. `sudoers.d/axwms-deploy` 등록 시 13-3 의 6개 명령 그대로 (rate-limit.conf install 줄 포함).
+2. 첫 배포 후 `sudo grep -c 'limit_req' /etc/nginx/sites-available/axwms.conf` 가 0 보다 큰 값 → 본 ADR 적용 확인.
+3. `curl -sI -X POST https://k14s209.p.ssafy.io/api/auth/login` 을 빠르게 31회 호출(`for i in $(seq 31); do curl -sI -o /dev/null -w "%{http_code}\n" -X POST https://k14s209.p.ssafy.io/api/auth/login; done`) → 처음 30개는 통과 응답코드, 31번째부터 `429` 가 나와야 한다(스모크 검증).
 
 ---
 
@@ -733,6 +806,18 @@ sudo chmod +x /etc/letsencrypt/renewal-hooks/deploy/reload-nginx.sh
 `SSH_PRIVATE_KEY` 의 `-----END ... -----` 뒤 trailing newline 누락 또는 CRLF 개행 오염이 주 원인이다.
 복구는 [`runbooks/infra/ci-auth-troubleshoot.md`](../../runbooks/infra/ci-auth-troubleshoot.md) B 케이스.
 
+### 15-6. 정상 사용자가 `429 Too Many Requests` 를 받는다
+ADR-018 의 rate limit 이 너무 빡빡하거나, NAT 뒤 다수 사용자가 같은 외부 IP 로 묶여 공동 영향을 받는 경우.
+
+확인 순서:
+1. `/var/log/nginx/access.log` 에서 그 IP 의 429 패턴 — 단일 사용자인지, 같은 IP 뒤 다수 사용자인지 행동 패턴으로 추정.
+2. `error.log` 의 `limiting requests, excess: ... by zone "<zone 이름>"` 로그로 어느 zone 이 차단했는지 확인.
+3. 차단 zone 이 `req_general` 이고 정상 패턴이면 → `infra/nginx/snippets/rate-limit.conf` 의 burst 값을 단계적으로 상향(40 → 60). PR 리뷰 후 자동 동기화.
+4. 차단 zone 이 `req_auth` 이고 정상 로그인 패턴이면 → 클라이언트가 토큰 갱신을 과도하게 호출하는 버그 가능성 먼저 점검(rate cap 완화는 마지막 수단).
+5. 사내 IP 공동 영향이면 → `geo` map 화이트리스트 별 MR 검토(ADR-018 의 본 ADR 범위 밖 항목).
+
+값 튜닝은 EC2 SSH 직접 수정 금지(OPS-020). PR 리뷰 + 13-4 자동 동기화 흐름 그대로.
+
 ---
 
 ## 16. 현재 의도적으로 하지 않은 것
@@ -741,22 +826,29 @@ sudo chmod +x /etc/letsencrypt/renewal-hooks/deploy/reload-nginx.sh
 
 - 과거 임시 검증 절차 재사용
 - EC2에서 소스 직접 빌드
-- ai 운영 자동배포 (web 은 ADR-014, nginx conf 동기화는 ADR-015 로 처리됨)
 - 전체 스택 단일 compose 통합
+- **fail2ban** — 반복 429/401 발생 IP 의 영속 차단. nginx 의 즉시 거부(429) 가 1차 cap 으로 들어왔으므로 fail2ban 은 그 위 층으로 별 ADR 검토.
+- **CDN/WAF (Cloudflare 등)** — 분산 DDoS / 봇 관리. SSAFY DNS 정책 의존이라 pending-decisions 항목으로 분리.
+- **앱 레벨 throttle** — Spring Security 의 로그인 lockout, FastAPI 의 Gemini quota. nginx 앞단 cap 과 책임 분담은 별 ADR.
+- **nginx access log 보관 / 로테이션** — 운영 안정성 보강 항목으로 별 MR.
 
-이유는 지금은 **배포 경로를 단순하게 만들고, api 자동배포를 먼저 안정화하는 것**이 우선이기 때문이다.
-TLS 자동 갱신은 ADR-012 로 범위에 포함되었다.
+이유는 지금은 **배포 경로를 단순하게 만들고, 자동 동기화 흐름의 일관성을 먼저 안정화하는 것**이 우선이기 때문이다.
+TLS 자동 갱신은 ADR-012 로, web/ai 자동배포 편입은 ADR-014/016 으로, nginx conf 저장소 편입은 ADR-015 로, per-IP rate limit 은 ADR-018 로 범위에 포함되었다.
 
 ---
 
 ## 17. 다음 단계 후보
 
-api/web 자동배포 + nginx conf 동기화가 안정화되면 다음 순서로 확장하면 된다.
+기본 자동배포 + nginx conf 동기화 + per-IP rate limit 이 안정화된 시점에서 우선순위 순서로 확장한다.
 
-1. `deploy_prod`를 manual 승인형으로 변경할지 결정
-2. ai Dockerfile 추가 + 자동배포 편입 (pending-decisions #5 의 ai 잔여 항목)
-3. nginx keep-alive 풀 도입 — `upstream { keepalive N; }` + `proxy_set_header Connection ""` 짝꿍 한 번에 추가 (ADR-015 의 6번 "본 ADR 범위 밖" 항목)
-4. 파이프라인 `changes` 세분화 (pending-decisions #2) — 문서-only MR 이 배포까지 도는 비용을 줄이는 후행 정리
+1. **fail2ban 도입** — 반복 429/401 IP 를 iptables 수준에서 N분~N시간 차단. nginx 의 즉시 거부 위 층 보호.
+2. **앱 레벨 throttle** — Spring Security 의 로그인 lockout, FastAPI 의 Gemini quota(외부 유료 호출 비용 보호). nginx 값과 책임 분담을 본 결정에서 명문화.
+3. **`deploy_prod` 를 manual 승인형으로 변경** — 운영 반영 게이팅.
+4. **nginx access log 보관 / 로테이션** — 429 빈도 관측 + 인증 실패 패턴 분석을 위한 보관 정책 확정.
+5. **`geo` map 화이트리스트** — 사내 IP / 신뢰 IP 의 429 면제. NAT 뒤 공동 영향이 관측될 때.
+6. **CDN/WAF (Cloudflare 등) 도입** — 분산 DDoS / 봇 관리. SSAFY 의 `k14s209.p.ssafy.io` DNS CNAME / NS 변경 가능 여부를 먼저 확인.
+7. **nginx keep-alive 풀** — `upstream { keepalive N; }` + `proxy_set_header Connection ""` 짝꿍 한 번에 추가 (ADR-015 의 6번 "본 ADR 범위 밖" 항목).
+8. **파이프라인 `changes` 세분화** (pending-decisions #2) — 문서-only MR 이 배포까지 도는 비용을 줄이는 후행 정리.
 
 ---
 

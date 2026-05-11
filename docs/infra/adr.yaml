@@ -610,3 +610,93 @@
     서로 다른 영역의 변경이 같은 배포 브랜치에 연속 merge 되어도 먼저 시작된 image build/deploy 가 중간 취소되지 않는다.
     배포 정합성은 높아지지만, 같은 영역 변경이 짧은 간격으로 중복 merge 되는 경우에도 이전 배포 pipeline 이 끝까지 실행될 수 있어 CI 사용량은 다소 늘 수 있다.
     영역별 중복 취소가 필요해지면 web/api/ai 를 child pipeline 또는 별도 pipeline 단위로 분리하는 설계를 별도 ADR 로 검토한다.
+
+- id: ADR-018
+  title: "Nginx per-IP rate limit / connection limit — L7 비정상 부하 차단"
+  status: adopted
+  date: 2026-05-11
+  stacks: [infra, nginx, security, ec2]
+  context: |
+    ADR-015 의 6번 "본 ADR 범위 밖" 에서 rate limit / fail2ban / WAF 도입은 운영 부하 관측 후 결정으로 명시적으로 분리되어 있었다.
+    그러나 시점 점검 결과 단일 EC2 + 단일 nginx 진입점 구조에서 한 IP 의 비정상 부하를 1차 차단할 지점이 없다는 사실이 그대로 남아 있었다.
+
+    구체 위험 표면:
+      - `/api/auth/*` 는 JWT 발급 경로로 brute-force 표면이 직접 노출. 앱 레벨 lockout 도입 전까지 차단 지점 0.
+      - `/ai/*` 는 Gemini API 가 외부 유료 자원이라 트래픽 자체보다 비용 폭주가 더 큰 사고 단위가 됨.
+      - 정상 사용자라도 클라이언트 버그로 인한 실수 무한루프가 운영 자원을 끌어내릴 수 있음.
+      - slowloris 류 느린 connection 은 nginx default timeout(60s) 으로 흡수되지만 여전히 헤더만 1초씩 보내는 패턴엔 무력.
+
+    검토한 대안과 핵심 탈락 사유:
+      - 앞단 CDN/WAF(Cloudflare 등): SSAFY DNS 의존 + 도입 부담 큼. 별 항목으로 분리 유지.
+      - fail2ban 단독: 반복 위반 IP 차단은 가능하지만 1차 rate cap 자체가 없어 폭주 첫 순간을 못 막음. nginx limit_req 가 선행되어야 의미 있음.
+      - 앱 레벨 throttle (Spring/FastAPI): 트래픽이 이미 컨테이너까지 도달한 뒤라 보호 대상(Gemini 호출 등) 의 비용은 이미 소비됨. nginx 앞단 차단이 비용·CPU 모두 가성비 좋음.
+      - per-route IP whitelist (`geo` map): 사내망 NAT 가 외부에서 단일 IP 로 보일 때 공동 영향 회피 목적. 본 ADR 범위 밖, 필요 시 별 MR.
+
+    sites-available 파일에서 `http` 컨텍스트 디렉티브를 사용하는 법:
+      Debian/Ubuntu nginx 는 `/etc/nginx/nginx.conf` 의 `http {}` 가 `/etc/nginx/sites-enabled/*` 를 include 한다. 따라서 `axwms.conf` 의 server 블록 밖에 둔 디렉티브는 http 컨텍스트로 진입한다. 본 ADR 의 zone 정의/응답 코드/timeout 은 모두 이 방식으로 적용한다.
+  decision: |
+    nginx 단일 진입점에 per-IP rate limit + connection limit 을 도입한다.
+    ADR-015 의 6번 "rate limit / fail2ban / WAF 는 운영 부하 관측 후 결정" 중 rate limit 부분을 본 ADR 이 회수한다. fail2ban / WAF / CDN 은 본 ADR 범위 밖으로 유지.
+
+    1. SSOT — `infra/nginx/snippets/rate-limit.conf` 신설. zone 정의·응답 코드·slowloris timeout·server_tokens 를 한 곳에 모은다(OPS-017 의 nginx SSOT 패턴 그대로).
+       `axwms.conf` 의 server 블록 밖(= http 컨텍스트) 에서 `include /etc/nginx/snippets/rate-limit.conf;` 로 로드.
+
+    2. zone 정의 (per-IP, `$binary_remote_addr` 키)
+       - perip                  — connection 동시 수 제한, 10m 공유 메모리. server 컨텍스트에서 `limit_conn perip 100;`.
+       - req_general: 30r/s     — 일반 라우트(`/`, `/api/*` 일반), burst 200 nodelay.
+       - req_auth:    5r/m      — `/api/auth/*` 인증 경로, burst 30 nodelay.
+       - req_ai:      30r/m     — `/ai/*` LLM/임베딩 경로, burst 60 nodelay.
+
+       값 선정 가정 — **SSAFY 캠퍼스 NAT 가정: 한 외부 IP 뒤에 약 30명 동시 사용자**.
+       zone 키가 `$binary_remote_addr` 라 IP 당 카운터인데 SSAFY 캠퍼스 wifi 가 외부에서 단일 IP 로 보일 가능성이 높아 단일 사용자 패턴을 기준 잡으면 정상 사용자가 429 를 폭발적으로 받는다. 30명 가정을 작업 초기에 박아둔다.
+
+       값 선정 근거:
+       - 일반: 30명 × 평균 1 req/s(실시간 알림/polling 포함) = 30r/s. 페이지 첫 로드 burst 30명 × 7 req ≈ 210 → burst 200 으로 흡수. `nodelay` 라 burst 까지는 즉시 처리.
+       - 인증: brute-force 페이스 cap(rate=5r/m) 은 그대로 유지 — 공격자 시도 페이스가 핵심 보호선이고 완화하면 강도 떨어짐. burst 만 30 으로 올려 30명 동시 로그인 흡수.
+       - AI: 30명 × 분당 1회 검색 = 30r/m. 30명 × 2회 burst = 60. Gemini 비용 보호선 유지.
+       - connection: HTTP/2 기본은 사용자당 1 connection 이지만 HTTP/1.1 fallback 마진까지 흡수해 100.
+
+       NAT 가정이 안 맞는 시나리오:
+       - 사용자 대부분이 외부 IP 분산(개인 인터넷): 값이 과도하게 느슨해 보호 강도 약화. 운영 데이터로 확인되면 값 하향 또는 `geo` map 분기(별 MR).
+       - 캠퍼스 인원이 30명을 넘는 동시 활성 사용자가 일상: burst 가 또 부족. 운영 관측 후 상향.
+
+    3. 응답 코드 — `limit_req_status 429`, `limit_conn_status 429` (기본 503 보다 client·proxy 해석 명확).
+
+    4. slowloris 대응 — `client_header_timeout 10s`, `client_body_timeout 10s`, `send_timeout 10s` 를 같은 snippet 에 둔다.
+       `keepalive_timeout` 은 Debian/Ubuntu nginx.conf 기본값(65s)과 중복 정의되면 `directive is duplicate` 로 `nginx -t` 가 실패하므로 snippet 에 두지 않는다. 필요 시 운영자가 nginx.conf 의 값을 조정한다(별 운영 절차).
+
+    5. `server_tokens off;` — nginx 버전 노출 차단. nginx.conf 가 활성 정의하지 않았는지 운영자가 1회 확인 후 활성화한다(코멘트 처리 상태이면 안전).
+
+    6. location 매핑 — production 443 / staging 8443 두 server 블록 모두 동일 패턴:
+       - server 컨텍스트에 `limit_conn perip 20;`.
+       - `/api/auth/` (req_auth) 신설 — `/api/` 보다 위에 둔다(가독성 목적, longest prefix match 라 순서 의존성은 없음).
+       - `/api/` (req_general), `/ai/` (req_ai + `proxy_read_timeout 180s;`), `/` (req_general).
+
+    7. staging/production 모두 동일 zone 적용 — 같은 EC2·같은 conf 라 staging 트래픽도 동일 보호.
+
+    8. 자동 동기화 — `deploy_dev` / `deploy_prod` 가 `rate-limit.conf` 도 ADR-015 의 흐름(scp + sudo install + nginx -t + systemctl reload) 에 포함한다. OPS-018 의 sudoers NOPASSWD 명령 목록에 `install ... /etc/nginx/snippets/rate-limit.conf` 1줄을 추가한다(5개 → 6개). 신규 EC2 1회 작업에 본 sudoers 추가가 빠지면 deploy 가 NOPASSWD 거부로 실패한다(눈에 띄는 빨간 신호, silent failure 아님).
+
+    9. 본 ADR 범위 밖
+       - fail2ban (반복 429 IP iptables 차단) — 별 ADR.
+       - CDN/WAF — pending-decisions 신규 항목 또는 별 ADR.
+       - 앱 레벨 throttle (Spring / FastAPI Gemini quota) — 별 ADR.
+       - 화이트리스트(`geo` map 으로 사내 IP 예외) — 필요 시점에 별 MR.
+       - nginx access log 보관/로테이션 — A 단계 운영 안정성 보강 항목으로 별 MR.
+  consequence: |
+    긍정적 영향:
+      - 한 IP brute-force / scraper / 실수 무한루프 클라이언트 즉시 차단(429).
+      - Gemini 호출 폭주에 대한 1차 비용 cap.
+      - slowloris 류 느린 헤더/본문 전송 차단(`client_*_timeout 10s`).
+      - rate-limit.conf 단일 SSOT 라 값 튜닝 시 수정 지점이 한 곳. OPS-017 의 자동 동기화 흐름으로 EC2 반영.
+
+    부정적 영향과 완화:
+      - 값이 너무 빡빡하면 정상 사용자도 429. 완화: 보수적 초기값 + nginx access log 의 429 빈도 1주 관측 후 튜닝.
+      - per-IP zone 이라 NAT 뒤 다수 사용자가 같은 외부 IP 로 보일 때 공동 영향. 완화: zone 별 값 자체가 일반 사용자 패턴 대비 넉넉. 운영 환경에서 패턴 발견 시 `geo` map 화이트리스트 추가.
+      - 429 가 application 로그가 아닌 nginx access log 에만 남음. 완화: nginx access log 보관 정책 정비 항목과 연동.
+      - `keepalive_timeout` 을 본 snippet 에서 정의하지 못해 slowloris 대응의 한 축이 nginx.conf 측 책임으로 분산됨. 완화: 사고 트리거 시 운영자가 nginx.conf 측 값을 조정하고, 본 ADR 의 5번 운영 절차를 따른다.
+
+    재검토 트리거:
+      - 단일 IP 가 아닌 분산 패턴 공격 관측 → CDN/WAF 도입 검토.
+      - 정상 사용자 429 발생률 > 0.1% → 값 완화 또는 인증 사용자 한정 화이트리스트.
+      - 앱 레벨 throttle 도입 → nginx 값과 책임 분담 재정렬.
+      - SSAFY 가 보안그룹 IP 화이트리스트를 허용해 DB 외부 개방 완화책이 추가되는 시점 → ADR-011 / 본 ADR 의 분담 재검토.
