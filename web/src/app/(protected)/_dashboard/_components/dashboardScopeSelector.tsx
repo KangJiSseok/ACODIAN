@@ -15,49 +15,63 @@ import {
 } from "@/components/ui/dialog";
 import { Select } from "@/components/ui/select";
 import { cn } from "@/lib/utils";
-import type { DashboardScopeSelection } from "../_types/dashboard.types";
+import type {
+  DashboardAdminScope,
+  DashboardRole,
+  DashboardScopeSelection,
+} from "../_types/dashboard.types";
+import { getAvailableDashboardAdminScopes } from "../_utils/dashboardAccess";
+
+export interface DashboardTeamOption {
+  teamId: number;
+  teamName: string;
+}
 
 interface DashboardScopeSelectorProps {
   value: DashboardScopeSelection;
+  dashboardRole: DashboardRole;
   departments: DepartmentSummary[];
+  adminTeams: DashboardTeamOption[];
+  adminTeamsLoading?: boolean;
   teams: AuthUserTeam[];
   onChange: (value: DashboardScopeSelection) => void;
 }
 
 type DraftView = "ADMIN" | "ME";
-type DraftAdminScope = "DEPARTMENT_COMPARISON" | "DEPARTMENT_DETAIL";
 
 export function DashboardScopeSelector({
   value,
+  dashboardRole,
   departments,
+  adminTeams,
+  adminTeamsLoading = false,
   teams,
   onChange,
 }: DashboardScopeSelectorProps) {
+  const adminScopes = getAvailableDashboardAdminScopes(dashboardRole);
+  const defaultAdminScope = adminScopes[0] ?? "DEPARTMENT_DETAIL";
   const [open, setOpen] = useState(false);
   const [draftView, setDraftView] = useState<DraftView>(value.view);
-  const [draftAdminScope, setDraftAdminScope] = useState<DraftAdminScope>(
-    value.view === "ADMIN" ? value.adminScope : "DEPARTMENT_COMPARISON",
+  const [draftAdminScope, setDraftAdminScope] = useState<DashboardAdminScope>(
+    getInitialAdminScope(value, adminScopes, defaultAdminScope),
   );
   const [draftDepartmentId, setDraftDepartmentId] = useState<number | null>(
-    value.view === "ADMIN" && value.adminScope === "DEPARTMENT_DETAIL"
-      ? value.departmentId
-      : departments[0]?.departmentId ?? null,
+    getInitialDepartmentId(value, departments),
+  );
+  const [draftAdminTeamId, setDraftAdminTeamId] = useState<number | null>(
+    getInitialAdminTeamId(value, adminTeams),
   );
   const [draftTeamId, setDraftTeamId] = useState<number | null>(
     value.view === "ME" ? value.teamId : getDefaultTeamId(teams),
   );
 
-  // 모달 안의 draft 값은 저장 전까지 실제 대시보드 조회 조건에 반영하지 않습니다.
   const handleOpen = () => {
     setDraftView(value.view);
     setDraftAdminScope(
-      value.view === "ADMIN" ? value.adminScope : "DEPARTMENT_COMPARISON",
+      getInitialAdminScope(value, adminScopes, defaultAdminScope),
     );
-    setDraftDepartmentId(
-      value.view === "ADMIN" && value.adminScope === "DEPARTMENT_DETAIL"
-        ? value.departmentId
-        : departments[0]?.departmentId ?? null,
-    );
+    setDraftDepartmentId(getInitialDepartmentId(value, departments));
+    setDraftAdminTeamId(getInitialAdminTeamId(value, adminTeams));
     setDraftTeamId(value.view === "ME" ? value.teamId : getDefaultTeamId(teams));
     setOpen(true);
   };
@@ -71,6 +85,15 @@ export function DashboardScopeSelector({
     [departments],
   );
 
+  const adminTeamOptions = useMemo(
+    () =>
+      adminTeams.map((team) => ({
+        label: team.teamName,
+        value: String(team.teamId),
+      })),
+    [adminTeams],
+  );
+
   const teamOptions = useMemo(
     () =>
       teams.map((team) => ({
@@ -80,19 +103,37 @@ export function DashboardScopeSelector({
     [teams],
   );
 
-  const selectedLabel = getScopeLabel(value, departments, teams);
-  const canApply =
-    draftView === "ADMIN"
-      ? draftAdminScope === "DEPARTMENT_COMPARISON" ||
-        draftDepartmentId !== null
-      : draftTeamId !== null;
+  const adminScopeOptions = useMemo(
+    () =>
+      adminScopes.map((scope) => ({
+        label: getAdminScopeOptionLabel(scope, dashboardRole),
+        value: scope,
+      })),
+    [adminScopes, dashboardRole],
+  );
+
+  const selectedLabel = getScopeLabel(value, departments, adminTeams, teams);
+  const isAdminTeamSelectDisabled =
+    adminTeamsLoading || adminTeamOptions.length === 0;
+  const isAdminTeamScopeDisabled =
+    draftView === "ADMIN" &&
+    draftAdminScope === "TEAM_DETAIL" &&
+    isAdminTeamSelectDisabled;
+  const canApply = isAdminTeamScopeDisabled
+    ? false
+    : canApplyDraft(
+        draftView,
+        draftAdminScope,
+        draftDepartmentId,
+        draftAdminTeamId,
+        draftTeamId,
+      );
 
   const handleApply = () => {
     if (!canApply) {
       return;
     }
 
-    // 백엔드가 요구하는 scope별 필수 파라미터만 선택 결과에 포함합니다.
     if (draftView === "ME") {
       onChange({
         view: "ME",
@@ -107,6 +148,16 @@ export function DashboardScopeSelector({
         view: "ADMIN",
         adminScope: "DEPARTMENT_DETAIL",
         departmentId: draftDepartmentId as number,
+      });
+      setOpen(false);
+      return;
+    }
+
+    if (draftAdminScope === "TEAM_DETAIL") {
+      onChange({
+        view: "ADMIN",
+        adminScope: "TEAM_DETAIL",
+        teamId: draftAdminTeamId as number,
       });
       setOpen(false);
       return;
@@ -150,7 +201,8 @@ export function DashboardScopeSelector({
                 <ScopeChoiceButton
                   active={draftView === "ADMIN"}
                   title="관리자 관점"
-                  description="본부장 관점으로 조직 간 성과와 리스크를 비교합니다."
+                  description="권한 범위 안에서 조직 성과와 리스크를 비교합니다."
+                  disabled={adminScopes.length === 0}
                   onClick={() => setDraftView("ADMIN")}
                 />
                 <ScopeChoiceButton
@@ -172,19 +224,11 @@ export function DashboardScopeSelector({
                     </span>
                     <Select
                       value={draftAdminScope}
-                      options={[
-                        {
-                          label: "전체 부서 비교",
-                          value: "DEPARTMENT_COMPARISON",
-                        },
-                        {
-                          label: "부서 내 팀 비교",
-                          value: "DEPARTMENT_DETAIL",
-                        },
-                      ]}
+                      options={adminScopeOptions}
+                      disabled={adminScopeOptions.length === 0}
                       onChange={(event) =>
                         setDraftAdminScope(
-                          event.target.value as DraftAdminScope,
+                          event.target.value as DashboardAdminScope,
                         )
                       }
                     />
@@ -206,6 +250,35 @@ export function DashboardScopeSelector({
                           setDraftDepartmentId(Number(event.target.value))
                         }
                       />
+                    </label>
+                  ) : null}
+                  {draftAdminScope === "TEAM_DETAIL" ? (
+                    <label className="block space-y-2">
+                      <span className="text-sm font-medium text-foreground">
+                        조회할 팀
+                      </span>
+                      <Select
+                        value={
+                          draftAdminTeamId === null
+                            ? ""
+                            : String(draftAdminTeamId)
+                        }
+                        options={adminTeamOptions}
+                        disabled={isAdminTeamSelectDisabled}
+                        onChange={(event) =>
+                          setDraftAdminTeamId(Number(event.target.value))
+                        }
+                      />
+                      {adminTeamsLoading ? (
+                        <span className="block text-sm text-muted-foreground">
+                          팀 목록을 불러오는 중입니다.
+                        </span>
+                      ) : null}
+                      {!adminTeamsLoading && adminTeamOptions.length === 0 ? (
+                        <span className="block text-sm text-muted-foreground">
+                          조회 가능한 팀이 없습니다.
+                        </span>
+                      ) : null}
                     </label>
                   ) : null}
                 </div>
@@ -283,13 +356,81 @@ function ScopeChoiceButton({
   );
 }
 
+function getInitialAdminScope(
+  value: DashboardScopeSelection,
+  adminScopes: DashboardAdminScope[],
+  fallback: DashboardAdminScope,
+) {
+  if (value.view === "ADMIN" && adminScopes.includes(value.adminScope)) {
+    return value.adminScope;
+  }
+
+  return fallback;
+}
+
+function getInitialDepartmentId(
+  value: DashboardScopeSelection,
+  departments: DepartmentSummary[],
+) {
+  return value.view === "ADMIN" && value.adminScope === "DEPARTMENT_DETAIL"
+    ? value.departmentId
+    : departments[0]?.departmentId ?? null;
+}
+
+function getInitialAdminTeamId(
+  value: DashboardScopeSelection,
+  adminTeams: DashboardTeamOption[],
+) {
+  return value.view === "ADMIN" && value.adminScope === "TEAM_DETAIL"
+    ? value.teamId
+    : adminTeams[0]?.teamId ?? null;
+}
+
 function getDefaultTeamId(teams: AuthUserTeam[]) {
   return teams.find((team) => team.isPrimary)?.teamId ?? teams[0]?.teamId ?? null;
+}
+
+function canApplyDraft(
+  draftView: DraftView,
+  draftAdminScope: DashboardAdminScope,
+  draftDepartmentId: number | null,
+  draftAdminTeamId: number | null,
+  draftTeamId: number | null,
+) {
+  if (draftView === "ME") {
+    return draftTeamId !== null;
+  }
+
+  if (draftAdminScope === "DEPARTMENT_DETAIL") {
+    return draftDepartmentId !== null;
+  }
+
+  if (draftAdminScope === "TEAM_DETAIL") {
+    return draftAdminTeamId !== null;
+  }
+
+  return draftAdminScope === "DEPARTMENT_COMPARISON";
+}
+
+function getAdminScopeOptionLabel(
+  scope: DashboardAdminScope,
+  role: DashboardRole,
+) {
+  if (scope === "DEPARTMENT_COMPARISON") {
+    return "전체 부서 비교";
+  }
+
+  if (scope === "DEPARTMENT_DETAIL") {
+    return role === "DEPARTMENT_HEAD" ? "내 부서 팀간 비교" : "부서별 팀 비교";
+  }
+
+  return "단일팀 상세";
 }
 
 function getScopeLabel(
   value: DashboardScopeSelection,
   departments: DepartmentSummary[],
+  adminTeams: DashboardTeamOption[],
   teams: AuthUserTeam[],
 ) {
   if (value.view === "ME") {
@@ -298,12 +439,19 @@ function getScopeLabel(
     return `내 업무 / ${teamName}`;
   }
 
+  if (value.adminScope === "TEAM_DETAIL") {
+    const teamName =
+      adminTeams.find((team) => team.teamId === value.teamId)?.teamName ??
+      "선택 팀";
+    return `관리자 / ${teamName} 상세`;
+  }
+
   if (value.adminScope === "DEPARTMENT_DETAIL") {
     const departmentName =
       departments.find(
         (department) => department.departmentId === value.departmentId,
       )?.departmentName ?? "선택 부서";
-    return `관리자 / ${departmentName} 팀 비교`;
+    return `관리자 / ${departmentName} 팀간 비교`;
   }
 
   return "관리자 / 전체 부서 비교";

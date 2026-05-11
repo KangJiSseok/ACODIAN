@@ -3,6 +3,7 @@ import type {
   DepartmentDashboard,
   DirectorDashboard,
   MyDashboard,
+  TeamDashboard,
 } from "../_types/dashboard.types";
 
 export const dashboardService = {
@@ -24,6 +25,14 @@ export const dashboardService = {
     apiClient.get<MyDashboard>("/dashboard", {
       params: {
         scope: "ME",
+        teamId,
+      },
+    }),
+
+  getTeamDashboard: (teamId: number) =>
+    apiClient.get<TeamDashboard>("/dashboard", {
+      params: {
+        scope: "TEAM_DETAIL",
         teamId,
       },
     }),
