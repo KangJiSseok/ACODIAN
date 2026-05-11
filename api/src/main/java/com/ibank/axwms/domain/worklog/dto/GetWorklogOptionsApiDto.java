@@ -12,7 +12,7 @@ import java.time.LocalDateTime;
 import java.util.List;
 
 @NoArgsConstructor(access = AccessLevel.PRIVATE)
-public final class GetWorklogCreateOptionsApiDto {
+public final class GetWorklogOptionsApiDto {
 
     @Schema(description = "업무일지 등록 화면 진입 시 사용할 폼 옵션 응답")
     public record Response(

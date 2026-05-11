@@ -1,7 +1,7 @@
 package com.ibank.axwms.domain.worklog.controller;
 
 import com.ibank.axwms.domain.worklog.dto.CreateWorklogApiDto;
-import com.ibank.axwms.domain.worklog.dto.GetWorklogCreateOptionsApiDto;
+import com.ibank.axwms.domain.worklog.dto.GetWorklogOptionsApiDto;
 import com.ibank.axwms.domain.worklog.dto.GetWorklogDetailApiDto;
 import com.ibank.axwms.domain.worklog.dto.GetWorklogFilterOptionsApiDto;
 import com.ibank.axwms.domain.worklog.dto.GetWorklogsApiDto;
@@ -104,7 +104,7 @@ public interface WorklogControllerDocs {
             @ApiResponse(responseCode = "200", description = "폼 옵션을 반환한다."),
             @ApiResponse(responseCode = "401", description = "인증이 필요하다.", content = @Content)
     })
-    GetWorklogCreateOptionsApiDto.Response getCreateOptions(
+    GetWorklogOptionsApiDto.Response getWorklogOptions(
             @Parameter(hidden = true) CustomUserPrincipal principal
     );
 }

@@ -6,7 +6,7 @@ import com.ibank.axwms.domain.organization.team.service.TeamService;
 import com.ibank.axwms.domain.tag.repository.jooq.projection.MetaTagDetailProjection;
 import com.ibank.axwms.domain.tag.service.TagService;
 import com.ibank.axwms.domain.worklog.dto.CreateWorklogApiDto;
-import com.ibank.axwms.domain.worklog.dto.GetWorklogCreateOptionsApiDto;
+import com.ibank.axwms.domain.worklog.dto.GetWorklogOptionsApiDto;
 import com.ibank.axwms.domain.worklog.dto.GetWorklogDetailApiDto;
 import com.ibank.axwms.domain.worklog.dto.GetWorklogsApiDto;
 import com.ibank.axwms.domain.worklog.entity.Worklog;
@@ -144,11 +144,11 @@ public class WorklogService {
      * 선행 업무 후보는 사용자가 접근 가능한 (admin 또는 ACTIVE 멤버) 팀의 미삭제, 미완료 worklog 만 최신순으로 포함한다.
      * 태그는 메타 태그 전체를 이름순으로 포함한다.
      */
-    public GetWorklogCreateOptionsApiDto.Response getCreateOptions(CustomUserPrincipal principal) {
+    public GetWorklogOptionsApiDto.Response getWorklogOptions(CustomUserPrincipal principal) {
         List<WorklogListProjection> predecessorCandidates =
                 worklogRepository.findActivePredecessorCandidates(principal.userId());
         List<MetaTagDetailProjection> tags = tagService.findAllTagDetails();
-        return GetWorklogCreateOptionsApiDto.Response.of(predecessorCandidates, tags);
+        return GetWorklogOptionsApiDto.Response.of(predecessorCandidates, tags);
     }
 
     private void validateDateRange(LocalDate instructionDate, LocalDate dueDate) {
