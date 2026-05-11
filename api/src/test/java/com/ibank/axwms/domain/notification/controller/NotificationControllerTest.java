@@ -8,6 +8,7 @@ import com.ibank.axwms.domain.notification.dto.MarkAllNotificationsReadApiDto;
 import com.ibank.axwms.domain.notification.dto.SearchNotificationsApiDto;
 import com.ibank.axwms.domain.notification.service.NotificationService;
 import com.ibank.axwms.domain.notification.sse.NotificationSseEmitterRegistry;
+import com.ibank.axwms.global.response.EmptyResponse;
 import com.ibank.axwms.global.response.PageResponse;
 import com.ibank.axwms.global.response.ResponseEnvelope;
 import com.ibank.axwms.global.security.CustomUserPrincipal;
@@ -24,6 +25,7 @@ import org.springframework.core.MethodParameter;
 import org.springframework.http.MediaType;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PatchMapping;
 import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
 
 @ExtendWith(MockitoExtension.class)
@@ -80,6 +82,45 @@ class NotificationControllerTest {
 
         then(notificationSseEmitterRegistry).should().register(101L);
         assertThat(response).isSameAs(emitter);
+    }
+
+    @Test
+    @DisplayName("알림 읽음 처리 메서드는 /{id}/read PATCH 매핑을 사용한다")
+    void 알림_읽음_처리_메서드는_id_read_PATCH_매핑을_사용한다() throws NoSuchMethodException {
+        Method method = NotificationController.class.getMethod(
+                "markNotificationAsRead",
+                CustomUserPrincipal.class,
+                Long.class
+        );
+        PatchMapping patchMapping = method.getAnnotation(PatchMapping.class);
+
+        assertThat(patchMapping).isNotNull();
+        assertThat(patchMapping.value()).containsExactly("/{id}/read");
+    }
+
+    @Test
+    @DisplayName("알림 읽음 처리 메서드는 인증 사용자 role gate 를 선언한다")
+    void 알림_읽음_처리_메서드는_인증_사용자_role_gate를_선언한다() throws NoSuchMethodException {
+        Method method = NotificationController.class.getMethod(
+                "markNotificationAsRead",
+                CustomUserPrincipal.class,
+                Long.class
+        );
+        PreAuthorize preAuthorize = method.getAnnotation(PreAuthorize.class);
+
+        assertThat(preAuthorize).isNotNull();
+        assertThat(preAuthorize.value()).contains("MEMBER");
+    }
+
+    @Test
+    @DisplayName("알림 읽음 처리 메서드는 서비스를 호출하고 EmptyResponse 를 반환한다")
+    void 알림_읽음_처리_메서드는_서비스를_호출하고_EmptyResponse를_반환한다() {
+        CustomUserPrincipal principal = new CustomUserPrincipal(101L, "user@ibank.com", "MEMBER");
+
+        EmptyResponse response = notificationController.markNotificationAsRead(principal, 1001L);
+
+        then(notificationService).should().markNotificationAsRead(principal, 1001L);
+        assertThat(response).isSameAs(EmptyResponse.INSTANCE);
     }
 
     @Test
