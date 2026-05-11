@@ -1,5 +1,6 @@
 package com.ibank.axwms.global.config;
 
+import com.ibank.axwms.global.logging.RequestTraceFilter;
 import com.ibank.axwms.global.security.JwtAuthenticationFilter;
 import com.ibank.axwms.global.security.SecurityExceptionHandler;
 import lombok.RequiredArgsConstructor;
@@ -40,6 +41,7 @@ public class SecurityConfig {
             PathPatternRequestMatcher.pathPattern("/auth/refresh")
     };
 
+    private final RequestTraceFilter requestTraceFilter;
     private final JwtAuthenticationFilter jwtAuthenticationFilter;
     private final SecurityExceptionHandler securityExceptionHandler;
     private final CorsConfigurationSource corsConfigurationSource;
@@ -59,7 +61,8 @@ public class SecurityConfig {
                 .authorizeHttpRequests(auth -> auth
                         .requestMatchers(PUBLIC_PATHS).permitAll()
                         .anyRequest().authenticated())
-                .addFilterBefore(jwtAuthenticationFilter, UsernamePasswordAuthenticationFilter.class);
+                .addFilterBefore(requestTraceFilter, UsernamePasswordAuthenticationFilter.class)
+                .addFilterAfter(jwtAuthenticationFilter, RequestTraceFilter.class);
         return http.build();
     }
 }
