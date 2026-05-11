@@ -113,7 +113,7 @@ class WorklogServiceTest {
                 .extracting(WorklogTag::getIsAiGenerated)
                 .containsOnly(Boolean.FALSE);
         verify(tagService).incrementUsageCountByIds(TAG_IDS);
-        verify(worklogDependencyService).registerPredecessor(eq(USER_ID), eq(WORKLOG_ID), eq(request.predecessorWorklogIds()));
+        verify(worklogDependencyService).registerPredecessor(eq(WORKLOG_ID), eq(TEAM_ID), eq(request.predecessorWorklogIds()));
     }
 
     @Test
