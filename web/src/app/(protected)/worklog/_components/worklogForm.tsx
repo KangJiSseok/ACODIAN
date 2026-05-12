@@ -495,14 +495,14 @@ export function WorklogForm({
 
             {isEditMode ? (
               <Field label="AI 요약">
-                <div
-                  className="min-h-[132px] rounded-[1.25rem] border border-dashed border-border bg-muted/45 px-4 py-4 shadow-inner shadow-background/60"
-                  aria-readonly="true"
-                >
-                  <p className="whitespace-pre-wrap text-sm leading-7 text-muted-foreground">
-                    {values.aiSummary?.trim() || "AI 요약 정보가 없습니다."}
-                  </p>
-                </div>
+                <Textarea
+                  value={values.aiSummary ?? ""}
+                  onChange={(event) =>
+                    setValues({ ...values, aiSummary: event.target.value })
+                  }
+                  className={`h-[132px] ${textareaClassName}`}
+                  placeholder="AI 요약을 직접 수정할 수 있습니다."
+                />
               </Field>
             ) : null}
 

@@ -312,7 +312,7 @@ export const worklogService = {
       ),
       tagIds: values.tagIds,
       removeTagIds: values.removeTagIds ?? [],
-      aiSummary: null,
+      aiSummary: values.aiSummary ?? "",
       removeFileIds: values.removeFileIds ?? [],
     }
     const formData = new FormData()

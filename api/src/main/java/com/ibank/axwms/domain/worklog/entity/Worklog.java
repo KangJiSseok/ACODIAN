@@ -91,16 +91,16 @@ public class Worklog {
     /**
      * 업무 등록 요청을 서버 기본값과 함께 초기 엔티티로 만든다.
      *
-     * @param authorId 작성자 사용자 ID
-     * @param teamId 소속 팀 ID
-     * @param title 업무 제목
-     * @param requestContent 업무 요청/지시 내용
-     * @param workContent 실제 수행 업무 내용
-     * @param statusCode 최초 업무 상태 코드
-     * @param importanceCode 중요도 코드
-     * @param actualHours 업무 소요 예상 시간
+     * @param authorId        작성자 사용자 ID
+     * @param teamId          소속 팀 ID
+     * @param title           업무 제목
+     * @param requestContent  업무 요청/지시 내용
+     * @param workContent     실제 수행 업무 내용
+     * @param statusCode      최초 업무 상태 코드
+     * @param importanceCode  중요도 코드
+     * @param actualHours     업무 소요 예상 시간
      * @param instructionDate 지시 일자
-     * @param dueDate 마감 일자
+     * @param dueDate         마감 일자
      * @return 저장 전 Worklog 엔티티
      */
     public static Worklog create(Long authorId,
@@ -132,6 +132,7 @@ public class Worklog {
 
     public void changeAiSummary(String summary) {
         this.aiSummary = summary;
+        this.aiSummaryEdited = true;
     }
 
     /**
@@ -158,7 +159,9 @@ public class Worklog {
         if (dueDate != null) this.dueDate = dueDate;
         if (aiSummary != null) {
             this.aiSummary = aiSummary;
-            this.aiSummaryEdited = Boolean.TRUE;
+            if (!this.aiSummary.equals(aiSummary)) {
+                this.aiSummaryEdited = Boolean.TRUE;
+            }
         }
     }
 
