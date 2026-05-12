@@ -154,7 +154,13 @@ public class FileService {
                 .map(FileWorklogItem::from)
                 .collect(Collectors.toMap(FileWorklogItem::worklogId, Function.identity()));
 
-        return GetFilesApiDto.Response.fromPage(page, worklogByWorklogId);
+        Page<GetFilesApiDto.Response.Item> responsePage = page.map(projection ->
+                GetFilesApiDto.Response.Item.from(
+                        projection,
+                        worklogByWorklogId.get(projection.worklogId()),
+                        objectStoragePort.toPublicUrl(projection.storedPath())
+                ));
+        return GetFilesApiDto.Response.fromPage(responsePage);
     }
 
     /**
