@@ -26,6 +26,8 @@ storage:
       retention-days: 0
 
 notification:
+  worklog-overdue-reminder:
+    cron: 0 10 9 * * *
   worklog-due-soon-reminder:
     cron: 0 0 9 * * *
   stream:
