@@ -26,6 +26,13 @@ import type {
 
 const ALL_FILTER_VALUE = "all";
 const NOTIFICATION_PAGE_SIZE = 6;
+const ACTIVE_TEAM_STATUS = "ACTIVE";
+
+interface NotificationTeamOption {
+  teamId: number;
+  teamName: string;
+  statusCode?: string | null;
+}
 
 export default function NotificationPage() {
   const { user } = useAuth();
@@ -91,6 +98,7 @@ export default function NotificationPage() {
       ? selectedDepartment?.teams ?? []
       : teamPage?.items ?? []
     : getUserTeamOptions(user);
+  const teamOptions = teamOptionsSource.filter(isActiveTeamOption);
   const totalCount = totalCountQuery.notificationPage?.totalCount ?? 0;
   const unreadCount = unreadCountQuery.notificationPage?.totalCount ?? 0;
   const readCount = readCountQuery.notificationPage?.totalCount ?? 0;
@@ -229,7 +237,7 @@ export default function NotificationPage() {
                     onChange={(event) => updateTeam(event.target.value)}
                     options={[
                       { label: "전체 팀", value: ALL_FILTER_VALUE },
-                      ...teamOptionsSource.map((team) => ({
+                      ...teamOptions.map((team) => ({
                         label: team.teamName,
                         value: String(team.teamId),
                       })),
@@ -354,8 +362,14 @@ function getUserDepartmentOptions(user: AuthUser | null | undefined) {
   ];
 }
 
-function getUserTeamOptions(user: AuthUser | null | undefined) {
+function getUserTeamOptions(
+  user: AuthUser | null | undefined,
+): NotificationTeamOption[] {
   return user?.teams ?? [];
+}
+
+function isActiveTeamOption(team: NotificationTeamOption) {
+  return (team.statusCode ?? ACTIVE_TEAM_STATUS) === ACTIVE_TEAM_STATUS;
 }
 
 function parseFilterNumber(value: string) {

@@ -28,6 +28,13 @@ test("notification filters use current user's department and teams outside direc
   assert.match(notificationPageFile, /user\?\.teams/);
 });
 
+test("notification team filters only expose active team options when status is available", () => {
+  assert.match(notificationPageFile, /const ACTIVE_TEAM_STATUS = "ACTIVE"/);
+  assert.match(notificationPageFile, /teamOptionsSource\.filter\(isActiveTeamOption\)/);
+  assert.match(notificationPageFile, /function isActiveTeamOption/);
+  assert.match(notificationPageFile, /team\.statusCode \?\? ACTIVE_TEAM_STATUS/);
+});
+
 test("team list query can be disabled by callers without changing existing defaults", () => {
   assert.match(teamListHookFile, /export function useTeamList\(params: GetTeamsParams = \{\}, enabled = true\)/);
   assert.match(teamListHookFile, /enabled,/);
