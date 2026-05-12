@@ -404,8 +404,8 @@ class NotificationServiceIntegrationTest extends IntegrationTestSupport {
     }
 
     @Test
-    @DisplayName("overdue 실행은 기존 D-3 row를 갱신하고 생성 시각과 읽음 상태를 보존한다")
-    void overdue_실행은_기존_D3_row를_갱신하고_생성_시각과_읽음_상태를_보존한다() {
+    @DisplayName("overdue 실행은 기존 D-3 row를 갱신하고 생성 시각은 보존하되 읽음 이력은 초기화한다")
+    void overdue_실행은_기존_D3_row를_갱신하고_생성_시각은_보존하되_읽음_이력은_초기화한다() {
         // given
         ReminderBaseFixture fixture = seedReminderBaseFixture();
         Worklog worklog = saveWorklog(fixture.author(), fixture.team(), "기존 초과 대상", WorklogStatus.PENDING, TODAY.minusDays(2), false);
@@ -439,8 +439,8 @@ class NotificationServiceIntegrationTest extends IntegrationTestSupport {
         assertThat(updatedNotification.getContent()).contains("기존 초과 대상 마감일이 2일 지났습니다.");
         assertThat(updatedNotification.getCreatedAt()).isEqualTo(createdAt);
         assertThat(updatedNotification.getUpdatedAt()).isAfter(oldUpdatedAt);
-        assertThat(updatedNotification.getIsRead()).isTrue();
-        assertThat(updatedNotification.getReadAt()).isEqualTo(readAt);
+        assertThat(updatedNotification.getIsRead()).isFalse();
+        assertThat(updatedNotification.getReadAt()).isNull();
         assertThat(streamRecords()).isEmpty();
     }
 

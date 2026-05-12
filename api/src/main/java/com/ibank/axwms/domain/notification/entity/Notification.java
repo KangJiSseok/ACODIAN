@@ -150,7 +150,7 @@ public class Notification {
     }
 
     /**
-     * 기존 업무 알림의 읽음 상태와 최초 생성 이력은 보존하고 마감 상태와 내용만 최신화한다.
+     * 기존 업무 알림의 최초 생성 이력은 보존하되, 미해결 마감 상태를 다시 확인하도록 읽음 이력을 초기화한다.
      */
     public void updateWorklogDeadlineReminder(NotificationType notificationType,
                                               String title,
@@ -158,6 +158,8 @@ public class Notification {
         this.notificationType = notificationType.name();
         this.title = title;
         this.content = content;
+        this.isRead = Boolean.FALSE;
+        this.readAt = null;
     }
 
     /**
