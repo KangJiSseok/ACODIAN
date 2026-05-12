@@ -4,7 +4,6 @@ import { useMemo, useState, type ReactNode } from "react"
 import {
   ChevronRight,
   FileText,
-  GitBranchPlus,
   Settings2,
   Tag,
 } from "lucide-react"
@@ -105,6 +104,7 @@ function hasCircularDependency(
 export function WorklogForm({
   initialValues,
   onSubmit,
+  onTeamIdChange,
   submitLabel,
   currentWorklogId,
   teamOptionsSource,
@@ -113,6 +113,7 @@ export function WorklogForm({
 }: {
   initialValues?: WorklogFormValues
   onSubmit: (values: WorklogFormValues) => Promise<void> | void
+  onTeamIdChange?: (teamId: number) => void
   submitLabel: string
   currentWorklogId?: number
   teamOptionsSource?: WorklogFormTeamOption[]
@@ -335,7 +336,18 @@ export function WorklogForm({
   }
 
   const updateValues = (nextValues: WorklogFormValues) => {
-    setValues(nextValues)
+    const teamChanged = nextValues.teamId !== values.teamId
+    const resolvedValues = teamChanged
+      ? { ...nextValues, dependencyIds: [] }
+      : nextValues
+
+    setValues(resolvedValues)
+    if (teamChanged) {
+      setDependencyKeywordInput("")
+      setDependencySearchOpen(false)
+      onTeamIdChange?.(nextValues.teamId)
+    }
+
     if (
       showSettingsValidationErrors &&
       !hasSettingsValidationErrors(
@@ -432,14 +444,9 @@ export function WorklogForm({
               actions={
                 <div className="flex flex-wrap items-center gap-2">
                   <InlineActionButton
-                    icon={<GitBranchPlus className="size-3.5" />}
-                    label="선행 업무 선택"
-                    count={selectedDependencies.length}
-                    onClick={() => setActiveModal("dependencies")}
-                  />
-                  <InlineActionButton
                     icon={<Settings2 className="size-3.5" />}
                     label="작업 설정 열기"
+                    count={selectedDependencies.length}
                     onClick={() => setActiveModal("settings")}
                   />
                   <InlineActionButton
