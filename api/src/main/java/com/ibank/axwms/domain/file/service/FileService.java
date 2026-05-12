@@ -133,6 +133,7 @@ public class FileService {
     /**
      * 사용자가 접근 가능한 (admin grant ∪ ACTIVE membership 의 미삭제 team) worklog 들의 첨부 파일을
      * 최신 등록순으로 페이지 조회한다. 각 행에 해당 worklog 의 요약(제목/팀/작성자/마감일/업무시간/AI/선행업무수)도 박는다.
+     * 파일 형식과 등록 기간 필터는 값이 있을 때만 AND 조건으로 적용한다.
      *
      * 성능:
      *  - file page 1 쿼리 + worklog batch 1 쿼리 (= 총 2 쿼리). 가시성 필터가 file page 에 이미 들어가 있어

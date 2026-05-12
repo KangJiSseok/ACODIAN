@@ -59,9 +59,7 @@ public class FileJooqRepositoryImpl implements FileJooqRepository {
         int pageSize = query.pageSize();
         PageRequest pageRequest = PageRequest.of(pageIndex, pageSize);
 
-        Condition condition = TB_FILE.IS_DELETED.isFalse()
-                .and(TB_WORKLOG.IS_DELETED.isFalse())
-                .and(visibleTeamCondition(userId));
+        Condition condition = filePageCondition(userId, query);
 
         long total = dsl.selectCount()
                 .from(TB_FILE)
@@ -96,6 +94,22 @@ public class FileJooqRepositoryImpl implements FileJooqRepository {
                 .fetch(FileSummaryProjection::from);
 
         return new PageImpl<>(items, pageRequest, total);
+    }
+
+    /**
+     * count/items 쿼리가 같은 visible scope 와 파일 필터 조건을 공유하도록 단일 Condition 으로 조립한다.
+     */
+    private Condition filePageCondition(Long userId, FilePageQuery query) {
+        Condition condition = TB_FILE.IS_DELETED.isFalse()
+                .and(TB_WORKLOG.IS_DELETED.isFalse())
+                .and(visibleTeamCondition(userId));
+        if (query.fileExtension() != null) {
+            condition = condition.and(TB_FILE.FILE_EXTENSION.eq(query.fileExtension()));
+        }
+        if (query.createdFrom() != null) {
+            condition = condition.and(TB_FILE.CREATED_AT.ge(query.createdFrom()));
+        }
+        return condition;
     }
 
     /**
@@ -146,6 +160,9 @@ public class FileJooqRepositoryImpl implements FileJooqRepository {
                 .and(TB_TEAM.TEAM_ID.in(visibleTeamIds(userId)));
     }
 
+    /**
+     * 파일 목록과 업무 요약 조회가 같은 팀 가시성 집합을 사용하도록 grant 와 ACTIVE membership 을 합친다.
+     */
     private Select<Record1<Long>> visibleTeamIds(Long userId) {
         return DSL.select(TB_TEAM_ADMIN.TEAM_ID)
                 .from(TB_TEAM_ADMIN)
