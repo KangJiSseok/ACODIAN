@@ -74,11 +74,72 @@ public class Notification {
                                                             Long worklogId,
                                                             String title,
                                                             String content) {
+        return createWorklogReminder(
+                userId,
+                departmentId,
+                teamId,
+                worklogId,
+                NotificationType.WORKLOG_DUE_SOON,
+                title,
+                content
+        );
+    }
+
+    /**
+     * 당일 마감 업무 알림도 같은 업무 reminder identity 를 사용해 D-3 알림 row 와 이어지게 한다.
+     */
+    public static Notification createWorklogDueTodayReminder(Long userId,
+                                                             Long departmentId,
+                                                             Long teamId,
+                                                             Long worklogId,
+                                                             String title,
+                                                             String content) {
+        return createWorklogReminder(
+                userId,
+                departmentId,
+                teamId,
+                worklogId,
+                NotificationType.WORKLOG_DUE_TODAY,
+                title,
+                content
+        );
+    }
+
+    /**
+     * 마감 초과 업무 알림을 저장-only 배치 경로에서 생성해 실시간 전파와 분리한다.
+     */
+    public static Notification createWorklogOverdueReminder(Long userId,
+                                                            Long departmentId,
+                                                            Long teamId,
+                                                            Long worklogId,
+                                                            String title,
+                                                            String content) {
+        return createWorklogReminder(
+                userId,
+                departmentId,
+                teamId,
+                worklogId,
+                NotificationType.WORKLOG_OVERDUE,
+                title,
+                content
+        );
+    }
+
+    /**
+     * 업무 reminder 계열이 같은 중복 방지 identity 와 WORKLOG 참조 계약을 공유하게 한다.
+     */
+    private static Notification createWorklogReminder(Long userId,
+                                                      Long departmentId,
+                                                      Long teamId,
+                                                      Long worklogId,
+                                                      NotificationType notificationType,
+                                                      String title,
+                                                      String content) {
         Notification notification = new Notification();
         notification.userId = userId;
         notification.departmentId = departmentId;
         notification.teamId = teamId;
-        notification.notificationType = NotificationType.WORKLOG_DUE_SOON.name();
+        notification.notificationType = notificationType.name();
         notification.title = title;
         notification.content = content;
         notification.referenceType = NotificationReferenceType.WORKLOG.name();
@@ -86,6 +147,19 @@ public class Notification {
         notification.isRead = Boolean.FALSE;
         notification.readAt = null;
         return notification;
+    }
+
+    /**
+     * 기존 업무 알림의 최초 생성 이력은 보존하되, 미해결 마감 상태를 다시 확인하도록 읽음 이력을 초기화한다.
+     */
+    public void updateWorklogDeadlineReminder(NotificationType notificationType,
+                                              String title,
+                                              String content) {
+        this.notificationType = notificationType.name();
+        this.title = title;
+        this.content = content;
+        this.isRead = Boolean.FALSE;
+        this.readAt = null;
     }
 
     /**

@@ -3,6 +3,7 @@ package com.ibank.axwms.domain.notification.repository.jooq;
 import com.ibank.axwms.domain.notification.NotificationReferenceType;
 import com.ibank.axwms.domain.notification.NotificationType;
 import com.ibank.axwms.domain.notification.repository.jooq.projection.WorklogDueSoonReminderCandidateProjection;
+import com.ibank.axwms.domain.notification.repository.jooq.projection.WorklogOverdueReminderCandidateProjection;
 import com.ibank.axwms.domain.worklog.WorklogStatus;
 import static com.ibank.axwms.global.jooq.Tables.TB_NOTIFICATION;
 
@@ -64,6 +65,29 @@ public class NotificationJooqRepositoryImpl implements NotificationJooqRepositor
 
 
 
+    /**
+     * 당일/초과 마감 배치는 기존 알림 갱신도 필요하므로 알림 존재 여부와 무관하게 후보 업무를 반환한다.
+     */
+    @Override
+    public List<WorklogOverdueReminderCandidateProjection> findWorklogOverdueReminderCandidates(LocalDate today) {
+        return dsl.select(
+                        TB_WORKLOG.WORKLOG_ID,
+                        TB_WORKLOG.AUTHOR_ID,
+                        TB_TEAM.DEPARTMENT_ID,
+                        TB_WORKLOG.TEAM_ID,
+                        TB_TEAM.TEAM_NAME,
+                        TB_WORKLOG.TITLE,
+                        TB_WORKLOG.DUE_DATE
+                )
+                .from(TB_WORKLOG)
+                .leftJoin(TB_TEAM).on(TB_TEAM.TEAM_ID.eq(TB_WORKLOG.TEAM_ID))
+                .where(TB_WORKLOG.DUE_DATE.le(today)
+                        .and(TB_WORKLOG.IS_DELETED.isFalse())
+                        .and(TB_WORKLOG.STATUS_CODE.in(REMINDABLE_WORKLOG_STATUSES)))
+                .orderBy(TB_WORKLOG.WORKLOG_ID.asc())
+                .fetch(record -> WorklogOverdueReminderCandidateProjection.from(record, today));
+    }
+
     /** 현재 사용자의 알림 목록을 최신 알림 우선 정렬과 선택 필터로 조회한다. */
     @Override
     public Page<NotificationSearchProjection> searchNotifications(Long userId, NotificationSearchQuery query) {
@@ -97,7 +121,7 @@ public class NotificationJooqRepositoryImpl implements NotificationJooqRepositor
                 )
                 .from(TB_NOTIFICATION)
                 .where(condition)
-                .orderBy(TB_NOTIFICATION.CREATED_AT.desc(), TB_NOTIFICATION.NOTIFICATION_ID.desc())
+                .orderBy(TB_NOTIFICATION.UPDATED_AT.desc(), TB_NOTIFICATION.NOTIFICATION_ID.desc())
                 .limit(pageSize)
                 .offset((long) pageIndex * pageSize)
                 .fetch(NotificationSearchProjection::from);

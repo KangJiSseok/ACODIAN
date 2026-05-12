@@ -5,6 +5,7 @@ import com.ibank.axwms.domain.notification.NotificationType;
 import com.ibank.axwms.domain.notification.entity.Notification;
 import com.ibank.axwms.domain.notification.repository.NotificationRepository;
 import com.ibank.axwms.domain.notification.repository.jooq.projection.WorklogDueSoonReminderCandidateProjection;
+import com.ibank.axwms.domain.notification.repository.jooq.projection.WorklogOverdueReminderCandidateProjection;
 import com.ibank.axwms.domain.organization.department.DepartmentStatus;
 import com.ibank.axwms.domain.organization.department.entity.Department;
 import com.ibank.axwms.domain.organization.department.repository.DepartmentRepository;
@@ -27,6 +28,7 @@ import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.data.domain.Range;
+import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.data.redis.connection.stream.MapRecord;
 import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.test.util.ReflectionTestUtils;
@@ -34,6 +36,7 @@ import org.springframework.transaction.support.TransactionTemplate;
 
 import java.math.BigDecimal;
 import java.time.LocalDate;
+import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Map;
 
@@ -46,6 +49,8 @@ class NotificationServiceIntegrationTest extends IntegrationTestSupport {
     private static final LocalDate TODAY = LocalDate.of(2026, 5, 11);
     private static final LocalDate TARGET_DUE_DATE = TODAY.plusDays(3);
     private static final String WORKLOG_DUE_SOON_NOTIFICATION_TYPE = NotificationType.WORKLOG_DUE_SOON.name();
+    private static final String WORKLOG_DUE_TODAY_NOTIFICATION_TYPE = NotificationType.WORKLOG_DUE_TODAY.name();
+    private static final String WORKLOG_OVERDUE_NOTIFICATION_TYPE = NotificationType.WORKLOG_OVERDUE.name();
     private static final String WORKLOG_REFERENCE_TYPE = NotificationReferenceType.WORKLOG.name();
     private static final String NOTIFICATION_STREAM_KEY = "notifications:stream";
 
@@ -78,6 +83,9 @@ class NotificationServiceIntegrationTest extends IntegrationTestSupport {
 
     @Autowired
     private TransactionTemplate transactionTemplate;
+
+    @Autowired
+    private JdbcTemplate jdbcTemplate;
 
     @BeforeEach
     void setUp() {
@@ -260,6 +268,200 @@ class NotificationServiceIntegrationTest extends IntegrationTestSupport {
         assertThat(streamRecords()).isEmpty();
     }
 
+    @Test
+    @DisplayName("당일과 overdue 미삭제 진행 대상 업무만 authorId 수신자 후보로 조회한다")
+    void 당일과_overdue_미삭제_진행_대상_업무만_authorId_수신자_후보로_조회한다() {
+        // given
+        ReminderBaseFixture fixture = seedReminderBaseFixture();
+        LocalDate overdueDate = TODAY.minusDays(1);
+        Worklog pending = saveWorklog(fixture.author(), fixture.team(), "PENDING 초과 대상", WorklogStatus.PENDING, overdueDate, false);
+        Worklog inProgress = saveWorklog(fixture.author(), fixture.team(), "IN_PROGRESS 초과 대상", WorklogStatus.IN_PROGRESS, overdueDate, false);
+        Worklog onHold = saveWorklog(fixture.author(), fixture.team(), "ON_HOLD 초과 대상", WorklogStatus.ON_HOLD, overdueDate, false);
+        Worklog dueToday = saveWorklog(fixture.author(), fixture.team(), "오늘 마감 대상", WorklogStatus.IN_PROGRESS, TODAY, false);
+        saveWorklog(fixture.author(), fixture.team(), "미래 마감 제외", WorklogStatus.IN_PROGRESS, TODAY.plusDays(1), false);
+        saveWorklog(fixture.author(), fixture.team(), "마감일 없음 제외", WorklogStatus.IN_PROGRESS, null, false);
+        saveWorklog(fixture.author(), fixture.team(), "삭제 업무 제외", WorklogStatus.IN_PROGRESS, overdueDate, true);
+        saveWorklog(fixture.author(), fixture.team(), "완료 업무 제외", WorklogStatus.COMPLETED, overdueDate, false);
+        saveWorklog(fixture.author(), fixture.team(), "취소 업무 제외", WorklogStatus.CANCELLED, overdueDate, false);
+
+        // when
+        List<WorklogOverdueReminderCandidateProjection> candidates =
+                notificationService.findWorklogOverdueReminderCandidates(TODAY);
+
+        // then
+        assertThat(candidates)
+                .extracting(
+                        WorklogOverdueReminderCandidateProjection::recipientUserId,
+                        WorklogOverdueReminderCandidateProjection::departmentId,
+                        WorklogOverdueReminderCandidateProjection::teamId,
+                        WorklogOverdueReminderCandidateProjection::dueDate,
+                        WorklogOverdueReminderCandidateProjection::notificationType,
+                        WorklogOverdueReminderCandidateProjection::referenceType,
+                        WorklogOverdueReminderCandidateProjection::referenceId
+                )
+                .containsExactly(
+                        tuple(
+                                fixture.author().getId(),
+                                fixture.department().getId(),
+                                fixture.team().getId(),
+                                overdueDate,
+                                WORKLOG_OVERDUE_NOTIFICATION_TYPE,
+                                WORKLOG_REFERENCE_TYPE,
+                                pending.getId()
+                        ),
+                        tuple(
+                                fixture.author().getId(),
+                                fixture.department().getId(),
+                                fixture.team().getId(),
+                                overdueDate,
+                                WORKLOG_OVERDUE_NOTIFICATION_TYPE,
+                                WORKLOG_REFERENCE_TYPE,
+                                inProgress.getId()
+                        ),
+                        tuple(
+                                fixture.author().getId(),
+                                fixture.department().getId(),
+                                fixture.team().getId(),
+                                overdueDate,
+                                WORKLOG_OVERDUE_NOTIFICATION_TYPE,
+                                WORKLOG_REFERENCE_TYPE,
+                                onHold.getId()
+                        ),
+                        tuple(
+                                fixture.author().getId(),
+                                fixture.department().getId(),
+                                fixture.team().getId(),
+                                TODAY,
+                                WORKLOG_DUE_TODAY_NOTIFICATION_TYPE,
+                                WORKLOG_REFERENCE_TYPE,
+                                dueToday.getId()
+                        )
+                );
+    }
+
+    @Test
+    @DisplayName("overdue 후보를 새 Notification row로 저장하되 Redis Stream을 발행하지 않는다")
+    void overdue_후보를_새_Notification_row로_저장하되_Redis_Stream을_발행하지_않는다() {
+        // given
+        ReminderBaseFixture fixture = seedReminderBaseFixture();
+        Worklog worklog = saveWorklog(fixture.author(), fixture.team(), "신규 초과 대상", WorklogStatus.IN_PROGRESS, TODAY.minusDays(1), false);
+
+        // when
+        int affectedCount = notificationService.createOrUpdateWorklogOverdueReminderNotifications(TODAY);
+
+        // then
+        assertThat(affectedCount).isOne();
+        List<Notification> notifications = notificationRepository.findAll();
+        assertThat(notifications)
+                .extracting(
+                        Notification::getUserId,
+                        Notification::getDepartmentId,
+                        Notification::getTeamId,
+                        Notification::getNotificationType,
+                        Notification::getReferenceType,
+                        Notification::getReferenceId,
+                        Notification::getIsRead
+                )
+                .containsExactly(tuple(
+                        fixture.author().getId(),
+                        fixture.department().getId(),
+                        fixture.team().getId(),
+                        WORKLOG_OVERDUE_NOTIFICATION_TYPE,
+                        WORKLOG_REFERENCE_TYPE,
+                        worklog.getId(),
+                        Boolean.FALSE
+                ));
+        Notification notification = notifications.getFirst();
+        assertThat(notification.getReadAt()).isNull();
+        assertThat(notification.getTitle()).isEqualTo("업무 마감일 초과 알림");
+        assertThat(notification.getContent()).isEqualTo(
+                fixture.team().getTeamName() + "의 신규 초과 대상 마감일이 1일 지났습니다. 마감일 : "
+                        + TODAY.minusDays(1) + ", 확인 기준일 : " + TODAY
+        );
+        assertThat(streamRecords()).isEmpty();
+    }
+
+    @Test
+    @DisplayName("오늘 마감 후보는 due today 타입과 오늘까지 문구로 저장한다")
+    void 오늘_마감_후보는_due_today_타입과_오늘까지_문구로_저장한다() {
+        // given
+        ReminderBaseFixture fixture = seedReminderBaseFixture();
+        Worklog worklog = saveWorklog(fixture.author(), fixture.team(), "당일 마감 대상", WorklogStatus.IN_PROGRESS, TODAY, false);
+
+        // when
+        int affectedCount = notificationService.createOrUpdateWorklogOverdueReminderNotifications(TODAY);
+
+        // then
+        assertThat(affectedCount).isOne();
+        Notification notification = notificationRepository.findAll().getFirst();
+        assertThat(notification.getNotificationType()).isEqualTo(WORKLOG_DUE_TODAY_NOTIFICATION_TYPE);
+        assertThat(notification.getTitle()).isEqualTo("업무 마감 오늘까지 알림");
+        assertThat(notification.getContent()).isEqualTo(
+                fixture.team().getTeamName() + "의 당일 마감 대상 마감일이 오늘까지입니다. 오늘 안에 업무를 완료해 주세요. 마감일 : " + TODAY
+        );
+        assertThat(notification.getReferenceId()).isEqualTo(worklog.getId());
+        assertThat(streamRecords()).isEmpty();
+    }
+
+    @Test
+    @DisplayName("overdue 실행은 기존 D-3 row를 갱신하고 생성 시각은 보존하되 읽음 이력은 초기화한다")
+    void overdue_실행은_기존_D3_row를_갱신하고_생성_시각은_보존하되_읽음_이력은_초기화한다() {
+        // given
+        ReminderBaseFixture fixture = seedReminderBaseFixture();
+        Worklog worklog = saveWorklog(fixture.author(), fixture.team(), "기존 초과 대상", WorklogStatus.PENDING, TODAY.minusDays(2), false);
+        LocalDateTime readAt = LocalDateTime.of(2026, 5, 10, 12, 30);
+        Notification existingNotification = notificationRepository.saveAndFlush(Notification.create(
+                fixture.author().getId(),
+                fixture.department().getId(),
+                fixture.team().getId(),
+                WORKLOG_DUE_SOON_NOTIFICATION_TYPE,
+                "기존 D-3 알림",
+                "기존 본문",
+                WORKLOG_REFERENCE_TYPE,
+                worklog.getId(),
+                true,
+                readAt
+        ));
+        Long existingNotificationId = existingNotification.getId();
+        LocalDateTime createdAt = existingNotification.getCreatedAt();
+        LocalDateTime oldUpdatedAt = LocalDateTime.of(2026, 5, 1, 9, 0);
+        forceNotificationUpdatedAt(existingNotificationId, oldUpdatedAt);
+
+        // when
+        int affectedCount = notificationService.createOrUpdateWorklogOverdueReminderNotifications(TODAY);
+
+        // then
+        assertThat(affectedCount).isOne();
+        assertThat(notificationRepository.findAll()).hasSize(1);
+        Notification updatedNotification = notificationRepository.findById(existingNotificationId).orElseThrow();
+        assertThat(updatedNotification.getNotificationType()).isEqualTo(WORKLOG_OVERDUE_NOTIFICATION_TYPE);
+        assertThat(updatedNotification.getTitle()).isEqualTo("업무 마감일 초과 알림");
+        assertThat(updatedNotification.getContent()).contains("기존 초과 대상 마감일이 2일 지났습니다.");
+        assertThat(updatedNotification.getCreatedAt()).isEqualTo(createdAt);
+        assertThat(updatedNotification.getUpdatedAt()).isAfter(oldUpdatedAt);
+        assertThat(updatedNotification.getIsRead()).isFalse();
+        assertThat(updatedNotification.getReadAt()).isNull();
+        assertThat(streamRecords()).isEmpty();
+    }
+
+    @Test
+    @DisplayName("overdue 반복 실행은 같은 업무 알림 row를 추가하지 않는다")
+    void overdue_반복_실행은_같은_업무_알림_row를_추가하지_않는다() {
+        // given
+        ReminderBaseFixture fixture = seedReminderBaseFixture();
+        saveWorklog(fixture.author(), fixture.team(), "반복 초과 대상", WorklogStatus.ON_HOLD, TODAY.minusDays(3), false);
+
+        // when
+        int firstAffectedCount = notificationService.createOrUpdateWorklogOverdueReminderNotifications(TODAY);
+        int secondAffectedCount = notificationService.createOrUpdateWorklogOverdueReminderNotifications(TODAY);
+
+        // then
+        assertThat(firstAffectedCount).isOne();
+        assertThat(secondAffectedCount).isOne();
+        assertThat(notificationRepository.findAll()).hasSize(1);
+        assertThat(streamRecords()).isEmpty();
+    }
+
     /**
      * 다른 통합 테스트가 같은 컨테이너를 공유해도 FK 제약에 걸리지 않도록 알림과 팀/사용자 연결 데이터를 먼저 제거한다.
      */
@@ -284,6 +486,17 @@ class NotificationServiceIntegrationTest extends IntegrationTestSupport {
      */
     private List<MapRecord<String, Object, Object>> streamRecords() {
         return stringRedisTemplate.opsForStream().range(NOTIFICATION_STREAM_KEY, Range.unbounded());
+    }
+
+    /**
+     * JPA auditing 이 갱신한 시각과 overdue update 이후 시각을 결정적으로 비교하기 위해 DB 값을 직접 고정한다.
+     */
+    private void forceNotificationUpdatedAt(Long notificationId, LocalDateTime updatedAt) {
+        jdbcTemplate.update(
+                "UPDATE tb_notification SET updated_at = ? WHERE notification_id = ?",
+                updatedAt,
+                notificationId
+        );
     }
 
     /**

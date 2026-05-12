@@ -1,11 +1,14 @@
 package com.ibank.axwms.domain.notification.service;
 
+import com.ibank.axwms.domain.notification.NotificationReferenceType;
+import com.ibank.axwms.domain.notification.NotificationType;
 import com.ibank.axwms.domain.notification.dto.MarkAllNotificationsReadApiDto;
 import com.ibank.axwms.domain.notification.dto.SearchNotificationsApiDto;
 import com.ibank.axwms.domain.notification.event.NotificationCreatedEvent;
 import com.ibank.axwms.domain.notification.entity.Notification;
 import com.ibank.axwms.domain.notification.repository.NotificationRepository;
 import com.ibank.axwms.domain.notification.repository.jooq.projection.WorklogDueSoonReminderCandidateProjection;
+import com.ibank.axwms.domain.notification.repository.jooq.projection.WorklogOverdueReminderCandidateProjection;
 import com.ibank.axwms.domain.notification.repository.jooq.query.NotificationSearchQuery;
 import com.ibank.axwms.global.error.BusinessException;
 import com.ibank.axwms.global.error.ErrorCode;
@@ -19,6 +22,9 @@ import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.time.temporal.ChronoUnit;
+import java.util.Optional;
+
 @Service
 @RequiredArgsConstructor
 @Transactional(readOnly = true)
@@ -26,6 +32,13 @@ public class NotificationService {
 
     private static final int WORKLOG_DUE_SOON_DAYS = 3;
     private static final String WORKLOG_DUE_SOON_TITLE = "업무 마감 3일 전 알림";
+    private static final String WORKLOG_DUE_TODAY_TITLE = "업무 마감 오늘까지 알림";
+    private static final String WORKLOG_OVERDUE_TITLE = "업무 마감일 초과 알림";
+    private static final List<String> WORKLOG_REMINDER_NOTIFICATION_TYPES = List.of(
+            NotificationType.WORKLOG_DUE_SOON.name(),
+            NotificationType.WORKLOG_DUE_TODAY.name(),
+            NotificationType.WORKLOG_OVERDUE.name()
+    );
 
     private final NotificationRepository notificationRepository;
     private final ApplicationEventPublisher applicationEventPublisher;
@@ -71,6 +84,13 @@ public class NotificationService {
     }
 
     /**
+     * 기준일이 마감일 당일이거나 이미 지난 업무를 저장-only 마감 배치 후보로 조회한다.
+     */
+    public List<WorklogOverdueReminderCandidateProjection> findWorklogOverdueReminderCandidates(LocalDate today) {
+        return notificationRepository.findWorklogOverdueReminderCandidates(today);
+    }
+
+    /**
      * 스케줄러가 주입한 기준일로 후보 산출과 저장을 같은 트랜잭션에서 처리해 재실행 시 중복 저장을 줄인다.
      */
     @Transactional
@@ -89,6 +109,102 @@ public class NotificationService {
         List<Notification> savedNotifications = notificationRepository.saveAllAndFlush(notifications);
         publishNotificationCreatedEvents(savedNotifications);
         return notifications.size();
+    }
+
+    /**
+     * 당일/초과 마감 배치는 같은 업무 reminder row 를 갱신한다.
+     */
+    @Transactional
+    public int createOrUpdateWorklogOverdueReminderNotifications(LocalDate today) {
+        List<WorklogOverdueReminderCandidateProjection> candidates = findWorklogOverdueReminderCandidates(today);
+        candidates.forEach(candidate -> {
+            Optional<Notification> existingNotification = findExistingWorklogReminder(candidate);
+            NotificationType notificationType = resolveWorklogDeadlineNotificationType(candidate, today);
+            String title = createWorklogDeadlineTitle(notificationType);
+            String content = createWorklogOverdueContent(candidate, today);
+            if (existingNotification.isPresent()) {
+                existingNotification.get().updateWorklogDeadlineReminder(
+                        notificationType,
+                        title,
+                        content
+                );
+                return;
+            }
+            notificationRepository.save(createWorklogDeadlineReminder(
+                    candidate.recipientUserId(),
+                    candidate.departmentId(),
+                    candidate.teamId(),
+                    candidate.referenceId(),
+                    notificationType,
+                    title,
+                    content
+            ));
+        });
+        notificationRepository.flush();
+        return candidates.size();
+    }
+
+    /**
+     * D-3, 당일, 초과를 같은 업무 reminder family 로 묶어 row 누적 대신 기존 row 갱신을 선택한다.
+     */
+    private Optional<Notification> findExistingWorklogReminder(WorklogOverdueReminderCandidateProjection candidate) {
+        return notificationRepository.findFirstByUserIdAndReferenceTypeAndReferenceIdAndNotificationTypeInOrderByIdAsc(
+                candidate.recipientUserId(),
+                NotificationReferenceType.WORKLOG.name(),
+                candidate.referenceId(),
+                WORKLOG_REMINDER_NOTIFICATION_TYPES
+        );
+    }
+
+    /**
+     * 마감일과 기준일의 관계를 저장 타입으로 고정해 같은 배치에서 당일/초과 메시지를 분리한다.
+     */
+    private NotificationType resolveWorklogDeadlineNotificationType(WorklogOverdueReminderCandidateProjection candidate, LocalDate today) {
+        if (candidate.dueDate().isEqual(today)) {
+            return NotificationType.WORKLOG_DUE_TODAY;
+        }
+        return NotificationType.WORKLOG_OVERDUE;
+    }
+
+    /**
+     * 알림 타입별 제목을 한 곳에서 정해 저장과 기존 row 갱신이 같은 문구를 쓰게 한다.
+     */
+    private String createWorklogDeadlineTitle(NotificationType notificationType) {
+        if (notificationType == NotificationType.WORKLOG_DUE_TODAY) {
+            return WORKLOG_DUE_TODAY_TITLE;
+        }
+        return WORKLOG_OVERDUE_TITLE;
+    }
+
+    /**
+     * 신규 당일/초과 알림 생성 시 알림 타입별 factory 를 명시해 도메인 생성 의도를 보존한다.
+     */
+    private Notification createWorklogDeadlineReminder(Long userId,
+                                                       Long departmentId,
+                                                       Long teamId,
+                                                       Long worklogId,
+                                                       NotificationType notificationType,
+                                                       String title,
+                                                       String content) {
+        if (notificationType == NotificationType.WORKLOG_DUE_TODAY) {
+            return Notification.createWorklogDueTodayReminder(userId, departmentId, teamId, worklogId, title, content);
+        }
+        return Notification.createWorklogOverdueReminder(userId, departmentId, teamId, worklogId, title, content);
+    }
+
+    /**
+     * 오늘 마감은 당일 완료 요청을, 지난 마감은 경과 일수를 포함해 후속 조치 우선순위를 드러낸다.
+     */
+    private String createWorklogOverdueContent(WorklogOverdueReminderCandidateProjection candidate, LocalDate today) {
+        if (candidate.dueDate().isEqual(today)) {
+            return candidate.teamName() + "의 " + candidate.worklogTitle()
+                    + " 마감일이 오늘까지입니다. 오늘 안에 업무를 완료해 주세요. 마감일 : " + candidate.dueDate();
+        }
+
+        long overdueDays = ChronoUnit.DAYS.between(candidate.dueDate(), today);
+        return candidate.teamName() + "의 " + candidate.worklogTitle()
+                + " 마감일이 " + overdueDays + "일 지났습니다. 마감일 : " + candidate.dueDate()
+                + ", 확인 기준일 : " + today;
     }
 
     /**

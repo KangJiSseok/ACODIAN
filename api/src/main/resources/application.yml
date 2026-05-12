@@ -73,6 +73,8 @@ ai:
     read-timeout: ${AI_WORKLOG_SEARCH_READ_TIMEOUT:10s}
 
 notification:
+  worklog-overdue-reminder:
+    cron: ${NOTIFICATION_WORKLOG_OVERDUE_REMINDER_CRON:0 10 9 * * *}
   worklog-due-soon-reminder:
     cron: ${NOTIFICATION_WORKLOG_DUE_SOON_REMINDER_CRON:0 0 9 * * *}
   stream:

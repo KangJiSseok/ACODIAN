@@ -25,6 +25,7 @@ import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.data.domain.Page;
+import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.transaction.annotation.Transactional;
 
 class NotificationRepositoryIntegrationTest extends IntegrationTestSupport {
@@ -40,6 +41,9 @@ class NotificationRepositoryIntegrationTest extends IntegrationTestSupport {
 
     @Autowired
     private NotificationRepository notificationRepository;
+
+    @Autowired
+    private JdbcTemplate jdbcTemplate;
 
     @BeforeEach
     void setUp() {
@@ -87,6 +91,54 @@ class NotificationRepositoryIntegrationTest extends IntegrationTestSupport {
                         NotificationSearchProjection::isRead
                 )
                 .containsExactly("안읽은 알림", fixture.departmentId(), fixture.teamId(), false);
+    }
+
+    @Test
+    @DisplayName("내 알림 목록은 updated_at 최신순과 notification_id 역순으로 정렬한다")
+    void 내_알림_목록은_updated_at_최신순과_notification_id_역순으로_정렬한다() {
+        // given
+        Department department = departmentRepository.save(createDepartment("정렬검증본부"));
+        User caller = userRepository.save(createUser(department.getId(), "정렬호출자", UserRole.MEMBER));
+        Team team = teamRepository.save(createTeam(department.getId(), "정렬검증팀"));
+        Notification oldestCreatedButNewestUpdated = notificationRepository.saveAndFlush(notification(
+                caller.getId(),
+                department.getId(),
+                team.getId(),
+                "생성은 오래됐지만 갱신 최신",
+                false
+        ));
+        Notification sameUpdatedLowId = notificationRepository.saveAndFlush(notification(
+                caller.getId(),
+                department.getId(),
+                team.getId(),
+                "같은 갱신시각 낮은 ID",
+                false
+        ));
+        Notification sameUpdatedHighId = notificationRepository.saveAndFlush(notification(
+                caller.getId(),
+                department.getId(),
+                team.getId(),
+                "같은 갱신시각 높은 ID",
+                false
+        ));
+        forceNotificationUpdatedAt(oldestCreatedButNewestUpdated.getId(), LocalDateTime.of(2026, 5, 12, 10, 0));
+        forceNotificationUpdatedAt(sameUpdatedLowId.getId(), LocalDateTime.of(2026, 5, 12, 9, 0));
+        forceNotificationUpdatedAt(sameUpdatedHighId.getId(), LocalDateTime.of(2026, 5, 12, 9, 0));
+
+        // when
+        Page<NotificationSearchProjection> result = notificationRepository.searchNotifications(
+                caller.getId(),
+                NotificationSearchQuery.from(new SearchNotificationsApiDto.Request(null, null, null, 1, 20))
+        );
+
+        // then
+        assertThat(result.getContent())
+                .extracting(NotificationSearchProjection::title)
+                .containsExactly(
+                        "생성은 오래됐지만 갱신 최신",
+                        "같은 갱신시각 높은 ID",
+                        "같은 갱신시각 낮은 ID"
+                );
     }
 
     @Test
@@ -195,6 +247,17 @@ class NotificationRepositoryIntegrationTest extends IntegrationTestSupport {
                 501L,
                 isRead,
                 isRead ? LocalDateTime.of(2026, 5, 11, 10, 0) : null
+        );
+    }
+
+    /**
+     * 목록 정렬 기준이 생성시각이 아니라 갱신시각임을 고정하기 위해 DB 감사 필드를 직접 조정한다.
+     */
+    private void forceNotificationUpdatedAt(Long notificationId, LocalDateTime updatedAt) {
+        jdbcTemplate.update(
+                "UPDATE tb_notification SET updated_at = ? WHERE notification_id = ?",
+                updatedAt,
+                notificationId
         );
     }
 

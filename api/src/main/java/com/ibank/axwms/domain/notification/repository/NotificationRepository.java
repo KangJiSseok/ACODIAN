@@ -10,7 +10,16 @@ import org.springframework.data.repository.query.Param;
 
 import java.util.Optional;
 
+import java.util.List;
 public interface NotificationRepository extends JpaRepository<Notification, Long>, NotificationJooqRepository {
+
+    /** 같은 업무 reminder 계열 알림 중 가장 먼저 생성된 row 를 갱신 대상으로 선택해 중복 insert 를 막는다. */
+    Optional<Notification> findFirstByUserIdAndReferenceTypeAndReferenceIdAndNotificationTypeInOrderByIdAsc(
+            Long userId,
+            String referenceType,
+            Long referenceId,
+            List<String> notificationTypes
+    );
 
     /**
      * 현재 사용자의 알림만 변경 대상으로 노출해 다른 사용자의 알림 존재 여부가 응답 차이로 새지 않게 한다.
