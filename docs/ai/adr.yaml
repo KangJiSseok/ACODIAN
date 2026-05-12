@@ -1,0 +1,176 @@
+- id: ADR-001
+  title: FastAPI 애플리케이션 구성 — App Factory + Router Aggregation
+  status: adopted
+  date: 2026-04-19
+  stacks: [fastapi]
+  context: |
+    AI 서비스 초기화 단계에서는 health 같은 최소 공개 엔드포인트만 유지하고,
+    실제 기능 API 는 필요가 확인된 뒤에만 추가한다.
+    엔드포인트 수가 늘어날수록 main.py에 라우팅을 직접 나열하면 앱 초기화, 설정, 라우터 책임이 섞여
+    테스트와 확장이 어려워진다.
+    공통 API prefix 를 설정값으로 관리해야 로컬/운영 환경 간 경로 drift를 줄일 수 있다.
+  decision: |
+    FastAPI 앱 생성은 app/main.py 의 create_app() factory가 단일 진입점으로 담당한다.
+    라우터 등록은 app/router/__init__.py 의 api_router 에서 모아 관리하고,
+    실제 mount prefix는 settings.api_prefix 로 주입한다.
+    AI 서비스의 기본 공개 prefix 는 api 서비스와 구분되는 /ai 로 둔다.
+    초기 bootstrap 단계에서는 health 라우터만 유지하고, 새 API 는 요구가 확정된 뒤 기능별 라우터로 확장한다.
+  consequence: |
+    앱 초기화와 기능 라우팅 책임이 분리된다.
+    신규 엔드포인트 추가 시 main.py 를 비대하게 만들지 않고 router 패키지에서만 확장할 수 있다.
+    공통 API 경로가 설정값과 일치하므로 환경별 경로 drift를 줄일 수 있다.
+
+- id: ADR-002
+  title: 설정/비밀정보 관리 — Pydantic Settings + .env 단일 로딩
+  status: adopted
+  date: 2026-04-19
+  stacks: [fastapi, pydantic]
+  context: |
+    AI 서비스는 Gemini API, PGVector, Redis, Neo4j, API 서버 주소처럼 환경별로 달라지는 설정이 많다.
+    이 값들을 코드에 하드코딩하면 로컬/개발/운영 간 차이를 안전하게 관리하기 어렵고,
+    비밀정보 노출 위험도 커진다.
+  decision: |
+    설정은 app/config/settings.py 의 BaseSettings 기반 Settings 클래스를 단일 진입점으로 사용한다.
+    .env 파일은 프로젝트 루트 기준으로 로드하고, 필드명은 Settings 속성으로 정규화한다.
+    Gemini API Key, DB/Redis/Neo4j 연결 정보 등 민감정보는 환경변수 또는 .env 로만 주입한다.
+    애플리케이션 코드는 settings 인스턴스를 통해서만 설정값에 접근한다.
+  consequence: |
+    설정 접근 방식이 한 곳으로 모여 테스트와 운영 설정 관리가 단순해진다.
+    하드코딩된 비밀정보 유입을 줄일 수 있다.
+    새 외부 의존성이 추가되어도 Settings 만 확장하면 되므로 진입점이 명확하다.
+
+- id: ADR-003
+  title: API 계층 분리 — Router / Model / Service 경계 유지
+  status: adopted
+  date: 2026-04-19
+  stacks: [fastapi, pydantic]
+  context: |
+    FastAPI는 엔드포인트 정의가 간결해 라우터 파일 안에 검증, 응답 조립, 외부 호출, 비즈니스 로직을
+    모두 넣기 쉽다. 하지만 AI 파이프라인과 검색은 외부 모델 호출, 벡터 저장소 접근, 권한/필터 조합 등
+    후속 복잡도가 높아질 가능성이 크므로 초기에 경계를 명확히 해야 한다.
+  decision: |
+    Router 는 HTTP 계약(경로, status code, response_model, dependency)만 담당한다.
+    요청/응답 스키마는 app/model/* 의 Pydantic BaseModel 로 정의하고, 입력 제약은 Field 로 선언한다.
+    실제 오케스트레이션과 도메인 로직은 app/service/* 에 둔다.
+    단순 dict/임의 JSON 조립 대신 response_model 로 반환 스키마를 명시한다.
+  consequence: |
+    라우터는 얇게 유지되고 테스트 포인트가 명확해진다.
+    모델 검증 규칙과 서비스 로직이 분리되어 유지보수가 쉬워진다.
+    추후 비동기 작업, 외부 클라이언트, 저장소 계층이 늘어나도 기능 경계를 유지할 수 있다.
+
+- id: ADR-004
+  title: 장시간 AI 작업 처리 — Trigger API 와 비동기 실행 분리
+  status: adopted
+  date: 2026-04-19
+  stacks: [fastapi, celery, redis]
+  context: |
+    요약 생성, 태그 생성, 임베딩 생성, 파일 분석 같은 AI 작업은 외부 모델 호출과 저장소 I/O를 동반해
+    응답 시간이 길어질 수 있다. 이를 동기 HTTP 요청 안에서 모두 처리하면 타임아웃과 재시도 관리가 어렵고,
+    사용자 경험도 나빠진다.
+  decision: |
+    파이프라인 API 는 작업을 직접 오래 수행하기보다 trigger 역할을 우선한다.
+    HTTP 계층은 접수/큐잉 결과를 빠르게 반환하고, 실제 장시간 작업은 Celery + Redis 기반 태스크로 분리한다.
+    pipeline_service 는 태스크 발행 orchestration 의 단일 진입점이 된다.
+    비동기 파이프라인 세부 구현은 task/ 와 service/ 로 나누어 유지한다.
+  consequence: |
+    API 응답 시간이 안정되고 작업 재시도/운영 가시성을 분리해서 설계할 수 있다.
+    파이프라인 기능이 확장되어도 HTTP 엔드포인트 복잡도가 급격히 증가하지 않는다.
+    큐/워커 인프라가 필요하므로 로컬 개발과 운영에 Redis/Celery 운영 규칙이 추가된다.
+
+- id: ADR-005
+  title: AI 검색 저장소 경계 — Vector Store 우선, Graph 확장은 선택적 분리
+  status: adopted
+  date: 2026-04-19
+  stacks: [fastapi, pgvector, neo4j]
+  context: |
+    AI 서비스는 시맨틱 검색을 위한 벡터 검색이 핵심이며, 향후 Graph RAG 같은 확장 기능도 고려하고 있다.
+    벡터 검색과 그래프 조회를 서비스 코드에 직접 섞으면 저장소 교체와 성능 튜닝 지점이 불분명해진다.
+  decision: |
+    검색/저장소 연동은 app/store/ 아래에서 분리한다.
+    기본 검색 축은 PGVector 를 우선 사용하고, graph 기능은 Neo4j 기반 선택적 확장으로 분리한다.
+    SearchService 는 검색 시나리오를 조합하지만, 저장소 세부 구현(SQL/드라이버/쿼리)은 store 계층이 소유한다.
+    Graph RAG 는 필요 시 별도 graph_service / graph_store 로 확장한다.
+  consequence: |
+    시맨틱 검색과 향후 graph 기능의 책임 경계가 분명해진다.
+    검색 품질 개선이나 저장소 교체 시 영향 범위를 store 계층 중심으로 제한할 수 있다.
+    초기 단계에는 PGVector 중심으로 단순하게 시작하되, graph 확장을 위한 구조적 여지를 남긴다.
+
+- id: ADR-006
+  title: 프롬프트/체인 분리 — AI 지시문과 호출 조립의 모듈화
+  status: planned
+  date: 2026-04-19
+  stacks: [fastapi, langchain, gemini]
+  context: |
+    요약/태그/청킹/파일 분석은 각기 다른 시스템 프롬프트와 출력 파서를 가진다.
+    이 로직을 서비스 내부 문자열과 외부 모델 호출 코드로 뒤섞으면 수정 범위가 커지고 테스트 포인트가 사라진다.
+    표준 가이드는 prompt/ 와 chain/ 패키지 분리를 권장한다.
+  decision: |
+    AI 지시문은 app/prompt/ 에 두고, 모델/프롬프트/파서 조합은 app/chain/ 에 둔다.
+    service 는 체인 실행 orchestration 과 후처리만 담당한다.
+    이 ADR은 현재 구조 확장을 위한 planned 상태로 두며, 실제 체인 구현이 들어오면 adopted 로 전환한다.
+  consequence: |
+    프롬프트 수정과 실행 로직 수정을 분리할 수 있다.
+    모델 교체나 출력 파서 조정 시 영향 범위를 국소화할 수 있다.
+    아직 구현이 얇은 상태에서는 planned 이므로 코드와 문서의 차이를 주기적으로 점검해야 한다.
+
+- id: ADR-007
+  title: 임베딩 저장소 — ai 소유 + 단일 PostgreSQL 공유
+  status: adopted
+  date: 2026-04-28
+  stacks: [fastapi, pgvector, postgresql]
+  context: |
+    아키텍처 가이드 §6 은 tb_worklog_embedding / tb_file_embedding 의 주 소유 서비스를 ai 로 명시한다.
+    한편 운영 단순화를 위해 비즈니스 데이터(api 소유) 와 임베딩(ai 소유) 은 같은 PostgreSQL 인스턴스를 공유한다.
+    pgvector 는 PostgreSQL 확장(extension) 이므로 동일 DB 안에 임베딩 테이블을 두는 형태가 자연스럽다.
+    임베딩 테이블의 FK 는 api 소유 테이블(tb_worklog, tb_user, tb_team, tb_department) 을 참조한다.
+  decision: |
+    임베딩 테이블의 DDL 과 마이그레이션은 ai 가 단독으로 소유한다 (ai/alembic/versions/).
+    물리적으로는 api 와 동일한 PostgreSQL 인스턴스 / 동일 데이터베이스를 공유한다.
+    api 가 소유한 테이블의 마이그레이션은 api 가 책임지며, ai 의 마이그레이션은 그 테이블이 존재함을 전제로만 동작한다 (FK 만 참조, 변경하지 않음).
+    DB 계정 분리(axwms_api / axwms_ai) 는 보안 강화 단계로 별도 후속 PR 에서 다룬다. 이 ADR 시점에서는 단일 계정 공유를 허용한다.
+  consequence: |
+    서비스 경계와 운영 단순성을 동시에 유지할 수 있다.
+    api 와 ai 의 마이그레이션 도구는 분리되지만, 충돌은 각자 소유 테이블 범위로 제한된다.
+    임베딩 스키마 변경 시 ai 단독 PR 로 진행 가능하다.
+    계정 분리가 도입되기 전까지는 ai 가 api 테이블에도 쓰기 권한을 갖는 점을 인지하고 운영한다.
+
+- id: ADR-008
+  title: DB 접근 계층 — SQLAlchemy 2.0 ORM + Alembic 채택
+  status: adopted
+  date: 2026-04-28
+  stacks: [fastapi, sqlalchemy, alembic]
+  context: |
+    ai 모듈은 임베딩 테이블에 대한 INSERT / DELETE / SELECT 와 벡터 유사도 검색을 수행해야 한다.
+    raw SQL 만 쓰면 스키마와 코드가 분리되어 인수인계 시 모델을 따로 외워야 한다.
+    Python 웹 백엔드에서 SQLAlchemy + Alembic 은 사실상 표준이며, pgvector 는 SQLAlchemy 용 Vector 타입을 제공한다.
+    requirements.txt 에 SQLAlchemy 2.0 이 이미 포함되어 있어 추가 의존성 부담이 적다.
+  decision: |
+    ai 모듈의 DB 접근은 SQLAlchemy 2.0 비동기 (asyncpg) ORM 으로 통일한다.
+    스키마 마이그레이션은 Alembic 으로 관리하며, 동기 드라이버(psycopg) 로 실행한다.
+    모델은 app/store/models.py 에 두고, Base 는 app/store/base.py 의 DeclarativeBase 를 단일 진입점으로 사용한다.
+    런타임 세션은 app/store/session.py 의 async_sessionmaker 를 통해서만 생성한다.
+    Vector 컬럼은 pgvector.sqlalchemy.Vector 타입으로 매핑한다.
+  consequence: |
+    스키마와 코드가 동일 모듈 안에서 동기화되어 인수인계가 단순해진다.
+    Alembic autogenerate 로 모델 변경을 마이그레이션에 반영할 수 있다.
+    raw SQL 이 필요한 곳(예: 복잡한 벡터 유사도 + 메타 필터 결합) 에서는 SQLAlchemy text() / 코어 표현식을 사용한다.
+    동기/비동기 드라이버를 분리 운영하므로 DSN 변환 로직(settings.async_database_url / sync_database_url) 을 일원화한다.
+
+- id: ADR-009
+  title: Gemini 클라이언트 단일화
+  status: adopted
+  date: 2026-04-28
+  stacks: [fastapi, gemini]
+  context: |
+    요약/태그/청킹/임베딩 등 여러 기능이 Gemini 를 호출한다.
+    각 기능이 자체 클라이언트를 만들면 인증/타임아웃/재시도 정책이 분산되고, API 키 관리도 흩어진다.
+  decision: |
+    ai 모듈의 모든 Gemini 호출은 app/client/gemini_client.py 의 GeminiClient 를 단일 진입점으로 사용한다.
+    클라이언트는 generate_text(텍스트 생성) 와 embed(임베딩 생성) 두 메서드를 제공한다.
+    모델명은 호출 측에서 override 가능하나 기본값은 settings 를 따른다 (gemini_model / embedding_model).
+    재시도 / 타임아웃 등 공통 정책은 settings 의 공통 키로만 조정한다.
+    클라이언트 메서드 시그니처 변경은 사전 합의 후 단독 PR 로 처리한다.
+  consequence: |
+    인증과 호출 정책이 한 곳에서 관리된다.
+    기능 PR 들이 같은 파일을 동시에 수정할 위험이 줄어든다 (메서드는 기능별로 분리).
+    Gemini SDK 교체나 호출 옵션 추가가 필요할 때 영향 범위를 국소화할 수 있다.

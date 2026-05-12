@@ -1,0 +1,519 @@
+- id: ADR-001
+  title: API 응답 포맷 통일
+  status: adopted
+  date: 2026-04-08
+  stacks: [springboot]
+  context: |
+    모든 API 응답 형식을 일관되게 유지하기 위해 GlobalResponseAdvice가 자동으로 래핑을 처리한다.
+    컨트롤러가 반환한 객체를 자동 래핑하므로, 컨트롤러에서 직접 ResponseEntity나 ApiResponse를 생성하면 이중 래핑이 발생한다.
+  decision: |
+    성공: { success: true, data: { ... }, timestamp: "ISO8601" }
+    에러: { success: false, error: { code, message, statusCode }, timestamp: "ISO8601" }
+    GlobalResponseAdvice(@RestControllerAdvice)가 자동 래핑. 컨트롤러는 DTO/List 직접 반환.
+  consequence: 컨트롤러에서 ApiResponse 수동 생성 금지. 에러는 GlobalExceptionHandler에서 처리.
+
+- id: ADR-002
+  title: 인증/인가 분리 — Spring Security + JWT
+  status: adopted
+  date: 2026-04-08
+  stacks: [springboot]
+  context: |
+    인증(JWT 검증)과 인가(역할 기반 접근 제어)를 단일 필터에서 처리하면 각각 독립적으로 변경하기 어렵다.
+    4단계 역할 계층(DIRECTOR > DEPT_HEAD > TEAM_LEAD > MEMBER)에서 상위 역할이 하위 권한을 포함해야 한다.
+  decision: |
+    인증: JwtAuthFilter에서 JWT 서명 검증 + SecurityContext 설정.
+    인가: @PreAuthorize("hasRole('...')") + RoleHierarchy Bean.
+    데이터 소유권 체크: Service 레이어에서 CustomUserPrincipal로 직접 검증.
+    `@AuthenticationPrincipal CustomUserPrincipal` 을 받는 protected Controller 경유 public Service 는
+    principal null/role claim 유효성을 중복 검증하지 않고 Security 체인이 보장한 principal 을 신뢰한다.
+    Service 내부 id 기반 존재성 조회 helper 는 `get{Entity}OrThrow` 네이밍으로 통일하고,
+    principal 사용자는 `principal.userId()` 를 그대로 넘겨 조회한다.
+  consequence: RoleHierarchy 덕분에 hasRole('DEPT_HEAD')는 DIRECTOR도 통과. 부서 소속 확인 등 데이터 권한은 Service에서 처리.
+    인증 보장 경로의 Service 에서 AUTH_UNAUTHORIZED/role 파싱 보일러플레이트를 반복하지 않게 되며,
+    존재성 조회 helper 계약도 `*OrThrow` suffix 로 일관된다.
+
+- id: ADR-003
+  title: 에러 처리 계층화 — ErrorCode enum 단일 출처
+  status: adopted
+  date: 2026-04-08
+  stacks: [springboot]
+  context: |
+    서비스 레이어에서 에러를 임의 형식으로 throw하면 응답 에러 포맷이 엔드포인트마다 달라진다.
+    프론트엔드에서 에러 코드 기반 분기를 하려면 에러 코드가 일관성 있게 정의되어야 한다.
+  decision: |
+    에러 코드는 Java ErrorCode enum이 단일 출처.
+    비즈니스 에러는 BusinessException(ErrorCode.XXX)으로 throw.
+    GlobalExceptionHandler가 모든 예외를 { success:false, error:{code, message, statusCode}, timestamp } 형식으로 변환.
+    도메인 접두사: COMMON_*, AUTH_*, DEPARTMENT_*, TEAM_*, USER_*
+  consequence: 새 에러 추가 시 ErrorCode enum에만 추가. RuntimeException 직접 throw 금지.
+
+- id: ADR-004
+  title: DB 마이그레이션 — Flyway 단일 관리
+  status: adopted
+  date: 2026-04-08
+  stacks: [springboot]
+  context: |
+    개발자가 로컬에서 직접 SQL을 실행하면 로컬/스테이징/운영 스키마가 달라져 배포 시 오류가 발생한다.
+    Spring Boot 기동 시 JPA ddl-auto로 스키마를 관리하면 운영 환경에서 위험하다.
+  decision: |
+    Flyway를 단일 마이그레이션 도구로 사용. ddl-auto는 validate 또는 none.
+    파일명 규칙: V{version}__{description}.sql (예: V1__init_schema.sql)
+    위치: src/main/resources/db/migration/
+    수동 SQL 직접 실행 금지. 마이그레이션 파일은 반드시 커밋.
+  consequence: 스키마 변경은 항상 새 Flyway 파일로. 기존 파일 수정 금지(체크섬 오류 발생).
+
+- id: ADR-005
+  title: Redis — Refresh Token 저장소
+  status: adopted
+  date: 2026-04-08
+  stacks: [springboot]
+  context: |
+    Refresh Token을 DB에 저장하면 만료/로그아웃 처리 시 DB 부하가 발생하고 TTL 자동 관리가 어렵다.
+    동시에 웹/모바일/MCP 클라이언트가 병렬로 세션을 유지할 수 있어야 하므로,
+    사용자당 단일 키 overwrite 구조는 다중 세션 요구와 충돌한다.
+    로그인 단계에서 세션 식별자 기준 저장 모델을 먼저 고정해야 후속 refresh/logout API도 같은 계약을 재사용할 수 있다.
+  decision: |
+    Redis primary key는 refresh:token:{sessionId} 형태를 사용한다.
+    sessionId(jti)를 refresh token 단위의 고유 식별자로 사용한다.
+    userId는 secondary lookup 인덱스로 저장해 한 사용자의 활성 세션 목록을 조회할 수 있게 한다.
+    TTL: 14일(1,209,600s)
+    로그아웃/세션 폐기는 sessionId 기준 단건 DELETE를 기본 primitive로 둔다.
+    한 사용자당 다중 세션 공존을 허용하고, 새 로그인 시 기존 refresh token을 덮어쓰지 않는다.
+  consequence: Redis 장애 시 재로그인 필요. 운영 환경에서 Redis 고가용성 구성 필수.
+    refresh/logout 구현은 sessionId 기준 조회/폐기와 userId 기준 세션 목록 조회를 같은 저장소 계약으로 재사용한다.
+
+- id: ADR-006
+  title: DTO 매핑 — API DTO 명시적 변환 + 팩토리 메서드 기반 응답 생성
+  status: adopted
+  date: 2026-04-14
+  stacks: [springboot]
+  context: |
+    8개 모듈에 걸쳐 다수의 Entity↔DTO 변환이 발생한다.
+    동시에 각 컨트롤러 API의 요청/응답 계약을 한 눈에 파악할 수 있어야 한다.
+    자동 매핑 도구를 기본 전제로 두면 API별로 국소적인 변환과 도메인 의미가 강한 조립 로직까지
+    숨겨져 가독성과 응집도가 떨어질 수 있다.
+    현재 프로젝트에서는 응답 DTO를 명시적으로 작성하는 방식이 더 단순하고 일관된다고 판단한다.
+  decision: |
+    API 전용 DTO는 유스케이스 기준의 {UseCase}ApiDto 외부 클래스에 모은다. 한 유스케이스는 한 {UseCase}ApiDto 파일 1:1 매핑을 기본으로 유지한다.
+    각 API 클래스는 static nested class Request/Response 를 기본으로 둔다.
+    Service 출력이 HTTP Response 와 실질적으로 1:1 이면 Service 가 Response 를 직접 반환할 수 있고, 이 경우 Response.of()/from() 정적 팩토리로 도메인 객체를 바로 조립하며 불필요한 Result record 는 만들지 않는다.
+    Service 출력이 Response 와 다르거나 다른 내부 소비자까지 고려한 별도 계약이 필요할 때만 같은 Api 클래스 안에 Result 를 둔다. Result 안에서만 의미가 있는 동반 타입은 Result 내부 중첩 record 로 둔다.
+    Request 는 Controller 바인딩/검증과 Service 입력을 겸한다. Service 메서드는 기본적으로 Request DTO 를 그대로 인자로 받고, 별도 Command/Criteria 클래스는 기본으로 만들지 않는다.
+    Service 입력을 Request 로 직결할 수 없는 경우(여러 소스 조립·정규화, HTTP 외 경로에서도 같은 유스케이스 호출 등) 에 한해 같은 {UseCase}ApiDto 안에 Command/Criteria nested record 를 추가한다. 별도 dto 파일로 분리하지 않는다.
+    Response는 static factory method(from/of)로 Service 결과 또는 도메인 객체를 받아 생성한다. Response 조립에 중간 Result 가 꼭 필요하지 않다면 Response.of()/from() 으로 바로 생성한다.
+    외부 DTO holder class 와 인스턴스화가 불필요한 nested utility class 는 수기 private 생성자 대신 Lombok `@NoArgsConstructor(access = AccessLevel.PRIVATE)` 로 선언한다.
+    Request DTO를 Entity로 직접 매핑하지 않는다.
+    API 요청/응답 변환은 명시적 코드로 작성하며, 자동 매핑 도구를 기본 규칙으로 도입하지 않는다.
+    Entity 생성/수정은 Service 또는 Domain의 책임으로 둔다.
+  consequence: |
+    API 계약이 유스케이스 단위로 응집된다.
+    Service 는 Request DTO 를 직접 받아 단순 유스케이스에서는 Command 보일러플레이트가 제거된다.
+    Command/Criteria 도입 여부 자체가 "Request 로 직결이 어렵다" 는 설계 신호로 작동한다.
+    응답 DTO 생성 규칙이 각 DTO 내부에 드러나 가독성과 추적성이 높아진다.
+    DTO holder 의 인스턴스화 금지 의도가 애노테이션 한 줄로 통일되어 수기 생성자 보일러플레이트와 접근 제어 누락을 줄인다.
+    자동 매핑 설정과 숨겨진 변환 규칙 없이, 명시적인 코드 중심으로 일관된 DTO 변환 방식을 유지할 수 있다.
+
+- id: ADR-007
+  title: 페이지네이션 표준
+  status: adopted
+  date: 2026-04-12
+  stacks: [springboot]
+  context: |
+    모든 목록 API에 일관된 페이지네이션 구조가 필요하다.
+    프론트엔드에서 페이지네이션 로직을 재사용하려면 응답 형식이 통일되어야 한다.
+  decision: |
+    Spring Data의 Pageable을 사용하되, 응답은 PageResponse<T>로 래핑한다.
+    기본값: page=1 (1-indexed), pageSize=20, max=100.
+    정렬: ?sortBy=field&sortDirection=ASC|DESC.
+    PageResponse 필드: { items: [...], page, pageSize, totalCount, totalPages, isFirst, isLast, hasNext, hasPrevious }
+    PageResponse<T>는 global/response/ 패키지에 정의한다.
+    PageResponse는 GlobalResponseAdvice의 data 필드 내부에 위치한다.
+    API 설계서의 각 응답 예시는 data 필드 내부 구조만 표현하며, 최종 응답은 ADR-001 래퍼가 자동 적용된다.
+  consequence: 모든 목록 API의 응답 형식이 통일됨. 클라이언트는 동일한 페이지네이션 로직 재사용 가능.
+
+- id: ADR-008
+  title: 모듈 간 통신 — 직접 호출 + 이벤트
+  status: adopted
+  date: 2026-04-12
+  stacks: [springboot]
+  context: |
+    worklog→organization 등 모듈 간 데이터 조회 및 부수효과 전파 방식을 결정해야 한다.
+    메시지 브로커 도입은 초기 단계에서 운영 부담이 크다.
+  decision: |
+    조회/검증: Service 직접 호출. (예: worklogService가 organizationService.getDepartment() 호출)
+    부수효과: Spring ApplicationEvent + @TransactionalEventListener 사용.
+    (예: 업무일지 생성 → WorklogCreatedEvent 발행 → notification 모듈이 리스닝)
+    메시지 브로커는 초기 단계에서 도입하지 않는다.
+  consequence: 단순한 디버깅. 부수효과 실패가 메인 트랜잭션에 영향 안 줌. IDE에서 호출 추적 가능.
+
+- id: ADR-009
+  title: 파일 저장소 추상화
+  status: adopted
+  date: 2026-04-14
+  stacks: [springboot]
+  context: |
+    개발 환경(dev)과 운영 환경(prod) 모두 S3 기반 저장소를 사용할 예정이다.
+    두 환경은 저장 방식은 같지만 bucket, prefix, credentials, endpoint 등 설정값이 다를 수 있다.
+    동시에 파일 업로드 유스케이스가 늘어나면서 단순 upload/delete 뿐 아니라
+    key 기반 공개 URL 계산, temp -> final copy, prefix 단위 orphan cleanup 조회 같은 계약도 함께 필요해졌다.
+    환경 차이를 설정으로 분리하면서도, 향후 저장소 변경 가능성과 유스케이스별 어댑터 분리 가능성은 열어둬야 한다.
+  decision: |
+    공통 저장소 추상화는 `ObjectStoragePort` 인터페이스로 정의한다.
+    기본 계약은 `upload`, `delete` 뿐 아니라 `copy`, `toPublicUrl`, `listKeysUploadedBefore` 까지 포함한다.
+    현재 dev/prod 프로파일 모두 S3 기반 `ObjectStoragePort` 구현체를 사용한다.
+    프로파일은 구현체를 전환하기보다 bucket, basePrefix, credentials, publicBaseUrl 같은 설정값으로 환경 차이를 분리한다.
+    공통 파일 업로드와 특정 도메인 전용 저장 흐름(예: 프로필 이미지)은 같은 `ObjectStoragePort` 계약 위에서 서로 다른 Adapter/Qualifier로 분리할 수 있다.
+    향후 로컬 파일시스템 또는 다른 Object Storage가 필요해질 경우 같은 포트를 구현하는 새 Adapter를 추가한다.
+  consequence: 개발/운영 환경이 동일한 저장 방식(S3 API)을 사용하므로 환경 차이로 인한 문제를 줄일 수 있다.
+    설정만으로 환경 전환이 가능하고, 테스트 대역과 향후 저장소 확장을 위해 Port 추상화는 유지한다.
+    이후 temp upload + AFTER_COMMIT promote 같은 수명주기 패턴은 이 포트 위에서 구현하며, 상세 트랜잭션/정리 정책은 ADR-021에서 다룬다.
+
+- id: ADR-010
+  title: 테스트 전략 — 3계층
+  status: adopted
+  date: 2026-04-12
+  stacks: [springboot]
+  context: |
+    비즈니스 로직 신뢰도와 빠른 피드백 루프를 동시에 확보해야 한다.
+    통합 테스트만으로는 피드백이 느리고, 단위 테스트만으로는 실제 DB 동작을 검증할 수 없다.
+    반대로 DTO, ExceptionHandler, 단순 응답 래퍼처럼 분기와 상태가 거의 없는 타입까지 개별 단위 테스트를 늘리면
+    리팩토링 내성이 낮은 테스트만 쌓이고, 실제 API 계약 보호보다 구현 세부사항 고정 비용이 더 커질 수 있다.
+  decision: |
+    Unit Test (60%): Mockito로 Service/Policy 단위 테스트. <1초 피드백.
+    Smoke/Context Test: 최소 Spring Boot 기동만 확인한다. `application-test.yml` 프로필을 사용하고 DB/JPA/Flyway/Redis 같은 무거운 인프라 성공 여부를 여기서 책임지지 않는다.
+    Integration Test (30%): Testcontainers로 실제 PostgreSQL/Redis 사용. `application-integration.yml` + `@ActiveProfiles("integration")` 를 사용하며, Flyway 마이그레이션, JPA/JOOQ 매핑, Repository/Service wiring 검증을 포함한다.
+    E2E Test (10%): MockMvc + full Spring context로 인증 포함 핵심 API 흐름 검증. `application-e2e.yml` + `@ActiveProfiles({"integration","e2e"})` 를 사용하며, 브라우저는 없지만 Security, Service, DB/Redis 연동은 실제로 검증한다.
+    테스트의 직접 소유 계층은 Controller, Service, Repository/Query, 도메인 규칙 판단형 Policy 로 한정한다.
+    DTO, projection, ExceptionHandler, Response wrapper, 단순 설정 객체는 기본적으로 standalone 테스트를 만들지 않고, Controller/E2E/통합 테스트를 통해 간접 검증한다.
+    `*ProjectionTest`, `*ApiDtoTest` 같은 형태로 단순 record/직렬화/필드 전달만 검증하는 테스트는 기본적으로 만들지 않는다.
+    단, 위 계층이더라도 분기 로직·상태 전이·복잡한 포맷 규칙처럼 독립 실패 가능성이 큰 경우에만 예외적으로 전용 테스트를 허용한다.
+    JPA-aware 공통 설정(`@EnableJpaAuditing` 등)은 JPA 인프라가 존재할 때만 활성화되도록 구성해 smoke profile과 충돌하지 않게 한다.
+    전체 커버리지 목표: 75%+, 비즈니스 로직 80%+.
+  consequence: 빠른 피드백과 높은 신뢰도 동시 확보. Smoke test 실패 원인과 인프라 연동 실패 원인을 분리할 수 있다. Testcontainers 사용으로 Docker 필수.
+    테스트 추가 기준이 API 계약 보호와 도메인 규칙 검증에 집중되어, DTO/Handler 구현 세부사항 변경 때문에 불필요한 테스트 유지비가 커지는 문제를 줄인다.
+
+- id: ADR-011
+  title: API 문서화 — Springdoc OpenAPI
+  status: adopted
+  date: 2026-04-12
+  stacks: [springboot]
+  context: |
+    프론트엔드 팀과 AI 팀이 API 스펙을 참조해야 한다.
+    수동 문서 관리는 코드와 문서 간 불일치를 유발한다.
+  decision: |
+    Springdoc OpenAPI로 OpenAPI 3.0 스펙을 코드에서 자동 생성한다.
+    개발 환경: /api/swagger-ui.html에서 Swagger UI 제공.
+    운영 환경: springdoc.api-docs.enabled=false로 비활성화.
+    필요 시 @Operation, @Tag 어노테이션으로 문서 보강.
+  consequence: 코드에서 문서 자동 파생. 별도 문서 관리 부담 최소화. 운영 환경 노출 방지.
+
+- id: ADR-012
+  title: 타입 세이프 쿼리 — JOOQ (QueryDSL 대체)
+  status: adopted
+  date: 2026-04-18
+  stacks: [springboot]
+  context: |
+    복잡한 동적 쿼리(다중 조건 필터링, 집계, 다중 테이블 JOIN)를 타입 세이프하게 작성해야 한다.
+    QueryDSL 5.x는 Hibernate 6.x / Spring Boot 3+ 환경에서 유지보수 신호가 약하고,
+    Q 클래스 생성과 커스텀 리포지토리 결합 규칙이 문서마다 달라지면 JPA/JOOQ 책임 경계가 흐려진다.
+    동시에 API 문서의 canonical root는 ADR-013에 따라 global/ 과 domain/ 으로 정규화되어야 한다.
+  decision: |
+    JOOQ를 타입 세이프 쿼리 도구로 채택한다. QueryDSL은 기준 기술에서 제외한다.
+    단순 CRUD(findById, save, findAll 등)는 Spring Data JPA를 유지하고, 복잡한 동적 쿼리/집계/JOIN은 JOOQ DSLContext를 사용한다.
+    hand-written 공통 설정과 generated 패키지 root는 global/jooq/ vocabulary에 맞춘다.
+    도메인별 hand-written JOOQ 쿼리 구현은 domain/{module}/repository/jooq/ 에 배치하고, 메인 Repository는 {Entity}JooqRepository 패턴으로 결합한다.
+    codegen 진입점은 ./gradlew jooqGenerate 로 통일하되, bootstrap 방식·generated source 비커밋·CI 선행 보장 같은 운영 규칙은 ADR-014에서 정의한다.
+  consequence: |
+    QueryDSL Q 타입과 별도 repository vocabulary를 계속 유지하지 않아도 된다.
+    JPA와 JOOQ의 책임 경계, global/domain package vocabulary, hand-written query class 배치 기준이 함께 정리된다.
+    JOOQ 도입 결정 자체와 codegen 운영 모델을 분리해 ADR-012와 ADR-014의 역할 충돌을 줄인다.
+
+- id: ADR-013
+  title: API 패키지 정규화 — global/domain canonical root
+  status: adopted
+  date: 2026-04-14
+  stacks: [springboot]
+  context: |
+    API 문서마다 legacy shared root, infrastructure/ 같은 서로 다른 최상위 패키지 용어가 섞여 있으면
+    실제 책임 경계보다 경로 이름이 먼저 흔들려 설계 리뷰와 후속 리팩터링 기준이 불명확해진다.
+    특히 인증 도메인(auth) 책임과 공통 보안 인프라(Security filter/config/principal) 책임이 섞이면
+    인증 유스케이스와 횡단 관심사의 ownership을 분리해 설명하기 어렵다.
+    organization 도메인은 department/team/user처럼 하위 기능 축이 커서 feature-first 기준이 별도로 필요하고,
+    dashboard는 여러 도메인의 조회 결과를 조합하지만 기준 데이터를 직접 변경하는 주체가 되면 안 된다.
+  decision: |
+    API 문서의 canonical root는 global/ 과 domain/ 으로 통일한다.
+    공통 보안 설정, JWT 필터, CustomUserPrincipal, 보안 어노테이션은 global/security/ 가 소유한다.
+    auth 도메인은 로그인, 토큰 발급/재발급, 로그아웃 같은 인증 유스케이스와 정책만 소유한다.
+    organization 도메인만 domain/organization/<feature>/<layer> 구조를 사용한다.
+    dashboard는 query-only 조합 계층으로 유지하고 다른 도메인의 원본 상태를 직접 변경하지 않는다.
+    이번 변경은 문서 canonicalization만 수행하며 실제 코드 이동은 별도 리팩터링으로 다룬다.
+  consequence: |
+    문서 전반에서 동일한 패키지 vocabulary(global/domain)를 사용하게 된다.
+    auth 와 global.security 의 책임 경계가 분명해져 보안 관련 코드 배치 기준이 명확해진다.
+    organization 의 feature-first 예외와 dashboard 의 query-only 제약이 함께 기록되어 후속 코드 정리 기준으로 재사용할 수 있다.
+
+- id: ADR-014
+  title: JOOQ codegen 운영 모델 — PostgreSQL bootstrap 유지 + bootstrap-first reproducible workflow
+  status: adopted
+  date: 2026-04-15
+  stacks: [springboot]
+  context: |
+    AX-WMS API는 실제 PostgreSQL(pgvector) bootstrap 후 Flyway migration을 적용한 스키마를 읽어 jOOQ 코드를 생성하고,
+    embedding 테이블은 생성 대상에서 제외하고 있다.
+    로컬 빌드와 CI가 `jooqGenerate` 를 안정적으로 선행 보장하고, 팀 전체가 Docker/pgvector bootstrap 전제를 수용한다면
+    generated source를 저장소에 커밋하지 않아도 clean checkout에서 동일한 codegen 결과를 재현할 수 있다.
+    이 경우 리뷰 관심사는 generated diff 자체보다 migration·hand-written code·실행 가능한 build 파이프라인으로 옮겨간다.
+  decision: |
+    jOOQ codegen은 실제 PostgreSQL bootstrap 기반 `jooqGenerate` lane을 유지한다.
+    embedding 테이블 제외 정책은 API가 vector 컬럼을 직접 사용하기 전까지 유지한다.
+    generated source canonical path는 `api/src/generated/jooq/main/java` 로 유지하고, `src/main/java` 와 분리된 generated-only 루트로 관리한다.
+    generated source는 disposable artifact로 취급하며 Git에 커밋하지 않는다. 갱신은 `./gradlew jooqGenerate` 재실행으로만 수행하고, generated-only 루트에는 수기 작성 소스를 두지 않는다.
+    로컬 `build`/`bootRun`/`test`/`assemble` 와 CI는 generated source가 없거나 stale 하면 compile 이전에 `jooqGenerate` 를 선행 보장하는 bootstrap-first workflow로 운영한다.
+    stale 판정은 migration 파일뿐 아니라 codegen 결과에 영향을 주는 `api/build.gradle`, `api/gradle/jooq-codegen.gradle`, `api/gradle.properties` 변경까지 함께 반영한다.
+    Flyway migration 변경자는 `./gradlew jooqGenerate` 또는 표준 build entrypoint로 codegen 성공 여부를 먼저 확인하되, generated source는 커밋하지 않는다.
+    `pgvector-java`, forcedType, custom Binding 같은 runtime vector binding은 실제 사용 요구가 생길 때까지 도입하지 않는다.
+  consequence: |
+    PostgreSQL bootstrap 기반 codegen lane과 embedding 제외 정책을 유지하면서도 clean checkout 재현성이 높아진다.
+    저장소에는 migration과 hand-written source 중심의 diff만 남아 PR review noise가 줄어든다.
+    codegen/bootstrap 실패는 로컬 build와 CI에서 더 일찍 드러나므로 generated source 누락 커밋 문제로 우회되지 않는다.
+    팀 전체가 Docker/pgvector bootstrap 전제를 받아들여야 하며, 로컬 환경 준비가 build 성공의 필수 조건이 된다.
+    `api/src/generated/...` 는 현재 build/sourceSets 기준 canonical path로 유지하고, `api/src/main/java/...` 는 hand-written jOOQ 설정 소스와 physical root가 섞이므로 사용하지 않는다.
+
+- id: ADR-015
+  title: 공통 응답 봉투 정책 단일화 — 런타임/문서 래핑 규칙 공유
+  status: adopted
+  date: 2026-04-20
+  stacks: [springboot]
+  context: |
+    GlobalResponseAdvice 는 런타임에 컨트롤러 반환값을 ApiResponse 봉투로 래핑하지만,
+    springdoc 은 메서드 반환 타입만 리플렉션으로 보고 스키마를 만든다.
+    두 경로가 분리돼 있어 래핑 제외 조건을 두 지점에 복제 구현하면 한쪽만 갱신돼 Swagger 문서와 실제 응답이 이탈한다.
+  decision: |
+    래핑 대상 판정은 global/response/ResponseEnvelope 에 단일 정의한다.
+    런타임 GlobalResponseAdvice 와 springdoc OperationCustomizer 모두 ResponseEnvelope.shouldWrap(...) 을 호출해 동일 규칙을 공유한다.
+    OperationCustomizer 는 2xx 응답 스키마를 {success, data, timestamp} 봉투로 교체해 문서와 런타임이 같은 형태로 노출되도록 한다.
+  consequence: |
+    래핑 규칙 변경 시 정책 유틸 한 곳만 고치면 런타임과 문서가 함께 갱신된다.
+    Swagger UI 의 Schema/Example 이 실제 curl 응답과 동일한 형태로 유지된다.
+    새로운 제외 타입(파일 다운로드용 Resource, StreamingResponseBody 등)을 추가할 때는 ResponseEnvelope 의 제외 목록에 먼저 반영한다.
+
+- id: ADR-016
+  title: 로그인 토큰 전송 채널 — Authorization 응답 헤더 + HttpOnly 쿠키
+  status: adopted
+  date: 2026-04-22
+  stacks: [springboot]
+  context: |
+    응답 바디에 access token 과 refresh token 을 함께 내리면 프런트가 refresh token 저장 위치를 결정해야 하고, XSS 로 장기 자격 증명까지 탈취될 위험이 있다.
+    토큰 전송 채널을 서버가 단일 규칙으로 고정하면 로그인·재발급·로그아웃이 동일 계약을 재사용할 수 있어 변경 비용이 낮아진다.
+  decision: |
+    access token 은 응답 헤더 Authorization: Bearer <token> 으로 내려준다. 요청 측 헤더와 이름을 통일해 클라이언트가 받은 값을 그대로 다음 요청 Authorization 헤더에 재사용하도록 한다.
+    refresh token 은 HttpOnly 쿠키로 내려준다. 쿠키 이름/Path/Secure/SameSite/Domain 은 auth.refresh-cookie.* 프로퍼티를 단일 출처로 사용하고, 기본 Path 는 /api/auth 이다. Max-Age 는 jwt.refresh-token-expiration 을 기본 사용한다.
+    로컬/테스트 프로파일은 HTTPS 미사용 환경을 위해 secure=false, same-site=Lax 같은 속성 override 를 프로퍼티로 관리한다.
+    로그인 응답 바디는 비운다(사용자 정보는 별도 현재 사용자 조회 API 가 SSOT 로 담당한다).
+    헤더/쿠키 쓰기 책임은 global/security/AuthTokenResponseWriter 가 단독으로 가진다. Controller 는 ResponseEntity 를 반환하지 않고 DTO 를 그대로 반환해 GlobalResponseAdvice 의 봉투 래핑을 유지한다.
+    refresh 재발급도 동일 채널 규약을 따른다. 요청은 body 가 아니라 설정된 이름의 HttpOnly refresh cookie 로 받고, 성공 시 응답 바디는 비우며 새 access token 은 Authorization 헤더로만 전달한다.
+    refresh token 회전은 매 요청마다 수행하지 않고, 남은 유효 시간이 전체 refresh TTL 의 절반 이하일 때만 같은 sessionId 로 새 쿠키를 다시 기록한다.
+    CORS 는 allowCredentials=true, allowedHeaders=[Authorization, Content-Type, X-Trace-Id], exposedHeaders=[Authorization, X-Trace-Id] 로 설정하고 허용 오리진은 auth.cors.* 프로퍼티로 환경별로 관리한다.
+    본 규약은 브라우저 기반 웹 클라이언트를 전제한다. MCP, CLI, 서버 간 호출 등 비브라우저 클라이언트는 쿠키 자동 처리를 전제할 수 없으므로 별도 토큰 발급 경로로 설계한다.
+  consequence: |
+    refresh token 이 JS 에서 접근 불가능해져 XSS 로 인한 장기 자격 증명 탈취를 차단한다.
+    /api/auth/refresh, /api/auth/logout 엔드포인트는 쿠키 기반 계약을 재사용하고, refresh 는 필요할 때만 조건부 Set-Cookie 회전을 수행한다.
+    CORS 설정이 필수가 되어 프런트 오리진을 환경별 프로퍼티로 관리해야 하며, 확정되기 전 operational 환경에서는 allowed-origin-patterns 를 명시적으로 주입한다.
+    비브라우저 클라이언트는 본 로그인 엔드포인트를 재사용하지 않고 별도 경로(예 - API 키 기반 인증 또는 바디 반환 토큰 엔드포인트)를 추가해 수용한다.
+- id: ADR-017
+  title: API prefix 중앙화와 REST 경로 정규화
+  status: adopted
+  date: 2026-04-22
+  stacks: [springboot]
+  context: |
+    여러 Controller 가 클래스 레벨 @RequestMapping 에 /api prefix 를 중복 선언하고 있어
+    애플리케이션 전역 prefix 를 변경하거나 문서/보안 설정과 맞출 때 경로 drift 가 발생하기 쉬웠다.
+    또한 일부 리소스 경로가 단수형(/user, /team, /worklog 등) 과 복수형이 혼재되어
+    API inventory, Swagger, 보안 허용 경로, 테스트 코드가 서로 다른 canonical path 를 참조할 위험이 있었다.
+  decision: |
+    공통 API prefix 는 server.servlet.context-path 로만 관리하고 기본값을 /api 로 둔다.
+    Controller 의 클래스 레벨 @RequestMapping 은 공통 prefix 를 포함하지 않고 리소스 자체 경로만 선언한다.
+    공개 리소스 경로는 REST 관례에 맞춰 복수형을 기본으로 사용한다.
+    예: /users, /departments, /teams, /worklogs, /files, /tags, /notifications, /dashboards.
+    내부 callback 이더라도 특정 리소스 컬렉션을 대표하면 동일하게 복수형을 사용한다.
+    예: /internal/files, /internal/worklogs.
+    인증처럼 액션/기능 경계가 더 자연스러운 엔드포인트는 /auth 처럼 예외적으로 단수 명사를 유지할 수 있다.
+  consequence: |
+    /api prefix 변경 시 application.yml 한 곳만 수정하면 되어 Controller, Security, 테스트, 문서의 동기화 비용이 줄어든다.
+    Controller 는 도메인 경로에만 집중하고, Swagger 및 endpoint inventory 의 canonical path 도 /api + 복수형 리소스 규칙으로 정리된다.
+    신규 엔드포인트 추가 시 /api 중복 선언이나 단수형 resource path 도입은 규약 위반으로 간주한다.
+- id: ADR-018
+  title: Repository 조회 결과 타입 명명 — JOOQ projection vocabulary 통일
+  status: adopted
+  date: 2026-04-25
+  stacks: [springboot]
+  context: |
+    JOOQ 기반 repository 조회 결과를 어디까지를 Entity 로 보고 어디부터를 조회 전용 조합 타입으로 볼지 문서상 용어가 고정되어 있지 않았다.
+    어떤 곳은 nested record 로 선언한 조회 결과를 `dao` 처럼 부르거나, 어떤 곳은 DTO 와 projection 의 경계를 분리하지 않아 Service 가 소비하는 read shape 의 책임이 흐려질 수 있었다.
+    특히 department GET 조회는 repository 내부 nested record 를 외부에서 소비하는 형태로 진행되고 있어, 패키지 위치와 타입 소유권을 더 명확히 정리할 필요가 있었다.
+  decision: |
+    Repository 가 Service 에 제공하는 조회 전용 read shape 는 `projection` 으로 통일한다.
+    `dao` 용어는 repository 조회 결과 타입 명명에서 사용하지 않는다.
+    projection 은 read-only 조회 결과 타입이며 Entity 나 controller/service 외부 API 계약 DTO 와 구분한다.
+    projection 기본 위치는 `domain/{module}/repository/jooq/projection/` 하위 패키지로 둔다.
+    controller/service 외부 API 계약 타입은 기존대로 `dto/` 규칙을 유지한다.
+    projection 은 repository 내부 nested record 보다 재사용 가능한 top-level 타입을 기본으로 사용한다.
+    projection 생성 책임을 projection 타입 옆에 두는 편이 더 읽기 쉬우면, top-level projection 안에
+    jOOQ 전용 static factory 를 둘 수 있다.
+    JOOQ repository 의 `fetch(...)` 매핑은 projection 생성자가 길어지거나 계산 필드가 포함되면 inline `new Projection(...)` 대신
+    projection 의 정적 팩토리를 호출한다.
+    선택한 `Record` 만으로 projection 을 1:1 조립할 수 있으면 `from(record)` 를 사용한다.
+    계산 Field, table alias, 외부에서 만든 매핑 단서처럼 `Record` 외 추가 입력이 필요하면 `from(record, ...)` 형태로 추가 인자를 명시한다.
+    `selectCount().asField(...)` 처럼 쿼리 안에서 만든 계산 Field 는 같은 Field 인스턴스를 `select(...)` 와 `from(record, field)` 에 함께 전달해
+    projection 내부에서 `record.get(field)` 로 읽는다.
+    이 경우에도 query 작성과 where/order/limit 책임은 repository 가 계속 소유한다.
+    projection 과 API DTO 는 단순 data carrier 성격의 standalone 테스트를 만들지 않고, Service/Controller/E2E/통합 테스트에서 간접 검증한다.
+    이번 변경의 첫 적용 대상으로 department GET 조회용 타입을 nested record 에서 projection 디렉토리의 top-level projection 타입으로 이동한다.
+  consequence: |
+    Service 는 repository 조회 결과를 projection vocabulary 로 일관되게 소비하고, Entity/API DTO 와의 경계도 문서상 명확해진다.
+    JOOQ hand-written query 패키지 아래에 projection 전용 디렉토리가 생겨 조회 타입의 위치를 예측하기 쉬워진다.
+    projection 이 필요 최소한의 jOOQ mapping helper 를 가질 수 있어 매핑 책임의 locality 를 높일 수 있다.
+    이후 신규 조회 타입이 `dao` 또는 임의 nested record 로 추가되면 문서 규약 위반으로 간주한다.
+- id: ADR-019
+  title: Repository 조회 입력 타입 명명 — JOOQ query vocabulary 도입
+  status: adopted
+  date: 2026-04-26
+  stacks: [springboot]
+  context: |
+    team 조회 구현을 최신 spec 에 맞추는 과정에서 controller Request DTO 가 service 를 지나 repository/jooq 까지 직접 전달되고 있었다.
+    이 구조는 public API contract 와 repository read input vocabulary 를 섞어 두어, 고정 정렬/visibility/default 값을 service 에서 정규화해도
+    repository 시그니처가 여전히 HTTP query shape 에 묶이는 문제가 있었다.
+    projection vocabulary 는 ADR-019 로 정리됐지만, 조회 입력 vocabulary 는 별도 문서 규칙이 없어 Criteria/Request/query 사이 기준이 흔들릴 수 있었다.
+  decision: |
+    Service 가 repository 조회 입력을 별도로 정규화해야 하는 경우, JOOQ read input 은 `domain/{module}/repository/jooq/query/*Query` top-level 타입으로 선언한다.
+    이 query 는 controller Request DTO 가 아니라 service -> repository 경계의 내부 vocabulary 다.
+    controller Request DTO 는 기존대로 `{UseCase}ApiDto.Request` 를 유지하고, service 가 기본값/정렬/visibility/ownership 문맥을 반영해 query 로 변환한다.
+    repository 는 `Get*ApiDto.Request` 같은 public API DTO 를 직접 받지 않는다.
+    첫 적용 범위는 organization/team read path(`TeamPageQuery`, `TeamSummaryQuery`, `TeamUsersQuery`, `TeamWorklogsQuery`) 이다.
+  consequence: |
+    public contract 변경과 repository query 변경 책임이 분리되어 drift 추적이 쉬워진다.
+    service 가 default/ownership normalization 의 단일 책임을 가지게 되고, repository 시그니처는 HTTP 바인딩 세부사항에서 분리된다.
+    이후 repository read input 을 별도 정규화해야 하는 신규 JOOQ 조회도 같은 `query/*Query` vocabulary 를 따라야 한다.
+
+- id: ADR-021
+  title: Object Storage + DB 트랜잭션 일관성 — temp upload 후 AFTER_COMMIT 승격
+  status: adopted
+  date: 2026-04-29
+  stacks: [springboot]
+  context: |
+    S3 같은 Object Storage 작업은 DB 트랜잭션에 참여하지 않으므로, 파일 업로드와 DB 저장을 한 요청에서 함께 처리하면
+    "파일은 올라갔지만 DB 는 롤백됨", "DB 는 커밋됐지만 최종 파일 위치 승격은 실패함" 같은 비대칭 상태가 생길 수 있다.
+    단순히 Service 안에서 업로드/저장/복사를 순차 호출하면, 어느 지점의 실패를 사용자 요청 전체 실패로 볼지와 orphan 파일을 어떻게 정리할지가 유스케이스마다 흩어진다.
+    특히 공개 회원가입의 프로필 이미지처럼 DB 엔티티 생성과 파일 참조 URL 저장이 함께 일어나지만,
+    최종 파일 위치 승격 실패가 사용자 계정 생성 자체를 되돌려야 할 정도의 치명적 오류는 아닌 경우가 있다.
+    따라서 Object Storage 와 DB 를 함께 다루는 흐름에서, 커밋 전/후 책임과 정리 정책을 재사용 가능한 패턴으로 먼저 고정할 필요가 있다.
+  decision: |
+    DB 트랜잭션과 Object Storage 는 원자적으로 묶으려 하지 않고, temp upload + AFTER_COMMIT promote 패턴으로 일관성을 맞춘다.
+    업로드가 필요한 요청은 ObjectStoragePort 로 temp key 에 먼저 저장하고, DB 엔티티에는 temp key 가 아니라 최종 서빙 기준 key 또는 final public URL 을 저장한다.
+    DB 트랜잭션이 커밋되면 `@TransactionalEventListener(phase = AFTER_COMMIT)` 에서 temp -> final promote(copy/move)를 수행한다.
+    promote 실패는 기본적으로 이미 커밋된 DB 트랜잭션을 롤백하지 않고 log/관측 가능 신호로 남긴다. 필요 시 재시도 job 또는 운영 보정 절차로 후속 처리한다.
+    DB 커밋 전에 실패한 temp 업로드는 비즈니스 요청 실패로 간주해 DB 저장을 진행하지 않는다.
+    temp 로 남은 orphan 객체는 scheduler 또는 별도 cleanup 경로로 정리한다.
+    cleanup 정책(cron, temp prefix, retention days 등)과 storage 환경 차이(bucket, basePrefix, publicBaseUrl 등)는 하드코딩하지 않고 설정 프로퍼티로 관리한다.
+    이 패턴은 ADR-008의 AFTER_COMMIT 이벤트 사용 원칙과 ADR-009의 Object Storage 추상화 위에 구축한다.
+    첫 적용 사례는 `/auth/signup` 의 선택 프로필 이미지 저장 흐름이다.
+  consequence: |
+    Object Storage 와 DB 를 함께 다루는 유스케이스가 temp upload, AFTER_COMMIT promote, orphan cleanup 이라는 공통 수명주기를 공유하게 된다.
+    promote 실패를 DB 롤백으로 연결하지 않으므로 사용자 요청의 핵심 비즈니스 성공과 외부 저장소 후처리를 분리할 수 있다.
+    대신 시스템은 eventual consistency 를 전제로 하며, promote 실패와 orphan 객체를 감지·정리하는 운영 수단이 필요하다.
+    이후 S3 연동이 추가되는 기능은 "commit 이전 실패는 요청 실패, commit 이후 승격 실패는 사후 보정"이라는 기준을 기본값으로 검토해야 한다.
+    단, 파일 승격 실패가 비즈니스적으로 즉시 치명적인 유스케이스라면 이 ADR을 그대로 적용하지 말고 별도 보상/재시도/확정 모델을 설계해야 한다.
+
+- id: ADR-022
+  title: 팀 관리 권한 — membership 과 분리된 grant 모델
+  status: adopted
+  date: 2026-05-01
+  stacks: [springboot]
+  context: |
+    `tb_user_team` 은 `(user_id, team_id)` unique 제약을 가진 single-row membership 모델이다.
+    이 테이블에 `ADMIN` 과 `LEADER`/`MEMBER` 를 같은 사용자-팀 조합으로 동시에 표현하려면 unique 제약을 제거하거나 membership 의미를 다중 권한 저장소로 바꿔야 한다.
+    하지만 팀 사용자 목록에서는 ADMIN-only 사용자를 제외하고, ADMIN 과 실제 업무 소속을 함께 가진 사용자는 업무 소속 권한으로 반환해야 하므로
+    업무 소속과 관리 권한을 같은 row 의미로 계속 섞으면 조회/정렬/집계 기준이 흔들린다.
+  decision: |
+    팀 관리 권한은 `tb_user_team` membership 과 분리된 `tb_team_admin` grant 모델로 둔다.
+    `tb_user_team` 은 실제 업무 소속(`LEADER`, `MEMBER`) 중심으로 해석하고, 팀 관리 권한은 `TeamAdmin` entity-side 모델이 표현하는 별도 grant 로 모델링한다.
+    동일 사용자는 같은 팀에 대해 `tb_team_admin` grant 와 `tb_user_team` membership 을 동시에 가질 수 있다.
+    팀 사용자 목록은 업무 소속 membership 을 기준으로 반환하며, 관리 grant 만 가진 ADMIN-only 사용자는 제외한다.
+    현재 구현 범위는 `tb_team_admin` Flyway migration, `TeamAdmin` managed entity/repository, `GET /teams` 의 admin grant + ACTIVE membership DISTINCT visible scope 조회까지 포함한다.
+    grant 부여/회수 전용 API, 팀 상세/사용자/업무일지/생성·수정·상태변경·bulk·삭제 endpoint 의 실제 동작 구현은 별도 후속 작업으로 진행한다.
+  consequence: |
+    기존 `tb_user_team` unique 제약과 leader 단일성 규칙을 유지하면서 관리 권한을 독립적으로 확장할 수 있다.
+    이미 반영된 `GET /teams` read path 는 admin grant 팀과 ACTIVE membership 팀의 합집합을 기준으로 visible scope 를 계산한다.
+    후속 구현에서는 생성 시 grant 부여, grant 회수/관리 흐름, mutation 권한 gate, ADMIN-only 사용자 목록 제외 쿼리를 각 endpoint 범위에 맞게 추가해야 한다.
+
+- id: ADR-023
+  title: API 코드 주석 누락 방지 — 신규·변경 helper 까지 Javadoc 게이트 적용
+  status: adopted
+  date: 2026-05-05
+  stacks: [springboot]
+  context: |
+    평가 이력 조회 구현에서 `validateEvaluationReadAccess`, `validateDirectorTarget` 같은 짧은 권한 검증 helper 가 추가되었지만,
+    "간단한 helper" 라는 이유로 최초 작성 시 Javadoc 이 누락되었다.
+    기존 주석 컨벤션은 WHY 중심 원칙과 private helper Javadoc 기준을 이미 갖고 있었으나,
+    실제 작업자는 복잡한 메서드에만 적용되는 규칙으로 해석해 역할 분기, 권한 gate, DTO 기본값 보정,
+    repository query/projection 변환처럼 짧지만 계약을 형성하는 helper 를 놓칠 수 있었다.
+    특히 Service 내부 권한 helper 는 코드가 짧아도 실패 시 어떤 비즈니스 예외를 던지는지,
+    어떤 visible scope 를 통과시키는지, 왜 특정 대상을 제외하는지에 따라 API 보안 계약이 달라진다.
+  decision: |
+    API hand-written source 에서 신규 또는 변경되는 helper/util/factory/normalization 메서드는 길이나 접근 제어자와 무관하게
+    한 줄 Javadoc 을 기본 필수로 둔다.
+    대상에는 Service private helper, 권한/소유권 검증 helper, `*OrThrow` 존재성 조회 helper, DTO 기본값/정규화 helper,
+    `from`/`of` 정적 팩토리, repository query/projection 조립 helper, JOOQ alias/Record 변환 helper 가 포함된다.
+    Javadoc 은 코드가 이미 말하는 WHAT 을 반복하지 않고, 호출자가 알아야 하는 역할 범위, 통과/차단 기준,
+    기본값 선택 이유, 예외 변환, 경계 간 vocabulary 변환 이유 중 하나 이상을 한국어로 설명한다.
+    단순 getter/setter, Lombok 생성자, Controller 구현 메서드처럼 기존 주석 생략 허용 대상은 유지하되,
+    새로 작성하거나 수정한 메서드가 helper/util/factory/normalization 성격이면 "간단하다" 는 이유만으로 생략하지 않는다.
+    API 변경 완료 전에는 `docs/api/code-convention.yaml` 의 주석/Javadoc 규칙과 실제 diff 를 대조해
+    신규·변경 메서드 Javadoc 누락 여부를 확인한다.
+  consequence: |
+    짧은 helper 라도 권한, 기본값, 조회 경계, DTO/projection 변환 같은 계약을 형성하면 코드 옆에서 의도를 확인할 수 있다.
+    리뷰어는 구현 diff 와 함께 Javadoc 누락을 명시적으로 점검하게 되어 보안/권한 helper 의 해석 차이를 줄일 수 있다.
+    반대로 WHAT 재서술 주석은 계속 금지되므로, 주석 추가가 코드 설명 반복이나 장식성 문서화로 흐르지 않도록 유지한다.
+    신규·변경 API 코드에는 주석 점검 비용이 조금 늘지만, private helper 를 포함한 설계 의도 누락 가능성을 낮춘다.
+
+- id: ADR-025
+  title: API Log Tracer — Filter/MDC/AOP 기반 요청 흐름 추적
+  status: adopted
+  date: 2026-05-10
+  stacks: [springboot]
+  context: |
+    API 장애 디버깅 시 HTTP 요청 진입, JWT 인증, Controller/Service/Repository 계층 호출, 정상/예외 응답 종료를 같은 키로 연결할 수 있는 근거가 필요하다.
+    현재 범위는 로그 저장소나 조회 API 가 아니라 실행 중 콘솔 로그의 상관관계 확보이며, 응답 JSON 봉투와 민감정보 비노출 정책을 유지해야 한다.
+  decision: |
+    RequestTraceFilter 를 JwtAuthenticationFilter 앞에 배치해 모든 요청의 traceId 를 먼저 확정하고 MDC 와 응답 header X-Trace-Id 에 기록한다.
+    외부 X-Trace-Id 는 Nginx/NestJS 같은 Spring 앞단에서 생성·검증된 값으로 신뢰하고, API 계층은 trim 뒤 비어 있지 않으면 재사용하며 없으면 hyphen 포함 UUID v4 를 새로 생성한다.
+    요청 시작/종료 로그는 method, HttpServletRequest#getRequestURI() 기반 path-only URI, status, durationMs 만 기록하고 query string, header dump, request/response body 는 기록하지 않는다. 인증된 CustomUserPrincipal 은 종료 시 userId/roleCode 만 요약한다.
+    LayerTraceAspect 는 Spring AOP 로 domain controller/service/repository public method enter/exit/exception 을 DEBUG/WARN 로 기록한다. method arguments, return value, raw exception message, stack trace 는 기본 기록하지 않으며 BusinessException 은 ErrorCode 만 추가한다.
+    X-Trace-Id 는 응답 body 계약을 바꾸지 않는 관측성 header 이므로 CorsConfig allowedHeaders 와 exposedHeaders 에 Authorization 정책을 유지한 채 함께 포함한다.
+  consequence: |
+    브라우저 클라이언트는 장애 신고 시 응답 header 의 X-Trace-Id 를 읽어 서버 로그와 연결할 수 있고, ApiResponse 성공/실패 envelope 는 변경되지 않는다.
+    Spring AOP proxy 한계상 self-invocation, non-bean 객체, JPA 내부 SQL, lazy loading, entity method, repository 내부 구현 세부 호출은 추적 대상이 아니다.
+    로그 파일/DB/Redis/S3 저장, 로그 조회 API, body logging, raw exception message logging 이 필요해지면 별도 ADR 로 저장·보안·마스킹 정책을 먼저 확정해야 한다.
+
+- id: ADR-024
+  title: Nullable team department ownership 복구와 부서 상세 조회
+  status: adopted
+  date: 2026-05-06
+  stacks: [springboot]
+  context: |
+    부서 상세 화면은 특정 부서가 직접 소유한 팀 목록을 보여줘야 하지만, 기존 Team API visible scope 는
+    `tb_team_admin` grant 와 ACTIVE membership 합집합 기준이라 부서 ownership 요구와 다르다.
+    또한 V9 migration 에서 `tb_team.department_id` 가 제거되어 department detail/list/delete 가 같은 소유 기준을 공유할 수 없었다.
+  decision: |
+    `tb_team.department_id` 를 nullable FK 로 복구하고, Team 생성/수정 request/query/filter/visible scope 계약에는 departmentId 를 추가하지 않는다.
+    `POST /teams` 는 request 에 departmentId 를 받지 않고, `addAdmin` 으로 지정된 사용자의 `department_id` 를 생성 팀의 ownership 으로 저장한다.
+    `GET /departments/{id}/detail` 은 ACTIVE department header 를 top-level 로 반환하고, `teams[]` 는
+    `tb_team.department_id = {id}`, `status_code = ACTIVE`, `deleted_at IS NULL` 기준의 직접 소유 팀만 포함한다.
+    부서장 이름은 department header projection 에서 head user 를 left join 해 조회하고, team row 집계와 섞지 않는다.
+    팀 leader 는 ACTIVE membership 의 단일 `is_leader = true` row 를 직접 join 하고, memberCount 는 leader join 과 분리된 팀별 ACTIVE membership count subquery 로 계산한다.
+    Department list 의 activeTeamCount 와 DELETE 차단 정책도 같은 직접 소유 ACTIVE/non-deleted 팀 기준으로 맞춘다.
+  consequence: |
+    `department_id IS NULL` 팀은 department detail/list activeTeamCount/delete ownership 판단에서 제외된다.
+    신규 Team API 생성 팀은 `addAdmin` 사용자가 부서를 가지고 있으면 해당 department detail/list/delete ownership 판단에 즉시 포함된다.
+    `addAdmin` 사용자의 `department_id` 가 null 이면 생성 팀도 미배정 팀으로 남으며, 별도 assignment/backfill 흐름은 후속 과제로 남긴다.
+    기존 데이터 backfill, Team assignment API, `(department_id, team_name)` unique 복구, Team API visible scope 변경은 이번 결정 범위가 아니다.

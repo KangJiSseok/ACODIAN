@@ -1,0 +1,50 @@
+spring:
+  autoconfigure:
+    exclude:
+      - org.springdoc.core.configuration.SpringDocConfiguration
+      - org.springdoc.core.properties.SpringDocConfigProperties
+      - org.springdoc.webmvc.core.configuration.SpringDocWebMvcConfiguration
+      - org.springdoc.webmvc.ui.SwaggerConfig
+
+jwt:
+  secret: test-secret-key-for-unit-tests-only-min-32-chars
+  access-token-expiration: 3600000
+  refresh-token-expiration: 1209600000
+
+storage:
+  s3:
+    bucket: test-bucket
+    region: ap-northeast-2
+    base-prefix: test/base
+    public-base-url: https://cdn.test.local
+    access-key-id: test-access-key
+    secret-access-key: test-secret-key
+  profile-image:
+    cleanup:
+      cron: 0 20 22 * * *
+      temp-prefix: temp/
+      retention-days: 0
+
+notification:
+  worklog-overdue-reminder:
+    cron: 0 10 9 * * *
+  worklog-due-soon-reminder:
+    cron: 0 0 9 * * *
+  stream:
+    key: notifications:stream
+    poll-timeout-millis: 2000
+  sse:
+    timeout-millis: 1800000
+    heartbeat-delay-millis: 25000
+
+auth:
+  refresh-cookie:
+    name: refreshToken
+    path: /api/auth
+    secure: false
+    same-site: Lax
+    domain:
+    max-age-seconds-override:
+  cors:
+    allowed-origins:
+    allowed-origin-patterns: "http://localhost"

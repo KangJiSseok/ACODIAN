@@ -1,0 +1,305 @@
+workflow:
+  auto_cancel:
+    on_new_commit: conservative
+  rules:
+    - if: '$CI_PIPELINE_SOURCE == "merge_request_event" && ($CI_MERGE_REQUEST_TARGET_BRANCH_NAME == "dev" || $CI_MERGE_REQUEST_TARGET_BRANCH_NAME == "master")'
+    - if: '$CI_PIPELINE_SOURCE == "push" && $CI_COMMIT_BRANCH && $CI_COMMIT_BRANCH != "dev" && $CI_COMMIT_BRANCH != "master"'
+    - if: '$CI_PIPELINE_SOURCE == "push" && ($CI_COMMIT_BRANCH == "dev" || $CI_COMMIT_BRANCH == "master")'
+      auto_cancel:
+        on_new_commit: none
+    - when: never
+
+stages:
+  - validate
+  - test
+  - build
+  - image
+  - deploy
+
+default:
+  interruptible: true
+
+variables:
+  DEPLOY_ROOT: /opt/axwms
+  PIP_CACHE_DIR: "$CI_PROJECT_DIR/.cache/pip"
+  API_IMAGE_BASE: ghcr.io/axwms-s209/axwms-api
+  WEB_IMAGE_BASE: ghcr.io/axwms-s209/axwms-web
+  AI_IMAGE_BASE: ghcr.io/axwms-s209/axwms-ai
+
+.web_changes: &web_changes
+  - web/**/*
+  - package.json
+  - pnpm-lock.yaml
+  - pnpm-workspace.yaml
+
+.ai_changes: &ai_changes
+  - ai/**/*
+
+.api_changes: &api_changes
+  - api/**/*
+
+.infra_changes: &infra_changes
+  - infra/**/*
+  - docs/infra/**/*
+  - .gitlab-ci.yml
+
+.api_deploy_changes: &api_deploy_changes
+  - api/**/*
+  - infra/**/*
+  - docs/infra/**/*
+  - .gitlab-ci.yml
+
+.web_deploy_changes: &web_deploy_changes
+  - web/**/*
+  - package.json
+  - pnpm-lock.yaml
+  - pnpm-workspace.yaml
+  - infra/**/*
+  - docs/infra/**/*
+  - .gitlab-ci.yml
+
+.ai_deploy_changes: &ai_deploy_changes
+  - ai/**/*
+  - infra/**/*
+  - docs/infra/**/*
+  - .gitlab-ci.yml
+
+.deploy_changes: &deploy_changes
+  - api/**/*
+  - web/**/*
+  - ai/**/*
+  - package.json
+  - pnpm-lock.yaml
+  - pnpm-workspace.yaml
+  - infra/**/*
+  - docs/infra/**/*
+  - .gitlab-ci.yml
+
+infra_validate:
+  stage: validate
+  image: docker:27.5.1-cli
+  before_script:
+    - cp infra/.env.example infra/.env.validate
+    - printf '\nAPP_ENV=ci\nAPI_IMAGE=registry.example.com/ax-wms/api:ci\nAPI_HOST_PORT=8101\nWEB_IMAGE=registry.example.com/ax-wms/web:ci\nWEB_HOST_PORT=8001\nAI_IMAGE=registry.example.com/ax-wms/ai:ci\nAI_HOST_PORT=8201\nPOSTGRES_HOST_PORT=8301\nREDIS_HOST_PORT=8401\n' >> infra/.env.validate
+  script:
+    - docker compose --env-file infra/.env.validate -f infra/compose.deploy.yml config > /tmp/compose.deploy.rendered.yml
+  after_script:
+    - rm -f infra/.env.validate
+  rules:
+    - if: '$CI_PIPELINE_SOURCE == "merge_request_event"'
+      changes: *infra_changes
+    - if: '$CI_PIPELINE_SOURCE == "push" && $CI_COMMIT_BRANCH && $CI_COMMIT_BRANCH != "dev" && $CI_COMMIT_BRANCH != "master"'
+      changes: *infra_changes
+    - if: '$CI_PIPELINE_SOURCE == "push" && ($CI_COMMIT_BRANCH == "dev" || $CI_COMMIT_BRANCH == "master")'
+      changes: *infra_changes
+
+web_ci:
+  stage: test
+  image: node:22-alpine
+  before_script:
+    - corepack enable
+    - corepack prepare pnpm@10.32.0 --activate
+    - pnpm config set store-dir .pnpm-store
+    - pnpm install --frozen-lockfile
+  script:
+    - pnpm lint:web
+    - pnpm build:web
+  cache:
+    key:
+      files:
+        - pnpm-lock.yaml
+    paths:
+      - .pnpm-store
+  rules:
+    - if: '$CI_PIPELINE_SOURCE == "merge_request_event"'
+      changes: *web_changes
+    - if: '$CI_PIPELINE_SOURCE == "push" && $CI_COMMIT_BRANCH && $CI_COMMIT_BRANCH != "dev" && $CI_COMMIT_BRANCH != "master"'
+      changes: *web_changes
+    - if: '$CI_PIPELINE_SOURCE == "push" && ($CI_COMMIT_BRANCH == "dev" || $CI_COMMIT_BRANCH == "master")'
+      changes: *web_changes
+
+ai_ci:
+  stage: test
+  image: python:3.12-slim
+  before_script:
+    - python -m pip install --upgrade pip
+    - pip install -r ai/requirements.txt pytest
+  script:
+    - pytest ai/tests -q
+  cache:
+    key:
+      files:
+        - ai/requirements.txt
+    paths:
+      - .cache/pip
+  rules:
+    - if: '$CI_PIPELINE_SOURCE == "merge_request_event"'
+      changes: *ai_changes
+    - if: '$CI_PIPELINE_SOURCE == "push" && $CI_COMMIT_BRANCH && $CI_COMMIT_BRANCH != "dev" && $CI_COMMIT_BRANCH != "master"'
+      changes: *ai_changes
+    - if: '$CI_PIPELINE_SOURCE == "push" && ($CI_COMMIT_BRANCH == "dev" || $CI_COMMIT_BRANCH == "master")'
+      changes: *ai_changes
+
+api_ci:
+  stage: build
+  image: docker:27.5.1-cli
+  services:
+    - name: docker:27.5.1-dind
+      command: ["--tls=false"]
+  variables:
+    DOCKER_HOST: tcp://docker:2375
+    DOCKER_TLS_CERTDIR: ""
+    GRADLE_USER_HOME: "$CI_PROJECT_DIR/api/.gradle"
+  before_script:
+    - apk add --no-cache bash openjdk21-jdk
+    - export JAVA_HOME=/usr/lib/jvm/java-21-openjdk
+    - chmod +x api/gradlew
+    - docker version
+    - java -version
+  script:
+    - cd api
+    - ./gradlew --no-daemon clean test bootJar
+  cache:
+    key:
+      files:
+        - api/gradle/libs.versions.toml
+        - api/build.gradle
+    paths:
+      - api/.gradle
+  artifacts:
+    paths:
+      - api/build/libs/*.jar
+    expire_in: 1 day
+  rules:
+    - if: '$CI_PIPELINE_SOURCE == "merge_request_event"'
+      changes: *api_changes
+    - if: '$CI_PIPELINE_SOURCE == "push" && $CI_COMMIT_BRANCH && $CI_COMMIT_BRANCH != "dev" && $CI_COMMIT_BRANCH != "master"'
+      changes: *api_changes
+    - if: '$CI_PIPELINE_SOURCE == "push" && ($CI_COMMIT_BRANCH == "dev" || $CI_COMMIT_BRANCH == "master")'
+      changes: *api_deploy_changes
+
+api_image:
+  stage: image
+  interruptible: false
+  image: docker:27.5.1-cli
+  services:
+    - name: docker:27.5.1-dind
+      command: ["--tls=false"]
+  variables:
+    DOCKER_HOST: tcp://docker:2375
+    DOCKER_TLS_CERTDIR: ""
+  needs:
+    - job: api_ci
+      artifacts: true
+  before_script:
+    - echo "$GHCR_TOKEN" | docker login ghcr.io -u "$GHCR_USER" --password-stdin
+  script:
+    - docker build -t "$API_IMAGE_BASE:$CI_COMMIT_SHA" -t "$API_IMAGE_BASE:$CI_COMMIT_REF_SLUG" api
+    - docker push "$API_IMAGE_BASE:$CI_COMMIT_SHA"
+    - docker push "$API_IMAGE_BASE:$CI_COMMIT_REF_SLUG"
+  rules:
+    - if: '$CI_PIPELINE_SOURCE == "push" && ($CI_COMMIT_BRANCH == "dev" || $CI_COMMIT_BRANCH == "master")'
+      changes: *api_deploy_changes
+
+web_image:
+  stage: image
+  interruptible: false
+  image: docker:27.5.1-cli
+  services:
+    - name: docker:27.5.1-dind
+      command: ["--tls=false"]
+  variables:
+    DOCKER_HOST: tcp://docker:2375
+    DOCKER_TLS_CERTDIR: ""
+  before_script:
+    - echo "$GHCR_TOKEN" | docker login ghcr.io -u "$GHCR_USER" --password-stdin
+  script:
+    - docker build -t "$WEB_IMAGE_BASE:$CI_COMMIT_SHA" -t "$WEB_IMAGE_BASE:$CI_COMMIT_REF_SLUG" -f web/Dockerfile .
+    - docker push "$WEB_IMAGE_BASE:$CI_COMMIT_SHA"
+    - docker push "$WEB_IMAGE_BASE:$CI_COMMIT_REF_SLUG"
+  rules:
+    - if: '$CI_PIPELINE_SOURCE == "push" && ($CI_COMMIT_BRANCH == "dev" || $CI_COMMIT_BRANCH == "master")'
+      changes: *web_deploy_changes
+
+ai_image:
+  stage: image
+  interruptible: false
+  image: docker:27.5.1-cli
+  services:
+    - name: docker:27.5.1-dind
+      command: ["--tls=false"]
+  variables:
+    DOCKER_HOST: tcp://docker:2375
+    DOCKER_TLS_CERTDIR: ""
+  before_script:
+    - echo "$GHCR_TOKEN" | docker login ghcr.io -u "$GHCR_USER" --password-stdin
+  script:
+    # 빌드 컨텍스트 = ai/. api 와 동일하게 단일 영역 컨텍스트로 빌드해 web 의 모노레포 컨텍스트와 분리한다(ADR-016).
+    - docker build -t "$AI_IMAGE_BASE:$CI_COMMIT_SHA" -t "$AI_IMAGE_BASE:$CI_COMMIT_REF_SLUG" -f ai/Dockerfile ai
+    - docker push "$AI_IMAGE_BASE:$CI_COMMIT_SHA"
+    - docker push "$AI_IMAGE_BASE:$CI_COMMIT_REF_SLUG"
+  rules:
+    - if: '$CI_PIPELINE_SOURCE == "push" && ($CI_COMMIT_BRANCH == "dev" || $CI_COMMIT_BRANCH == "master")'
+      changes: *ai_deploy_changes
+
+.deploy_base:
+  image: alpine:3.20
+  before_script:
+    - apk add --no-cache openssh-client
+    - mkdir -p ~/.ssh
+    - chmod 700 ~/.ssh
+    - printf '%s' "$SSH_PRIVATE_KEY" > ~/.ssh/id_ed25519
+    - chmod 600 ~/.ssh/id_ed25519
+    - printf '%s\n' "$SSH_KNOWN_HOSTS" > ~/.ssh/known_hosts
+    - chmod 644 ~/.ssh/known_hosts
+
+deploy_dev:
+  extends: .deploy_base
+  stage: deploy
+  interruptible: false
+  environment:
+    name: staging
+    url: $STAGING_URL
+  script:
+    - export TARGET_HOST="$DEPLOY_HOST_STAGING"
+    - export APP_ENV=staging
+    - export REMOTE_DIR="${DEPLOY_ROOT%/}/$APP_ENV"
+    - ssh "$DEPLOY_USER@$TARGET_HOST" "mkdir -p '$REMOTE_DIR'"
+    - scp infra/compose.deploy.yml "$DEPLOY_USER@$TARGET_HOST:$REMOTE_DIR/compose.deploy.yml"
+    - scp infra/scripts/remote-deploy.sh "$DEPLOY_USER@$TARGET_HOST:$REMOTE_DIR/remote-deploy.sh"
+    - ssh "$DEPLOY_USER@$TARGET_HOST" "chmod +x '$REMOTE_DIR/remote-deploy.sh'"
+    - ssh "$DEPLOY_USER@$TARGET_HOST" "APP_ENV='$APP_ENV' DEPLOY_ROOT='$DEPLOY_ROOT' API_IMAGE='$API_IMAGE_BASE:$CI_COMMIT_REF_SLUG' WEB_IMAGE='$WEB_IMAGE_BASE:$CI_COMMIT_REF_SLUG' AI_IMAGE='$AI_IMAGE_BASE:$CI_COMMIT_REF_SLUG' GHCR_USER='$GHCR_USER' GHCR_TOKEN='$GHCR_TOKEN' sh '$REMOTE_DIR/remote-deploy.sh'"
+    # ADR-015 — nginx conf 동기화 + reload. staging/production 이 같은 EC2 에 공존하고 conf 한 파일이 양쪽 server 블록을 모두 가지므로 두 deploy 가 모두 reload 해도 결과 동일(멱등).
+    # ADR-018 — rate-limit.conf 도 같은 흐름으로 동기화.
+    - scp infra/nginx/sites-available/axwms.conf "$DEPLOY_USER@$TARGET_HOST:/tmp/axwms.conf"
+    - scp infra/nginx/snippets/proxy-headers.conf "$DEPLOY_USER@$TARGET_HOST:/tmp/proxy-headers.conf"
+    - scp infra/nginx/snippets/rate-limit.conf "$DEPLOY_USER@$TARGET_HOST:/tmp/rate-limit.conf"
+    - ssh "$DEPLOY_USER@$TARGET_HOST" "sudo install -o root -g root -m 0644 /tmp/axwms.conf /etc/nginx/sites-available/axwms.conf && sudo mkdir -p /etc/nginx/snippets && sudo install -o root -g root -m 0644 /tmp/proxy-headers.conf /etc/nginx/snippets/proxy-headers.conf && sudo install -o root -g root -m 0644 /tmp/rate-limit.conf /etc/nginx/snippets/rate-limit.conf && sudo nginx -t && sudo systemctl reload nginx && rm -f /tmp/axwms.conf /tmp/proxy-headers.conf /tmp/rate-limit.conf"
+  rules:
+    - if: '$CI_PIPELINE_SOURCE == "push" && $CI_COMMIT_BRANCH == "dev"'
+      changes: *deploy_changes
+
+deploy_prod:
+  extends: .deploy_base
+  stage: deploy
+  interruptible: false
+  environment:
+    name: production
+    url: $PRODUCTION_URL
+  script:
+    - export TARGET_HOST="$DEPLOY_HOST_PRODUCTION"
+    - export APP_ENV=production
+    - export REMOTE_DIR="${DEPLOY_ROOT%/}/$APP_ENV"
+    - ssh "$DEPLOY_USER@$TARGET_HOST" "mkdir -p '$REMOTE_DIR'"
+    - scp infra/compose.deploy.yml "$DEPLOY_USER@$TARGET_HOST:$REMOTE_DIR/compose.deploy.yml"
+    - scp infra/scripts/remote-deploy.sh "$DEPLOY_USER@$TARGET_HOST:$REMOTE_DIR/remote-deploy.sh"
+    - ssh "$DEPLOY_USER@$TARGET_HOST" "chmod +x '$REMOTE_DIR/remote-deploy.sh'"
+    - ssh "$DEPLOY_USER@$TARGET_HOST" "APP_ENV='$APP_ENV' DEPLOY_ROOT='$DEPLOY_ROOT' API_IMAGE='$API_IMAGE_BASE:$CI_COMMIT_REF_SLUG' WEB_IMAGE='$WEB_IMAGE_BASE:$CI_COMMIT_REF_SLUG' AI_IMAGE='$AI_IMAGE_BASE:$CI_COMMIT_REF_SLUG' GHCR_USER='$GHCR_USER' GHCR_TOKEN='$GHCR_TOKEN' sh '$REMOTE_DIR/remote-deploy.sh'"
+    # ADR-015 — nginx conf 동기화 + reload (멱등). ADR-018 — rate-limit.conf 도 같은 흐름으로 동기화.
+    - scp infra/nginx/sites-available/axwms.conf "$DEPLOY_USER@$TARGET_HOST:/tmp/axwms.conf"
+    - scp infra/nginx/snippets/proxy-headers.conf "$DEPLOY_USER@$TARGET_HOST:/tmp/proxy-headers.conf"
+    - scp infra/nginx/snippets/rate-limit.conf "$DEPLOY_USER@$TARGET_HOST:/tmp/rate-limit.conf"
+    - ssh "$DEPLOY_USER@$TARGET_HOST" "sudo install -o root -g root -m 0644 /tmp/axwms.conf /etc/nginx/sites-available/axwms.conf && sudo mkdir -p /etc/nginx/snippets && sudo install -o root -g root -m 0644 /tmp/proxy-headers.conf /etc/nginx/snippets/proxy-headers.conf && sudo install -o root -g root -m 0644 /tmp/rate-limit.conf /etc/nginx/snippets/rate-limit.conf && sudo nginx -t && sudo systemctl reload nginx && rm -f /tmp/axwms.conf /tmp/proxy-headers.conf /tmp/rate-limit.conf"
+  rules:
+    - if: '$CI_PIPELINE_SOURCE == "push" && $CI_COMMIT_BRANCH == "master"'
+      changes: *deploy_changes

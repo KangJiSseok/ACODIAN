@@ -1,0 +1,184 @@
+package com.ibank.axwms.domain.organization.skill.service;
+
+import com.ibank.axwms.domain.organization.skill.dto.CreateSkillApiDto;
+import com.ibank.axwms.domain.organization.skill.dto.GetSkillsApiDto;
+import com.ibank.axwms.domain.organization.skill.dto.UpdateSkillApiDto;
+import com.ibank.axwms.domain.organization.skill.entity.UserSkill;
+import com.ibank.axwms.domain.organization.skill.repository.UserSkillRepository;
+import com.ibank.axwms.domain.organization.skill.repository.jooq.projection.UserSkillListItemProjection;
+import com.ibank.axwms.domain.organization.user.UserRole;
+import com.ibank.axwms.domain.organization.user.entity.User;
+import com.ibank.axwms.domain.organization.user.repository.UserRepository;
+import com.ibank.axwms.global.error.BusinessException;
+import com.ibank.axwms.global.error.ErrorCode;
+import com.ibank.axwms.global.security.CustomUserPrincipal;
+import java.util.List;
+import lombok.RequiredArgsConstructor;
+import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
+
+@Service
+@RequiredArgsConstructor
+@Transactional(readOnly = true)
+public class UserSkillService {
+
+    private final UserSkillRepository userSkillRepository;
+    private final UserRepository userRepository;
+
+    /**
+     * 특정 사용자의 보유 스킬 목록을 조회한다.
+     * 자기 자신 또는 DEPT_HEAD 가 DIRECTOR 를 조회하면 스킬을 노출하지 않고 빈 목록을 반환한다.
+     */
+    public GetSkillsApiDto.Response getSkills(CustomUserPrincipal principal, Long userId) {
+        validateOrganizationManagerRole(principal);
+
+        User targetUser = getUserOrThrow(userId);
+        if (shouldHideSkills(principal, targetUser)) {
+            return GetSkillsApiDto.Response.of(userId, List.of());
+        }
+        validateReadableScope(principal, targetUser);
+
+        List<UserSkillListItemProjection> skills = userSkillRepository.findUserSkillsByUserId(userId);
+        return GetSkillsApiDto.Response.of(userId, skills);
+    }
+
+    /** 특정 사용자에게 스킬을 등록한다. 조직 관리자만 자기 자신을 제외한 허용 범위 사용자에게 등록할 수 있다. */
+    @Transactional
+    public void createSkill(CustomUserPrincipal principal, Long userId, CreateSkillApiDto.Request request) {
+        validateWritableTargetUser(principal, userId);
+
+        String skillName = normalizeRequiredSkillName(request.skillName());
+        ensureSkillNameAvailable(userId, skillName);
+
+        userSkillRepository.save(UserSkill.create(userId, skillName, request.skillLevel()));
+    }
+
+    /** 특정 사용자의 스킬 정보를 부분 수정한다. 조직 관리자만 허용 범위 안에서 수정할 수 있다. */
+    @Transactional
+    public void updateSkill(CustomUserPrincipal principal, Long userId, Long skillId, UpdateSkillApiDto.Request request) {
+        validateWritableTargetUser(principal, userId);
+
+        UserSkill userSkill = getUserSkillOrThrow(skillId, userId);
+        String skillName = normalizeOptionalSkillName(request.skillName());
+        ensureSkillNameAvailableForUpdate(userId, skillId, skillName);
+
+        userSkill.updatePartial(skillName, request.skillLevel());
+    }
+
+    /** 특정 사용자의 스킬을 삭제한다. 조직 관리자만 허용 범위 안에서 삭제할 수 있다. */
+    @Transactional
+    public void deleteSkill(CustomUserPrincipal principal, Long userId, Long skillId) {
+        validateWritableTargetUser(principal, userId);
+
+        UserSkill userSkill = getUserSkillOrThrow(skillId, userId);
+        userSkillRepository.delete(userSkill);
+    }
+
+    /** 스킬 API 는 조직 관리자에게만 열어 둔다. */
+    private void validateOrganizationManagerRole(CustomUserPrincipal principal) {
+        if (isOrganizationManager(principal)) {
+            return;
+        }
+        throw new BusinessException(ErrorCode.AUTH_ACCESS_DENIED);
+    }
+
+    /** DEPT_HEAD 는 자기 부서 사용자 스킬만 조회할 수 있다. */
+    private void validateReadableScope(CustomUserPrincipal principal, User targetUser) {
+        if (UserRole.DIRECTOR.name().equals(principal.roleCode())) {
+            return;
+        }
+
+        User actor = getUserOrThrow(principal.userId());
+        if (actor.getDepartmentId() == null || !actor.getDepartmentId().equals(targetUser.getDepartmentId())) {
+            throw new BusinessException(ErrorCode.AUTH_ACCESS_DENIED);
+        }
+    }
+
+    /**
+     * 쓰기 요청의 공통 권한 검증 순서를 보존하며 대상 사용자를 조회한다.
+     */
+    private void validateWritableTargetUser(CustomUserPrincipal principal, Long userId) {
+        validateOrganizationManagerRole(principal);
+
+        User targetUser = getUserOrThrow(userId);
+        validateWritableScope(principal, targetUser);
+    }
+
+    /** 조직 관리자 쓰기 작업의 대상 사용자 범위를 검증한다. */
+    private void validateWritableScope(CustomUserPrincipal principal, User targetUser) {
+        if (principal.userId().equals(targetUser.getId())) {
+            throw new BusinessException(ErrorCode.AUTH_ACCESS_DENIED);
+        }
+        if (UserRole.DIRECTOR.name().equals(principal.roleCode())) {
+            return;
+        }
+        if (UserRole.DIRECTOR.equals(targetUser.getRoleCode())) {
+            throw new BusinessException(ErrorCode.AUTH_ACCESS_DENIED);
+        }
+
+        User actor = getUserOrThrow(principal.userId());
+        if (actor.getDepartmentId() == null || !actor.getDepartmentId().equals(targetUser.getDepartmentId())) {
+            throw new BusinessException(ErrorCode.AUTH_ACCESS_DENIED);
+        }
+    }
+
+    /** 사용자별 스킬명 UNIQUE 충돌을 사전에 확인한다. */
+    private void ensureSkillNameAvailable(Long userId, String skillName) {
+        if (userSkillRepository.existsByUserIdAndSkillName(userId, skillName)) {
+            throw new BusinessException(ErrorCode.USER_SKILL_DUPLICATE_NAME);
+        }
+    }
+
+    /** 스킬명 변경 요청이 있을 때 현재 레코드를 제외하고 중복을 확인한다. */
+    private void ensureSkillNameAvailableForUpdate(Long userId, Long skillId, String skillName) {
+        if (skillName == null) {
+            return;
+        }
+        if (userSkillRepository.existsByUserIdAndSkillNameAndIdNot(userId, skillName, skillId)) {
+            throw new BusinessException(ErrorCode.USER_SKILL_DUPLICATE_NAME);
+        }
+    }
+
+    /** 필수 스킬명은 저장 전 양끝 공백을 제거해 중복 검사와 저장 값을 일치시킨다. */
+    private String normalizeRequiredSkillName(String skillName) {
+        return skillName.trim();
+    }
+
+    /** 부분 수정 스킬명은 null 또는 blank 이면 기존 값 유지를 의미하는 null 로 정규화한다. */
+    private String normalizeOptionalSkillName(String skillName) {
+        if (skillName == null || skillName.isBlank()) {
+            return null;
+        }
+        return skillName.trim();
+    }
+
+    /** 조회는 성공시키되 목록을 비워야 하는 비노출 정책을 판별한다. */
+    private boolean shouldHideSkills(CustomUserPrincipal principal, User targetUser) {
+        return principal.userId().equals(targetUser.getId())
+                || isDeptHeadReadingDirector(principal, targetUser);
+    }
+
+    /** DEPT_HEAD 가 상위 역할인 DIRECTOR 의 스킬을 보지 못하게 한다. */
+    private boolean isDeptHeadReadingDirector(CustomUserPrincipal principal, User targetUser) {
+        return UserRole.DEPT_HEAD.name().equals(principal.roleCode())
+                && UserRole.DIRECTOR.equals(targetUser.getRoleCode());
+    }
+
+    /** 조직 관리자 역할인지 확인한다. */
+    private boolean isOrganizationManager(CustomUserPrincipal principal) {
+        return UserRole.DIRECTOR.name().equals(principal.roleCode())
+                || UserRole.DEPT_HEAD.name().equals(principal.roleCode());
+    }
+
+    /** 대상 사용자가 존재하지 않으면 USER_NOT_FOUND 로 변환한다. */
+    private User getUserOrThrow(Long userId) {
+        return userRepository.findById(userId)
+                .orElseThrow(() -> new BusinessException(ErrorCode.USER_NOT_FOUND));
+    }
+
+    /** path 의 사용자에게 속한 스킬 레코드를 조회한다. */
+    private UserSkill getUserSkillOrThrow(Long skillId, Long userId) {
+        return userSkillRepository.findByIdAndUserId(skillId, userId)
+                .orElseThrow(() -> new BusinessException(ErrorCode.USER_SKILL_NOT_FOUND));
+    }
+}

@@ -1,0 +1,702 @@
+- id: ADR-001
+  title: EC2 1차 자동배포 범위 — api/postgres/redis 3서비스 최소 구성
+  status: adopted
+  date: 2026-04-22
+  stacks: [docker, compose, ec2]
+  context: |
+    현재 인프라 목표는 EC2에서 전체 스택(web, api, ai, nginx)을 한 번에 완성형으로 배포하는 것이 아니라,
+    먼저 api가 의존하는 postgres/redis와 함께 안정적으로 자동배포되도록 만드는 것이다.
+    web과 ai는 아직 production Docker image 및 compose 편성이 준비되지 않았고,
+    nginx/HTTPS는 이미 외부에서 제공된 환경을 활용하는 전제다.
+  decision: |
+    1차 자동배포 범위는 api/postgres/redis 3서비스로 제한한다.
+    EC2 배포의 source of truth compose 파일은 `infra/compose.deploy.yml` 하나로 유지한다.
+    web, ai, nginx의 운영 자동배포는 후속 단계로 분리한다.
+  consequence: |
+    배포 대상과 실패 지점을 api 중심으로 좁혀 초기 자동화를 빠르게 안정화할 수 있다.
+    반면 전체 서비스 일괄 배포는 아직 지원하지 않으므로 web/ai 확장은 별도 인프라 작업이 필요하다.
+
+- id: ADR-002
+  title: API 컨테이너 패키징 — CI 선빌드 JAR + 단순 런타임 이미지
+  status: adopted
+  date: 2026-04-22
+  stacks: [docker, springboot, gitlab]
+  context: |
+    api/Dockerfile 은 build/libs/*.jar 를 런타임 이미지에 복사하는 단순 패키징 구조다.
+    EC2 서버가 직접 git clone 과 Gradle build 를 수행하면 서버에 JDK/Gradle 의존성을 오래 유지해야 하고,
+    배포 재현성도 CI 기준보다 낮아진다.
+    현재 Gradle 빌드에는 jOOQ codegen과 Docker 의존이 있어, 빌드 책임을 CI로 모으는 편이 더 일관적이다.
+  decision: |
+    API 이미지는 GitLab CI 에서 `./gradlew clean test bootJar` 후 빌드한다.
+    Dockerfile 은 외부 빌드된 JAR만 복사하는 현재 구조를 유지한다.
+    EC2 는 빌드 서버가 아니라 Registry 이미지를 pull 받아 실행하는 런타임 호스트로 취급한다.
+  consequence: |
+    빌드 책임과 실행 책임이 분리되어 배포 재현성이 높아진다.
+    대신 GitLab Runner가 Java 21과 Docker-in-Docker 환경을 사용할 수 있어야 한다.
+
+- id: ADR-003
+  title: 배포 설정 주입과 기동 순서 — 서버 .env + healthcheck gating
+  status: adopted
+  date: 2026-04-22
+  stacks: [docker, compose, postgres, redis]
+  context: |
+    DB 계정, JWT 시크릿, 포트 같은 값은 staging/production 마다 다르므로 저장소에 실제 값을 둘 수 없다.
+    또한 postgres 와 redis 가 실제 연결 가능한 상태가 되기 전에 api 가 먼저 기동하면,
+    초기 배포 시 연결 실패와 migration 실패가 발생할 수 있다.
+  decision: |
+    환경별 설정은 EC2 의 `/opt/axwms/{staging|production}/.env` 파일로 주입한다.
+    compose 파일에는 샘플만 남기고, 실제 비밀값은 서버 또는 GitLab protected variable 로만 관리한다.
+    api 서비스는 postgres 와 redis 의 healthcheck 통과 이후에만 기동한다.
+  consequence: |
+    환경별 설정을 분리하고 민감정보를 커밋하지 않을 수 있다.
+    초기 배포 순서 문제를 줄일 수 있지만, 서버 `.env` 파일 관리 책임이 운영 쪽에 생긴다.
+
+- id: ADR-004
+  title: GitLab 브랜치 이벤트별 파이프라인 분리 — dev/master 외 브랜치 CI, dev/master merge 후 CD
+  status: adopted
+  date: 2026-04-22
+  stacks: [gitlab, ci, cd]
+  context: |
+    현재 실무 브랜치 해석은 `feat`라는 접두사 그 자체가 아니라,
+    `dev`와 `master`를 제외한 모든 작업 브랜치에서 빠르게 CI만 돌리고 싶다는 요구에 가깝다.
+    반대로 dev/master 는 merge 결과를 기준으로 staging/production 에 반영되어야 흐름이 단순하다.
+  decision: |
+    push 이벤트에서는 `dev`, `master`를 제외한 모든 브랜치에서 CI만 수행한다.
+    `dev`, `master` 대상 merge request 생성·업데이트 시에도 CI만 수행한다.
+    merge 완료 후 `dev`, `master`에 생긴 push pipeline 에서만 CI + CD 를 수행한다.
+  consequence: |
+    브랜치 이름 접두사에 의존하지 않고 모든 작업 브랜치에서 일관된 검증이 가능하다.
+    운영 반영은 dev/master merge 결과로 제한되어 staging/production 추적이 쉬워진다.
+
+- id: ADR-005
+  title: EC2 배포 방식 — GitLab Container Registry 이미지 pull + SSH 원격 compose 실행
+  status: superseded
+  date: 2026-04-22
+  stacks: [gitlab, docker, compose, ec2, ssh]
+  context: |
+    EC2 에서 직접 소스코드를 pull 받아 빌드하는 방식은 서버 상태에 따라 결과가 흔들리고,
+    롤백 시 어떤 커밋/이미지가 올라갔는지 추적하기 어렵다.
+    GitLab CI 에서 이미지를 만들고, EC2 는 해당 이미지만 받아 실행하는 편이 단순하다.
+  decision: |
+    CI 는 `api` 이미지를 GitLab Container Registry 에 push 한다.
+    deploy job 은 SSH 로 EC2 에 접속해 `infra/compose.deploy.yml`과 배포 스크립트를 전달한다.
+    서버에서는 `docker compose pull` 후 `docker compose up -d` 로 반영한다.
+    staging 과 production 은 `/opt/axwms/{env}` 및 `API_HOST_PORT` 로 분리한다.
+  consequence: |
+    이미지 단위로 배포/롤백 추적이 쉬워진다.
+    다만 Registry 자격증명, SSH 키, 환경별 `.env`, Nginx 포트 연결을 별도로 관리해야 한다.
+
+- id: ADR-006
+  title: GitLab Runner 배치 — 배포 대상 EC2 에 공존 + docker executor
+  status: adopted
+  date: 2026-04-23
+  stacks: [gitlab, runner, docker, ec2]
+  context: |
+    SSafy GitLab 환경은 프로젝트에 공유 Runner 를 제공하지 않으므로 자체 Runner 를 띄울 호스트가 필요하다.
+    별도 빌드 전용 VM 을 확보하기 어려운 초기 단계이고, `api_ci` / `api_image` 는 docker executor 위에서
+    DinD service 를 사용하는 표준 패턴을 따르므로 docker executor 가 자연스러운 선택이다.
+  decision: |
+    `gitlab-runner` 는 배포 대상 EC2 에 같이 설치하고 docker executor 로 등록한다.
+    Runner 는 "Lock to current projects" 로 프로젝트 전용으로 운영하고,
+    "Protected" 옵션은 해제해 작업 브랜치 push 에서도 CI 를 수행할 수 있게 한다.
+    Runner 의 docker daemon 권한 정책(`[runners.docker]` 의 `privileged = true` 등) 은 ADR-008 에서 단독 결정한다.
+  consequence: |
+    별도 VM 없이 자동화 CI/CD 를 기동할 수 있다.
+    빌드 부하가 운영 서비스와 같은 호스트에서 경쟁하므로,
+    장기적으로는 별도 Runner 호스트 분리를 후속 과제로 둔다(ADR-008 의 1순위 전환 선택지와 동일).
+    Runner 권한 모델과 그에 따른 보안 경계는 ADR-008 을 함께 본다.
+
+- id: ADR-007
+  title: 이미지 레지스트리 구현체 — GitHub Container Registry(ghcr.io) 채택
+  status: adopted
+  date: 2026-04-23
+  stacks: [gitlab, docker, github, ghcr]
+  context: |
+    ADR-005 는 빌드 재현성을 위해 "GitLab Container Registry + SSH 원격 compose 실행" 조합을 정했다.
+    그러나 SSafy GitLab 인스턴스는 Container Registry 가 인스턴스 수준에서 비활성이고
+    프로젝트 권한으로 활성화 경로가 없어 외부 레지스트리로 대체가 불가피하다.
+    검토한 대안과 핵심 탈락 사유:
+      - Docker Hub: 무료 플랜 private repo 1개 한도 + IP 단위 pull rate limit 200/6h. web/ai 확장 시 즉시 한계.
+      - EC2 자체 registry:2: 외부 의존은 없지만 HTTPS/디스크 cleanup/retention 운영 부담이 ADR-001 의 초기 자동화 범위 대비 과도하고, EC2 를 실행 전용 호스트로 두는 ADR-005 방향과도 어긋난다.
+      - GitHub Container Registry(ghcr.io): 무료 private 무제한, pull rate limit 사실상 없음, classic PAT 1개로 자격증명 단순화.
+  decision: |
+    이미지 레지스트리는 GitHub Container Registry(ghcr.io) 를 사용한다.
+    ADR-005 의 "GitLab Container Registry 사용" 결정은 본 결정이 갱신한다(SSH 원격 compose 실행 부분은 유지).
+    구성:
+      - 이미지 네임스페이스: `ghcr.io/axwms-s209/axwms-api`
+      - 자격증명: GitHub 개인 계정의 classic PAT (scopes: `write:packages`, `read:packages`, `repo`)
+      - GitLab CI/CD Variables: `GHCR_USER`(개인 username), `GHCR_TOKEN`(PAT) 을 Protected 로 등록, `GHCR_TOKEN` 은 Mask 적용
+      - `.gitlab-ci.yml` 은 이미지 식별자를 `API_IMAGE_BASE` 변수로 상수화해 레지스트리 교체 시 수정 지점이 한 곳에 모이게 한다.
+  consequence: |
+    private 이미지 한도와 rate limit 리스크에서 자유로워지고 web/ai 확장 시에도 같은 네임스페이스로 일관 관리된다.
+    PAT 만료 시 CI 가 `unauthorized` 로 조용히 실패하므로 만료 전 갱신을 운영 루틴에 포함한다(D-7 캘린더 알림).
+    이미지가 GitHub Organization `axwms-s209` 에 귀속되며, Org 변경 시 `API_IMAGE_BASE` 한 줄과 본 ADR 을 함께 갱신한다.
+    소스(GitLab) 와 이미지(GitHub) 가 두 서비스로 분산되므로, SSafy GitLab 이 Container Registry 를 다시 열면 본 결정을 재검토한다.
+
+- id: ADR-008
+  title: CI Runner privileged 허용 — DinD 기반 이미지 빌드의 전제와 재검토 트리거
+  status: adopted
+  date: 2026-04-23
+  stacks: [gitlab, runner, docker, security]
+  context: |
+    ADR-006 은 Runner 배치(EC2 공존, docker executor) 결정만 두고, daemon 권한 정책은 본 ADR 이 단독 책임진다.
+    privileged 의 근본 원인은 "이미지 빌드" 가 아니라 "Gradle 자체가 Docker 를 쓰는 설계" 다.
+      - jOOQ codegen: `./gradlew jooqGenerate` 가 실제 `pgvector/pgvector:pg17` 컨테이너를 띄우고 Flyway migration 을 적용한 뒤 메타데이터를 읽어 generated source 를 만든다.
+      - Testcontainers: `./gradlew test` 가 PostgreSQL/Redis 컨테이너를 즉석 기동한다.
+    따라서 `api_ci` 의 Gradle 실행은 컨테이너 안에서도 Docker daemon 접근을 요구하고, GitLab 표준 해법인 `docker:dind` services 패턴을 사용한다.
+    DinD daemon 은 커널 namespace, cgroups, overlay/loopback mount, iptables NAT, `/dev` 접근이 필요하므로 unprivileged 컨테이너에서는 동작하지 않는다.
+    검토한 대안과 핵심 탈락 사유:
+      - DooD(host `/var/run/docker.sock` 바인딩): GitLab 공식 문서 기준 "privileged 와 동급 또는 그 이상 위험".
+      - Kaniko(rootless image builder): `api_image` 만 rootless 로 바꿀 수 있으나 `api_ci` 가 jOOQ + Testcontainers 때문에 여전히 DinD 를 요구해 `config.toml` 의 `privileged` 자체는 끌 수 없다.
+      - Shell executor + 호스트 docker daemon: 컨테이너 격리 자체를 포기해 공격 표면이 더 넓어진다.
+  decision: |
+    현 단계에서는 `[runners.docker]` 의 `privileged = true` 를 유지한다.
+    privileged 의 이론적 위험은 아래 방어 조합으로 실제 공격 경로 전환을 차단한다고 판단한다.
+      - Runner 가 "Lock to current projects" 로 이 프로젝트에만 바인딩된다.
+      - `SSH_PRIVATE_KEY`, `GHCR_TOKEN` 같은 민감 자격증명은 Protected variable 로 Protected branch(`master`/`dev`) 파이프라인에만 주입된다. 작업 브랜치 CI 는 privileged 컨테이너를 얻더라도 탈취할 비밀값 자체가 없다.
+      - 저장소는 SSafy GitLab 내부 전용으로 외부 fork MR 이 존재하지 않는다.
+      - `dev`/`master` 직접 push 가 금지되고 MR 리뷰를 거쳐야 반영된다.
+      - 팀 규모가 작아 trust boundary 가 좁다.
+  consequence: |
+    GitLab 표준 DinD 패턴을 그대로 사용해 학습 허들과 디버깅 비용이 낮고, ADR-002 / ADR-005 / ADR-006 의 "CI 선빌드 + Registry 이미지 pull" 설계가 변경 없이 성립한다.
+    privileged 컨테이너 탈출이 성공하면 호스트(EC2) 장악으로 이어질 수 있고, 악성 MR 이 protected branch 에 병합되면 배포 파이프라인이 공격 벡터가 될 수 있다. 위 방어 조합으로 감수 가능한 수준으로 판단한다.
+
+    재검토 트리거 (아래 중 하나라도 해당되면 본 ADR 을 재검토한다):
+      - 저장소가 public 으로 전환되어 fork MR 파이프라인을 받게 되는 경우
+      - 팀 인원이 커져 코드 리뷰 기반 신뢰 모델이 느슨해지는 경우
+      - SSafy 또는 외부 감사·보안 요구사항이 privileged 를 금지하는 경우
+      - api 외에 web/ai 컨테이너화까지 확장되어 privileged Runner 의 blast radius 가 넓어지는 경우
+      - SSafy GitLab 이 Container Registry 를 다시 열어 ADR-007 의 기반 전제가 바뀌는 경우
+
+    전환 시 1순위 선택지: privileged Runner 를 배포 대상 EC2 에서 떼어내 전용 빌드 VM 으로 옮긴다(ADR-006 갱신 동반). 실행 호스트와 빌드 호스트가 분리되어 blast radius 가 실제로 줄어드는 가장 큰 실질 완화책이다.
+    추가 선택지(보조): `api_image` 만 Kaniko 로 전환하면 privileged 컨테이너의 외부 노출 구간이 줄어들지만 `api_ci` 의 DinD 는 그대로 남는다. api 의 codegen/test 아키텍처를 바꾸는 경우에만 privileged 자체를 제거할 수 있다.
+
+- id: ADR-009
+  title: "`infra/.env.example` 역할 재정의 — compose 렌더·스모크 테스트용 기본값 파일"
+  status: adopted
+  date: 2026-04-23
+  stacks: [infra, docker, compose, ci]
+  context: |
+    ADR-003 은 환경별 값(DB 계정, JWT 시크릿, 포트 등) 을 저장소가 아니라 EC2 `/opt/axwms/{staging|production}/.env`
+    또는 GitLab CI/CD Variables 로만 주입한다고 확정했다.
+    그러나 실제 `infra/.env.example` 에는 `APP_ENV=staging`, `API_HOST_PORT=8081` 같은 환경 특화 값이 남아 있어
+    "이 파일을 그대로 서버에 복사해도 되는가" 라는 혼동을 유발하고, ADR-003 의 "환경별 값은 서버 `.env` 에서만" 원칙과도 충돌했다.
+
+    동시에 `.gitlab-ci.yml` 의 `infra_validate` job 이 이 파일을 `infra/.env.validate` 로 복사한 뒤
+    `APP_ENV` / `API_IMAGE` / `API_HOST_PORT` 만 append 하고 `docker compose config` 로 렌더한다.
+    즉 `.env.example` 에 담긴 DB/JWT 기본값은 실제 CI 렌더 입력으로 쓰인다.
+    문제는 기존 `JWT_SECRET=change-me-to-a-long-random-string` (31바이트) 가 HMAC-SHA256 의 최소 32바이트 요구에 1바이트 부족해,
+    로컬에서 compose 로 스모크 기동할 때 Spring 기동이 실패할 수 있는 잠재 리스크가 있었다.
+
+    요컨대 `.env.example` 이 "운영 샘플" 이라는 명목을 유지하는 한
+    (1) ADR-003 원칙과의 문구 drift, (2) `infra_validate` 및 로컬 스모크에서 실제 사용되는 값의 안전성 보증
+    두 가지가 동시에 해결되지 않는다.
+  decision: |
+    `infra/.env.example` 의 역할을 "운영 샘플" 이 아니라
+    "compose 렌더 / `infra_validate` / 로컬 스모크 테스트에서 그대로 동작하는 기본값 파일" 로 축소 재정의한다.
+
+    구체 변경:
+      - 환경 특화 값(`APP_ENV`, `API_HOST_PORT`) 은 `.env.example` 에서 제거한다.
+        compose.deploy.yml 은 `${APP_ENV:-deploy}` / `${API_HOST_PORT:-8080}` default 를 갖고,
+        `infra_validate` 는 자체적으로 `APP_ENV=ci` / `API_HOST_PORT=8081` 을 append 하므로 제거해도 렌더가 깨지지 않는다.
+      - 헤더 주석에 "스모크 테스트용 기본값 / 프로덕션 절대 금지 / 환경 특화 값과 비밀값은 서버 `.env` 또는 GitLab Variables 로만 주입" 을 명시한다.
+      - `DB_PASSWORD` 는 `postgres` 로 고정해 compose 의 postgres/redis 기본값과 일치시킨다.
+      - `JWT_SECRET` 은 HMAC-SHA256 이 요구하는 최소 32바이트를 만족하는 더미 값으로 교체해
+        `infra_validate` 렌더와 로컬 스모크 기동이 별도 값 주입 없이 성공하도록 한다.
+      - `JWT_ACCESS_EXPIRATION` / `JWT_REFRESH_EXPIRATION` 은 그대로 둔다 — compose default 와 중복되지만 명시 값이 가독성을 높인다.
+
+    이 결정은 ADR-003("환경별 값은 서버 `.env` 에서만 주입") 을 갱신하지 않고 보강한다.
+    `.env.example` 이 서버 `.env` 를 대체하는 원본이라는 해석을 명시적으로 닫는다.
+  consequence: |
+    긍정적 영향:
+      - `infra_validate` 가 추가 append 없이도 compose 렌더에 필요한 DB/JWT 값을 안전하게 확보한다.
+        (JWT_SECRET 길이 부족으로 기동이 실패할 리스크 제거)
+      - `.env.example` 과 ADR-003 사이 문서 drift 가 사라진다. "환경 특화 값은 서버 `.env` 에서만" 이라는 단일 원칙이 파일 구조에서도 드러난다.
+      - 로컬 개발자가 `docker compose -f infra/compose.deploy.yml --env-file infra/.env.example up` 으로 즉시 스모크 기동할 수 있다.
+
+    부정적 영향 및 완화:
+      - 스모크 테스트용 기본값(DB_PASSWORD=postgres, JWT_SECRET=smoke-test-...) 이 실수로 서버 `.env` 로 복사되면 약한 비밀값이 운영에 유입될 수 있다.
+        완화: 헤더 주석에 "프로덕션 절대 금지" 를 명시하고, 코드 리뷰 단계에서 서버 배포 체크리스트로 차단한다.
+      - 기존 `.env.example` 을 그대로 서버에 복사하는 운영 흐름은 이 결정 이후 사용할 수 없다.
+        완화: `docs/infra/ec2-gitlab-cicd-guide.md` 가 이미 서버 `.env` 를 별도로 작성하도록 안내하므로 실제 운영 절차에는 영향 없다.
+
+    후속 책임:
+      - 향후 compose 변수 추가 시 "환경 특화 값인가 / 스모크 기본값이 안전하게 잡히는가" 두 기준을 먼저 판단한다.
+        환경 특화면 서버 `.env` 에만, 스모크 기본값을 둘 수 있으면 `.env.example` 에 둔다.
+
+- id: ADR-010
+  title: "외부 진입 포트 재정의 — Nginx 80/443·8080/8443, 컨테이너 내부 8x00, 127.0.0.1 바인딩, staging +1 오프셋"
+  status: adopted
+  date: 2026-04-24
+  stacks: [infra, nginx, compose, ec2, security]
+  context: |
+    기존 스킴은 "외부에서 8989/8990 으로 들어와 컨테이너 호스트 포트(8080/8081) 에 직접 도달" 하는 구조였다.
+    이 구조는 세 가지 한계가 있었다.
+      1. TLS 종료 지점이 명확하지 않다. 브라우저가 요구하는 HTTPS/HTTP 상호작용(특히 FE 가 HTTPS 면 API 도 HTTPS 여야 mixed content 회피) 을 체계적으로 처리할 경로가 없었다.
+      2. 외부에서 컨테이너 호스트 포트에 직접 꽂힐 수 있어 Nginx 의 로깅/속도 제한/헤더 정책 같은 경계 정책이 우회될 여지가 있었다.
+      3. 포트 번호가 8989/8990 처럼 불규칙해 서비스 증설 시 기억 부담이 커졌다. web/ai 가 자동배포 범위에 들어오면 더 악화될 수 있다.
+
+    동시에 환경/현실 조건을 재확인한 결과:
+      - SSAFY 보안그룹은 443/80 을 포함해 일반 포트가 이미 열려 있다. 팀이 8000–9000 으로 좁혀 쓰던 것은 "어디가 열렸는지 파악하기 귀찮아서" 의 편의 규칙이었을 뿐 제도적 제약이 아니다.
+      - Nginx 를 EC2 systemd 로 두는 방향은 합의돼 있다(ADR-001 의 "nginx/HTTPS 는 외부에서 제공된 환경" 은 상위 인프라가 아니라 이 EC2 자체의 systemd nginx 로 재해석).
+      - TLS 인증서 발급 경로(ADR-012) 는 Let's Encrypt + certbot 으로 확정한다.
+
+    따라서 "Nginx 를 전면에 두고 컨테이너는 내부 포트만 쓰게" 구조를 명시적으로 바꿀 수 있는 시점이다.
+  decision: |
+    Nginx 를 EC2 systemd 로 운영하고 외부 진입 포트를 재정의한다.
+
+    1. 외부 진입 포트 (Nginx listen)
+       - production: 80, 443 (ACME HTTP-01 challenge + HTTPS)
+       - staging:    8080, 8443
+       Nginx 는 이 네 포트를 점유하고 모든 외부 요청을 받는다.
+       이 포트들은 OPS-004 의 "8000–9000" 규칙의 예외로 허용한다 (OPS-004 갱신).
+
+    2. 컨테이너 내부 listen 포트 (고정)
+       - web (Next.js):    8000
+       - api (Spring):     8100
+       - ai (FastAPI):     8200
+       컨테이너가 "어느 서비스인가" 를 포트 한 자리수로 기억할 수 있게 8x00 네이밍으로 통일한다.
+
+    3. 컨테이너 호스트 바인딩
+       - web/api/ai 는 `127.0.0.1:<HOST>:<INTERNAL>` 형태로 바인딩해 외부에서 Nginx 를 우회할 수 없게 한다 (OPS-010).
+       - production 호스트 포트는 컨테이너 내부 포트와 동일하게 둔다 (예: `127.0.0.1:8100:8100`).
+       - staging 호스트 포트는 production +1 오프셋으로 둔다 (예: `127.0.0.1:8101:8100`). 이 규칙은 OPS-009 로 상수화한다.
+       - Nginx 는 `proxy_pass http://127.0.0.1:8100` 처럼 로컬로만 upstream 을 연다.
+
+    4. 서비스 증설 시 운용 규칙
+       - web/ai 자동배포 범위 확장(ADR-001) 은 별개 결정이다. 이 ADR 은 web/ai 도 8000/8200 으로 내부 listen 한다는 네이밍만 확정하고, 실제 compose/코드 반영은 자동배포 범위가 열릴 때 동반 진행한다.
+
+    이 결정은 ADR-005(이미지 pull + SSH compose 실행) 와 ADR-007(ghcr.io) 을 갱신하지 않고, ADR-001 의 "외부 nginx/HTTPS" 해석을 "EC2 systemd nginx" 로 구체화한다.
+  consequence: |
+    긍정적 영향:
+      - TLS 종료가 Nginx 단일 지점에 모여 FE/API/AI HTTPS 일관성이 확보된다. mixed content 문제 해소.
+      - 외부 스캔에 노출되는 TCP 포트가 Nginx(80/443, 8080/8443) 와 DB(ADR-011) 로 축소된다. 공격 표면 감소.
+      - 포트 번호 규칙성이 높아 팀원이 외워서 디버깅 가능.
+      - production/staging 이 같은 EC2 에 공존해도 충돌이 구조적으로 방지된다 (+1 오프셋 + 127.0.0.1 바인딩).
+
+    부정적 영향 및 수용 범위:
+      - Nginx 가 단일 장애 지점이 된다 — reload 실패 시 전체 외부 접근 중단. 완화: `sudo nginx -t` 선행, systemd 재시작 대신 reload 사용, 설정 변경은 PR 리뷰 필수화 (Nginx conf 저장소화는 pending-decisions 참고).
+      - `server.port` 를 8100 으로 옮기면서 기존 application.yml default(8080) 와 문서(`API_HOST_PORT=8080`) 를 같이 갱신해야 한다. 이번 MR 에서 api 영역에 한해 반영한다.
+      - web/ai 는 실제 반영이 자동배포 범위에 들어올 때까지 유예된다. 그동안 web/ai 개발자는 기본 포트(Next 3000, Uvicorn 8000) 를 쓰다가 자동배포 편입 시점에 일괄 교체해야 한다 — pending-decisions 에 기록.
+
+    후속 책임:
+      - OPS-004 / OPS-009 / OPS-010 을 이 ADR 의 근거로 한다.
+      - 가이드(`docs/infra/ec2-gitlab-cicd-guide.md`) 섹션 6·8·13 을 이 스킴으로 재작성한다.
+      - Nginx conf 저장소 편입(가이드 섹션 17 후속 과제) 은 실제 서버 작업과 동기화가 필요해 별도 MR 로 분리한다.
+
+- id: ADR-011
+  title: "DB 개발 편의 외부 노출 — postgres 8300/8301, redis 8400/8401, production 포함 리스크 수용"
+  status: adopted
+  date: 2026-04-24
+  stacks: [infra, postgres, redis, security]
+  context: |
+    팀 개발 루프에서 스키마/데이터를 DBeaver, RedisInsight 같은 클라이언트 툴로 직접 확인해야 하는 빈도가 높다.
+    기존 compose 는 postgres/redis 를 호스트 포트로 노출하지 않아 매번 `docker exec -it` 또는 SSH 포트포워딩을 거쳐야 했고,
+    이 마찰이 디버깅 속도를 눈에 띄게 떨어뜨리고 있었다.
+
+    검토한 대안:
+      (a) 호스트 포트 외부 개방 (이 ADR)
+          - 장점: DB 툴이 바로 붙는다. 설정 단순.
+          - 단점: 공개 인터넷에 DB 포트가 상시 listen 된다. 비밀번호 유출 시 즉시 공격 가능.
+      (b) SSH 터널 only (외부 비노출)
+          - 장점: 외부 표면 0. 가장 안전.
+          - 단점: 매번 `ssh -L` 세팅. 팀원별 SSH 키 관리가 필요. 툴 연결 템플릿 배포 부담.
+      (c) VPN (WireGuard 등)
+          - 장점: 내부망처럼 사용. 표면 최소.
+          - 단점: VPN 서버 운영·계정 관리·클라이언트 배포. 팀 규모 대비 운영 오버헤드 과도.
+
+    ADR-001 의 "EC2 는 실행 전용 호스트" 방향과 (a) 는 긴장 관계에 있지만, 지금 팀 규모와 개발 속도 요구를 고려하면 (a) 의 이득이 크다.
+    사용자(팀 리드) 가 "개발 편의를 위해 production 포함 외부 개방" 을 명시적으로 결정했다.
+  decision: |
+    postgres 와 redis 를 호스트 포트로 외부에 개방한다. production 도 개방 대상에 포함한다.
+
+    호스트 포트 매핑 (OPS-009 의 +1 오프셋 규칙 적용):
+      - postgres: production `8300:5432`, staging `8301:5432`
+      - redis:    production `8400:6379`, staging `8401:6379`
+
+    컨테이너 내부 listen 포트는 기본값(postgres 5432, redis 6379) 을 유지한다.
+    "내부 listen 도 8300/8400 으로 바꾸자" 는 초기 제안은, 클라이언트 드라이버 기본값(5432/6379) 과 mismatch 로 인한 실수 가능성이 커 이번 단계에서는 채택하지 않았다.
+    문제가 발생하면 그때 내부 포트도 변경한다.
+
+    완화책(공격 표면 확장에 대한 방어선):
+      - `DB_PASSWORD` 는 staging/production 각각 다른 강한 무작위 값(최소 24자, 혼합) 으로 관리한다 (OPS-011).
+      - 비밀번호는 GitLab CI/CD Variables 로만 보관하고 저장소·문서에 실제 값을 커밋하지 않는다.
+      - SSAFY 보안그룹에서 IP 화이트리스트가 가능해지면 DB 포트만 팀원 IP 로 제한한다 (pending-decisions).
+      - 비정상 접속 패턴이 감지되면 임시로 DB 포트만 보안그룹에서 닫는 runbook 을 운영한다 (후속 문서화).
+
+  consequence: |
+    긍정적 영향:
+      - 개발 속도 가속 — DBeaver/RedisInsight 연결 한 번으로 스키마 검증, 데이터 수정, 쿼리 디버깅이 즉시 가능.
+      - compose 레벨에서 호스트 포트만 다루므로 컨테이너 내부/서비스 코드에 영향 없음.
+
+    부정적 영향 및 수용 범위:
+      - 공개 인터넷에 DB 포트가 상시 listen 된다. 자동 스캐너 입장에서 유의미한 타깃이다.
+      - 비밀번호 유출 시 즉시 공격이 가능하다. OPS-011 의 강한 비밀번호 정책이 유일한 1차 방어선이다.
+      - ADR-001 의 "EC2 실행 전용 호스트" 방향과 긴장 — 이번 결정은 "개발 편의 vs 보안 표면" 트레이드오프에서 편의를 명시적으로 선택한 기록이다.
+
+    재검토 트리거 (아래 중 하나라도 해당되면 이 ADR 을 재검토한다):
+      - 저장 데이터가 민감정보 수준(개인정보/결제 등) 으로 격상되는 경우
+      - 팀 인원 확대로 DB 접속이 필요한 사람 수가 급증하는 경우
+      - 실제 침해 사고 또는 유사 사고가 인접 프로젝트에서 발생하는 경우
+      - SSAFY 가 IP 화이트리스트 기능을 열어줘 (b)/(c) 에 준하는 수준의 표면 축소가 가능해지는 경우
+
+- id: ADR-012
+  title: "TLS 인증서 출처 — Let's Encrypt + certbot 자동 갱신"
+  status: adopted
+  date: 2026-04-24
+  stacks: [infra, nginx, security, ec2]
+  context: |
+    ADR-010 으로 Nginx 가 443/8443 에서 HTTPS 를 제공하는 구조가 확정되면서 인증서가 실제로 필요해졌다.
+
+    검토한 대안:
+      (a) Let's Encrypt + certbot
+          - 무료, 90일 만료 + 자동 갱신 가능, 표준 ACME 클라이언트.
+          - 도메인 `k14s209.p.ssafy.io` 가 공개 인터넷에서 80 포트로 HTTP-01 challenge 를 받을 수 있으면 발급 가능.
+          - 갱신 실패 시 `certbot renew` 로그만 확인하면 된다.
+      (b) SSAFY 제공 와일드카드 인증서
+          - 팀에서 출처·갱신 주기·private key 보관 책임 경계가 불명확.
+          - 와일드카드 특성상 대상 범위가 넓어 키 분실 시 영향 범위가 크다.
+      (c) 자체 서명 (self-signed)
+          - 브라우저 경고로 정상 운영 불가. 내부 툴용이라도 FE 연결 시 API HTTPS 는 실제 CA 인증서가 필요.
+
+    도메인이 이미 존재하고 80 포트 개방이 (ADR-010) 로 확정된 상태라 (a) 의 전제가 성립한다.
+  decision: |
+    Let's Encrypt + certbot 으로 TLS 인증서를 발급·갱신한다.
+
+    운영 방식:
+      - 초기 발급: `certbot --nginx -d k14s209.p.ssafy.io` 로 Nginx plugin 이 conf 자동 수정 + 인증서 발급을 동시 수행.
+      - 인증서 위치: `/etc/letsencrypt/live/k14s209.p.ssafy.io/fullchain.pem` / `privkey.pem`
+      - 자동 갱신: certbot 설치 시 systemd timer(`certbot.timer`) 가 자동 활성화되어 하루 2회 `certbot renew` 실행. 만료 D-30 시점부터 갱신 시도.
+      - 갱신 후 hook: `--deploy-hook "systemctl reload nginx"` 를 systemd timer 의 환경 또는 `/etc/letsencrypt/renewal/*.conf` 에 설정해 reload 를 자동화.
+      - 80 포트는 Nginx 가 항상 listen 해야 ACME HTTP-01 challenge 가 가능하다. 설령 443 으로만 트래픽을 받아도 80 은 redirect 목적 + challenge 목적으로 남겨둔다.
+  consequence: |
+    긍정적 영향:
+      - 무료·자동 갱신·Nginx 통합. 운영 오버헤드 최소.
+      - 인증서 출처가 표준 공개 CA 이므로 브라우저 경고 없음.
+
+    부정적 영향과 완화:
+      - Let's Encrypt 서비스 장애 시 갱신이 지연될 수 있다. 완화: 만료 7일 전 알림 루틴(외부 모니터링) 을 pending-decisions 의 후속 과제로 기록.
+      - 80 포트가 반드시 외부 개방되어야 한다. ADR-010 과 연동되어 있어 두 결정은 함께 움직인다.
+      - `k14s209.p.ssafy.io` 의 DNS 제어권이 SSAFY 측에 있다. SSAFY 가 도메인을 회수하거나 DNS 변경을 지체하면 신규 발급이 막힌다. 완화: 사고 시점에 DNS 관리 주체에 긴급 요청할 연락 창구를 운영 문서에 명시한다 (후속 과제).
+
+    후속 책임:
+      - 실제 `certbot --nginx` 초기 발급은 EC2 서버 작업이 수반되므로 코드 변경만으로 완결되지 않는다 — pending-decisions 참고.
+      - Nginx conf 저장소 편입이 이뤄지면 인증서 경로도 저장소 conf 와 정합성 유지.
+
+- id: ADR-013
+  title: CI/CD 인증 자격증명의 등록·검증 규칙 — `.gitlab-ci.yml` 참조명과 Variables Key 정합성
+  status: adopted
+  date: 2026-04-24
+  stacks: [gitlab, ci, security, ops]
+  context: |
+    ADR-007 은 ghcr.io 레지스트리 채택을, OPS-006 은 CI/CD Variables 의 Protected/Mask 정책을 규정했지만
+    "UI 에 값이 있어 보이는데 runtime 에 원하는 형태로 들어오지 않는" 변수 주입 실패는 별도 검증 절차 없이 사후 진단에 의존했다.
+    실제 사례로 dev push 의 `api_image` 가 `Must provide --username with --password-stdin` 로 반복 실패했고, 원인은
+    GitLab Variables Key 가 `GHCR_USER` 가 아니라 `GHCR_NAME` 으로 등록된 단순 오타였다(육안 확인만으로는 잡히지 않았다).
+    동시에 `SSH_PRIVATE_KEY` 의 `-----END OPENSSH PRIVATE KEY-----` 뒤 trailing newline 누락으로
+    `Load key ... error in libcrypto` / `Permission denied (publickey)` 가 별도로 발생했다.
+    이러한 실수가 배포 단계까지 흘러가는 경로를 사전 차단하고, 사후에는 5분 내 판정 가능한 검증 절차가 필요하다.
+  decision: |
+    신규 CI/CD Variable 등록 또는 기존 값 수정 시 아래 5단계 검증을 의무로 한다. 육안 확인만으로 "등록 완료" 를 승인하지 않는다.
+      (1) 참조명 정합 — `.gitlab-ci.yml` 등 참조 파일에서 `grep -n 'VARNAME'` 으로 참조명을 먼저 확정한다.
+      (2) Key 직접 타이핑 — UI Key 필드를 복붙 대신 키보드로 입력하고, 등록 후 커서를 좌우 끝으로 이동해 잉여 공백·유사 유니코드 문자가 없는지 재확인한다.
+      (3) 간접 probe — 임시 job 또는 해당 job 의 `before_script` 최상단에서 `env | awk -F= '/^PREFIX/ {print $1}'` 와 `echo "V set?=${VARNAME+yes} len=${#VARNAME}"` 만 사용해 Key 주입 여부와 길이를 확인한다. 값 자체는 어떤 형태로도 echo 하지 않으며, probe 라인은 원인 확정 후 동일/후속 MR 로 반드시 제거한다.
+      (4) Masked 조건 준수 — 단일 줄·최소 8자·허용 문자 집합을 만족할 때만 Masked 를 켠다. PEM/multi-line/공백 포함 값은 Masked 대상이 아니다.
+      (5) Protected × Environment scope 정합 — Protected 변수는 Protected branch/tag 의 job 에만 주입된다. environment 미선언 job 에서는 Environments 를 `All (default) *` 로 둬야 주입된다.
+    PEM 기반 변수(`SSH_PRIVATE_KEY` 등) 는 마지막 `-----END ... -----` 뒤에 LF 개행 1개를 반드시 포함하고 개행은 LF 고정으로 저장한다(`SSH_PRIVATE_KEY`, `SSH_KNOWN_HOSTS` 는 "Expand variable reference" 비활성화).
+    상세 단계별 절차·진단 사례·복구 명령은 `docs/infra/code-convention.yaml` 의 OPS-012 / OPS-013 / OPS-015 와 `runbooks/infra/ci-auth-troubleshoot.md` 가 SSOT 다.
+  consequence: |
+    변수 등록 실수(Key 오타, 보이지 않는 문자, Masked 저장 실패, PEM 개행 누락) 가 배포 단계까지 흘러가는 경로가 차단된다.
+    간접 probe 패턴이 표준화되어 장애 진단 시간이 예측 가능해지고, OPS-006 의 "Protected 등록" 원칙이 실제 검증 가능한 절차로 보강된다.
+    변수 추가마다 probe 커밋/제거 쌍이 발생할 수 있으나 동일 MR 안에서 정리하거나 후속 cleanup MR 로 분리한다.
+    MR 리뷰에서 probe 로그 발췌(예: `GHCR_USER set?=yes len=8`) 를 검증 증거로 요구한다.
+
+- id: ADR-014
+  title: "EC2 자동배포 범위 확장 — web 편입(1차 추가)"
+  status: adopted
+  date: 2026-04-27
+  stacks: [docker, compose, ec2, gitlab, nextjs]
+  context: |
+    ADR-001 은 EC2 1차 자동배포 범위를 api/postgres/redis 로 좁히고 web/ai 의 운영 자동배포는 후속 단계로 분리해 두었다.
+    이후 ADR-010 이 web 내부 listen 8000, OPS-009 의 staging +1 오프셋, OPS-010 의 127.0.0.1 바인딩까지 합의했지만,
+    실제 web 컨테이너 이미지·compose 편성·CI 파이프라인 자산은 본 ADR 시점까지 0 이었다.
+    pending-decisions #5 의 트리거("자동배포 범위가 web/ai 로 확장되는 시점") 가 이번 단계에서 web 부분에 한해 도래했다.
+
+    추가로 점검한 제약:
+      - 모노레포 구조: pnpm-workspace.yaml 의 packages 가 `web` 단일이지만 lockfile 은 루트에 있어 web Dockerfile 의 빌드 컨텍스트는 모노레포 루트가 자연스럽다.
+      - api/Dockerfile 은 외부 빌드 산출물(JAR) 만 복사하는 단순 구조(DO-001) 이지만 web 은 Node 빌드 자체를 컨테이너 안에서 수행해야 하므로 multi-stage 가 필요하다.
+      - Next.js 16 의 standalone output 은 `outputFileTracingRoot` 가 모노레포 루트로 잡혔을 때 `<root>/web/.next/standalone/{web,node_modules}` 형태로 hoisted 의존성을 함께 트레이스해 runner 이미지에 그대로 옮길 수 있다.
+  decision: |
+    ADR-001 의 "web 의 운영 자동배포는 후속 단계로 분리" 결정 중 web 부분을 본 ADR 이 회수한다(ai 는 별개 ADR 로 후속 분리 유지).
+    각 결정의 대안 비교·기각 근거는 `docs/infra/web-deploy-rationale.md` 가 SSOT 다.
+
+    1. 컨테이너 패키징 — `web/Dockerfile` 신규
+       - 빌드 컨텍스트: 모노레포 루트(`.`). 사유: pnpm workspace lockfile 무결성과 hoisted 의존성 추적.
+       - multi-stage 분리: `deps`(pnpm install --frozen-lockfile) → `builder`(`pnpm --filter ./web build`) → `runner`(standalone 산출물 + `.next/static` 만 복사).
+       - 런타임 이미지: `node:22-alpine`, non-root user, `WORKDIR /app/web`, `CMD ["node","server.js"]`.
+       - `web/next.config.ts` 에 `output: "standalone"`, `outputFileTracingRoot: path.join(__dirname, "..")` 명시.
+
+    2. 컨테이너 내부 listen 포트 — 8000 (ADR-010 합의 그대로)
+       - production 호스트: `127.0.0.1:8000:8000`
+       - staging 호스트:    `127.0.0.1:8001:8000` (OPS-009 +1 오프셋)
+       - `package.json` 의 `start` 도 `next start -p 8000` 으로 맞춰 로컬·컨테이너 동작 일치.
+
+    3. 이미지 레지스트리 네임스페이스 — `ghcr.io/axwms-s209/axwms-web`
+       - ADR-007 의 organization(`axwms-s209`) 그대로 사용. 자격증명도 동일(`GHCR_USER`/`GHCR_TOKEN`).
+       - 태그 정책은 api 와 동일: `:<CI_COMMIT_SHA>` + `:<CI_COMMIT_REF_SLUG>` 두 개 push.
+
+    4. 배포 스크립트 일반화 — `infra/scripts/remote-deploy-api.sh` → `infra/scripts/remote-deploy.sh`
+       - `API_IMAGE` 와 `WEB_IMAGE` 모두 `require_var`.
+       - `compose pull api web` / `compose rm -sf api web` / `compose up -d --remove-orphans postgres redis api web` 로 두 컨테이너를 같은 멱등 흐름(OPS-016) 안에서 처리.
+
+    5. `.gitlab-ci.yml` 확장
+       - `WEB_IMAGE_BASE` 변수 추가, `web_image` job 신규(컨텍스트 루트, `-f web/Dockerfile`).
+       - `.web_deploy_changes` anchor 추가(web/** + 모노레포 root manifest + infra/** + docs/infra/** + .gitlab-ci.yml). web_image 트리거.
+       - deploy_dev/deploy_prod 의 changes 트리거를 `.api_deploy_changes` → `.deploy_changes` 합집합으로 일반화. API_IMAGE/WEB_IMAGE 동시 주입.
+       - `infra_validate` 의 ci 더미 변수에 `WEB_IMAGE`/`WEB_HOST_PORT` 추가, 기존 `API_HOST_PORT=8081` 잔재를 ADR-010 스킴(8101) 으로 갱신.
+
+    6. 본 ADR 범위 밖
+       - ai 컨테이너화 / 자동배포 편입.
+       - Nginx conf 의 path-based 라우팅(/, /api, /ai) 실 반영 — pending-decisions #3 의 Nginx conf 저장소 편입과 동시 진행이 자연스럽다.
+       - EC2 `/opt/axwms/{staging,production}/.env` 의 `WEB_HOST_PORT` 추가는 코드 변경이 아니라 서버 sudo 작업이므로 본 MR 외 운영 절차로 분리. 가이드 섹션 8/14 갱신만으로 안내한다.
+  consequence: |
+    긍정적 영향:
+      - web 도 동일 파이프라인 모델(CI 선빌드 + ghcr push + EC2 SSH compose 실행) 에 편입되어 ADR-002/005/007 의 패턴이 영역 무관하게 일관된다.
+      - api 의 DinD/jOOQ 의존(ADR-008) 이 web 빌드에는 없으므로 web_image job 은 단순 docker build/push 로 끝나 Runner 부하 증가가 미미하다.
+      - OPS-004/009/010 의 web 관련 조항이 "예정값" 이 아니라 실제 적용된 구성이 된다. pending-decisions #5 의 web 부분이 종결.
+
+    부정적 영향과 완화:
+      - deploy 시 ghcr 에 web 이미지가 없으면 실패한다. `.web_deploy_changes` 가 인프라 변경도 포함하므로 본 MR 의 인프라 변경이 web_image 첫 빌드를 보장한다. 이후 인프라-only 변경에서도 동일 보장.
+      - pending-decisions #3 가 후행이라 nginx 가 web upstream 으로 라우팅하기 전까지 컨테이너는 떠 있고 외부 접근만 막힌다 — 의도된 단계 분리. 후속 MR 에서 nginx conf 저장소 편입 + reload 자동화.
+      - 모노레포 루트 컨텍스트 빌드를 위해 `.dockerignore` 가 루트에 신설된다. api 빌드는 컨텍스트가 `api/` 이므로 api/.dockerignore 가 우선이고 본 파일의 영향은 없다.
+      - web/Dockerfile 의 builder stage 가 `pnpm install --frozen-lockfile` 을 매번 수행한다. CI 캐시는 `.web_changes` 의 lockfile 키 기반 cache 가 web_ci 에서 따로 동작하지만 web_image 자체에는 캐시가 없어 첫 빌드 시간이 더 길다(허용 범위로 판단, 추후 BuildKit `--cache-from` 도입은 별 MR).
+
+    재검토 트리거:
+      - 패키지 매니저가 pnpm 외 다른 워크스페이스 모델로 바뀌는 경우(빌드 컨텍스트 전제 변동).
+      - web 이 server actions / RSC 외부 의존성, 사이드카(예: Redis-backed cache, BFF) 등을 추가해 단일 컨테이너 모델이 깨지는 경우.
+      - ADR-007 의 ghcr.io organization 이 바뀌는 경우(`WEB_IMAGE_BASE` 동반 갱신 필요).
+      - SSafy GitLab 이 Container Registry 를 다시 열어 ADR-007 의 기반 전제가 흔들리는 경우.
+
+- id: ADR-015
+  title: "Nginx conf 저장소 편입 + path-based 라우팅 + deploy 동기화"
+  status: adopted
+  date: 2026-04-27
+  stacks: [infra, nginx, ec2, gitlab, security]
+  context: |
+    ADR-010 으로 EC2 systemd nginx 가 단일 진입점으로 결정됐고, ADR-012 로 Let's Encrypt 인증서가 발급됐으며,
+    ADR-014 로 web 컨테이너가 자동배포 흐름에 편입됐다.
+    그러나 nginx conf 자체는 EC2 의 `/etc/nginx/sites-available/axwms.conf` 에만 존재하고 저장소 SSOT 가 없었다.
+    그 결과:
+      - ADR-014 로 web 컨테이너가 떠 있어도 nginx 가 web upstream 으로 라우팅하지 않아 외부에서 web 접근이 막혀 있었다.
+      - conf 변경이 PR 리뷰 / CI 검증 경로 밖에서 일어나 drift 가 즉시 발생할 수 있었다.
+      - pending-decisions #3 의 다음 트리거(인증서 발급 완료 + conf 안정화) 가 ADR-014 시점에 충족됐다.
+
+    추가로 점검한 제약:
+      - 한 EC2 에 staging/production 이 공존하고 nginx conf 한 파일이 양쪽 server 블록을 모두 가진다.
+      - 도메인은 `k14s209.p.ssafy.io` 하나뿐. 와일드카드 인증서나 별 도메인 발급은 SSAFY DNS 의존이라 외부 차단.
+      - deploy user 는 ubuntu 계정이며 nginx reload 에 sudo 가 필요하다.
+  decision: |
+    ADR-014 의 "Nginx conf 의 path-based 라우팅 실 반영은 pending-decisions #3 과 동시 진행" 결정 중
+    Nginx 측 부분을 본 ADR 이 회수한다. pending-decisions #3 은 본 ADR 로 종결.
+
+    1. 저장소 위치 — `infra/nginx/sites-available/axwms.conf` + `infra/nginx/snippets/proxy-headers.conf`
+       대안과 기각 사유:
+         - 루트 `nginx/` 디렉터리: 인프라 자산은 `infra/` 하위가 SSOT (CMP-001 정합) 라서 분리할 이유 없음.
+
+    2. 환경 분리 — 1:1 커밋 (production server 블록 + staging server 블록 둘 다 글자 그대로)
+       대안과 기각 사유:
+         - 템플릿화(`axwms.conf.tpl` + `envsubst` 류): 도메인 단일이라 치환할 변수가 사실상 listen 포트뿐.
+           도구 의존 + 변수 누락 위험 + EC2 안에서만 `nginx -t` 검증 가능 — 이득 대비 부담 큼.
+         - Ansible / 별 배포 도구: 운영 표면 확장 부담, 본 ADR 범위 초과.
+
+    3. 라우팅 모델 — path-based (`/api/` → api, `/ai/` → ai, `/` → web). 더 구체적인 prefix 가 location 블록에서 위로.
+       대안과 기각 사유:
+         - subdomain (api.k14s209.p.ssafy.io 등): 와일드카드 인증서 또는 도메인 추가 발급 필요.
+           SSAFY 가 `k14s209.p.ssafy.io` 한 줄만 매핑해줘서 외부 의존 추가. ADR-012 의 단일 인증서 모델과도 충돌.
+
+    4. 배포 경로 — `deploy_dev`/`deploy_prod` 의 script 끝에 nginx 단계 추가.
+       흐름: `scp` 로 `/tmp` 에 두 파일 → `ssh` 한 번에 `sudo install + mkdir + install + nginx -t + systemctl reload + rm` 묶어 처리.
+       대안과 기각 사유:
+         - 별 `deploy_nginx` job: 같은 SSH key 설정 중복 + 두 deploy 사이 race 가능성.
+         - 별 인벤토리 도구(Ansible 등): 운영 표면 확장.
+       staging/production 이 같은 EC2 에서 같은 conf 를 공유하므로 두 deploy 가 모두 reload 해도 결과 동일(멱등).
+       어느 환경 배포 시점에도 conf 가 최신으로 동기화 보장.
+
+    5. 새 EC2 1회 사전 절차 — sites-enabled symlink 와 sudoers
+       (1) `sudo ln -sf /etc/nginx/sites-available/axwms.conf /etc/nginx/sites-enabled/axwms.conf` + `sudo rm -f /etc/nginx/sites-enabled/default`.
+           Debian/Ubuntu nginx 는 `/etc/nginx/sites-enabled/*` 만 include 하므로 symlink 가 없으면 deploy 가 install 한 파일을 nginx 가 로드하지 않는다.
+           이 누락은 silent failure 다 — deploy 의 `nginx -t` 는 sites-enabled 의 다른 파일만 검증하므로 그대로 통과하고 reload 도 성공한다.
+           job 로그가 녹색인데 외부 동작이 변하지 않는 가장 헷갈리는 사고 패턴이라, 본 ADR 의 운영자 사전 절차에 명시 박아둔다.
+       (2) deploy user 의 sudoers 에 다음 명령만 NOPASSWD 로 등록한다.
+         /usr/bin/install -o root -g root -m 0644 /tmp/axwms.conf /etc/nginx/sites-available/axwms.conf
+         /usr/bin/install -o root -g root -m 0644 /tmp/proxy-headers.conf /etc/nginx/snippets/proxy-headers.conf
+         /usr/bin/mkdir -p /etc/nginx/snippets
+         /usr/sbin/nginx -t
+         /usr/bin/systemctl reload nginx
+       대안과 기각 사유:
+         - deploy user 에게 `/etc/nginx/sites-available/` 직접 쓰기 권한 부여: nginx 의 보안 표준(시스템 conf 는 root) 깨짐.
+         - sudoers 에 `ALL=(ALL) NOPASSWD: ALL`: 권한 최소화 원칙 위배. 감사 시 즉시 지적 대상.
+
+    6. 본 ADR 범위 밖 (별 MR 로 분리)
+       - keep-alive 풀(`upstream { keepalive N; }` + `proxy_set_header Connection ""` 짝꿍): 두 짝이 같이 들어가야 동작하므로 본 conf 에선 `keepalive` 자체를 두지 않는다. 단일 진입점 안정화 후 한 MR 로 두 짝 동시 추가.
+       - 보안 헤더 확장(CSP, Permissions-Policy 등): 현재는 HSTS + X-Content-Type-Options 만.
+       - gzip / brotli, rate limit, fail2ban, WAF: 운영 부하 관측 후 결정.
+  consequence: |
+    긍정적 영향:
+      - web 외부 접근이 처음으로 활성화된다(`https://k14s209.p.ssafy.io/` → web 컨테이너).
+      - nginx conf 변경 이력이 git log 에 남고 PR 리뷰가 강제된다. drift 0 보장.
+      - api/ai 도 같은 단일 진입점에서 라우팅되어 사용자 입장의 URL 일관성 확보(`/api/`, `/ai/`).
+
+    부정적 영향과 완화:
+      - nginx conf 변경이 `.deploy_changes` 의 `infra/**` 안에 들어가 인프라-only 변경 시에도 deploy 가 돈다.
+        한 push 가 deploy_dev + deploy_prod 양쪽에서 reload 를 일으킴. 멱등이라 결과는 동일하지만 reload 횟수가 두 배.
+        완화: pending-decisions #2 의 changes 세분화에서 `infra_runtime` 으로 좁힐 때 함께 정리.
+      - sudoers 등록과 sites-enabled symlink 생성이 운영자 1회 수동 작업. 둘 다 누락 시 운영 영향 다름:
+        sudoers 미등록 → deploy job 이 비밀번호 요청 후 timeout 으로 즉시 실패(눈에 띄는 빨간 신호).
+        symlink 미생성 → deploy job 은 녹색이지만 nginx 가 conf 를 로드하지 않음(silent failure).
+        완화: 가이드 섹션 13-3 / 13-3a 가 두 절차 모두 SSOT 다. 본 ADR 의 5번 결정과 동일.
+      - `nginx -t` 가 실패하면 reload 가 일어나지 않아 batch 가 중단되지만, 그 시점까지 scp 한 `/tmp/*.conf` 가 남는다.
+        완화: ssh 한 줄에 `&&` 로 묶여 있어 install + mkdir + install 까지는 적용되어 있을 수 있다.
+        실패 분석은 deploy job 의 ssh 출력 + EC2 의 `journalctl -u nginx` 로 충분.
+
+    재검토 트리거:
+      - ADR-012 의 인증서 출처 변경 시 conf 의 `ssl_certificate*` 경로 동반 갱신.
+      - 도메인 추가(예: `api.axwms.example.com` 도입) 시 본 ADR 의 path-based 결정 재검토 → subdomain 모델 재고려.
+      - rate limit / WAF / CDN 도입 시 단일 진입점 모델 재검토.
+      - SSAFY 보안그룹이 80/443/8080/8443 외 추가 포트를 차단/제한하는 경우.
+
+- id: ADR-016
+  title: ai 자동배포 편입 — Dockerfile + compose ai 서비스 + ai_image job
+  status: adopted
+  date: 2026-04-28
+  stacks: [docker, compose, ec2, gitlab, fastapi]
+  context: |
+    ADR-014 가 web 자동배포를 회수한 뒤 pending-decisions #5 의 ai 잔존 항목이 본 ADR 의 대상이다.
+    nginx `/ai/` 라우팅(ADR-015), 8x00 포트 스킴(ADR-010), OPS-016 의 멱등 배포 규약은 모두 ai 를 전제로 정렬되어 있다.
+    표준가이드 docx 의 nextjs 3000 / nestjs 4000 / fastapi 5000 스킴은 컨테이너↔nginx localhost 통신이라 SSAFY 외부 노출 정책과 무관하고, nestjs 항목은 본 프로젝트 Spring Boot 스택과 어긋나며, ADR-010/014/015 가 8x00 위에 다섯 서비스 + nginx + sudoers + TLS 를 정합한 비용은 docx 한 줄에 맞추기 위해 회수할 가치가 없다.
+  decision: |
+    `ai/Dockerfile` 신규 — `python:3.12-slim` 단일 stage, non-root, EXPOSE 8200, CMD `uvicorn app.main:app --host 0.0.0.0 --port 8200`. `ai/.dockerignore` 동반.
+    `infra/compose.deploy.yml` 에 `ai` 서비스 추가 — production `127.0.0.1:8200:8200` / staging `127.0.0.1:8201:8200`, depends_on postgres/redis healthy, 내부 통신은 compose hostname.
+    `remote-deploy.sh` 일반화 — `AI_IMAGE` require_var 및 `pull/rm -sf/up -d` 인자에 ai 포함.
+    `.gitlab-ci.yml` 확장 — `AI_IMAGE_BASE` 변수, `ai_image` job(`-f ai/Dockerfile ai`), `.ai_deploy_changes` anchor, `.deploy_changes` 합집합에 ai/** 편입, deploy_dev/prod ssh 한 줄에 `AI_IMAGE` 주입.
+    이미지 네임스페이스: `ghcr.io/axwms-s209/axwms-ai` (ADR-007 organization 그대로). 태그 정책은 api/web 과 동일.
+    docx 의 3000/4000/5000 스킴은 채택하지 않는다. 평가/심사 기준에 docx 포트가 명시적으로 들어간다는 사실이 추후 확인되면 본 결정 재검토.
+    Celery worker / Neo4j / ai → api 호출 인증 흐름은 사용 코드가 0건이라 본 ADR 범위 밖. 사용 시점에 별 ADR.
+  consequence: |
+    pending-decisions #5 의 ai 잔존 항목 종결. ai 도 CI 선빌드 + ghcr push + EC2 SSH compose 흐름에 편입되어 ADR-002/005/007/014 의 패턴이 영역 무관하게 일관된다.
+    Gemini API 키 없이 기동하면 `/ai/` 호출이 외부 호출 단계에서 실패하므로 첫 deploy 전 서버 `.env` 의 `GEMINI_API_KEY` 주입이 필수다.
+    파일 업로드가 붙는 시점에는 API 컨테이너에도 `AWS_S3_BUCKET`, `AWS_REGION`, `AWS_S3_BASE_PREFIX`, `AWS_S3_PUBLIC_BASE_URL`, `AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY` 를 서버 `.env` 또는 GitLab CI/CD Variables 로 주입해야 한다.
+
+- id: ADR-017
+  title: dev/master 배포 파이프라인 auto-cancel 방지
+  status: adopted
+  date: 2026-05-08
+  stacks: [gitlab, ci, cd]
+  context: |
+    `.gitlab-ci.yml` 의 전역 `interruptible: true` 와 GitLab 의 auto-cancel redundant pipelines 동작이 결합되면,
+    같은 ref 에 새 pipeline 이 생성될 때 기존 pipeline 의 실행 중 job 이 취소될 수 있다.
+    이는 작업 브랜치나 MR 검증에서는 오래된 검증을 줄이는 장점이 있지만,
+    `dev` / `master` push pipeline 에서는 배포 반영 중인 image build 또는 deploy job 이 취소되어 문제가 된다.
+
+    특히 web 변경 merge 후 `web_image` 가 `:<ref-slug>` 태그를 push 하기 전에 api 변경 merge 로 새 `dev` pipeline 이 생성되면,
+    기존 web pipeline 이 취소되고 다음 deploy 가 이전 `web:dev` 이미지를 그대로 사용할 수 있다.
+    GitLab auto-cancel 은 변경 영역(web/api/ai)이 아니라 ref 단위로 동작하므로,
+    단일 pipeline 구조에서 "같은 영역 중복 pipeline 만 취소하고 다른 영역 pipeline 은 유지"를 안전하게 표현하기 어렵다.
+  decision: |
+    `workflow:auto_cancel:on_new_commit` 의 기본값은 `conservative` 로 두어 작업 브랜치와 MR pipeline 의 중복 정리는 유지한다.
+    단, `dev` / `master` push pipeline 은 `workflow:rules:auto_cancel:on_new_commit: none` 으로 지정해 새 commit 이 같은 branch 에 들어와도 자동 취소하지 않는다.
+    또한 `api_image`, `web_image`, `ai_image`, `deploy_dev`, `deploy_prod` 는 명시적으로 `interruptible: false` 를 선언한다.
+  consequence: |
+    서로 다른 영역의 변경이 같은 배포 브랜치에 연속 merge 되어도 먼저 시작된 image build/deploy 가 중간 취소되지 않는다.
+    배포 정합성은 높아지지만, 같은 영역 변경이 짧은 간격으로 중복 merge 되는 경우에도 이전 배포 pipeline 이 끝까지 실행될 수 있어 CI 사용량은 다소 늘 수 있다.
+    영역별 중복 취소가 필요해지면 web/api/ai 를 child pipeline 또는 별도 pipeline 단위로 분리하는 설계를 별도 ADR 로 검토한다.
+
+- id: ADR-018
+  title: "Nginx per-IP rate limit / connection limit — L7 비정상 부하 차단"
+  status: adopted
+  date: 2026-05-11
+  stacks: [infra, nginx, security, ec2]
+  context: |
+    ADR-015 의 6번 "본 ADR 범위 밖" 에서 rate limit / fail2ban / WAF 도입은 운영 부하 관측 후 결정으로 명시적으로 분리되어 있었다.
+    그러나 시점 점검 결과 단일 EC2 + 단일 nginx 진입점 구조에서 한 IP 의 비정상 부하를 1차 차단할 지점이 없다는 사실이 그대로 남아 있었다.
+
+    구체 위험 표면:
+      - `/api/auth/*` 는 JWT 발급 경로로 brute-force 표면이 직접 노출. 앱 레벨 lockout 도입 전까지 차단 지점 0.
+      - `/ai/*` 는 Gemini API 가 외부 유료 자원이라 트래픽 자체보다 비용 폭주가 더 큰 사고 단위가 됨.
+      - 정상 사용자라도 클라이언트 버그로 인한 실수 무한루프가 운영 자원을 끌어내릴 수 있음.
+      - slowloris 류 느린 connection 은 nginx default timeout(60s) 으로 흡수되지만 여전히 헤더만 1초씩 보내는 패턴엔 무력.
+
+    검토한 대안과 핵심 탈락 사유:
+      - 앞단 CDN/WAF(Cloudflare 등): SSAFY DNS 의존 + 도입 부담 큼. 별 항목으로 분리 유지.
+      - fail2ban 단독: 반복 위반 IP 차단은 가능하지만 1차 rate cap 자체가 없어 폭주 첫 순간을 못 막음. nginx limit_req 가 선행되어야 의미 있음.
+      - 앱 레벨 throttle (Spring/FastAPI): 트래픽이 이미 컨테이너까지 도달한 뒤라 보호 대상(Gemini 호출 등) 의 비용은 이미 소비됨. nginx 앞단 차단이 비용·CPU 모두 가성비 좋음.
+      - per-route IP whitelist (`geo` map): 사내망 NAT 가 외부에서 단일 IP 로 보일 때 공동 영향 회피 목적. 본 ADR 범위 밖, 필요 시 별 MR.
+
+    sites-available 파일에서 `http` 컨텍스트 디렉티브를 사용하는 법:
+      Debian/Ubuntu nginx 는 `/etc/nginx/nginx.conf` 의 `http {}` 가 `/etc/nginx/sites-enabled/*` 를 include 한다. 따라서 `axwms.conf` 의 server 블록 밖에 둔 디렉티브는 http 컨텍스트로 진입한다. 본 ADR 의 zone 정의/응답 코드/timeout 은 모두 이 방식으로 적용한다.
+  decision: |
+    nginx 단일 진입점에 per-IP rate limit + connection limit 을 도입한다.
+    ADR-015 의 6번 "rate limit / fail2ban / WAF 는 운영 부하 관측 후 결정" 중 rate limit 부분을 본 ADR 이 회수한다. fail2ban / WAF / CDN 은 본 ADR 범위 밖으로 유지.
+
+    1. SSOT — `infra/nginx/snippets/rate-limit.conf` 신설. zone 정의·응답 코드·slowloris timeout·server_tokens 를 한 곳에 모은다(OPS-017 의 nginx SSOT 패턴 그대로).
+       `axwms.conf` 의 server 블록 밖(= http 컨텍스트) 에서 `include /etc/nginx/snippets/rate-limit.conf;` 로 로드.
+
+    2. zone 정의 (per-IP, `$binary_remote_addr` 키)
+       - perip                  — connection 동시 수 제한, 10m 공유 메모리. server 컨텍스트에서 `limit_conn perip 100;`.
+       - req_general: 30r/s     — 일반 라우트(`/`, `/api/*` 일반), burst 200 nodelay.
+       - req_auth:    5r/m      — `/api/auth/*` 인증 경로, burst 30 nodelay.
+       - req_ai:      30r/m     — `/ai/*` LLM/임베딩 경로, burst 60 nodelay.
+
+       값 선정 가정 — **SSAFY 캠퍼스 NAT 가정: 한 외부 IP 뒤에 약 30명 동시 사용자**.
+       zone 키가 `$binary_remote_addr` 라 IP 당 카운터인데 SSAFY 캠퍼스 wifi 가 외부에서 단일 IP 로 보일 가능성이 높아 단일 사용자 패턴을 기준 잡으면 정상 사용자가 429 를 폭발적으로 받는다. 30명 가정을 작업 초기에 박아둔다.
+
+       값 선정 근거:
+       - 일반: 30명 × 평균 1 req/s(실시간 알림/polling 포함) = 30r/s. 페이지 첫 로드 burst 30명 × 7 req ≈ 210 → burst 200 으로 흡수. `nodelay` 라 burst 까지는 즉시 처리.
+       - 인증: brute-force 페이스 cap(rate=5r/m) 은 그대로 유지 — 공격자 시도 페이스가 핵심 보호선이고 완화하면 강도 떨어짐. burst 만 30 으로 올려 30명 동시 로그인 흡수.
+       - AI: 30명 × 분당 1회 검색 = 30r/m. 30명 × 2회 burst = 60. Gemini 비용 보호선 유지.
+       - connection: HTTP/2 기본은 사용자당 1 connection 이지만 HTTP/1.1 fallback 마진까지 흡수해 100.
+
+       NAT 가정이 안 맞는 시나리오:
+       - 사용자 대부분이 외부 IP 분산(개인 인터넷): 값이 과도하게 느슨해 보호 강도 약화. 운영 데이터로 확인되면 값 하향 또는 `geo` map 분기(별 MR).
+       - 캠퍼스 인원이 30명을 넘는 동시 활성 사용자가 일상: burst 가 또 부족. 운영 관측 후 상향.
+
+    3. 응답 코드 — `limit_req_status 429`, `limit_conn_status 429` (기본 503 보다 client·proxy 해석 명확).
+
+    4. slowloris 대응 — `client_header_timeout 10s`, `client_body_timeout 10s`, `send_timeout 10s` 를 같은 snippet 에 둔다.
+       `keepalive_timeout` 은 Debian/Ubuntu nginx.conf 기본값(65s)과 중복 정의되면 `directive is duplicate` 로 `nginx -t` 가 실패하므로 snippet 에 두지 않는다. 필요 시 운영자가 nginx.conf 의 값을 조정한다(별 운영 절차).
+
+    5. `server_tokens off;` — nginx 버전 노출 차단. nginx.conf 가 활성 정의하지 않았는지 운영자가 1회 확인 후 활성화한다(코멘트 처리 상태이면 안전).
+
+    6. location 매핑 — production 443 / staging 8443 두 server 블록 모두 동일 패턴:
+       - server 컨텍스트에 `limit_conn perip 20;`.
+       - `/api/auth/` (req_auth) 신설 — `/api/` 보다 위에 둔다(가독성 목적, longest prefix match 라 순서 의존성은 없음).
+       - `/api/` (req_general), `/ai/` (req_ai + `proxy_read_timeout 180s;`), `/` (req_general).
+
+    7. staging/production 모두 동일 zone 적용 — 같은 EC2·같은 conf 라 staging 트래픽도 동일 보호.
+
+    8. 자동 동기화 — `deploy_dev` / `deploy_prod` 가 `rate-limit.conf` 도 ADR-015 의 흐름(scp + sudo install + nginx -t + systemctl reload) 에 포함한다. OPS-018 의 sudoers NOPASSWD 명령 목록에 `install ... /etc/nginx/snippets/rate-limit.conf` 1줄을 추가한다(5개 → 6개). 신규 EC2 1회 작업에 본 sudoers 추가가 빠지면 deploy 가 NOPASSWD 거부로 실패한다(눈에 띄는 빨간 신호, silent failure 아님).
+
+    9. 본 ADR 범위 밖
+       - fail2ban (반복 429 IP iptables 차단) — 별 ADR.
+       - CDN/WAF — pending-decisions 신규 항목 또는 별 ADR.
+       - 앱 레벨 throttle (Spring / FastAPI Gemini quota) — 별 ADR.
+       - 화이트리스트(`geo` map 으로 사내 IP 예외) — 필요 시점에 별 MR.
+       - nginx access log 보관/로테이션 — A 단계 운영 안정성 보강 항목으로 별 MR.
+  consequence: |
+    긍정적 영향:
+      - 한 IP brute-force / scraper / 실수 무한루프 클라이언트 즉시 차단(429).
+      - Gemini 호출 폭주에 대한 1차 비용 cap.
+      - slowloris 류 느린 헤더/본문 전송 차단(`client_*_timeout 10s`).
+      - rate-limit.conf 단일 SSOT 라 값 튜닝 시 수정 지점이 한 곳. OPS-017 의 자동 동기화 흐름으로 EC2 반영.
+
+    부정적 영향과 완화:
+      - 값이 너무 빡빡하면 정상 사용자도 429. 완화: 보수적 초기값 + nginx access log 의 429 빈도 1주 관측 후 튜닝.
+      - per-IP zone 이라 NAT 뒤 다수 사용자가 같은 외부 IP 로 보일 때 공동 영향. 완화: zone 별 값 자체가 일반 사용자 패턴 대비 넉넉. 운영 환경에서 패턴 발견 시 `geo` map 화이트리스트 추가.
+      - 429 가 application 로그가 아닌 nginx access log 에만 남음. 완화: nginx access log 보관 정책 정비 항목과 연동.
+      - `keepalive_timeout` 을 본 snippet 에서 정의하지 못해 slowloris 대응의 한 축이 nginx.conf 측 책임으로 분산됨. 완화: 사고 트리거 시 운영자가 nginx.conf 측 값을 조정하고, 본 ADR 의 5번 운영 절차를 따른다.
+
+    재검토 트리거:
+      - 단일 IP 가 아닌 분산 패턴 공격 관측 → CDN/WAF 도입 검토.
+      - 정상 사용자 429 발생률 > 0.1% → 값 완화 또는 인증 사용자 한정 화이트리스트.
+      - 앱 레벨 throttle 도입 → nginx 값과 책임 분담 재정렬.
+      - SSAFY 가 보안그룹 IP 화이트리스트를 허용해 DB 외부 개방 완화책이 추가되는 시점 → ADR-011 / 본 ADR 의 분담 재검토.

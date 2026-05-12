@@ -1,0 +1,32 @@
+# 컨테이너 이미지에 들어가면 안 되는 것들.
+# 이미지 크기·재현성·보안 모두에 영향이 있어 명시적으로 제외한다.
+
+.venv/
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/
+.cache/
+.coverage
+htmlcov/
+
+# 로컬 개발 산출물
+.env
+.env.*
+!.env.example
+.omx/
+
+# 테스트는 런타임에 필요 없다 (CI 단계에서 별도 실행).
+tests/
+
+# 메타/문서
+.git/
+.gitignore
+.gitattributes
+.idea/
+.vscode/
+*.md
+AGENTS.md

@@ -1,0 +1,195 @@
+package com.ibank.axwms.domain.organization.user.entity;
+
+import com.ibank.axwms.domain.organization.user.EmploymentStatus;
+import com.ibank.axwms.domain.organization.user.UserRole;
+import jakarta.persistence.Column;
+import jakarta.persistence.Entity;
+import jakarta.persistence.EnumType;
+import jakarta.persistence.Enumerated;
+import jakarta.persistence.GeneratedValue;
+import jakarta.persistence.GenerationType;
+import jakarta.persistence.Id;
+import jakarta.persistence.Table;
+import jakarta.persistence.UniqueConstraint;
+import lombok.AccessLevel;
+import lombok.Getter;
+import lombok.NoArgsConstructor;
+import org.hibernate.annotations.CreationTimestamp;
+import org.hibernate.annotations.UpdateTimestamp;
+
+import java.time.LocalDate;
+import java.time.LocalDateTime;
+
+@Entity
+@Table(name = "tb_user", uniqueConstraints = {
+        @UniqueConstraint(columnNames = {"email"})
+})
+@Getter
+@NoArgsConstructor(access = AccessLevel.PROTECTED)
+public class User {
+
+    @Id
+    @GeneratedValue(strategy = GenerationType.IDENTITY)
+    @Column(name = "user_id")
+    private Long id;
+
+    @Column(name = "department_id")
+    private Long departmentId;
+
+    @Column(name = "user_name", nullable = false, length = 50)
+    private String userName;
+
+    @Column(name = "email", nullable = false, length = 100)
+    private String email;
+
+    @Column(name = "password_hash", nullable = false, length = 255)
+    private String passwordHash;
+
+    @Column(name = "position_name", length = 50)
+    private String positionName;
+
+    @Column(name = "title_name", length = 50)
+    private String titleName;
+
+    @Column(name = "join_date")
+    private LocalDate joinDate;
+
+    @Enumerated(EnumType.STRING)
+    @Column(name = "role_code", nullable = false, length = 20)
+    private UserRole roleCode;
+
+    @Column(name = "profile_image_url", length = 500)
+    private String profileImageUrl;
+
+    @Column(name = "phone", length = 20)
+    private String phone;
+
+    @Enumerated(EnumType.STRING)
+    @Column(name = "employment_status", nullable = false, length = 20)
+    private EmploymentStatus employmentStatus;
+
+    @CreationTimestamp
+    @Column(name = "created_at", nullable = false, updatable = false)
+    private LocalDateTime createdAt;
+
+    @UpdateTimestamp
+    @Column(name = "updated_at", nullable = false)
+    private LocalDateTime updatedAt;
+
+    /**
+     * 신규 사용자를 생성한다.
+     * email 은 tb_user 의 UNIQUE key 이므로 중복 여부는 호출측이 사전 검증한다.
+     * passwordHash 는 BCrypt 로 해시된 값이어야 하며 평문을 전달하면 인증이 성립하지 않는다.
+     * departmentId 는 부서 배정 전 DEPT_HEAD 후보를 제외하면 tb_department 의 유효한 id 여야 한다.
+     */
+    public static User create(Long departmentId,
+                              String userName,
+                              String email,
+                              String passwordHash,
+                              UserRole roleCode,
+                              EmploymentStatus employmentStatus,
+                              String positionName,
+                              String titleName,
+                              LocalDate joinDate,
+                              String phone,
+                              String profileImageUrl) {
+        User user = new User();
+        user.departmentId = departmentId;
+        user.userName = userName;
+        user.email = email;
+        user.passwordHash = passwordHash;
+        user.roleCode = roleCode;
+        user.employmentStatus = employmentStatus;
+        user.positionName = positionName;
+        user.titleName = titleName;
+        user.joinDate = joinDate;
+        user.phone = phone;
+        user.profileImageUrl = profileImageUrl;
+        return user;
+    }
+
+    /** null 이 아닌 요청 필드만 사용자 기본 정보에 반영한다. */
+    public void updatePartial(String userName,
+                              String email,
+                              String profileImageUrl,
+                              String positionName,
+                              String titleName,
+                              Long departmentId,
+                              String phone,
+                              EmploymentStatus employmentStatus,
+                              LocalDate joinDate) {
+        if (userName != null && !userName.isBlank()) {
+            this.userName = userName;
+        }
+        if (email != null && !email.isBlank()) {
+            this.email = email;
+        }
+        if (profileImageUrl != null) {
+            this.profileImageUrl = profileImageUrl;
+        }
+        if (positionName != null && !positionName.isBlank()) {
+            this.positionName = positionName;
+        }
+        if (titleName != null && !titleName.isBlank()) {
+            this.titleName = titleName;
+        }
+        if (departmentId != null) {
+            this.departmentId = departmentId;
+        }
+        if (phone != null && !phone.isBlank()) {
+            this.phone = phone;
+        }
+        if (employmentStatus != null) {
+            this.employmentStatus = employmentStatus;
+        }
+        if (joinDate != null) {
+            this.joinDate = joinDate;
+        }
+    }
+
+    /** 현재 사용자 self 수정 정책에 따라 titleName 과 roleCode 를 같은 매핑 단위로 동기화한다. */
+    public void updateMyProfile(Long departmentId,
+                                String userName,
+                                String email,
+                                String profileImageUrl,
+                                String positionName,
+                                String titleName,
+                                UserRole roleCode,
+                                LocalDate joinDate,
+                                String phone,
+                                EmploymentStatus employmentStatus) {
+        if (departmentId != null) {
+            this.departmentId = departmentId;
+        }
+        if (userName != null && !userName.isBlank()) {
+            this.userName = userName;
+        }
+        if (email != null && !email.isBlank()) {
+            this.email = email;
+        }
+        if (profileImageUrl != null) {
+            this.profileImageUrl = profileImageUrl;
+        }
+        if (positionName != null && !positionName.isBlank()) {
+            this.positionName = positionName;
+        }
+        if (titleName != null && !titleName.isBlank()) {
+            this.titleName = titleName;
+            this.roleCode = roleCode;
+        }
+        if (joinDate != null) {
+            this.joinDate = joinDate;
+        }
+        if (phone != null && !phone.isBlank()) {
+            this.phone = phone;
+        }
+        if (employmentStatus != null) {
+            this.employmentStatus = employmentStatus;
+        }
+    }
+
+    /** 인증 도메인에서 검증과 해시 생성을 끝낸 뒤에만 저장된 비밀번호 해시를 교체한다. */
+    public void changePasswordHash(String passwordHash) {
+        this.passwordHash = passwordHash;
+    }
+}

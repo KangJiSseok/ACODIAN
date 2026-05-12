@@ -1,0 +1,4 @@
+version: 1
+display_name: iBank Dummy Data
+short_description: Create iBank team MDs, staffing plans, realistic worklogs, reviews, and SQL seed files.
+default_prompt: Generate iBank dummy team, staffing, worklog, and SQL seed data using the local personas and templates.

@@ -8,20 +8,21 @@ description: 현재 AX-WMS 프로젝트의 PR 제목과 본문을 한글 맥락�
 이 스킬은 현재 프로젝트의 **PR 제목 / PR 본문 규칙**만 담당한다.
 커밋 메시지는 **Conventional Commit** 규칙을 참고해 작성할 수 있지만, PR 제목은 검색성과 가독성을 위해 **짧고 읽기 쉬운 형식**을 우선한다.
 
-또한 현재 프로젝트는 **TBD(Trunk-Based Development)** 방식으로 운영하므로, PR은 모두 **`master` 브랜치로 머지하는 짧은 작업 단위 PR**을 기본으로 한다.
-이 프로젝트는 모노레포이므로 scope는 가능하면 `web`, `api`, `ai`, `infra`, `docs`, `shared` 중 하나로 시작한다.
+현재 프로젝트는 **GitFlow 경량 전략**으로 운영한다. 일상 작업 PR은 모두 **`dev` 브랜치로 머지**하며, 릴리즈 시 `dev → master` PR을 올린다. `hotfix/*`는 예외적으로 `master`에서 분기하고, 완료 후 `master`와 `dev` 양쪽에 반영한다.
+이 프로젝트는 모노레포이므로 scope는 가능하면 `web`, `api`, `ai`, `infra`, `docs`, `agent` 중 하나로 시작한다.
 
 ## PR 제목 형식
 ```text
-<type>(<scope>): <subject>
+[<Type>(<scope>)]: <subject>
 ```
 
 ## type 예시
-- `docs`
-- `fix`
-- `feat`
-- `refactor`
-- `chore`
+- `Docs`
+- `Fix`
+- `Feat`
+- `Refactor`
+- `Chore`
+- `Deploy`
 
 ## scope 예시
 - `web`
@@ -29,21 +30,41 @@ description: 현재 AX-WMS 프로젝트의 PR 제목과 본문을 한글 맥락�
 - `ai`
 - `infra`
 - `docs`
-- `shared`
+- `agent`
+
+## 제목(Subject) 작성 규칙
+- **50자 이내** 권장
+- **한글을 기본**으로 작성하며, 고유명사·라이브러리명 등 영문이 자연스러운 경우에만 영문 사용
+- **명사형(동사 없이 목적어+명사)** 으로 끝맺음 — "~한다" / "~합니다" 금지
+  - 좋음: `JWT 리프레시 토큰 엔드포인트 추가`
+  - 나쁨: `JWT 리프레시 토큰 엔드포인트를 추가한다`
+- 끝에 **마침표를 붙이지 않음**
+- 무엇을, 왜 바꿨는지 알 수 있게 작성
 
 ## PR 제목 예시
-- `docs(api): update response schema guide`
-- `fix(api): prevent invalid status transition`
-- `feat(web): add importance filter`
-- `chore(shared): add project git skills`
-- `refactor(api): simplify worklog status flow`
+- `[Docs(api)]: 응답 스키마 가이드 업데이트`
+- `[Fix(api)]: 잘못된 상태 전환 방지`
+- `[Feat(web)]: 중요도 필터 추가`
+- `[Chore(agent)]: 프로젝트 git 스킬 추가`
+- `[Deploy(infra)]: EC2 GitLab CI/CD 배포 기준 정리`
+- `[Refactor(api)]: worklog 상태 흐름 단순화`
 
 ## PR 제목 작성 원칙
 - 제목은 한 줄로 짧게 쓴다.
+- 제목은 `[Type(scope)]: subject` 형식을 사용한다.
+- `Type`은 앞글자를 대문자로 쓰고, `scope`는 괄호 안에 넣는다.
 - `type`은 변경 성격을 드러내고, `scope`는 변경 영역을 드러낸다.
-- `subject`는 동사 중심으로 핵심만 쓴다.
+- `subject`는 명사형으로 핵심만 쓴다.
 - PR 제목은 커밋 메시지처럼 엄격한 규약 검사용이 아니라, **리뷰어가 빠르게 이해할 수 있는 검색 친화형 요약**으로 본다.
 - 가능하면 한 PR에는 한 가지 주제만 담는다.
+
+## PR 출력 원칙
+
+- PR 본문은 아래 템플릿 구조를 기본으로 사용하고, 사용자가 별도로 요청하지 않은 추가 섹션은 임의로 늘리지 않는다.
+- 분석용 메타데이터를 `키: 값` 형식의 별도 섹션으로 덧붙이지 않는다.
+- `Type of change` 체크리스트는 템플릿의 일부이므로 유지한다.
+- 사용자가 **최종 PR 제목/본문 자체**를 요청하면, 짧은 제목 한 줄과 바로 붙여 넣을 수 있는 Markdown 본문만 출력한다.
+- base 브랜치는 별도 요청이 없으면 내부 기본값으로만 적용한다. 일반 작업은 `dev`, `hotfix/*`만 `master`를 사용한다.
 
 ## PR 본문 템플릿
 이 프로젝트의 PR 본문은 아래 구조를 기본으로 사용한다.
@@ -58,6 +79,7 @@ description: 현재 AX-WMS 프로젝트의 PR 제목과 본문을 한글 맥락�
 - [ ] 🎨 Style / Design — 코드 포맷 또는 사용자 UI 디자인 변경
 - [ ] ✅ Test — 테스트 코드 추가/수정
 - [ ] 🔧 Chore — 빌드, CI, 패키지 매니저 등 잡일
+- [ ] 🚀 Deploy — 배포 설정, 스크립트, 인프라 릴리스 경로 변경
 
 ## Motivation
 
@@ -73,14 +95,18 @@ description: 현재 AX-WMS 프로젝트의 PR 제목과 본문을 한글 맥락�
 ```
 
 ## 본문 작성 원칙
+- **한글을 기본**으로 작성하며, 고유명사·라이브러리명 등 영문이 자연스러운 경우에만 영문 사용
+- **한 줄에 한 문장**을 원칙으로 한다. 문장 중간에 줄바꿈을 넣지 않고, 줄바꿈은 마침표로 문장이 끝난 뒤에만 사용한다.
+- 예: `Motivation` 과 `Problem Solving` 안에서도 한 문장을 두 줄로 쪼개지 않고, 다음 문장은 새 줄에서 시작한다.
+- **템플릿 밖 메타데이터 필드를 포함하지 않는다.** `키: 값` 형식의 분석 항목이나 템플릿 밖 체크리스트는 PR 본문에 넣지 않는다.
 - `Type of change` 에는 해당 항목만 체크한다.
-- `Motivation` 에는 왜 이 변경이 필요한지 적는다.
+- `Motivation` 에는 왜 이 변경이 필요한지 적는다 — *어떻게*보다 *왜*를 중심으로 작성
 - `Problem Solving` 에는 어떤 방식으로 해결했는지 적는다.
 - `To Reviewer` 에는 리뷰어가 중점적으로 볼 부분, 아직 확신이 없는 부분, 확인 요청사항을 적는다.
 - diff를 그대로 설명하지 말고, 리뷰어가 알아야 할 판단 포인트를 적는다.
 - 문서 작업 PR이면 source of truth가 무엇인지 명시한다.
-- TBD 원칙상 PR은 가능한 한 작고 빠르게 머지 가능한 범위로 쪼갠다.
-- `master` 를 오래 막는 대형 PR은 지양한다.
+- PR은 가능한 한 작고 빠르게 머지 가능한 범위로 쪼갠다.
+- 한 PR에는 한 가지 주제만 담는다.
 - 이슈 번호 섹션은 기본적으로 두지 않는다. 필요하면 추후 별도 규칙을 추가한다.
 
 ## 문서/스키마 작업에 특화된 문안
@@ -95,17 +121,14 @@ description: 현재 AX-WMS 프로젝트의 PR 제목과 본문을 한글 맥락�
 - `ai`: FastAPI / 임베딩 / AI 파이프라인 작업
 - `infra`: nginx, docker, 배포 설정, 리버스 프록시 등 인프라 작업
 - `docs`: 문서 작업
-- `shared`: 여러 영역 공통 작업
+- `agent`: agent 관련 작업
 
 ## 응답 방식
-사용자가 PR을 요청하면 아래 순서로 답한다.
-1. PR 제목 제안
-2. `Type of change` 체크 항목 제안
-3. `Motivation` 초안
-4. `Problem Solving` 초안
-5. `To Reviewer` 초안
-6. base 브랜치는 기본적으로 `master` 로 둔다
-7. 필요하면 Markdown 형식으로 다시 정리
+사용자가 PR을 요청하면 기본적으로 아래 형태로 답한다.
+1. PR 제목 한 줄
+2. 바로 사용할 수 있는 Markdown 본문
+
+추가 설명은 사용자가 검토 포인트나 분기 전략을 따로 물을 때만 덧붙인다.
 
 ## 본문 예시 뼈대
 ```md
@@ -117,6 +140,7 @@ description: 현재 AX-WMS 프로젝트의 PR 제목과 본문을 한글 맥락�
 - [ ] 🎨 Style / Design
 - [ ] ✅ Test
 - [ ] 🔧 Chore
+- [ ] 🚀 Deploy
 
 ## Motivation
 

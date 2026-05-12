@@ -1,0 +1,40 @@
+package com.ibank.axwms.domain.worklog.controller;
+
+import com.ibank.axwms.domain.worklog.dto.ApplyWorklogTagsAiApiDto;
+import com.ibank.axwms.domain.worklog.dto.UpdateWorklogAiApiDto;
+import com.ibank.axwms.domain.worklog.service.InternalWorklogAiCallbackService;
+import com.ibank.axwms.global.response.EmptyResponse;
+import jakarta.validation.Valid;
+import lombok.RequiredArgsConstructor;
+import org.springframework.web.bind.annotation.PatchMapping;
+import org.springframework.web.bind.annotation.PathVariable;
+import org.springframework.web.bind.annotation.RequestBody;
+import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RestController;
+
+@RestController
+@RequestMapping("/internal/worklogs")
+@RequiredArgsConstructor
+public class InternalWorklogAiCallbackController implements InternalWorklogAiCallbackControllerDocs {
+
+    private final InternalWorklogAiCallbackService internalWorklogAiCallbackService;
+
+    @Override
+    @PatchMapping("/{worklogId}/ai-result")
+    public EmptyResponse updateWorklogAiResult(@PathVariable Long worklogId, @Valid @RequestBody UpdateWorklogAiApiDto.Request request) {
+
+        internalWorklogAiCallbackService.updateAiResult(worklogId, request);
+
+        return EmptyResponse.INSTANCE;
+    }
+
+    @Override
+    @PatchMapping("/{worklogId}/tags")
+    public EmptyResponse applyAiGeneratedTags(
+            @PathVariable Long worklogId,
+            @Valid @RequestBody ApplyWorklogTagsAiApiDto.Request request
+    ) {
+        internalWorklogAiCallbackService.applyAiGeneratedTags(worklogId, request);
+        return EmptyResponse.INSTANCE;
+    }
+}

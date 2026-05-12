@@ -1,0 +1,4 @@
+version: 1
+display_name: iBank Worklog Duplicate Audit
+short_description: Audit same-task or duplicate-looking iBank worklogs and prepare minimal clarification fixes.
+default_prompt: Inspect iBank worklogs for duplicate or same-task candidates and produce lead-reviewed clarification actions.

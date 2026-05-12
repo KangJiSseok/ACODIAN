@@ -1,0 +1,4 @@
+version: 1
+display_name: iBank Worklog Review Loop
+short_description: Review and refine iBank worklogs with lead, department, member rewrite, and dependency validation loops.
+default_prompt: Run the iBank worklog review loop on a chosen SQL version, produce revised worklog output, and re-check dependency links for the revised version.

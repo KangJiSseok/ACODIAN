@@ -1,0 +1,3 @@
+# Integration profile:
+# - enable JPA/Flyway/DataSource/Redis auto-configuration
+# - rely on Testcontainers ServiceConnection wiring from IntegrationTestSupport

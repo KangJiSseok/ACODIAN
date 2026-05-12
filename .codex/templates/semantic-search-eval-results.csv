@@ -1,0 +1,6 @@
+query_id,query_text,query_type,top_k,returned_worklog_ids,returned_team_ids,expected_team_ids,expected_role_hint,expected_status_hint,team_hit_at_3,team_hit_at_5,linked_pair_hit_at_5,linked_pair_hit_at_10,role_hit_at_5,status_hit_at_5,persona_hit_at_5,primary_team_rank,notes
+Q-EX-01,"P0 회귀 대응 이력",exact,10,"","","[101]","[""MEMBER"",""DEPT_HEAD""]","[""COMPLETED"",""IN_PROGRESS""]",,,,,,,,
+Q-PARA-03,"권한은 있는데 실제로는 접근이 막혔던 건",paraphrase,10,"","","[103]","[""MEMBER"",""DEPT_HEAD""]","[]",,,,,,,,
+Q-LINK-01,"DX 플랫폼 운영 이슈가 WMS 정합성 개선으로 이어진 흐름",cross-team,10,"","","[101,106]","[]","[]",,,,,,,,
+Q-ROLE-02,"사업부장이 리스크 보고나 승인 기준을 남긴 업무",role-based,10,"","","[101,103,105,108,110]","[""DEPT_HEAD""]","[]",,,,,,,,
+Q-STATUS-01,"마감일을 넘겨서 완료된 업무",status/deadline,10,"","","[101,102,105,110]","[]","[""COMPLETED""]",,,,,,,,
