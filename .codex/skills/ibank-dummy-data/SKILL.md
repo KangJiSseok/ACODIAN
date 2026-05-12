@@ -51,6 +51,14 @@ Read only the files needed for the current step.
   - Team leadership belongs in `tb_user_team.is_leader` and `team_role`; it does not change `title_name`.
   - For staff users `5~35`, keep ranks realistic and conservative: mostly `사원`/`대리`/`과장`, only a few `차장`, and avoid `부장` unless the user explicitly asks for a more senior organization.
 - `tb_user.password_hash` uses the shared BCrypt hash from `.codex/guides/ibank-dummy-data-preferences.md`
+- `tb_team.department_id` ownership is derived from the non-director `tb_team_admin` user:
+  - User `1` is the director/admin-only grant and must not be used as the source for `tb_team.department_id`.
+  - The non-director admin, normally the owning department head, determines the team's `department_id` from `tb_user.department_id`.
+  - If SQL inserts `tb_team` before `tb_team_admin`, add a deterministic backfill/update so `tb_team.department_id` matches the non-director admin's department.
+- `tb_user_team.is_primary` is unique per user across all team memberships:
+  - For each `user_id`, all `tb_user_team` rows for that user may include many teams, but exactly one row must have `is_primary = true`.
+  - Prefer an `ACTIVE` team as the primary when the user has any current `ACTIVE` team membership.
+  - Set every other membership for the same user to `is_primary = false`, including historical or `INACTIVE` teams.
 - Excluded tables:
   - `tb_meta_tag`
   - `tb_file`
@@ -84,6 +92,8 @@ When assigning people:
 - Department heads may be included when review/oversight is needed
 - User `1` (본부장) joins only key TF teams, but is included in all `team_admin`
 - The team creator is the owning department head and is included in `tb_team_admin`
+- `tb_team.department_id` must match the non-director `tb_team_admin` user's `tb_user.department_id`; never derive it from director `user_id=1`
+- A user can have many `tb_user_team` rows, but exactly one row per `user_id` must have `is_primary = true`
 
 Output should make role ownership obvious:
 - `team_role`
@@ -154,6 +164,8 @@ When the user asks for SQL:
   7. `tb_worklog_status_history` when needed
 - Keep IDs stable and internally consistent
 - Reuse the shared BCrypt hash for all users unless the user overrides it
+- After `tb_team_admin` output, ensure `tb_team.department_id` is populated from the non-director admin's department.
+- Validate `is_primary` uniqueness by grouping all `tb_user_team` rows by `user_id`; each user represented in `tb_user_team` must have exactly one `is_primary = true` row.
 
 ## Output modes
 

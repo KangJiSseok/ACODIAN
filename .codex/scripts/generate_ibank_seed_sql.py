@@ -107,22 +107,76 @@ def parse_team_docs():
     return teams
 
 
+def normalize_primary_memberships(teams):
+    memberships_by_user = {}
+    for team in teams:
+        for member in team['members']:
+            memberships_by_user.setdefault(member['user_id'], []).append((team, member))
+
+    for memberships in memberships_by_user.values():
+        active_team_memberships = [
+            item for item in memberships
+            if item[0]['status_code'] == 'ACTIVE' and item[1]['status_code'] == 'ACTIVE'
+        ]
+        active_primary_memberships = [
+            item for item in active_team_memberships
+            if item[1]['is_primary']
+        ]
+        if active_primary_memberships:
+            chosen_team, chosen_member = sorted(
+                active_primary_memberships,
+                key=lambda item: (not item[1]['is_leader'], item[0]['team_id']),
+            )[0]
+        elif active_team_memberships:
+            chosen_team, chosen_member = sorted(
+                active_team_memberships,
+                key=lambda item: (not item[1]['is_leader'], item[0]['team_id']),
+            )[0]
+        else:
+            primary_memberships = [item for item in memberships if item[1]['is_primary']]
+            if primary_memberships:
+                chosen_team, chosen_member = sorted(
+                    primary_memberships,
+                    key=lambda item: (not item[1]['is_leader'], item[0]['team_id']),
+                )[0]
+            else:
+                chosen_team, chosen_member = sorted(
+                    memberships,
+                    key=lambda item: (not item[1]['is_leader'], item[0]['team_id']),
+                )[0]
+
+        for team, member in memberships:
+            member['is_primary'] = (team, member) == (chosen_team, chosen_member)
+
+
 def build_sql():
     teams = parse_team_docs()
+    if not teams:
+        raise RuntimeError(f'No team markdown files found under {TEAM_DIR}')
+    normalize_primary_memberships(teams)
+    min_team_id = min(team['team_id'] for team in teams)
+    max_team_id = max(team['team_id'] for team in teams)
     lines = []
     lines.append('-- iBank team seed SQL generated from .codex/team-md')
     lines.append('-- Scope: tb_department, tb_user, tb_team, tb_team_admin, tb_user_team')
-    lines.append('-- Notes: user_id=1 is team_admin-only; 102 keeps the user-approved original period')
+    lines.append('-- Rules:')
+    lines.append('--   1. user_id=1 is director/admin-only and is not used for team department ownership.')
+    lines.append('--   2. tb_team.department_id follows the non-director tb_team_admin user department.')
+    lines.append('--   3. Each user_id in tb_user_team has exactly one is_primary = true row.')
     lines.append('BEGIN;')
     lines.append('')
 
-    lines.append('-- Departments: insert without head first to break the circular FK with tb_user')
+    lines.append('-- Departments: insert without head first to avoid the circular FK with tb_user.')
     lines.append('INSERT INTO tb_department (department_id, department_name, description, department_head_user_id, status_code) VALUES')
     dep_rows = []
     for dep_id in sorted(DEPARTMENTS):
         dep = DEPARTMENTS[dep_id]
         dep_rows.append(f"  ({dep_id}, {sql_str(dep['name'])}, {sql_str(dep['description'])}, NULL, 'ACTIVE')")
-    lines.append(',\n'.join(dep_rows) + ';')
+    lines.append(',\n'.join(dep_rows))
+    lines.append('ON CONFLICT (department_id) DO UPDATE SET')
+    lines.append('  department_name = EXCLUDED.department_name,')
+    lines.append('  description = EXCLUDED.description,')
+    lines.append('  status_code = EXCLUDED.status_code;')
     lines.append('')
 
     lines.append('-- Users')
@@ -133,22 +187,42 @@ def build_sql():
         user_rows.append(
             f"  ({uid}, {u['department_id'] if u['department_id'] is not None else 'NULL'}, {sql_str(u['name'])}, {sql_str(u['email'])}, {sql_str(PASSWORD_HASH)}, {sql_str(u['position'])}, {sql_str(u['title'])}, {sql_str(u['join_date'])}, {sql_str(u['role_code'])}, {sql_str(f'https://cdn.ibank.local/profiles/u{uid:03d}.png')}, {sql_str(u['phone'])}, 'ACTIVE')"
         )
-    lines.append(',\n'.join(user_rows) + ';')
+    lines.append(',\n'.join(user_rows))
+    lines.append('ON CONFLICT (user_id) DO UPDATE SET')
+    lines.append('  department_id = EXCLUDED.department_id,')
+    lines.append('  user_name = EXCLUDED.user_name,')
+    lines.append('  email = EXCLUDED.email,')
+    lines.append('  password_hash = EXCLUDED.password_hash,')
+    lines.append('  position_name = EXCLUDED.position_name,')
+    lines.append('  title_name = EXCLUDED.title_name,')
+    lines.append('  join_date = EXCLUDED.join_date,')
+    lines.append('  role_code = EXCLUDED.role_code,')
+    lines.append('  profile_image_url = EXCLUDED.profile_image_url,')
+    lines.append('  phone = EXCLUDED.phone,')
+    lines.append('  employment_status = EXCLUDED.employment_status;')
     lines.append('')
 
-    lines.append('-- Department heads after users exist')
+    lines.append('-- Department heads after users exist.')
     for dep_id in sorted(DEPARTMENTS):
         lines.append(f"UPDATE tb_department SET department_head_user_id = {DEPARTMENTS[dep_id]['head']} WHERE department_id = {dep_id};")
     lines.append('')
 
     lines.append('-- Teams')
-    lines.append('INSERT INTO tb_team (team_id, team_name, status_code, description, start_date, expected_end_date, deleted_at) VALUES')
+    lines.append('INSERT INTO tb_team (team_id, department_id, team_name, status_code, description, start_date, expected_end_date, deleted_at) VALUES')
     team_rows = []
     for team in teams:
         team_rows.append(
-            f"  ({team['team_id']}, {sql_str(team['team_name'])}, {sql_str(team['status_code'])}, {sql_str(team['description'])}, {sql_str(team['start_date'])}, {sql_str(team['expected_end_date'])}, NULL)"
+            f"  ({team['team_id']}, {team['department_id']}, {sql_str(team['team_name'])}, {sql_str(team['status_code'])}, {sql_str(team['description'])}, {sql_str(team['start_date'])}, {sql_str(team['expected_end_date'])}, NULL)"
         )
-    lines.append(',\n'.join(team_rows) + ';')
+    lines.append(',\n'.join(team_rows))
+    lines.append('ON CONFLICT (team_id) DO UPDATE SET')
+    lines.append('  department_id = EXCLUDED.department_id,')
+    lines.append('  team_name = EXCLUDED.team_name,')
+    lines.append('  status_code = EXCLUDED.status_code,')
+    lines.append('  description = EXCLUDED.description,')
+    lines.append('  start_date = EXCLUDED.start_date,')
+    lines.append('  expected_end_date = EXCLUDED.expected_end_date,')
+    lines.append('  deleted_at = EXCLUDED.deleted_at;')
     lines.append('')
 
     lines.append('-- Team admins: owning department head + director(user_id=1)')
@@ -156,22 +230,73 @@ def build_sql():
     for team in teams:
         admin_rows.append(f"  ({team['head_user_id']}, {team['team_id']})")
         admin_rows.append(f"  (1, {team['team_id']})")
-    lines.append('INSERT INTO tb_team_admin (user_id, team_id) VALUES')
-    lines.append(',\n'.join(admin_rows) + ';')
+    lines.append('INSERT INTO tb_team_admin (user_id, team_id)')
+    lines.append('SELECT v.user_id, v.team_id')
+    lines.append('FROM (VALUES')
+    lines.append(',\n'.join(admin_rows))
+    lines.append(') AS v(user_id, team_id)')
+    lines.append('ON CONFLICT (user_id, team_id) DO NOTHING;')
     lines.append('')
 
-    lines.append('-- Team members')
+    lines.append("-- 팀 소유 부서는 director가 아닌 관리자 사용자의 부서를 따른다.")
+    lines.append('UPDATE tb_team t')
+    lines.append('SET department_id = u.department_id')
+    lines.append('FROM tb_team_admin ta')
+    lines.append('JOIN tb_user u ON u.user_id = ta.user_id')
+    lines.append('WHERE ta.team_id = t.team_id')
+    lines.append('  AND ta.user_id <> 1')
+    lines.append(f'  AND t.team_id BETWEEN {min_team_id} AND {max_team_id}')
+    lines.append('  AND t.department_id IS DISTINCT FROM u.department_id;')
+    lines.append('')
+
+    lines.append('DROP TABLE IF EXISTS tmp_ibank_user_team_seed;')
+    lines.append('CREATE TEMP TABLE tmp_ibank_user_team_seed (')
+    lines.append('  user_id BIGINT NOT NULL,')
+    lines.append('  team_id BIGINT NOT NULL,')
+    lines.append('  team_role VARCHAR(50) NOT NULL,')
+    lines.append('  allocation VARCHAR(50),')
+    lines.append('  is_primary BOOLEAN NOT NULL,')
+    lines.append('  status_code VARCHAR(20) NOT NULL,')
+    lines.append('  is_leader BOOLEAN NOT NULL')
+    lines.append(') ON COMMIT DROP;')
+    lines.append('')
+
+    lines.append('-- Team members.')
     user_team_rows = []
     for team in teams:
         for m in team['members']:
             user_team_rows.append(
                 f"  ({m['user_id']}, {team['team_id']}, {sql_str(m['team_role'])}, {sql_str(m['allocation'])}, {'true' if m['is_primary'] else 'false'}, {sql_str(m['status_code'])}, {'true' if m['is_leader'] else 'false'})"
             )
-    lines.append('INSERT INTO tb_user_team (user_id, team_id, team_role, allocation, is_primary, status_code, is_leader) VALUES')
+    lines.append('INSERT INTO tmp_ibank_user_team_seed (user_id, team_id, team_role, allocation, is_primary, status_code, is_leader) VALUES')
     lines.append(',\n'.join(user_team_rows) + ';')
     lines.append('')
 
-    lines.append('-- Sequence alignment for explicit IDs')
+    lines.append('-- Re-seeding must keep exactly one primary membership per user.')
+    lines.append('UPDATE tb_user_team ut')
+    lines.append('SET is_primary = false,')
+    lines.append('    updated_at = CURRENT_TIMESTAMP')
+    lines.append('FROM (')
+    lines.append('  SELECT DISTINCT user_id')
+    lines.append('  FROM tmp_ibank_user_team_seed')
+    lines.append(') seeded_user')
+    lines.append('WHERE ut.user_id = seeded_user.user_id')
+    lines.append('  AND ut.is_primary = true;')
+    lines.append('')
+
+    lines.append('INSERT INTO tb_user_team (user_id, team_id, team_role, allocation, is_primary, status_code, is_leader)')
+    lines.append('SELECT user_id, team_id, team_role, allocation, is_primary, status_code, is_leader')
+    lines.append('FROM tmp_ibank_user_team_seed')
+    lines.append('ON CONFLICT (user_id, team_id) DO UPDATE SET')
+    lines.append('  team_role = EXCLUDED.team_role,')
+    lines.append('  allocation = EXCLUDED.allocation,')
+    lines.append('  is_primary = EXCLUDED.is_primary,')
+    lines.append('  status_code = EXCLUDED.status_code,')
+    lines.append('  is_leader = EXCLUDED.is_leader,')
+    lines.append('  updated_at = CURRENT_TIMESTAMP;')
+    lines.append('')
+
+    lines.append('-- Sequence alignment for explicit IDs.')
     lines.append("SELECT setval(pg_get_serial_sequence('tb_department', 'department_id'), (SELECT COALESCE(MAX(department_id), 1) FROM tb_department), true);")
     lines.append("SELECT setval(pg_get_serial_sequence('tb_user', 'user_id'), (SELECT COALESCE(MAX(user_id), 1) FROM tb_user), true);")
     lines.append("SELECT setval(pg_get_serial_sequence('tb_team', 'team_id'), (SELECT COALESCE(MAX(team_id), 1) FROM tb_team), true);")
