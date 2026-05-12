@@ -333,7 +333,7 @@ export default function WorklogPage() {
         </div>
 
         <div className="pt-2">
-          <div className="flex flex-col gap-3 pb-4 sm:flex-row sm:items-center sm:justify-between">
+          <div className="grid gap-3 pb-4 sm:grid-cols-[minmax(0,1fr)_auto] sm:items-center">
             <div className="flex items-center gap-2">
               <p className="text-sm text-muted-foreground">
                 표시 중인 업무{" "}

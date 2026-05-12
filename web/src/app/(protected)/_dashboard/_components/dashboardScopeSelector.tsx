@@ -176,11 +176,11 @@ export function DashboardScopeSelector({
         type="button"
         variant="outline"
         size="lg"
-        className="h-12 justify-start gap-3 rounded-2xl px-5 text-left text-base font-semibold"
+        className="h-16 max-w-full justify-start gap-4 rounded-[32px] border-primary/20 bg-primary px-7 text-left text-lg font-semibold tracking-[-0.02em] !text-primary-foreground shadow-[0_18px_40px_-24px_color-mix(in_srgb,var(--primary)_82%,transparent)] hover:bg-primary/90 hover:!text-primary-foreground dark:border-white/10 dark:bg-primary dark:shadow-[0_18px_42px_-24px_rgba(59,130,246,0.72)] dark:hover:bg-primary/90 [&_svg]:size-5 [&_svg]:!text-primary-foreground"
         onClick={handleOpen}
       >
         <SlidersHorizontal className="size-4" />
-        <span>{selectedLabel}</span>
+        <span className="min-w-0 truncate">{selectedLabel}</span>
       </Button>
 
       <Dialog open={open} onOpenChange={setOpen}>

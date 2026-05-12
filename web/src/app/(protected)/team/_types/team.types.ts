@@ -7,8 +7,6 @@ export interface TeamSummary {
   description: string | null;
   teamLeaderId: number | null;
   teamLeaderName: string | null;
-  deptHeadAdminUserId?: number | null;
-  deptHeadAdminUsername?: string | null;
   memberCount: number;
   myIsLeader: boolean;
   teamRole: string | null;

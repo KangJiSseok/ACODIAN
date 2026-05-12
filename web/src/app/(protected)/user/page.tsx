@@ -256,10 +256,7 @@ export default function UserPage() {
               </p>
             </div>
             <p className="text-sm font-medium text-muted-foreground">
-              조회된 사용자{" "}
-              <span className="text-lg font-semibold text-foreground">
-                {userPage?.totalCount ?? 0}명
-              </span>
+              표시 중인 사용자 {userPage?.totalCount ?? 0}명
             </p>
           </div>
         </div>
