@@ -42,6 +42,7 @@ interface WorklogFormModalsProps {
   onRemoveDependency: (dependencyId: number) => void
   incompleteDependencies: WorklogFormDependencyOption[]
   circularDependencyDetected: boolean
+  statusChangeReasonVisible: boolean
   tagKeywordInput: string
   onTagKeywordInputChange: (value: string) => void
   tagSearchOpen: boolean
@@ -75,6 +76,7 @@ export function WorklogFormModals({
   onRemoveDependency,
   incompleteDependencies,
   circularDependencyDetected,
+  statusChangeReasonVisible,
   tagKeywordInput,
   onTagKeywordInputChange,
   tagSearchOpen,
@@ -109,6 +111,7 @@ export function WorklogFormModals({
         onRemoveDependency={onRemoveDependency}
         incompleteDependencies={incompleteDependencies}
         circularDependencyDetected={circularDependencyDetected}
+        statusChangeReasonVisible={statusChangeReasonVisible}
       />
 
       <WorklogTagModal

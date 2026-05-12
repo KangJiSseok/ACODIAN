@@ -191,8 +191,8 @@ function toWorklogDetail(item: WorklogDetailApiResponse): Worklog {
 
 const nextMap: Record<WorklogRecord["status"], WorklogRecord["status"][]> = {
   PENDING: ["IN_PROGRESS"],
-  IN_PROGRESS: ["DONE", "ON_HOLD", "FAILED", "CANCELLED"],
-  ON_HOLD: ["IN_PROGRESS", "FAILED"],
+  IN_PROGRESS: ["DONE", "ON_HOLD", "CANCELLED"],
+  ON_HOLD: ["IN_PROGRESS"],
   DONE: [],
   FAILED: ["IN_PROGRESS"],
   CANCELLED: [],
@@ -301,6 +301,8 @@ export const worklogService = {
       title: values.title,
       requestContent: values.requestContent,
       workContent: values.workContent,
+      statusCode: worklogStatusApiCodeMap[values.status] ?? "PENDING",
+      reason: values.statusChangeReason?.trim() || null,
       importanceCode: values.importance,
       actualHours: values.actualHours,
       instructionDate: values.instructionDate,
@@ -308,6 +310,8 @@ export const worklogService = {
       predecessorWorklogIds: values.dependencyIds.filter(
         (dependencyId) => dependencyId !== id
       ),
+      tagIds: values.tagIds,
+      removeTagIds: values.removeTagIds ?? [],
       aiSummary: null,
       removeFileIds: values.removeFileIds ?? [],
     }

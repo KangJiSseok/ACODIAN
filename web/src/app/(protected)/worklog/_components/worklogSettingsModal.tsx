@@ -52,6 +52,7 @@ interface WorklogSettingsModalProps {
   onRemoveDependency: (dependencyId: number) => void
   incompleteDependencies: WorklogFormDependencyOption[]
   circularDependencyDetected: boolean
+  statusChangeReasonVisible: boolean
 }
 
 export function WorklogSettingsModal({
@@ -77,140 +78,170 @@ export function WorklogSettingsModal({
   onRemoveDependency,
   incompleteDependencies,
   circularDependencyDetected,
+  statusChangeReasonVisible,
 }: WorklogSettingsModalProps) {
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="relative max-h-[86vh] max-w-4xl overflow-y-auto rounded-[28px] p-7">
-        <DialogHeader>
+      <DialogContent className="relative flex max-h-[86vh] max-w-4xl flex-col overflow-hidden rounded-[28px] p-0">
+        <DialogHeader className="shrink-0 px-7 pb-4 pt-7">
           <DialogTitle>작업 설정</DialogTitle>
           <DialogDescription>
             업무 상태, 담당자, 업무 소요 예상 시간과 진행 일정을 설정합니다.
           </DialogDescription>
         </DialogHeader>
-        <div className="grid gap-5">
-          <ModalField label="상태 및 중요도">
-            <div className="grid gap-3 sm:grid-cols-2">
-              <Select
-                className={controlClassName}
-                value={values.status}
-                options={statusOptions}
-                onChange={(event) =>
-                  onValuesChange({
-                    ...values,
-                    status: event.target.value as WorklogFormValues["status"],
-                  })
-                }
-              />
-              <Select
-                className={controlClassName}
-                value={values.importance}
-                options={[
-                  { label: getImportanceLabel("URGENT"), value: "URGENT" },
-                  { label: getImportanceLabel("HIGH"), value: "HIGH" },
-                  { label: getImportanceLabel("NORMAL"), value: "NORMAL" },
-                  { label: getImportanceLabel("LOW"), value: "LOW" },
-                ]}
-                onChange={(event) =>
-                  onValuesChange({
-                    ...values,
-                    importance: event.target.value as WorklogFormValues["importance"],
-                  })
-                }
-              />
-            </div>
-          </ModalField>
-
-          <ModalField label="담당 팀">
-            <div className="grid gap-3">
-              <Select
-                className={cn(
-                  controlClassName,
-                  disableTeamChange &&
-                    "border-border/60 bg-muted/70 text-muted-foreground shadow-none blur-[0.2px]"
-                )}
-                disabled={disableTeamChange}
-                value={String(values.teamId)}
-                options={teamOptions}
-                onChange={(event) =>
-                  onValuesChange({ ...values, teamId: Number(event.target.value) })
-                }
-              />
-              {disableTeamChange ? (
-                <p className="text-xs leading-5 text-muted-foreground">
-                  수정 화면에서는 담당 팀을 변경할 수 없습니다.
-                </p>
-              ) : null}
-            </div>
-          </ModalField>
-
-          <ModalField label="선행 업무">
-            <DependencyDropdown
-              status={values.status}
-              searchControlClassName={searchControlClassName}
-              dependencyKeywordInput={dependencyKeywordInput}
-              onDependencyKeywordInputChange={onDependencyKeywordInputChange}
-              dependencySearchOpen={dependencySearchOpen}
-              onDependencySearchOpenChange={onDependencySearchOpenChange}
-              filteredDependencyCandidates={filteredDependencyCandidates}
-              selectedDependencies={selectedDependencies}
-              onAddDependency={onAddDependency}
-              onRemoveDependency={onRemoveDependency}
-              incompleteDependencies={incompleteDependencies}
-              circularDependencyDetected={circularDependencyDetected}
-            />
-          </ModalField>
-
-          <ModalField label="업무 소요 예상 시간">
-            <div className="space-y-2">
-              <Input
-                className={controlClassName}
-                type="number"
-                step="0.5"
-                value={actualHoursInput}
-                aria-invalid={Boolean(validationErrors?.actualHours)}
-                onFocus={(event) => event.currentTarget.select()}
-                onChange={(event) => onActualHoursInputChange(event.target.value)}
-                placeholder="예: 1.5"
-              />
-              {validationErrors?.actualHours ? (
-                <p className="text-xs font-medium text-destructive">
-                  {validationErrors.actualHours}
-                </p>
-              ) : null}
-              <p className="text-xs leading-5 text-muted-foreground">
-                소수 입력이 가능합니다. 예: 1.5 = 1시간 30분
-              </p>
-            </div>
-          </ModalField>
-
-          <ModalField label="진행 일정">
-            <div className="space-y-2">
-              <p className="text-xs text-muted-foreground">
-                숫자로 직접 수정하거나 입력칸의 달력 아이콘으로 선택할 수 있습니다.
-              </p>
-              <div className="grid gap-3 sm:grid-cols-[1fr_auto_1fr] sm:items-center">
-                <ScheduleDateControl
-                  label="지시일"
-                  value={values.instructionDate}
-                  onChange={(nextValue) =>
-                    onValuesChange({ ...values, instructionDate: nextValue })
-                  }
-                />
-                <span className="hidden text-center text-sm text-muted-foreground sm:block">
-                  ~
-                </span>
-                <ScheduleDateControl
-                  label="마감일"
-                  value={values.dueDate}
-                  onChange={(nextValue) =>
-                    onValuesChange({ ...values, dueDate: nextValue })
-                  }
-                />
+        <div className="dashboard-scrollbar min-h-0 flex-1 overflow-y-auto px-7 pb-5 [scrollbar-gutter:stable]">
+          <div className="grid gap-5">
+            <ModalField label="상태 및 중요도">
+              <div className="space-y-3">
+                <div className="grid gap-3 sm:grid-cols-2">
+                  <Select
+                    className={controlClassName}
+                    value={values.status}
+                    options={statusOptions}
+                    onChange={(event) =>
+                      onValuesChange({
+                        ...values,
+                        status: event.target.value as WorklogFormValues["status"],
+                      })
+                    }
+                  />
+                  <Select
+                    className={controlClassName}
+                    value={values.importance}
+                    options={[
+                      { label: getImportanceLabel("URGENT"), value: "URGENT" },
+                      { label: getImportanceLabel("HIGH"), value: "HIGH" },
+                      { label: getImportanceLabel("NORMAL"), value: "NORMAL" },
+                      { label: getImportanceLabel("LOW"), value: "LOW" },
+                    ]}
+                    onChange={(event) =>
+                      onValuesChange({
+                        ...values,
+                        importance:
+                          event.target.value as WorklogFormValues["importance"],
+                      })
+                    }
+                  />
+                </div>
+                <div
+                  className={cn(
+                    "space-y-3 overflow-hidden rounded-2xl border border-border/70 bg-muted/20 p-4",
+                    !statusChangeReasonVisible && "hidden"
+                  )}
+                >
+                  <label className="text-sm font-semibold text-foreground">
+                    변경 사유
+                  </label>
+                  <div className="rounded-2xl border border-input bg-background/75 px-4 py-3 shadow-sm transition-all focus-within:border-primary/45 focus-within:ring-2 focus-within:ring-primary/15">
+                    <textarea
+                      className="h-[112px] w-full resize-none bg-transparent pr-2 text-sm leading-6 text-foreground outline-none placeholder:text-muted-foreground [scrollbar-color:theme(colors.slate.400)_transparent] [scrollbar-gutter:stable] [scrollbar-width:thin] [&::-webkit-scrollbar]:w-2 [&::-webkit-scrollbar-thumb]:rounded-full [&::-webkit-scrollbar-thumb]:bg-muted-foreground/35 [&::-webkit-scrollbar-track]:bg-transparent"
+                      value={values.statusChangeReason ?? ""}
+                      onChange={(event) =>
+                        onValuesChange({
+                          ...values,
+                          statusChangeReason: event.target.value,
+                        })
+                      }
+                      placeholder="상태를 변경하는 이유를 간단히 남겨주세요."
+                      spellCheck={false}
+                    />
+                  </div>
+                </div>
               </div>
+            </ModalField>
+
+              <ModalField label="담당 팀">
+                <div className="grid gap-3">
+                  <Select
+                    className={cn(
+                      controlClassName,
+                      disableTeamChange &&
+                        "border-border/60 bg-muted/70 text-muted-foreground shadow-none blur-[0.2px]"
+                    )}
+                    disabled={disableTeamChange}
+                    value={String(values.teamId)}
+                    options={teamOptions}
+                    onChange={(event) =>
+                      onValuesChange({ ...values, teamId: Number(event.target.value) })
+                    }
+                  />
+                  {disableTeamChange ? (
+                    <p className="text-xs leading-5 text-muted-foreground">
+                      수정 화면에서는 담당 팀을 변경할 수 없습니다.
+                    </p>
+                  ) : null}
+                </div>
+              </ModalField>
+
+              <ModalField label="선행 업무">
+                <DependencyDropdown
+                  status={values.status}
+                  searchControlClassName={searchControlClassName}
+                  dependencyKeywordInput={dependencyKeywordInput}
+                  onDependencyKeywordInputChange={onDependencyKeywordInputChange}
+                  dependencySearchOpen={dependencySearchOpen}
+                  onDependencySearchOpenChange={onDependencySearchOpenChange}
+                  filteredDependencyCandidates={filteredDependencyCandidates}
+                  selectedDependencies={selectedDependencies}
+                  onAddDependency={onAddDependency}
+                  onRemoveDependency={onRemoveDependency}
+                  incompleteDependencies={incompleteDependencies}
+                  circularDependencyDetected={circularDependencyDetected}
+                />
+              </ModalField>
+
+              <ModalField label="업무 소요 예상 시간">
+                <div className="space-y-2">
+                  <Input
+                    className={controlClassName}
+                    type="number"
+                    step="0.5"
+                    value={actualHoursInput}
+                    aria-invalid={Boolean(validationErrors?.actualHours)}
+                    onFocus={(event) => event.currentTarget.select()}
+                    onChange={(event) => onActualHoursInputChange(event.target.value)}
+                    placeholder="예: 1.5"
+                  />
+                  {validationErrors?.actualHours ? (
+                    <p className="text-xs font-medium text-destructive">
+                      {validationErrors.actualHours}
+                    </p>
+                  ) : null}
+                  <p className="text-xs leading-5 text-muted-foreground">
+                    소수 입력이 가능합니다. 예: 1.5 = 1시간 30분
+                  </p>
+                </div>
+              </ModalField>
+
+              <ModalField label="진행 일정">
+                <div className="space-y-2">
+                  <p className="text-xs text-muted-foreground">
+                    숫자로 직접 수정하거나 입력칸의 달력 아이콘으로 선택할 수 있습니다.
+                  </p>
+                  <div className="grid gap-3 sm:grid-cols-[1fr_auto_1fr] sm:items-center">
+                    <ScheduleDateControl
+                      label="지시일"
+                      value={values.instructionDate}
+                      onChange={(nextValue) =>
+                        onValuesChange({ ...values, instructionDate: nextValue })
+                      }
+                    />
+                    <span className="hidden text-center text-sm text-muted-foreground sm:block">
+                      ~
+                    </span>
+                    <ScheduleDateControl
+                      label="마감일"
+                      value={values.dueDate}
+                      onChange={(nextValue) =>
+                        onValuesChange({ ...values, dueDate: nextValue })
+                      }
+                    />
+                  </div>
+                </div>
+              </ModalField>
             </div>
-          </ModalField>
-        </div>
-        <DialogFooter className="items-center justify-between border-t border-border/70 pt-4">
+          </div>
+        <DialogFooter className="shrink-0 items-center justify-between border-t border-border/70 px-7 py-4">
           <p className="mr-auto text-xs text-muted-foreground">
             변경 내용은 업무 등록 폼에 즉시 반영됩니다.
           </p>

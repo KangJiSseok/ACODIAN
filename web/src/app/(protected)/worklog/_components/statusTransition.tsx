@@ -10,8 +10,8 @@ import { StatusBadge } from "./statusBadge"
 
 const nextMap: Record<WorklogStatus, WorklogStatus[]> = {
   PENDING: ["IN_PROGRESS"],
-  IN_PROGRESS: ["DONE", "ON_HOLD", "FAILED", "CANCELLED"],
-  ON_HOLD: ["IN_PROGRESS", "FAILED"],
+  IN_PROGRESS: ["DONE", "ON_HOLD", "CANCELLED"],
+  ON_HOLD: ["IN_PROGRESS"],
   DONE: ["IN_PROGRESS"],
   FAILED: ["IN_PROGRESS"],
   CANCELLED: [],

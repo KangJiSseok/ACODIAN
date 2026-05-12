@@ -69,8 +69,10 @@ export interface WorklogFormValues {
   attachmentFileItems?: WorklogFileItem[]
   removeFileIds?: number[]
   tagIds: number[]
+  removeTagIds?: number[]
   aiSummary?: string
   aiSummaryEdited?: boolean
+  statusChangeReason?: string
 }
 
 export interface WorklogFormTeamOption {

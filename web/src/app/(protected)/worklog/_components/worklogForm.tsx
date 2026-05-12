@@ -30,16 +30,14 @@ import {
 
 const editableStatusTransitionMap: Record<WorklogStatus, WorklogStatus[]> = {
   PENDING: ["IN_PROGRESS"],
-  IN_PROGRESS: ["DONE", "ON_HOLD", "FAILED", "CANCELLED"],
+  IN_PROGRESS: ["DONE", "ON_HOLD", "CANCELLED"],
   DONE: [],
-  ON_HOLD: ["IN_PROGRESS", "FAILED"],
+  ON_HOLD: ["IN_PROGRESS"],
   FAILED: ["IN_PROGRESS"],
   CANCELLED: [],
 }
 
-const creatableStatusOptions = worklogStatusLegendOrder.filter(
-  (status) => status !== "FAILED",
-)
+const creatableStatusOptions = worklogStatusLegendOrder
 
 type SettingsValidationErrors = {
   actualHours?: string
@@ -142,6 +140,8 @@ export function WorklogForm({
     attachmentFileItems: [],
     removeFileIds: [],
     tagIds: [],
+    removeTagIds: [],
+    statusChangeReason: "",
   }
   const [activeModal, setActiveModal] = useState<WorklogFormModalKey | null>(null)
   const [values, setValues] = useState<WorklogFormValues>(resolvedInitialValues)
@@ -161,6 +161,8 @@ export function WorklogForm({
       validateInvalidNumber: showSettingsValidationErrors,
     },
   )
+  const initialStatus = initialValues?.status ?? resolvedInitialValues.status
+  const statusChangeReasonVisible = isEditMode && values.status !== initialStatus
 
   const teamSource = useMemo<WorklogFormTeamOption[]>(
     () => teamOptionsSource ?? [],
@@ -327,6 +329,7 @@ export function WorklogForm({
     setValues((previous) => ({
       ...previous,
       tagIds: Array.from(new Set([...previous.tagIds, tagId])),
+      removeTagIds: (previous.removeTagIds ?? []).filter((item) => item !== tagId),
     }))
     setTagKeywordInput("")
     setTagSearchOpen(false)
@@ -336,6 +339,7 @@ export function WorklogForm({
     setValues((previous) => ({
       ...previous,
       tagIds: previous.tagIds.filter((item) => item !== tagId),
+      removeTagIds: Array.from(new Set([...(previous.removeTagIds ?? []), tagId])),
     }))
   }
 
@@ -546,6 +550,7 @@ export function WorklogForm({
         onRemoveDependency={removeDependency}
         incompleteDependencies={incompleteDependencies}
         circularDependencyDetected={circularDependencyDetected}
+        statusChangeReasonVisible={statusChangeReasonVisible}
         tagKeywordInput={tagKeywordInput}
         onTagKeywordInputChange={setTagKeywordInput}
         tagSearchOpen={tagSearchOpen}

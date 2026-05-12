@@ -126,8 +126,10 @@ function toWorklogFormValues(
     attachmentFileItems: worklog.fileItems ?? [],
     removeFileIds: [],
     tagIds,
+    removeTagIds: [],
     aiSummary: worklog.aiSummary,
     aiSummaryEdited: worklog.aiSummaryEdited,
+    statusChangeReason: "",
   }
 }
 

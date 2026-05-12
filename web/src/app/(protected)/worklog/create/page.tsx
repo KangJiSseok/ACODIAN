@@ -128,6 +128,8 @@ function buildInitialValues(teamId: number): WorklogFormValues {
     attachmentFileItems: [],
     removeFileIds: [],
     tagIds: [],
+    removeTagIds: [],
+    statusChangeReason: "",
   }
 }
 
