@@ -1,23 +1,35 @@
 "use client";
 
 import { useQuery } from "@tanstack/react-query";
-import { selectIsAuthenticated, useAuthStore } from "@/app/_common/store/auth.store";
+import {
+  selectAuthUser,
+  selectIsAuthenticated,
+  useAuthStore,
+} from "@/app/_common/store/auth.store";
 import { notificationService } from "../_service/notification.service";
 import type { GetNotificationsParams } from "../_types/notification.types";
 
 export const notificationKeys = {
   all: ["notifications"] as const,
-  list: (params: GetNotificationsParams = {}) =>
-    [...notificationKeys.all, "list", params] as const,
+  user: (userId: number | null | undefined) =>
+    [...notificationKeys.all, "user", userId ?? "anonymous"] as const,
+  list: (
+    userId: number | null | undefined,
+    params: GetNotificationsParams = {},
+  ) => [...notificationKeys.user(userId), "list", params] as const,
 };
 
 export function useNotificationList(params: GetNotificationsParams = {}) {
+  const user = useAuthStore(selectAuthUser);
   const isAuthenticated = useAuthStore(selectIsAuthenticated);
+  const userId = user?.userId;
 
   const query = useQuery({
-    queryKey: notificationKeys.list(params),
+    queryKey: notificationKeys.list(userId, params),
     queryFn: () => notificationService.getNotifications(params),
-    enabled: isAuthenticated,
+    enabled: isAuthenticated && Number.isFinite(userId),
+    staleTime: 0,
+    refetchOnMount: "always",
   });
 
   return {
