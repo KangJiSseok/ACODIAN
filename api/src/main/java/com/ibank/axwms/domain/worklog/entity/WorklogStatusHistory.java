@@ -53,11 +53,26 @@ public class WorklogStatusHistory {
             WorklogStatus newStatusCode,
             Long changedBy
     ) {
+        return create(worklogId, null, newStatusCode, changedBy, null);
+    }
+
+    /**
+     * 상태 전환의 이전/이후 상태와 사용자가 남긴 사유를 이력 한 건으로 기록한다.
+     */
+    public static WorklogStatusHistory create(
+            Long worklogId,
+            WorklogStatus previousStatusCode,
+            WorklogStatus newStatusCode,
+            Long changedBy,
+            String reason
+    ) {
         WorklogStatusHistory worklogStatusHistory = new WorklogStatusHistory();
         worklogStatusHistory.worklogId = worklogId;
         worklogStatusHistory.changedBy = changedBy;
+        worklogStatusHistory.previousStatusCode = previousStatusCode;
         worklogStatusHistory.newStatusCode = newStatusCode;
+        worklogStatusHistory.reason = reason;
 
-        return  worklogStatusHistory;
+        return worklogStatusHistory;
     }
 }

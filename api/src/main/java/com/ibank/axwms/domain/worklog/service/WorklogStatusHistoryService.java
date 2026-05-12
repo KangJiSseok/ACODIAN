@@ -22,4 +22,22 @@ public class WorklogStatusHistoryService {
             workingLogId, statusCode, changedBy
         ));
     }
+
+    /**
+     * 수정 요청으로 상태가 실제 변경된 경우 이전 상태와 변경 사유를 함께 이력으로 기록한다.
+     */
+    @Transactional
+    public void createStatusHistory(Long workingLogId,
+                                    WorklogStatus previousStatusCode,
+                                    WorklogStatus newStatusCode,
+                                    Long changedBy,
+                                    String reason) {
+        worklogStatusHistoryRepository.save(WorklogStatusHistory.create(
+                workingLogId,
+                previousStatusCode,
+                newStatusCode,
+                changedBy,
+                reason
+        ));
+    }
 }

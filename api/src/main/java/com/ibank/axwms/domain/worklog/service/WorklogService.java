@@ -5,6 +5,7 @@ import com.ibank.axwms.domain.file.service.FileService;
 import com.ibank.axwms.domain.organization.team.service.TeamService;
 import com.ibank.axwms.domain.tag.repository.jooq.projection.MetaTagDetailProjection;
 import com.ibank.axwms.domain.tag.service.TagService;
+import com.ibank.axwms.domain.worklog.WorklogStatus;
 import com.ibank.axwms.domain.worklog.dto.CreateWorklogApiDto;
 import com.ibank.axwms.domain.worklog.dto.GetWorklogOptionsApiDto;
 import com.ibank.axwms.domain.worklog.dto.GetWorklogDetailApiDto;
@@ -35,6 +36,8 @@ import org.springframework.web.multipart.MultipartFile;
 import java.time.LocalDate;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
+import java.util.stream.Collectors;
 
 @Service
 @RequiredArgsConstructor
@@ -177,6 +180,7 @@ public class WorklogService {
      * null 필드는 변경되지 않으며, predecessorWorklogIds 는 null=변경없음 / []=모두 제거 / [...]=전체 replace 시멘틱.
      * teamId 는 수정 불가. 일자 범위는 변경 후 합산값 기준으로 검증.
      * aiSummary 가 들어오면 aiSummaryEdited 가 true 로 자동 표시.
+     * statusCode 가 실제로 변경되면 reason 을 상태 이력 사유로 함께 기록한다.
      * 파일 추가/삭제 중 어느 단계든 실패하면 본문 수정까지 함께 롤백된다.
      *
      * @param principal 현재 로그인 사용자
@@ -206,15 +210,27 @@ public class WorklogService {
         LocalDate effectiveDueDate = request.dueDate() != null ? request.dueDate() : worklog.getDueDate();
         validateDateRange(effectiveInstructionDate, effectiveDueDate);
 
+        WorklogStatus previousStatusCode = worklog.getStatusCode();
+        boolean statusChanged = request.statusCode() != null && request.statusCode() != previousStatusCode;
+
         worklog.updatePartial(
                 request.title(),
                 request.requestContent(),
                 request.workContent(),
+                request.statusCode(),
                 request.importanceCode(),
                 request.actualHours(),
                 request.instructionDate(),
                 request.dueDate(),
                 request.aiSummary()
+        );
+        createStatusHistoryIfChanged(
+                worklogId,
+                previousStatusCode,
+                request.statusCode(),
+                principal.userId(),
+                request.reason(),
+                statusChanged
         );
 
         worklogDependencyService.replacePredecessors(
@@ -223,11 +239,96 @@ public class WorklogService {
                 request.predecessorWorklogIds()
         );
 
+        removeManualTags(worklogId, request.removeTagIds());
+        registerAdditionalManualTags(worklogId, request.tagIds());
+
         if (request.removeFileIds() != null && !request.removeFileIds().isEmpty()) {
             fileService.softDeleteWorklogFiles(worklogId, request.removeFileIds());
         }
 
         fileService.uploadWorklogFiles(worklogId, principal.userId(), newFiles);
+    }
+
+    /**
+     * 상태 값이 실제 변경된 요청만 상태 이력으로 남겨 수정 저장과 이력 표시를 동기화한다.
+     */
+    private void createStatusHistoryIfChanged(Long worklogId,
+                                              WorklogStatus previousStatusCode,
+                                              WorklogStatus newStatusCode,
+                                              Long changedBy,
+                                              String reason,
+                                              boolean statusChanged) {
+        if (!statusChanged) {
+            return;
+        }
+
+        worklogStatusHistoryService.createStatusHistory(
+                worklogId,
+                previousStatusCode,
+                newStatusCode,
+                changedBy,
+                normalizeStatusChangeReason(reason)
+        );
+    }
+
+    /**
+     * 빈 상태 변경 사유는 이력 조회에서 무의미한 공백으로 보이지 않도록 null 로 정규화한다.
+     */
+    private String normalizeStatusChangeReason(String reason) {
+        if (reason == null || reason.isBlank()) {
+            return null;
+        }
+
+        return reason.trim();
+    }
+
+    /**
+     * 수정 요청에서 삭제를 명시한 태그만 연결 해제한다.
+     */
+    private void removeManualTags(Long worklogId, List<Long> removeTagIds) {
+        List<Long> normalizedRemoveTagIds = tagService.normalizeExistingTagIds(removeTagIds);
+        if (normalizedRemoveTagIds.isEmpty()) {
+            return;
+        }
+
+        List<Long> linkedRemoveTagIds = worklogTagRepository
+                .findByWorklogIdAndTagIdIn(worklogId, normalizedRemoveTagIds)
+                .stream()
+                .map(WorklogTag::getTagId)
+                .toList();
+        if (linkedRemoveTagIds.isEmpty()) {
+            return;
+        }
+
+        worklogTagRepository.deleteByWorklogIdAndTagIdIn(worklogId, linkedRemoveTagIds);
+        tagService.decrementUsageCountByIds(linkedRemoveTagIds);
+    }
+
+    /**
+     * 최종 선택 태그 목록에서 이미 연결된 태그를 제외하고 새 수동 태그만 추가한다.
+     */
+    private void registerAdditionalManualTags(Long worklogId, List<Long> tagIds) {
+        List<Long> normalizedTagIds = tagService.normalizeExistingTagIds(tagIds);
+        if (normalizedTagIds.isEmpty()) {
+            return;
+        }
+
+        Set<Long> linkedTagIds = worklogTagRepository.findByWorklogIdAndTagIdIn(worklogId, normalizedTagIds)
+                .stream()
+                .map(WorklogTag::getTagId)
+                .collect(Collectors.toSet());
+        List<Long> newTagIds = normalizedTagIds.stream()
+                .filter(tagId -> !linkedTagIds.contains(tagId))
+                .toList();
+        if (newTagIds.isEmpty()) {
+            return;
+        }
+
+        List<WorklogTag> worklogTags = newTagIds.stream()
+                .map(tagId -> WorklogTag.createManualSelected(worklogId, tagId))
+                .toList();
+        worklogTagRepository.saveAll(worklogTags);
+        tagService.incrementUsageCountByIds(newTagIds);
     }
 
     /**

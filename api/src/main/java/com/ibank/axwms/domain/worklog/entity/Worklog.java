@@ -142,6 +142,7 @@ public class Worklog {
     public void updatePartial(String title,
                               String requestContent,
                               String workContent,
+                              WorklogStatus statusCode,
                               WorklogImportance importanceCode,
                               BigDecimal actualHours,
                               LocalDate instructionDate,
@@ -150,6 +151,7 @@ public class Worklog {
         if (title != null) this.title = title;
         if (requestContent != null) this.requestContent = requestContent;
         if (workContent != null) this.workContent = workContent;
+        if (statusCode != null) this.statusCode = statusCode;
         if (importanceCode != null) this.importanceCode = importanceCode;
         if (actualHours != null) this.actualHours = actualHours;
         if (instructionDate != null) this.instructionDate = instructionDate;
