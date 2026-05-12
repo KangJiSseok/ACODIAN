@@ -4,7 +4,10 @@ import type { ReactNode } from "react";
 import { useMemo, useState } from "react";
 import { ChevronDown, RefreshCw, SlidersHorizontal } from "lucide-react";
 import { Pagination } from "@/app/_common/components/data-display/pagination";
+import { useAuth } from "@/app/_common/hooks/useAuth";
 import PageHeader from "@/app/_common/components/layout/pageHeader";
+import type { AuthUser } from "@/app/_common/store/auth.store";
+import { isDirectorProfile } from "@/app/_common/utils/organizationAccess.utils";
 import { Button } from "@/components/ui/button";
 import { CardSpotlight } from "@/components/ui/card-spotlight";
 import { Select } from "@/components/ui/select";
@@ -25,6 +28,8 @@ const ALL_FILTER_VALUE = "all";
 const NOTIFICATION_PAGE_SIZE = 6;
 
 export default function NotificationPage() {
+  const { user } = useAuth();
+  const isDirector = isDirectorProfile(user);
   const [activeView, setActiveView] = useState<NotificationView>("TOTAL");
   const [showFilters, setShowFilters] = useState(false);
   const [departmentId, setDepartmentId] = useState(ALL_FILTER_VALUE);
@@ -72,16 +77,20 @@ export default function NotificationPage() {
     ...countBaseParams,
     isRead: true,
   });
-  const { data: departmentData } = useDepartmentList();
-  const { data: teamPage } = useTeamList({ pageSize: 100 });
+  const { data: departmentData } = useDepartmentList(isDirector);
+  const { data: teamPage } = useTeamList({ pageSize: 100 }, isDirector);
   const { data: selectedDepartment } = useDepartmentDetail(
-    selectedDepartmentId ?? Number.NaN,
+    isDirector ? selectedDepartmentId ?? Number.NaN : Number.NaN,
   );
 
-  const departments = departmentData?.departments ?? [];
-  const teamOptionsSource = selectedDepartmentId
-    ? selectedDepartment?.teams ?? []
-    : teamPage?.items ?? [];
+  const departments = isDirector
+    ? departmentData?.departments ?? []
+    : getUserDepartmentOptions(user);
+  const teamOptionsSource = isDirector
+    ? selectedDepartmentId
+      ? selectedDepartment?.teams ?? []
+      : teamPage?.items ?? []
+    : getUserTeamOptions(user);
   const totalCount = totalCountQuery.notificationPage?.totalCount ?? 0;
   const unreadCount = unreadCountQuery.notificationPage?.totalCount ?? 0;
   const readCount = readCountQuery.notificationPage?.totalCount ?? 0;
@@ -330,6 +339,23 @@ function FilterField({
       {children}
     </div>
   );
+}
+
+function getUserDepartmentOptions(user: AuthUser | null | undefined) {
+  if (!Number.isFinite(user?.departmentId)) {
+    return [];
+  }
+
+  return [
+    {
+      departmentId: user?.departmentId as number,
+      departmentName: user?.departmentName ?? "내 부서",
+    },
+  ];
+}
+
+function getUserTeamOptions(user: AuthUser | null | undefined) {
+  return user?.teams ?? [];
 }
 
 function parseFilterNumber(value: string) {

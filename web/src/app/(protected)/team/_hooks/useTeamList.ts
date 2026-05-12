@@ -12,10 +12,11 @@ export const teamKeys = {
   userCandidates: () => [...teamKeys.all, "user-candidates"] as const,
 };
 
-export function useTeamList(params: GetTeamsParams = {}) {
+export function useTeamList(params: GetTeamsParams = {}, enabled = true) {
   return useQuery({
     queryKey: teamKeys.list(params),
     queryFn: () => teamService.getTeams(params),
+    enabled,
   });
 }
 
