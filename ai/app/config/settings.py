@@ -22,7 +22,7 @@ class Settings(BaseSettings):
     gemini_max_retries: int = 3                           # 호출 실패 시 재시도 최대 횟수
 
     # ---- 임베딩 / 청킹 (기획서 2.4) ----
-    embedding_model: str = "text-embedding-004"           # 768 차원 출력 모델
+    embedding_model: str = "gemini-embedding-001"           # 768 차원 출력 모델
     embedding_dim: int = 768                              # 벡터 차원. ERD VECTOR(768) 와 *반드시* 동기화.
     chunk_threshold_chars: int = 3000                     # 이 길이 초과 시 Gemini 지능형 청킹 사용
 

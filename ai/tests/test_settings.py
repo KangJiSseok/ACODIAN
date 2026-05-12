@@ -13,7 +13,7 @@ def test_settings_has_embedding_defaults(monkeypatch) -> None:
     monkeypatch.delenv("EMBEDDING_DIM", raising=False)
     monkeypatch.delenv("CHUNK_THRESHOLD_CHARS", raising=False)
     settings = Settings(_env_file=None)
-    assert settings.embedding_model == "text-embedding-004"
+    assert settings.embedding_model == "gemini-embedding-001"
     assert settings.embedding_dim == 768                 # ERD VECTOR(768) 와 동기화
     assert settings.chunk_threshold_chars == 3000        # 기획서 2.4.1 분기 기준
 
