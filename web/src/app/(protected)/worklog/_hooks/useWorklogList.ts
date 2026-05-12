@@ -1,4 +1,8 @@
-import { useQuery, type UseQueryOptions } from "@tanstack/react-query"
+import {
+  keepPreviousData,
+  useQuery,
+  type UseQueryOptions,
+} from "@tanstack/react-query"
 import { worklogService } from "../_service/worklog.service"
 import type { PageResponse } from "@/app/_common/types/api.types"
 import type {
@@ -64,6 +68,7 @@ export function useWorklogOptions(
     queryKey: worklogKeys.options(teamId),
     queryFn: () => worklogService.getOptions(teamId as number),
     enabled: Number.isFinite(teamId) && Number(teamId) > 0,
+    placeholderData: keepPreviousData,
     ...options,
   })
 }

@@ -9,6 +9,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog"
+import { cn } from "@/lib/utils"
 import { ImportanceBadge } from "./importanceBadge"
 import { StatusBadge } from "./statusBadge"
 import { useAuth } from "@/app/_common/hooks/useAuth"
@@ -132,12 +133,15 @@ function InfoRow({
   valueClassName?: string
 }) {
   return (
-    <div className={`min-w-0 rounded-2xl bg-background/70 px-4 py-3 ${className ?? ""}`}>
+    <div className={cn("min-w-0 rounded-2xl bg-background/70 px-4 py-3", className)}>
       <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-muted-foreground">
         {label}
       </p>
       <p
-        className={`mt-1 text-[15px] font-semibold leading-6 text-foreground ${valueClassName ?? "truncate"}`}
+        className={cn(
+          "mt-1 text-[15px] font-semibold leading-6 text-foreground",
+          valueClassName ?? "truncate"
+        )}
         title={value}
       >
         {value}
