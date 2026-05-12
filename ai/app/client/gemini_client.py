@@ -90,7 +90,7 @@ class GeminiClient:
         Args:
             texts: 임베딩할 텍스트들.
             model: 모델명 override. 미지정 시 ``settings.embedding_model``
-                (기본 ``text-embedding-004``, 768 차원 — ERD ``VECTOR(768)`` 와 일치).
+                (기본 ``gemini-embedding-001``, 768 차원 — ERD ``VECTOR(768)`` 와 일치).
 
         Returns:
             각 입력 텍스트에 대응하는 부동소수점 벡터 리스트.
