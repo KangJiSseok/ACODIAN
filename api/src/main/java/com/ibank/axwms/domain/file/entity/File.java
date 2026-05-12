@@ -98,6 +98,27 @@ public class File {
         this.isDeleted = Boolean.TRUE;
     }
 
+    /**
+     * AI 가 생성한 요약을 파일에 반영한다. 콜백 재시도 시 가장 최근 값으로 덮어쓴다.
+     */
+    public void changeAiSummary(String summary) {
+        this.aiSummary = summary;
+    }
+
+    /**
+     * AI 요약 파이프라인이 정상 종료되었음을 표시한다.
+     */
+    public void completeAiSummaryProcessing() {
+        this.aiProcessingStatus = AiProcessingStatus.COMPLETED;
+    }
+
+    /**
+     * AI 요약 파이프라인이 실패로 종료되었음을 표시한다. aiSummary 는 콜백 페이로드 그대로 유지한다.
+     */
+    public void failAiSummaryProcessing() {
+        this.aiProcessingStatus = AiProcessingStatus.FAILED;
+    }
+
     private static String extensionOf(String originalName) {
         if (originalName == null) {
             return DEFAULT_EXTENSION;
