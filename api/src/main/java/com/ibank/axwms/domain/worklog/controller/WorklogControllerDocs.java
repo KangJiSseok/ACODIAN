@@ -1,12 +1,13 @@
 package com.ibank.axwms.domain.worklog.controller;
 
 import com.ibank.axwms.domain.worklog.dto.CreateWorklogApiDto;
-import com.ibank.axwms.domain.worklog.dto.GetWorklogOptionsApiDto;
 import com.ibank.axwms.domain.worklog.dto.GetWorklogDetailApiDto;
 import com.ibank.axwms.domain.worklog.dto.GetWorklogFilterOptionsApiDto;
+import com.ibank.axwms.domain.worklog.dto.GetWorklogOptionsApiDto;
 import com.ibank.axwms.domain.worklog.dto.GetWorklogsApiDto;
 import com.ibank.axwms.domain.worklog.dto.SearchWorklogsApiDto;
 import com.ibank.axwms.domain.worklog.dto.UpdateWorklogApiDto;
+import com.ibank.axwms.global.response.EmptyResponse;
 import com.ibank.axwms.global.response.PageResponse;
 import com.ibank.axwms.global.security.CustomUserPrincipal;
 import io.swagger.v3.oas.annotations.Operation;
@@ -113,7 +114,7 @@ public interface WorklogControllerDocs {
             @ApiResponse(responseCode = "403", description = "작성자가 아님", content = @Content),
             @ApiResponse(responseCode = "404", description = "업무가 없거나 소프트 삭제됨, 또는 삭제 대상 첨부 파일을 찾을 수 없음", content = @Content)
     })
-    void updateWorklog(
+    EmptyResponse updateWorklog(
             @Parameter(hidden = true) CustomUserPrincipal principal,
             @Parameter(description = "수정 대상 업무 ID", example = "501") Long worklogId,
             UpdateWorklogApiDto.Request request,
