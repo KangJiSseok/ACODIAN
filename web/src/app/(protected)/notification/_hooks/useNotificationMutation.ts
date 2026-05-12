@@ -1,18 +1,34 @@
-"use client"
+"use client";
 
-import { useAuth } from "../../worklog/_hooks/useAuth"
-import { notificationService } from "../_service/notification.service"
+import { useMutation, useQueryClient } from "@tanstack/react-query";
+import { notificationService } from "../_service/notification.service";
+import { notificationKeys } from "./useNotificationList";
 
 export function useNotificationMutation() {
-  const { user } = useAuth()
+  const queryClient = useQueryClient();
+
+  const markReadMutation = useMutation({
+    mutationFn: notificationService.markRead,
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: notificationKeys.all });
+    },
+  });
+
+  const markAllReadMutation = useMutation({
+    mutationFn: notificationService.markAllRead,
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: notificationKeys.all });
+    },
+  });
 
   return {
     markRead: (id: number) => {
-      notificationService.markRead(id)
+      markReadMutation.mutate(id);
     },
     markAllRead: () => {
-      if (!user) return
-      notificationService.markAllRead(user.id)
+      markAllReadMutation.mutate();
     },
-  }
+    isMarkingRead: markReadMutation.isPending,
+    isMarkingAllRead: markAllReadMutation.isPending,
+  };
 }

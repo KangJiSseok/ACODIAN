@@ -7,10 +7,11 @@ import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import { resolveBreadcrumbs } from "@/app/_common/service/breadcrumbs";
 import {
-  useNotificationList,
+  useNotificationCenter,
   useNotificationMutation,
 } from "@/app/(protected)/notification/_hooks";
 import { resolveNotificationDeepLink } from "@/app/(protected)/notification/_utils/resolveNotificationDeepLink";
+import { getNotificationTypeLabel } from "@/app/(protected)/notification/_utils/notificationLabel";
 import {
   NotificationCenterPopover,
   type NotificationCenterItem,
@@ -19,16 +20,16 @@ import {
 export default function Gnb() {
   const pathname = usePathname();
   const breadcrumbs = resolveBreadcrumbs(pathname);
-  const { unreadCount, recentUnreadNotifications } = useNotificationList();
+  const { unreadCount, recentUnreadNotifications } = useNotificationCenter();
   const { markAllRead, markRead } = useNotificationMutation();
   const [isNotificationOpen, setIsNotificationOpen] = useState(false);
   const notificationRef = useRef<HTMLDivElement>(null);
   const notificationCenterItems: NotificationCenterItem[] =
     recentUnreadNotifications.map((notification) => ({
       id: notification.id,
-      typeLabel: notification.type === "WORKLOAD" ? "업무량" : "알림",
+      typeLabel: getNotificationTypeLabel(notification.type),
       title: notification.title,
-      content: notification.content,
+      content: notification.content ?? "",
       createdAt: notification.createdAt,
       href: resolveNotificationDeepLink(notification),
     }));

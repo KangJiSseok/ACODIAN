@@ -34,7 +34,7 @@ export function NotificationCenterPopover({
         <div>
           <h2 className="text-sm font-semibold">알림 센터</h2>
           <p className="mt-1 text-xs text-muted-foreground">
-            선택팀 · MCP Project 기준 · 미읽음 {unreadCount}건
+            내 알림 기준 · 미읽음 {unreadCount}건
           </p>
         </div>
 
