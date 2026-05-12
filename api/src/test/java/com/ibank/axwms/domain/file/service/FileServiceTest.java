@@ -6,6 +6,7 @@ import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.BDDMockito.given;
 import static org.mockito.Mockito.verify;
 
+import com.ibank.axwms.domain.file.FileType;
 import com.ibank.axwms.domain.file.dto.GetFilesApiDto;
 import com.ibank.axwms.domain.file.external.FilePathGenerator;
 import com.ibank.axwms.domain.file.external.ObjectStoragePort;
@@ -60,6 +61,19 @@ class FileServiceTest {
         ArgumentCaptor<FilePageQuery> queryCaptor = ArgumentCaptor.forClass(FilePageQuery.class);
         verify(fileRepository).findFilePage(eq(USER_ID), queryCaptor.capture());
         assertThat(queryCaptor.getValue().createdFrom()).isBetween(before, after);
+    }
+
+    @Test
+    @DisplayName("파일 형식 목록을 enum 선언 순서대로 반환한다")
+    void 파일_형식_목록을_enum_선언_순서대로_반환한다() {
+        var result = fileService.getFileTypes();
+
+        assertThat(result)
+                .extracting(item -> item.fileType())
+                .containsExactly(FileType.values());
+        assertThat(result)
+                .extracting(item -> item.extension())
+                .containsExactly("docx", "hwp", "md", "pdf", "png", "pptx", "xlsx");
     }
 
     /** protected Controller 경유 호출과 같은 최소 인증 문맥만 service 에 전달한다. */

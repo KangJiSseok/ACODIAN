@@ -1,5 +1,6 @@
 package com.ibank.axwms.domain.file.controller;
 
+import com.ibank.axwms.domain.file.dto.GetFileTypesApiDto;
 import com.ibank.axwms.domain.file.dto.GetFilesApiDto;
 import com.ibank.axwms.global.response.PageResponse;
 import com.ibank.axwms.global.security.CustomUserPrincipal;
@@ -11,6 +12,8 @@ import io.swagger.v3.oas.annotations.responses.ApiResponses;
 import io.swagger.v3.oas.annotations.security.SecurityRequirement;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import org.springdoc.core.annotations.ParameterObject;
+
+import java.util.List;
 
 @Tag(name = "File", description = "파일 API")
 public interface FileControllerDocs {
@@ -31,4 +34,14 @@ public interface FileControllerDocs {
             @Parameter(hidden = true) CustomUserPrincipal principal,
             @ParameterObject GetFilesApiDto.Request request
     );
+
+    @Operation(summary = "파일 형식 목록 조회",
+            description = "파일 목록 필터와 업로드 확장자 안내에 사용할 FileType 선택지를 반환한다. "
+                    + "응답의 fileType 값은 /files 조회의 fileType 쿼리 파라미터에 그대로 사용할 수 있다.")
+    @SecurityRequirement(name = "bearerAuth")
+    @ApiResponses({
+            @ApiResponse(responseCode = "200", description = "파일 형식 목록을 반환한다."),
+            @ApiResponse(responseCode = "401", description = "인증이 필요하다.", content = @Content)
+    })
+    List<GetFileTypesApiDto.Response> getFileTypes();
 }

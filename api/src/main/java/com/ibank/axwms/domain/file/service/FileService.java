@@ -1,6 +1,7 @@
 package com.ibank.axwms.domain.file.service;
 
 import com.ibank.axwms.domain.file.dto.FileWorklogItem;
+import com.ibank.axwms.domain.file.dto.GetFileTypesApiDto;
 import com.ibank.axwms.domain.file.dto.GetFilesApiDto;
 import com.ibank.axwms.domain.file.entity.File;
 import com.ibank.axwms.domain.file.event.WorklogFileAiSummaryRequestedEvent;
@@ -154,5 +155,12 @@ public class FileService {
                 .collect(Collectors.toMap(FileWorklogItem::worklogId, Function.identity()));
 
         return GetFilesApiDto.Response.fromPage(page, worklogByWorklogId);
+    }
+
+    /**
+     * 파일 목록 필터에서 사용할 수 있는 FileType 선택지를 enum 선언 순서대로 제공한다.
+     */
+    public List<GetFileTypesApiDto.Response> getFileTypes() {
+        return GetFileTypesApiDto.Response.all();
     }
 }
