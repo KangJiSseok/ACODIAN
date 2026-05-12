@@ -291,11 +291,34 @@ export function WorklogForm({
   }
 
   const addAttachmentFiles = (files: File[]) => {
+    const seenNames = new Set(values.attachmentNames)
+    const duplicateNames: string[] = []
+    const nextFiles = files.filter((file) => {
+      if (seenNames.has(file.name)) {
+        duplicateNames.push(file.name)
+        return false
+      }
+      seenNames.add(file.name)
+      return true
+    })
+
+    if (duplicateNames.length > 0) {
+      setSubmitError(
+        `이미 같은 이름의 첨부 파일이 있습니다: ${Array.from(new Set(duplicateNames)).join(", ")}`,
+      )
+    } else {
+      setSubmitError("")
+    }
+
+    if (nextFiles.length === 0) {
+      return
+    }
+
     setValues((previous) => ({
       ...previous,
       attachmentFiles: [
         ...previous.attachmentFiles,
-        ...files.filter(
+        ...nextFiles.filter(
           (file) =>
             !previous.attachmentFiles.some(
               (item) =>
@@ -308,7 +331,7 @@ export function WorklogForm({
       attachmentNames: Array.from(
         new Set([
           ...previous.attachmentNames,
-          ...files.map((file) => file.name).filter(Boolean),
+          ...nextFiles.map((file) => file.name).filter(Boolean),
         ]),
       ),
     }))

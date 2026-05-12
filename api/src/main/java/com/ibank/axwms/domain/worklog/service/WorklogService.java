@@ -13,6 +13,7 @@ import com.ibank.axwms.domain.worklog.dto.GetWorklogsApiDto;
 import com.ibank.axwms.domain.worklog.dto.UpdateWorklogApiDto;
 import com.ibank.axwms.domain.worklog.entity.Worklog;
 import com.ibank.axwms.domain.worklog.entity.WorklogTag;
+import com.ibank.axwms.domain.worklog.policy.WorklogStatusPolicy;
 import com.ibank.axwms.domain.worklog.repository.WorklogDependencyRepository;
 import com.ibank.axwms.domain.worklog.repository.WorklogRepository;
 import com.ibank.axwms.domain.worklog.repository.WorklogStatusHistoryRepository;
@@ -53,6 +54,7 @@ public class WorklogService {
     private final FileService fileService;
     private final WorklogStatusHistoryService worklogStatusHistoryService;
     private final WorklogDependencyService worklogDependencyService;
+    private final WorklogStatusPolicy worklogStatusPolicy;
     private final TagService tagService;
 
     /**
@@ -212,6 +214,7 @@ public class WorklogService {
 
         WorklogStatus previousStatusCode = worklog.getStatusCode();
         boolean statusChanged = request.statusCode() != null && request.statusCode() != previousStatusCode;
+        validateStatusTransitionIfChanged(previousStatusCode, request.statusCode(), statusChanged);
 
         worklog.updatePartial(
                 request.title(),
@@ -247,6 +250,20 @@ public class WorklogService {
         }
 
         fileService.uploadWorklogFiles(worklogId, principal.userId(), newFiles);
+    }
+
+    /**
+     * 클라이언트 우회 요청도 프론트 수정 화면과 같은 상태 전이 규칙을 통과한 경우에만 저장한다.
+     */
+    private void validateStatusTransitionIfChanged(WorklogStatus previousStatusCode,
+                                                   WorklogStatus nextStatusCode,
+                                                   boolean statusChanged) {
+        if (!statusChanged) {
+            return;
+        }
+        if (!worklogStatusPolicy.canTransition(previousStatusCode, nextStatusCode)) {
+            throw new BusinessException(ErrorCode.WORKLOG_STATUS_TRANSITION_INVALID);
+        }
     }
 
     /**
