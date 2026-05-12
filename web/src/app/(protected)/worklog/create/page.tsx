@@ -1,8 +1,9 @@
 "use client"
 
-import { useMemo } from "react"
+import { useMemo, useState } from "react"
 import { useRouter } from "next/navigation"
 import PageHeader from "@/app/_common/components/layout/pageHeader"
+import { useAuth } from "@/app/_common/hooks/useAuth"
 import { WorklogForm } from "../_components/worklogForm"
 import {
   useWorklogOptions,
@@ -31,19 +32,26 @@ const statusCodeMap: Record<string, WorklogStatus> = {
 
 export default function WorklogCreatePage() {
   const router = useRouter()
+  const { user } = useAuth()
   const {
     data: teamPage,
     isError: isTeamListError,
     isLoading: isTeamListLoading,
   } = useTeamList({ pageSize: 100 })
+  const defaultTeamId = useMemo(
+    () => resolveInitialTeamId(user, teamPage?.items ?? []),
+    [teamPage?.items, user]
+  )
+  const [selectedTeamId, setSelectedTeamId] = useState<number | null>(null)
+  const effectiveTeamId = selectedTeamId ?? defaultTeamId
   const {
     data: worklogOptions,
     isError: isWorklogOptionsError,
     isLoading: isWorklogOptionsLoading,
-  } = useWorklogOptions()
+  } = useWorklogOptions(effectiveTeamId)
   const formContext = useMemo(
-    () => buildCreateFormContext(teamPage?.items ?? [], worklogOptions),
-    [teamPage?.items, worklogOptions]
+    () => buildCreateFormContext(teamPage?.items ?? [], worklogOptions, effectiveTeamId),
+    [effectiveTeamId, teamPage?.items, worklogOptions]
   )
 
   if (isTeamListLoading || isWorklogOptionsLoading) {
@@ -65,6 +73,7 @@ export default function WorklogCreatePage() {
       <WorklogForm
         initialValues={formContext.initialValues}
         submitLabel="업무 생성"
+        onTeamIdChange={setSelectedTeamId}
         teamOptionsSource={formContext.teamOptionsSource}
         dependencyOptionsSource={formContext.dependencyOptionsSource}
         tagOptionsSource={formContext.tagOptionsSource}
@@ -79,18 +88,27 @@ export default function WorklogCreatePage() {
 
 function buildCreateFormContext(
   teams: TeamSummary[],
-  worklogOptions: WorklogOptionsApiResponse | undefined
+  worklogOptions: WorklogOptionsApiResponse | undefined,
+  teamId: number | null | undefined
 ) {
-  if (!worklogOptions) return null
+  if (!worklogOptions || !teamId) return null
 
   const teamOptionsSource = buildTeamOptions(teams)
 
   return {
-    initialValues: buildInitialValues(teamOptionsSource[0]?.id ?? 0),
+    initialValues: buildInitialValues(teamId),
     teamOptionsSource,
     dependencyOptionsSource: buildDependencyOptions(worklogOptions),
     tagOptionsSource: buildTagOptions(worklogOptions),
   }
+}
+
+function resolveInitialTeamId(
+  user: ReturnType<typeof useAuth>["user"],
+  teams: TeamSummary[]
+) {
+  const authPrimaryTeamId = user?.teams.find((team) => team.isPrimary)?.teamId
+  return authPrimaryTeamId ?? user?.teams[0]?.teamId ?? teams[0]?.teamId ?? null
 }
 
 function buildInitialValues(teamId: number): WorklogFormValues {

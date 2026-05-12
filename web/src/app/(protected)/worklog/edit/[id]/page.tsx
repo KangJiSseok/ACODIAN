@@ -1,6 +1,6 @@
 "use client"
 
-import { useMemo } from "react"
+import { useMemo, useState } from "react"
 import { useParams, useRouter } from "next/navigation"
 import PageHeader from "@/app/_common/components/layout/pageHeader"
 import { WorklogForm } from "../../_components/worklogForm"
@@ -44,10 +44,12 @@ export default function WorklogEditPage() {
     data: teamPage,
     isLoading: isTeamListLoading,
   } = useTeamList({ pageSize: 100 })
+  const [selectedTeamId, setSelectedTeamId] = useState<number | null>(null)
+  const effectiveTeamId = selectedTeamId ?? worklog?.teamId
   const {
     data: worklogOptions,
     isLoading: isWorklogOptionsLoading,
-  } = useWorklogOptions()
+  } = useWorklogOptions(effectiveTeamId)
 
   const formContext = useMemo(() => {
     if (!worklog || !worklogOptions) return null
@@ -81,6 +83,7 @@ export default function WorklogEditPage() {
         initialValues={formContext.initialValues}
         currentWorklogId={worklog.id}
         submitLabel="수정 저장"
+        onTeamIdChange={setSelectedTeamId}
         teamOptionsSource={formContext.teamOptionsSource}
         dependencyOptionsSource={formContext.dependencyOptionsSource}
         tagOptionsSource={formContext.tagOptionsSource}

@@ -19,7 +19,8 @@ export const worklogKeys = {
   search: (params: SearchWorklogsParams = {}) =>
     [...worklogKeys.all, "search", params] as const,
   filterOptions: () => [...worklogKeys.all, "filter-options"] as const,
-  options: () => [...worklogKeys.all, "options"] as const,
+  options: (teamId: number | null | undefined) =>
+    [...worklogKeys.all, "options", teamId] as const,
   detail: (worklogId: number) => [...worklogKeys.all, "detail", worklogId] as const,
 }
 
@@ -52,10 +53,18 @@ export function useWorklogFilterOptions() {
   })
 }
 
-export function useWorklogOptions() {
+export function useWorklogOptions(
+  teamId: number | null | undefined,
+  options: Pick<
+    UseQueryOptions<Awaited<ReturnType<typeof worklogService.getOptions>>>,
+    "enabled"
+  > = {}
+) {
   return useQuery({
-    queryKey: worklogKeys.options(),
-    queryFn: () => worklogService.getOptions(),
+    queryKey: worklogKeys.options(teamId),
+    queryFn: () => worklogService.getOptions(teamId as number),
+    enabled: Number.isFinite(teamId) && Number(teamId) > 0,
+    ...options,
   })
 }
 

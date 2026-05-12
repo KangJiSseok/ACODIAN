@@ -5,11 +5,10 @@ import type {
   WorklogFormTagOption,
   WorklogFormValues,
 } from "../_types/worklog.types"
-import { WorklogDependencyModal } from "./worklogDependencyModal"
 import { WorklogSettingsModal } from "./worklogSettingsModal"
 import { WorklogTagModal } from "./worklogTagModal"
 
-export type WorklogFormModalKey = "dependencies" | "settings" | "tags"
+export type WorklogFormModalKey = "settings" | "tags"
 
 type SelectOption = {
   label: string
@@ -85,25 +84,6 @@ export function WorklogFormModals({
 }: WorklogFormModalsProps) {
   return (
     <>
-      <WorklogDependencyModal
-        open={activeModal === "dependencies"}
-        onOpenChange={(open) =>
-          onActiveModalChange(open ? "dependencies" : null)
-        }
-        status={values.status}
-        searchControlClassName={searchControlClassName}
-        dependencyKeywordInput={dependencyKeywordInput}
-        onDependencyKeywordInputChange={onDependencyKeywordInputChange}
-        dependencySearchOpen={dependencySearchOpen}
-        onDependencySearchOpenChange={onDependencySearchOpenChange}
-        filteredDependencyCandidates={filteredDependencyCandidates}
-        selectedDependencies={selectedDependencies}
-        onAddDependency={onAddDependency}
-        onRemoveDependency={onRemoveDependency}
-        incompleteDependencies={incompleteDependencies}
-        circularDependencyDetected={circularDependencyDetected}
-      />
-
       <WorklogSettingsModal
         open={activeModal === "settings"}
         onOpenChange={(open) => onActiveModalChange(open ? "settings" : null)}
@@ -115,6 +95,17 @@ export function WorklogFormModals({
         validationErrors={settingsValidationErrors}
         actualHoursInput={actualHoursInput}
         onActualHoursInputChange={onActualHoursInputChange}
+        searchControlClassName={searchControlClassName}
+        dependencyKeywordInput={dependencyKeywordInput}
+        onDependencyKeywordInputChange={onDependencyKeywordInputChange}
+        dependencySearchOpen={dependencySearchOpen}
+        onDependencySearchOpenChange={onDependencySearchOpenChange}
+        filteredDependencyCandidates={filteredDependencyCandidates}
+        selectedDependencies={selectedDependencies}
+        onAddDependency={onAddDependency}
+        onRemoveDependency={onRemoveDependency}
+        incompleteDependencies={incompleteDependencies}
+        circularDependencyDetected={circularDependencyDetected}
       />
 
       <WorklogTagModal

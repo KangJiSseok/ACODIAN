@@ -394,8 +394,10 @@ export const worklogService = {
   async getFilterOptions(): Promise<WorklogFilterOptions> {
     return apiClient.get<WorklogFilterOptions>("/worklogs/filter-options")
   },
-  async getOptions(): Promise<WorklogOptionsApiResponse> {
-    return apiClient.get<WorklogOptionsApiResponse>("/worklogs/options")
+  async getOptions(teamId: number): Promise<WorklogOptionsApiResponse> {
+    return apiClient.get<WorklogOptionsApiResponse>("/worklogs/options", {
+      params: { teamId },
+    })
   },
   async getById(id: number): Promise<Worklog | undefined> {
     const response = await apiClient.get<WorklogDetailApiResponse>(
