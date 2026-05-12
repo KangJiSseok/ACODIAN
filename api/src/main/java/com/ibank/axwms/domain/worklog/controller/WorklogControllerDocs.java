@@ -122,14 +122,18 @@ public interface WorklogControllerDocs {
 
     @Operation(summary = "업무 등록 화면 폼 옵션 조회",
             description = "업무 등록 화면 진입 시 사용할 폼 옵션을 한 번에 반환한다. "
-                    + "선행 업무 후보는 사용자가 접근 가능한 (admin 또는 ACTIVE 멤버) 팀의 미삭제, 미완료 worklog 만 최신순으로 포함되며, "
+                    + "의존성은 같은 팀 내에서만 등록 가능하므로 선행 후보는 요청 teamId 의 미삭제, 미완료 worklog 만 최신순으로 포함된다. "
+                    + "요청자는 해당 팀의 ACTIVE 멤버여야 한다. "
                     + "태그는 메타 태그 전체를 이름순으로 반환한다.")
     @SecurityRequirement(name = "bearerAuth")
     @ApiResponses({
             @ApiResponse(responseCode = "200", description = "폼 옵션을 반환한다."),
-            @ApiResponse(responseCode = "401", description = "인증이 필요하다.", content = @Content)
+            @ApiResponse(responseCode = "400", description = "요청 값이 올바르지 않다.", content = @Content),
+            @ApiResponse(responseCode = "401", description = "인증이 필요하다.", content = @Content),
+            @ApiResponse(responseCode = "403", description = "요청 팀의 ACTIVE 멤버가 아니다.", content = @Content)
     })
     GetWorklogOptionsApiDto.Response getWorklogOptions(
-            @Parameter(hidden = true) CustomUserPrincipal principal
+            @Parameter(hidden = true) CustomUserPrincipal principal,
+            @ParameterObject GetWorklogOptionsApiDto.Request request
     );
 }

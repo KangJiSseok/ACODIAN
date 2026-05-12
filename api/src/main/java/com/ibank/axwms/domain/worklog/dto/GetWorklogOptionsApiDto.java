@@ -3,6 +3,7 @@ package com.ibank.axwms.domain.worklog.dto;
 import com.ibank.axwms.domain.tag.repository.jooq.projection.MetaTagDetailProjection;
 import com.ibank.axwms.domain.worklog.repository.jooq.projection.WorklogListProjection;
 import io.swagger.v3.oas.annotations.media.Schema;
+import jakarta.validation.constraints.NotNull;
 import lombok.AccessLevel;
 import lombok.NoArgsConstructor;
 
@@ -14,9 +15,16 @@ import java.util.List;
 @NoArgsConstructor(access = AccessLevel.PRIVATE)
 public final class GetWorklogOptionsApiDto {
 
+    @Schema(description = "업무일지 등록 화면 진입 시 사용할 폼 옵션 요청")
+    public record Request(
+            @Schema(description = "선행 후보를 좁힐 팀 ID. 사용자가 해당 팀의 ACTIVE 멤버여야 한다.", example = "21")
+            @NotNull(message = "teamId 는 필수입니다.")
+            Long teamId
+    ) {}
+
     @Schema(description = "업무일지 등록 화면 진입 시 사용할 폼 옵션 응답")
     public record Response(
-            @Schema(description = "사용자가 선행 업무로 지정할 수 있는 worklog 후보 (미삭제 + 미완료 + 사용자 접근 가능 팀)")
+            @Schema(description = "사용자가 선행 업무로 지정할 수 있는 worklog 후보 (요청 teamId 의 미삭제 + 미완료 worklog)")
             List<PredecessorCandidate> predecessorCandidates,
             @Schema(description = "전체 메타 태그 목록")
             List<TagItem> tags

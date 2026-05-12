@@ -36,10 +36,10 @@ public interface WorklogJooqRepository {
 
     /**
      * 업무 등록 화면 진입 시 노출할 선행 업무 후보를 조회한다.
-     * 사용자가 접근 가능한 팀의 미삭제, 미완료 (status_code != COMPLETED) worklog 만 최신순으로 반환한다.
-     * 가시 범위 룰은 findWorklogPage 와 동일하게 admin grant ∪ ACTIVE membership 기반.
+     * 의존성은 같은 팀 내에서만 등록 가능하므로 요청 teamId 의 미삭제, 미완료 (status_code != COMPLETED) worklog 만 최신순으로 반환한다.
+     * 호출 측 service 가 사용자의 teamId 멤버십을 사전 검증한다.
      */
-    List<WorklogListProjection> findActivePredecessorCandidates(Long userId);
+    List<WorklogListProjection> findActivePredecessorCandidates(Long teamId);
 
     /** 가시 범위와 정규화된 검색 query 로 업무일지 페이지를 조회한다. */
     Page<WorklogSearchProjection> searchWorklogPage(WorklogVisibilityScope scope, WorklogSearchQuery query);
