@@ -11,6 +11,7 @@ import { Button } from "@/components/ui/button"
 import { CardSpotlight } from "@/components/ui/card-spotlight"
 import { Input } from "@/components/ui/input"
 import { Textarea } from "@/components/ui/textarea"
+import { getApiErrorMessage } from "@/app/_common/service/api-client"
 import { cn } from "@/lib/utils"
 import type {
   WorklogFormDependencyOption,
@@ -138,6 +139,8 @@ export function WorklogForm({
     dependencyIds: [],
     attachmentNames: [],
     attachmentFiles: [],
+    attachmentFileItems: [],
+    removeFileIds: [],
     tagIds: [],
   }
   const [activeModal, setActiveModal] = useState<WorklogFormModalKey | null>(null)
@@ -316,6 +319,7 @@ export function WorklogForm({
       attachmentFiles: previous.attachmentFiles.filter(
         (file) => file.name !== name,
       ),
+      removeFileIds: appendRemovedFileId(previous, name),
     }))
   }
 
@@ -414,7 +418,13 @@ export function WorklogForm({
         }
 
         setSubmitError("")
-        await onSubmit(submitValues)
+        try {
+          await onSubmit(submitValues)
+        } catch (error) {
+          setSubmitError(
+            getApiErrorMessage(error, "업무일지 저장 요청을 처리하지 못했습니다.")
+          )
+        }
       }}
     >
       <div className="grid gap-5">
@@ -520,6 +530,7 @@ export function WorklogForm({
         onValuesChange={updateValues}
         controlClassName={controlClassName}
         searchControlClassName={searchControlClassName}
+        disableTeamChange={isEditMode}
         teamOptions={teamOptions}
         statusOptions={statusOptions}
         settingsValidationErrors={settingsValidationErrors}
@@ -552,6 +563,15 @@ export function WorklogForm({
       ) : null}
     </form>
   )
+}
+
+function appendRemovedFileId(values: WorklogFormValues, filename: string) {
+  const removedFileId = values.attachmentFileItems?.find(
+    (file) => file.originalName === filename,
+  )?.fileId
+
+  if (!removedFileId) return values.removeFileIds ?? []
+  return Array.from(new Set([...(values.removeFileIds ?? []), removedFileId]))
 }
 
 function FormPanel({

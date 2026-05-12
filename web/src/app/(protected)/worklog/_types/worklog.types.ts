@@ -66,6 +66,8 @@ export interface WorklogFormValues {
   dependencyIds: number[]
   attachmentNames: string[]
   attachmentFiles: File[]
+  attachmentFileItems?: WorklogFileItem[]
+  removeFileIds?: number[]
   tagIds: number[]
   aiSummary?: string
   aiSummaryEdited?: boolean

@@ -26,6 +26,7 @@ interface WorklogFormModalsProps {
   onValuesChange: (values: WorklogFormValues) => void
   controlClassName: string
   searchControlClassName: string
+  disableTeamChange?: boolean
   teamOptions: SelectOption[]
   statusOptions: SelectOption[]
   settingsValidationErrors: SettingsValidationErrors
@@ -58,6 +59,7 @@ export function WorklogFormModals({
   onValuesChange,
   controlClassName,
   searchControlClassName,
+  disableTeamChange,
   teamOptions,
   statusOptions,
   settingsValidationErrors,
@@ -90,6 +92,7 @@ export function WorklogFormModals({
         values={values}
         onValuesChange={onValuesChange}
         controlClassName={controlClassName}
+        disableTeamChange={disableTeamChange}
         teamOptions={teamOptions}
         statusOptions={statusOptions}
         validationErrors={settingsValidationErrors}

@@ -13,6 +13,7 @@ import {
 } from "@/components/ui/dialog"
 import { Input } from "@/components/ui/input"
 import { Select } from "@/components/ui/select"
+import { cn } from "@/lib/utils"
 import { getImportanceLabel, getWorklogStatusLabel } from "../_utils/worklogFormat"
 import type {
   WorklogFormDependencyOption,
@@ -34,6 +35,7 @@ interface WorklogSettingsModalProps {
   values: WorklogFormValues
   onValuesChange: (values: WorklogFormValues) => void
   controlClassName: string
+  disableTeamChange?: boolean
   teamOptions: SelectOption[]
   statusOptions: SelectOption[]
   validationErrors?: WorklogSettingsValidationErrors
@@ -58,6 +60,7 @@ export function WorklogSettingsModal({
   values,
   onValuesChange,
   controlClassName,
+  disableTeamChange,
   teamOptions,
   statusOptions,
   validationErrors,
@@ -120,13 +123,23 @@ export function WorklogSettingsModal({
           <ModalField label="담당 팀">
             <div className="grid gap-3">
               <Select
-                className={controlClassName}
+                className={cn(
+                  controlClassName,
+                  disableTeamChange &&
+                    "border-border/60 bg-muted/70 text-muted-foreground shadow-none blur-[0.2px]"
+                )}
+                disabled={disableTeamChange}
                 value={String(values.teamId)}
                 options={teamOptions}
                 onChange={(event) =>
                   onValuesChange({ ...values, teamId: Number(event.target.value) })
                 }
               />
+              {disableTeamChange ? (
+                <p className="text-xs leading-5 text-muted-foreground">
+                  수정 화면에서는 담당 팀을 변경할 수 없습니다.
+                </p>
+              ) : null}
             </div>
           </ModalField>
 

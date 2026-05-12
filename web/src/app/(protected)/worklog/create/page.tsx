@@ -125,6 +125,8 @@ function buildInitialValues(teamId: number): WorklogFormValues {
     dependencyIds: [],
     attachmentNames: [],
     attachmentFiles: [],
+    attachmentFileItems: [],
+    removeFileIds: [],
     tagIds: [],
   }
 }
