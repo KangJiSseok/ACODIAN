@@ -21,6 +21,9 @@ Use this skill after the team direction is already known.
 - department head may join for oversight
 - user `1` joins only key TF teams, but is included in all `team_admin`
 - team creator is the owning department head and is included in `team_admin`
+- `tb_team.department_id` follows the non-director `team_admin` user's `tb_user.department_id`; director `user_id=1` is never the ownership source
+- each user may belong to many teams, but exactly one `tb_user_team` row per `user_id` must have `is_primary = true`
+- prefer an `ACTIVE` team for that user's primary membership when one exists, and set all other memberships for the same user to `false`
 
 ## Output
 

@@ -26,6 +26,9 @@ description: Produce `.sql` seed output for iBank dummy users, teams, staffing, 
 - preserve all already-approved drafts
 - output `.sql`-ready inserts
 - when dependency data exists, keep `tb_worklog` -> `tb_worklog_dependency` -> `tb_worklog_status_history` order
+- `tb_team.department_id` must match the `tb_user.department_id` of the non-director `tb_team_admin` user; ignore director `user_id=1` for this ownership mapping
+- when needed, include a deterministic `UPDATE tb_team ... FROM tb_team_admin ... tb_user` after `tb_team_admin` inserts to backfill the team department
+- validate `tb_user_team.is_primary` by grouping all rows by `user_id`; every user represented in `tb_user_team` must have exactly one `is_primary = true` row
 - support both:
   - one team at a time
   - large multi-team batch
