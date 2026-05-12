@@ -64,6 +64,36 @@ class FileServiceTest {
     }
 
     @Test
+    @DisplayName("파일 목록 응답의 storedPath 는 공개 접근 URL 로 변환한다")
+    void 파일_목록_응답의_storedPath_는_공개_접근_URL_로_변환한다() {
+        String storageKey = "worklog/2026/05/12/report.pdf";
+        String publicUrl = "https://cdn.example.com/worklog/2026/05/12/report.pdf";
+        FileSummaryProjection projection = new FileSummaryProjection(
+                1L,
+                501L,
+                "report.pdf",
+                storageKey,
+                "pdf",
+                245678L,
+                "요약",
+                com.ibank.axwms.global.enums.AiProcessingStatus.COMPLETED,
+                LocalDateTime.now()
+        );
+        given(fileRepository.findFilePage(eq(USER_ID), any(FilePageQuery.class)))
+                .willReturn(new PageImpl<>(List.of(projection), PageRequest.of(0, 20), 1));
+        given(fileRepository.findFileWorklogsByIds(eq(USER_ID), any())).willReturn(List.of());
+        given(objectStoragePort.toPublicUrl(storageKey)).willReturn(publicUrl);
+
+        var result = fileService.getFiles(principal(), new GetFilesApiDto.Request(null, null, null, null));
+
+        assertThat(result.items())
+                .singleElement()
+                .extracting(GetFilesApiDto.Response.Item::storedPath)
+                .isEqualTo(publicUrl);
+        verify(objectStoragePort).toPublicUrl(storageKey);
+    }
+
+    @Test
     @DisplayName("파일 형식 목록을 enum 선언 순서대로 반환한다")
     void 파일_형식_목록을_enum_선언_순서대로_반환한다() {
         var result = fileService.getFileTypes();
