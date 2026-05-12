@@ -9,6 +9,7 @@ import { resolveBreadcrumbs } from "@/app/_common/service/breadcrumbs";
 import {
   useNotificationCenter,
   useNotificationMutation,
+  useNotificationStream,
 } from "@/app/(protected)/notification/_hooks";
 import { resolveNotificationDeepLink } from "@/app/(protected)/notification/_utils/resolveNotificationDeepLink";
 import { getNotificationTypeLabel } from "@/app/(protected)/notification/_utils/notificationLabel";
@@ -22,6 +23,7 @@ export default function Gnb() {
   const breadcrumbs = resolveBreadcrumbs(pathname);
   const { unreadCount, recentUnreadNotifications } = useNotificationCenter();
   const { markAllRead, markRead } = useNotificationMutation();
+  useNotificationStream();
   const [isNotificationOpen, setIsNotificationOpen] = useState(false);
   const notificationRef = useRef<HTMLDivElement>(null);
   const notificationCenterItems: NotificationCenterItem[] =
