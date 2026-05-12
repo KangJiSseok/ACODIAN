@@ -1,5 +1,6 @@
 package com.ibank.axwms.domain.file.controller;
 
+import com.ibank.axwms.domain.file.dto.GetFileTypesApiDto;
 import com.ibank.axwms.domain.file.dto.GetFilesApiDto;
 import com.ibank.axwms.global.response.PageResponse;
 import com.ibank.axwms.global.security.CustomUserPrincipal;
@@ -12,13 +13,17 @@ import io.swagger.v3.oas.annotations.security.SecurityRequirement;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import org.springdoc.core.annotations.ParameterObject;
 
+import java.util.List;
+
 @Tag(name = "File", description = "파일 API")
 public interface FileControllerDocs {
 
     @Operation(summary = "파일 목록 조회",
             description = "로그인 사용자가 접근 가능한 (admin grant ∪ ACTIVE membership 의 미삭제 team) worklog 에 첨부된 파일을 "
                     + "최신 등록순으로 페이지 조회한다. 각 행에는 소속 업무의 요약(제목/팀/작성자/마감일/업무시간/AI 요약/AI 상태/선행업무수)이 함께 반환된다. "
-                    + "소프트 삭제된 파일과 worklog 는 제외된다.")
+                    + "소프트 삭제된 파일과 worklog 는 제외된다. "
+                    + "fileType(DOCX, HWP, MD, PDF, PNG, PPTX, XLSX) 은 단일 선택 필터이고, "
+                    + "period 는 파일 등록 시각 기준 최근 N일 숫자 필터다. 생략하면 해당 조건을 적용하지 않는다.")
     @SecurityRequirement(name = "bearerAuth")
     @ApiResponses({
             @ApiResponse(responseCode = "200", description = "파일 목록을 반환한다."),
@@ -29,4 +34,14 @@ public interface FileControllerDocs {
             @Parameter(hidden = true) CustomUserPrincipal principal,
             @ParameterObject GetFilesApiDto.Request request
     );
+
+    @Operation(summary = "파일 형식 목록 조회",
+            description = "파일 목록 필터와 업로드 확장자 안내에 사용할 FileType 선택지를 반환한다. "
+                    + "응답의 fileType 값은 /files 조회의 fileType 쿼리 파라미터에 그대로 사용할 수 있다.")
+    @SecurityRequirement(name = "bearerAuth")
+    @ApiResponses({
+            @ApiResponse(responseCode = "200", description = "파일 형식 목록을 반환한다."),
+            @ApiResponse(responseCode = "401", description = "인증이 필요하다.", content = @Content)
+    })
+    List<GetFileTypesApiDto.Response> getFileTypes();
 }
