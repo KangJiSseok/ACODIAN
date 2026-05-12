@@ -1,6 +1,14 @@
 "use client";
 
-import { useState } from "react";
+import { useMemo, useState } from "react";
+import type { AiProcessingStatus } from "@/app/(protected)/worklog/_types/worklog.types";
+import { Pagination } from "@/app/_common/components/data-display/pagination";
+import PageHeader from "@/app/_common/components/layout/pageHeader";
+import { Button } from "@/components/ui/button";
+import { Checkbox } from "@/components/ui/checkbox";
+import { Input } from "@/components/ui/input";
+import { Select } from "@/components/ui/select";
+import { cn } from "@/lib/utils";
 import {
   CircleHelp,
   ChevronDown,
@@ -9,19 +17,108 @@ import {
   Search,
   SlidersHorizontal,
 } from "lucide-react";
-import { files } from "@/app/(protected)/worklog/_mock/worklog.mock";
-import PageHeader from "@/app/_common/components/layout/pageHeader";
-import { Button } from "@/components/ui/button";
-import { Checkbox } from "@/components/ui/checkbox";
-import { Input } from "@/components/ui/input";
-import { Select } from "@/components/ui/select";
-import { cn } from "@/lib/utils";
 import { FileCard } from "./_components/fileCard";
+import { useFileList } from "./_hooks";
+import type { FileFiltersValue, FileItem, GetFilesParams } from "./_types/file.types";
+
+const ALL_FILTER_VALUE = "ALL";
+const FILE_PAGE_SIZE = 10;
 
 export default function FilePage() {
-  const [selected, setSelected] = useState(false);
+  const [selectedFileIds, setSelectedFileIds] = useState<Set<number>>(new Set());
   const [showFilters, setShowFilters] = useState(false);
-  const sampleFile = files.find((file) => !file.isDeleted);
+  const [query, setQuery] = useState("");
+  const [fileType, setFileType] = useState(ALL_FILTER_VALUE);
+  const [period, setPeriod] = useState<FileFiltersValue["period"]>("ALL");
+  const [aiStatus, setAiStatus] = useState<FileFiltersValue["aiStatus"]>("ALL");
+  const [page, setPage] = useState(1);
+
+  const fileListParams = useMemo<GetFilesParams>(
+    () => ({
+      page,
+      pageSize: FILE_PAGE_SIZE,
+    }),
+    [page],
+  );
+
+  const {
+    data: filePage,
+    isLoading,
+    error,
+    refetch,
+  } = useFileList(fileListParams);
+
+  const visibleFiles = useMemo(
+    () =>
+      filterFiles(filePage?.items ?? [], {
+        query,
+        fileType,
+        period,
+        aiStatus,
+      }),
+    [aiStatus, filePage?.items, fileType, period, query],
+  );
+  const allVisibleFilesSelected =
+    visibleFiles.length > 0 && visibleFiles.every((file) => selectedFileIds.has(file.id));
+  const selectedCount = selectedFileIds.size;
+
+  function resetFilters() {
+    setQuery("");
+    setFileType(ALL_FILTER_VALUE);
+    setPeriod("ALL");
+    setAiStatus("ALL");
+    setPage(1);
+  }
+
+  function updateQuery(value: string) {
+    setQuery(value);
+    setPage(1);
+  }
+
+  function updateFileType(value: string) {
+    setFileType(value);
+    setPage(1);
+  }
+
+  function updatePeriod(value: string) {
+    setPeriod(value as FileFiltersValue["period"]);
+    setPage(1);
+  }
+
+  function updateAiStatus(value: string) {
+    setAiStatus(value as FileFiltersValue["aiStatus"]);
+    setPage(1);
+  }
+
+  function toggleFileSelection(fileId: number, checked: boolean) {
+    setSelectedFileIds((current) => {
+      const next = new Set(current);
+
+      if (checked) {
+        next.add(fileId);
+      } else {
+        next.delete(fileId);
+      }
+
+      return next;
+    });
+  }
+
+  function toggleVisibleFiles(checked: boolean) {
+    setSelectedFileIds((current) => {
+      const next = new Set(current);
+
+      visibleFiles.forEach((file) => {
+        if (checked) {
+          next.add(file.id);
+        } else {
+          next.delete(file.id);
+        }
+      });
+
+      return next;
+    });
+  }
 
   return (
     <div className="flex flex-col gap-6">
@@ -39,8 +136,10 @@ export default function FilePage() {
             <div className="relative flex-1">
               <Search className="pointer-events-none absolute left-4 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
               <Input
+                value={query}
+                onChange={(event) => updateQuery(event.target.value)}
                 className="h-12 pl-11"
-                placeholder="파일명, AI 요약 키워드로 검색하세요"
+                placeholder="파일명, AI 요약, 업무명으로 검색하세요"
                 aria-label="파일 검색"
               />
             </div>
@@ -83,6 +182,7 @@ export default function FilePage() {
                     className="h-9 w-9"
                     type="button"
                     aria-label="필터 초기화"
+                    onClick={resetFilters}
                   >
                     <RefreshCw className="size-4" />
                   </Button>
@@ -95,12 +195,14 @@ export default function FilePage() {
                     </p>
                     <Select
                       aria-label="파일 형식 필터"
-                      defaultValue="ALL"
+                      value={fileType}
+                      onChange={(event) => updateFileType(event.target.value)}
                       options={[
-                        { label: "전체 형식", value: "ALL" },
+                        { label: "전체 형식", value: ALL_FILTER_VALUE },
                         { label: "PDF", value: "PDF" },
                         { label: "HWP", value: "HWP" },
                         { label: "DOCX", value: "DOCX" },
+                        { label: "XLSX", value: "XLSX" },
                       ]}
                     />
                   </div>
@@ -110,7 +212,8 @@ export default function FilePage() {
                     </p>
                     <Select
                       aria-label="업로드 기간 필터"
-                      defaultValue="ALL"
+                      value={period}
+                      onChange={(event) => updatePeriod(event.target.value)}
                       options={[
                         { label: "전체 기간", value: "ALL" },
                         { label: "최근 7일", value: "7D" },
@@ -125,7 +228,8 @@ export default function FilePage() {
                     </p>
                     <Select
                       aria-label="AI 상태 필터"
-                      defaultValue="ALL"
+                      value={aiStatus}
+                      onChange={(event) => updateAiStatus(event.target.value)}
                       options={[
                         { label: "전체 AI 상태", value: "ALL" },
                         { label: "대기", value: "PENDING" },
@@ -148,12 +252,13 @@ export default function FilePage() {
             <div className="flex flex-wrap items-center gap-3 text-sm text-muted-foreground">
               <span className="font-medium">표시 중인 파일</span>
               <span className="text-lg font-semibold text-foreground">
-                {sampleFile ? "1건" : "0건"}
+                {visibleFiles.length}건 / 전체 {filePage?.totalCount ?? 0}건
               </span>
               <label className="ml-0 inline-flex items-center gap-2 text-sm text-muted-foreground lg:ml-3">
                 <Checkbox
-                  checked={selected}
-                  onChange={(event) => setSelected(event.target.checked)}
+                  checked={allVisibleFilesSelected}
+                  onChange={(event) => toggleVisibleFiles(event.target.checked)}
+                  disabled={visibleFiles.length === 0}
                 />
                 <span>현재 페이지 전체 선택</span>
               </label>
@@ -162,7 +267,7 @@ export default function FilePage() {
                 size="icon"
                 className="h-8 w-8"
                 type="button"
-                aria-label="AI 상태 도움말"
+                aria-label="AI 상태 안내"
               >
                 <CircleHelp className="size-4" />
               </Button>
@@ -173,7 +278,7 @@ export default function FilePage() {
                 variant="secondary"
                 className="h-11 min-w-28 px-5 text-sm font-semibold"
                 type="button"
-                disabled={!selected}
+                disabled={selectedCount === 0}
               >
                 <Download className="size-4" />
                 다운로드
@@ -182,18 +287,121 @@ export default function FilePage() {
           </div>
         </div>
 
-        {sampleFile ? (
-          <FileCard
-            file={sampleFile}
-            selected={selected}
-            onToggleSelect={(_, checked) => setSelected(checked)}
-          />
-        ) : (
-          <p className="text-sm leading-6 text-muted-foreground">
-            표시할 샘플 파일이 없습니다.
+        {isLoading ? (
+          <div className="workspace-empty rounded-2xl px-6 py-10 text-center text-sm">
+            파일 목록을 불러오는 중입니다.
+          </div>
+        ) : null}
+
+        {error ? (
+          <div className="rounded-2xl border border-destructive/30 bg-destructive/5 px-6 py-4 text-sm text-destructive">
+            파일 목록을 불러오지 못했습니다.
+            <button
+              type="button"
+              className="ml-3 font-semibold underline underline-offset-4"
+              onClick={() => void refetch()}
+            >
+              다시 시도
+            </button>
+          </div>
+        ) : null}
+
+        {!isLoading && !error && visibleFiles.length === 0 ? (
+          <p className="workspace-empty rounded-2xl px-6 py-10 text-center text-sm">
+            표시할 파일이 없습니다.
           </p>
-        )}
+        ) : null}
+
+        <div className="grid gap-4">
+          {visibleFiles.map((file) => (
+            <FileCard
+              key={file.id}
+              file={file}
+              selected={selectedFileIds.has(file.id)}
+              onToggleSelect={toggleFileSelection}
+            />
+          ))}
+        </div>
+
+        <Pagination
+          page={filePage?.page ?? page}
+          totalPages={filePage?.totalPages ?? 1}
+          onPageChange={setPage}
+        />
       </div>
     </div>
   );
+}
+
+function filterFiles(
+  files: FileItem[],
+  filters: {
+    query: string;
+    fileType: string;
+    period: FileFiltersValue["period"];
+    aiStatus: FileFiltersValue["aiStatus"];
+  },
+) {
+  const keyword = filters.query.trim().toLowerCase();
+
+  return files.filter((file) => {
+    if (keyword && !matchesKeyword(file, keyword)) {
+      return false;
+    }
+
+    if (
+      filters.fileType !== ALL_FILTER_VALUE &&
+      file.fileExtension.toUpperCase() !== filters.fileType
+    ) {
+      return false;
+    }
+
+    if (
+      filters.aiStatus !== "ALL" &&
+      toAiProcessingStatus(file.aiProcessingStatus) !== filters.aiStatus
+    ) {
+      return false;
+    }
+
+    return matchesPeriod(file.createdAt, filters.period);
+  });
+}
+
+function matchesKeyword(file: FileItem, keyword: string) {
+  return [
+    file.originalName,
+    file.aiSummary,
+    file.worklog?.title,
+    file.worklog?.teamName,
+    file.worklog?.authorName,
+  ]
+    .filter(Boolean)
+    .some((value) => String(value).toLowerCase().includes(keyword));
+}
+
+function matchesPeriod(value: string, period: FileFiltersValue["period"]) {
+  if (period === "ALL") {
+    return true;
+  }
+
+  const days = Number(period.replace("D", ""));
+  const uploadedAt = new Date(value).getTime();
+
+  if (!Number.isFinite(uploadedAt)) {
+    return false;
+  }
+
+  return Date.now() - uploadedAt <= days * 24 * 60 * 60 * 1000;
+}
+
+function toAiProcessingStatus(status: string | null | undefined): AiProcessingStatus {
+  if (status === "COMPLETED" || status === "DONE") {
+    return "DONE";
+  }
+
+  if (status === "PROCESSING" || status === "FAILED") {
+    return status;
+  }
+
+  return "PENDING";
 }
