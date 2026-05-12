@@ -161,7 +161,14 @@ public class WorklogService {
         List<WorklogDependencyProjection> dependencies = worklogDependencyRepository.findDirectDependencies(worklogId);
         List<WorklogStatusHistoryProjection> statusHistories = worklogStatusHistoryRepository.findStatusHistories(worklogId);
 
-        return GetWorklogDetailApiDto.Response.of(detail, files, tags, dependencies, statusHistories);
+        return GetWorklogDetailApiDto.Response.of(
+                detail,
+                files,
+                tags,
+                dependencies,
+                statusHistories,
+                fileService::toPublicUrl
+        );
     }
 
     /**

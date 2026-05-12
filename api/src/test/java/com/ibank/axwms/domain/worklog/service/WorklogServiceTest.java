@@ -9,6 +9,7 @@ import com.ibank.axwms.domain.tag.service.TagService;
 import com.ibank.axwms.domain.worklog.WorklogImportance;
 import com.ibank.axwms.domain.worklog.WorklogStatus;
 import com.ibank.axwms.domain.worklog.dto.CreateWorklogApiDto;
+import com.ibank.axwms.domain.worklog.dto.GetWorklogDetailApiDto;
 import com.ibank.axwms.domain.worklog.dto.GetWorklogsApiDto;
 import com.ibank.axwms.domain.worklog.entity.Worklog;
 import com.ibank.axwms.domain.worklog.entity.WorklogTag;
@@ -16,6 +17,8 @@ import com.ibank.axwms.domain.worklog.repository.WorklogDependencyRepository;
 import com.ibank.axwms.domain.worklog.repository.WorklogRepository;
 import com.ibank.axwms.domain.worklog.repository.WorklogStatusHistoryRepository;
 import com.ibank.axwms.domain.worklog.repository.WorklogTagRepository;
+import com.ibank.axwms.domain.worklog.repository.jooq.projection.WorklogDetailProjection;
+import com.ibank.axwms.domain.worklog.repository.jooq.projection.WorklogFileProjection;
 import com.ibank.axwms.domain.worklog.repository.jooq.projection.WorklogListProjection;
 import com.ibank.axwms.domain.worklog.repository.jooq.query.WorklogPageQuery;
 import com.ibank.axwms.global.error.BusinessException;
@@ -38,8 +41,10 @@ import org.springframework.web.multipart.MultipartFile;
 
 import java.math.BigDecimal;
 import java.time.LocalDate;
+import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
@@ -248,6 +253,39 @@ class WorklogServiceTest {
         assertThat(queryCaptor.getValue().pageIndex()).isEqualTo(0);
     }
 
+    @Test
+    @DisplayName("getWorklogDetail 은 첨부 파일의 내부 저장 key 를 공개 URL 로 변환해 반환한다")
+    void getWorklogDetail_은_첨부_파일의_내부_저장_key를_공개_URL로_변환해_반환한다() {
+        // given
+        CustomUserPrincipal principal = principal();
+        String storageKey = "worklog/2026/04/report.pdf";
+        String publicUrl = "https://cdn.example.com/worklog/2026/04/report.pdf";
+        WorklogFileProjection fileProjection = new WorklogFileProjection(
+                9001L,
+                "report.pdf",
+                storageKey,
+                "pdf",
+                204800L
+        );
+
+        given(worklogRepository.findWorklogDetail(USER_ID, WORKLOG_ID))
+                .willReturn(Optional.of(sampleDetailProjection()));
+        given(fileRepository.findByWorklogId(WORKLOG_ID))
+                .willReturn(List.of(fileProjection));
+        given(worklogTagRepository.findTagNames(WORKLOG_ID)).willReturn(List.of("결산"));
+        given(worklogDependencyRepository.findDirectDependencies(WORKLOG_ID)).willReturn(List.of());
+        given(worklogStatusHistoryRepository.findStatusHistories(WORKLOG_ID)).willReturn(List.of());
+        given(fileService.toPublicUrl(storageKey)).willReturn(publicUrl);
+
+        // when
+        GetWorklogDetailApiDto.Response response = worklogService.getWorklogDetail(principal, WORKLOG_ID);
+
+        // then
+        assertThat(response.files()).hasSize(1);
+        assertThat(response.files().get(0).storedPath()).isEqualTo(publicUrl);
+        verify(fileService).toPublicUrl(storageKey);
+    }
+
     private static WorklogListProjection sampleProjection() {
         return new WorklogListProjection(
                 WORKLOG_ID,
@@ -265,6 +303,33 @@ class WorklogServiceTest {
                 "홍길동",
                 INSTRUCTION_DATE,
                 DUE_DATE
+        );
+    }
+
+    /**
+     * 상세조회 응답 조립 경로만 검증하도록 본문 projection 은 성공 케이스의 필수 필드로 고정한다.
+     */
+    private static WorklogDetailProjection sampleDetailProjection() {
+        return new WorklogDetailProjection(
+                WORKLOG_ID,
+                TEAM_ID,
+                "물류혁신TF",
+                USER_ID,
+                "홍길동",
+                "결산 보고서 작성",
+                "요청 내용",
+                "수행 내용",
+                "AI 요약",
+                Boolean.FALSE,
+                "COMPLETED",
+                "IN_PROGRESS",
+                "HIGH",
+                new BigDecimal("3.10"),
+                INSTRUCTION_DATE,
+                DUE_DATE,
+                null,
+                LocalDateTime.of(2026, 4, 22, 9, 0),
+                LocalDateTime.of(2026, 4, 22, 10, 0)
         );
     }
 
