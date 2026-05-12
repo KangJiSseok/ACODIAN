@@ -121,7 +121,7 @@ public class NotificationJooqRepositoryImpl implements NotificationJooqRepositor
                 )
                 .from(TB_NOTIFICATION)
                 .where(condition)
-                .orderBy(TB_NOTIFICATION.CREATED_AT.desc(), TB_NOTIFICATION.NOTIFICATION_ID.desc())
+                .orderBy(TB_NOTIFICATION.UPDATED_AT.desc(), TB_NOTIFICATION.NOTIFICATION_ID.desc())
                 .limit(pageSize)
                 .offset((long) pageIndex * pageSize)
                 .fetch(NotificationSearchProjection::from);
