@@ -1,11 +1,12 @@
 # Wiki Index
 
-> 5 pages | Last updated: 2026-05-13T05:19:07.691Z
+> 6 pages | Last updated: 2026-05-13T06:57:27.553Z
 
 ## architecture
 
 - [LightRAG 전환 조사와 구성 선택지](2026-05-12-065231-search-lightrag-전환-조사와-구성-선택지.md) — # LightRAG 전환 조사와 구성 선택지
 - [LightRAG endpoint versioning 병행 도입 구현 계획](2026-05-12-080727-search-lightrag-병행-도입-구현-계획.md) — # LightRAG endpoint versioning 병행 도입 구현 계획
+- [LightRAG v3 업무일지 KG index 및 ID-only retrieval 구현 계획](lightrag-v3-업무일지-kg-index-및-id-only-retrieval-구현-계획.md) — # LightRAG v3 업무일지 KG index 및 ID-only retrieval 구현 계획
 
 ## decision
 
