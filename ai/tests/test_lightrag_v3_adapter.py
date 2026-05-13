@@ -137,6 +137,8 @@ def test_lightrag_adapter_initializes_inserts_ids_and_finalizes() -> None:
     assert embed.calls[0][1] == {
         "api_key": "fake-gemini-api-key",
         "model": "gemini-embedding-001",
+        "embedding_dim": 768,
+        "max_token_size": 2048,
     }
 
 

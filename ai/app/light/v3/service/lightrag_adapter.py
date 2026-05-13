@@ -201,6 +201,8 @@ def _build_gemini_embedding_func(
             texts,
             api_key=settings_obj.gemini_api_key,
             model=settings_obj.lightrag_embedding_model,
+            embedding_dim=settings_obj.embedding_dim,
+            max_token_size=settings_obj.lightrag_embedding_max_token_size,
         )
 
     return embedding_func
