@@ -14,6 +14,7 @@
 
 from fastapi import APIRouter
 
+from app.light.v3.router.worklog_index import router as light_worklogs_v3_router
 from app.router.embedding import router as embedding_router
 from app.router.file import router as file_router
 from app.router.health import router as health_router
@@ -29,4 +30,5 @@ api_router.include_router(pipeline_router)
 api_router.include_router(embedding_router)
 api_router.include_router(search_router)
 api_router.include_router(file_router)
+api_router.include_router(light_worklogs_v3_router)
 # api_router.include_router(tagging_router)
