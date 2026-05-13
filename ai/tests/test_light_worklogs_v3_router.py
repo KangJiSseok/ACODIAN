@@ -4,6 +4,7 @@ from app.light.v3.model.worklog_index import (
     WorklogLightIndexItem,
     WorklogLightIndexResponse,
 )
+from app.light.v3.service.lightrag_adapter import LightRagConfigurationError
 from app.main import app
 
 client = TestClient(app)
@@ -41,7 +42,21 @@ def test_light_worklogs_v3_index_contract(monkeypatch) -> None:
     }
 
 
-def test_light_worklogs_v3_index_allows_single_item_list() -> None:
+def test_light_worklogs_v3_index_allows_single_item_list(monkeypatch) -> None:
+    from app.light.v3.router import worklog_index
+
+    async def fake_index_worklogs(worklog_ids: list[int]) -> WorklogLightIndexResponse:
+        assert worklog_ids == [101]
+        return WorklogLightIndexResponse(
+            items=[WorklogLightIndexItem(worklogId=101, indexed=True)]
+        )
+
+    monkeypatch.setattr(
+        worklog_index.worklog_index_service,
+        "index_worklogs",
+        fake_index_worklogs,
+    )
+
     response = client.post(
         "/ai/light/worklogs-v3/index",
         json={"worklogIds": [101]},
@@ -49,13 +64,7 @@ def test_light_worklogs_v3_index_allows_single_item_list() -> None:
 
     assert response.status_code == 200
     assert response.json() == {
-        "items": [
-            {
-                "worklogId": 101,
-                "indexed": False,
-                "error": "LIGHTRAG_INDEX_NOT_IMPLEMENTED",
-            }
-        ]
+        "items": [{"worklogId": 101, "indexed": True, "error": None}]
     }
 
 
@@ -111,3 +120,24 @@ def test_light_worklogs_v3_index_rejects_duplicate_worklog_ids() -> None:
     )
 
     assert response.status_code == 422
+
+
+def test_light_worklogs_v3_index_maps_configuration_error_to_500(monkeypatch) -> None:
+    from app.light.v3.router import worklog_index
+
+    async def fake_index_worklogs(worklog_ids: list[int]) -> WorklogLightIndexResponse:
+        raise LightRagConfigurationError("missing api key")
+
+    monkeypatch.setattr(
+        worklog_index.worklog_index_service,
+        "index_worklogs",
+        fake_index_worklogs,
+    )
+
+    response = client.post(
+        "/ai/light/worklogs-v3/index",
+        json={"worklogIds": [101]},
+    )
+
+    assert response.status_code == 500
+    assert response.json() == {"detail": "LIGHTRAG_CONFIGURATION_ERROR"}
