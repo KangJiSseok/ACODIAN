@@ -52,6 +52,10 @@ services:
       AI_WORKLOG_SEARCH_BASE_URL: http://ai:8200/ai
       AI_WORKLOG_SEARCH_CONNECT_TIMEOUT: ${AI_WORKLOG_SEARCH_CONNECT_TIMEOUT:-2s}
       AI_WORKLOG_SEARCH_READ_TIMEOUT: ${AI_WORKLOG_SEARCH_READ_TIMEOUT:-10s}
+      AI_FILE_SUMMARY_ENABLED: ${AI_FILE_SUMMARY_ENABLED:-true}
+      AI_FILE_SUMMARY_BASE_URL: http://ai:8200/ai
+      AI_FILE_SUMMARY_CONNECT_TIMEOUT: ${AI_FILE_SUMMARY_CONNECT_TIMEOUT:-2s}
+      AI_FILE_SUMMARY_READ_TIMEOUT: ${AI_FILE_SUMMARY_READ_TIMEOUT:-3s}
       JWT_SECRET: ${JWT_SECRET}
       JWT_ACCESS_EXPIRATION: ${JWT_ACCESS_EXPIRATION:-3600000}
       JWT_REFRESH_EXPIRATION: ${JWT_REFRESH_EXPIRATION:-1209600000}
@@ -110,11 +114,53 @@ services:
       GEMINI_MODEL: ${GEMINI_MODEL:-gemini-2.5-flash}
       GEMINI_REQUEST_TIMEOUT_SECONDS: ${GEMINI_REQUEST_TIMEOUT_SECONDS:-30}
       GEMINI_MAX_RETRIES: ${GEMINI_MAX_RETRIES:-3}
+      GEMINI_FILE_ACTIVE_POLL_SEC: ${GEMINI_FILE_ACTIVE_POLL_SEC:-2.0}
+      GEMINI_FILE_ACTIVE_TIMEOUT_SEC: ${GEMINI_FILE_ACTIVE_TIMEOUT_SEC:-120}
       EMBEDDING_MODEL: ${EMBEDDING_MODEL:-gemini-embedding-001}
       EMBEDDING_DIM: ${EMBEDDING_DIM:-768}
       CHUNK_THRESHOLD_CHARS: ${CHUNK_THRESHOLD_CHARS:-3000}
+      # 파일 AI 요약: api 의 S3 버킷에서 파일 본문을 GET 한다. 같은 자격증명을 공유한다.
+      AWS_REGION: ${AWS_REGION}
+      AWS_S3_BUCKET: ${AWS_S3_BUCKET}
+      AWS_S3_BASE_PREFIX: ${AWS_S3_BASE_PREFIX}
+      AWS_ACCESS_KEY_ID: ${AWS_ACCESS_KEY_ID}
+      AWS_SECRET_ACCESS_KEY: ${AWS_SECRET_ACCESS_KEY}
     ports:
       - "127.0.0.1:${AI_HOST_PORT:?AI_HOST_PORT required (env-specific offset, e.g. 8200/8201)}:8200"
+    restart: unless-stopped
+
+  # Celery worker — ai FastAPI 가 task.delay() 로 큐에 적재한 작업을 실제로 처리하는 별도 프로세스.
+  # 같은 이미지를 사용하되 command 만 uvicorn 대신 celery worker 로 override 한다.
+  # 환경변수는 ai 서비스와 동일하게 유지해야 settings 로드/Gemini/S3/콜백 호출이 모두 작동한다.
+  ai_worker:
+    image: ${AI_IMAGE}
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    environment:
+      ENVIRONMENT: ${APP_ENV:-deploy}
+      LOG_LEVEL: ${AI_LOG_LEVEL:-INFO}
+      PGVECTOR_DSN: postgresql://${DB_USERNAME:-postgres}:${DB_PASSWORD:-postgres}@postgres:5432/${DB_NAME:-postgres}
+      REDIS_URL: redis://redis:6379/0
+      API_BASE_URL: http://api:8100
+      JWT_SECRET: ${JWT_SECRET}
+      GEMINI_API_KEY: ${GEMINI_API_KEY}
+      GEMINI_MODEL: ${GEMINI_MODEL:-gemini-2.5-flash}
+      GEMINI_REQUEST_TIMEOUT_SECONDS: ${GEMINI_REQUEST_TIMEOUT_SECONDS:-30}
+      GEMINI_MAX_RETRIES: ${GEMINI_MAX_RETRIES:-3}
+      GEMINI_FILE_ACTIVE_POLL_SEC: ${GEMINI_FILE_ACTIVE_POLL_SEC:-2.0}
+      GEMINI_FILE_ACTIVE_TIMEOUT_SEC: ${GEMINI_FILE_ACTIVE_TIMEOUT_SEC:-120}
+      EMBEDDING_MODEL: ${EMBEDDING_MODEL:-gemini-embedding-001}
+      EMBEDDING_DIM: ${EMBEDDING_DIM:-768}
+      CHUNK_THRESHOLD_CHARS: ${CHUNK_THRESHOLD_CHARS:-3000}
+      AWS_REGION: ${AWS_REGION}
+      AWS_S3_BUCKET: ${AWS_S3_BUCKET}
+      AWS_S3_BASE_PREFIX: ${AWS_S3_BASE_PREFIX}
+      AWS_ACCESS_KEY_ID: ${AWS_ACCESS_KEY_ID}
+      AWS_SECRET_ACCESS_KEY: ${AWS_SECRET_ACCESS_KEY}
+    command: ["celery", "-A", "app.task.celery_app", "worker", "--loglevel=INFO"]
     restart: unless-stopped
 
 volumes:
