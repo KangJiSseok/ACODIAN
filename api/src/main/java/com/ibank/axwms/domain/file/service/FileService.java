@@ -97,6 +97,9 @@ public class FileService {
             eventPublisher.publishEvent(new WorklogFileUploadedEvent(key));
 
             File saved = fileRepository.save(File.create(worklogId, uploaderId, key, file));
+            // 같은 트랜잭션 안에서 PROCESSING 으로 전이 → 커밋 시점에 이미 처리중 상태.
+            // 트랜잭션 롤백 시 PROCESSING 전이도 함께 무효화돼 트리거 발화와 상태가 항상 일치한다.
+            saved.startAiSummaryProcessing();
             eventPublisher.publishEvent(new WorklogFileAiSummaryRequestedEvent(
                     saved.getId(),
                     worklogId,

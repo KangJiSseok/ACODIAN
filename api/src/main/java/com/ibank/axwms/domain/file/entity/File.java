@@ -69,7 +69,9 @@ public class File {
 
     /**
      * 업로드가 완료된 파일의 메타데이터로 초기 엔티티를 만든다.
-     * AI 처리 상태는 PENDING, is_deleted 는 false 로 시작한다.
+     * AI 처리 상태는 PENDING 으로 시작하며, 호출측 서비스가 같은 트랜잭션 안에서
+     * AI 트리거 이벤트 발행 직전에 {@link #startAiSummaryProcessing()} 로 전이시킨다.
+     * is_deleted 는 false.
      *
      * @param worklogId   소속 업무 ID
      * @param uploaderId  업로드 수행자 사용자 ID
@@ -96,6 +98,15 @@ public class File {
      */
     public void markDeleted() {
         this.isDeleted = Boolean.TRUE;
+    }
+
+    /**
+     * AI 요약 트리거를 곧 발사하기 직전에 호출되어 처리 상태를 PROCESSING 으로 전이한다.
+     * 같은 트랜잭션에서 발행되는 {@code WorklogFileAiSummaryRequestedEvent} 와 짝을 이루므로,
+     * 트랜잭션이 롤백되면 상태 전이와 트리거 발화가 함께 무효화된다.
+     */
+    public void startAiSummaryProcessing() {
+        this.aiProcessingStatus = AiProcessingStatus.PROCESSING;
     }
 
     /**

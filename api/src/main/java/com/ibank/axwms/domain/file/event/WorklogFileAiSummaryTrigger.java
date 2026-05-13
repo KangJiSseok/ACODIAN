@@ -23,6 +23,9 @@ public class WorklogFileAiSummaryTrigger {
     /** AFTER_COMMIT 단계에서 호출되어 파일 단위 요약 요청을 1회 발사한다. 실패는 흡수하고 재시도하지 않는다. */
     @TransactionalEventListener(phase = TransactionPhase.AFTER_COMMIT)
     public void onCommit(WorklogFileAiSummaryRequestedEvent event) {
+
+        log.info("[trigger] fired fileId={} key={}", event.fileId(), event.storageKey());
+        
         TriggerFileSummaryDto.Request request = new TriggerFileSummaryDto.Request(
                 event.fileId(),
                 event.worklogId(),

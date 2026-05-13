@@ -7,8 +7,8 @@ import com.ibank.axwms.domain.tag.repository.jooq.projection.MetaTagDetailProjec
 import com.ibank.axwms.domain.tag.service.TagService;
 import com.ibank.axwms.domain.worklog.WorklogStatus;
 import com.ibank.axwms.domain.worklog.dto.CreateWorklogApiDto;
-import com.ibank.axwms.domain.worklog.dto.GetWorklogOptionsApiDto;
 import com.ibank.axwms.domain.worklog.dto.GetWorklogDetailApiDto;
+import com.ibank.axwms.domain.worklog.dto.GetWorklogOptionsApiDto;
 import com.ibank.axwms.domain.worklog.dto.GetWorklogsApiDto;
 import com.ibank.axwms.domain.worklog.dto.UpdateWorklogApiDto;
 import com.ibank.axwms.domain.worklog.entity.Worklog;
@@ -29,6 +29,7 @@ import com.ibank.axwms.global.error.ErrorCode;
 import com.ibank.axwms.global.response.PageResponse;
 import com.ibank.axwms.global.security.CustomUserPrincipal;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.domain.Page;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -40,6 +41,7 @@ import java.util.Map;
 import java.util.Set;
 import java.util.stream.Collectors;
 
+@Slf4j
 @Service
 @RequiredArgsConstructor
 @Transactional(readOnly = true)
@@ -94,6 +96,7 @@ public class WorklogService {
                 request.dueDate()
         ));
 
+        log.info("access worklog create service");
         fileService.uploadWorklogFiles(savedWorklog.getId(), principal.userId(), files);
         worklogStatusHistoryService.createStatusHistory(
                 savedWorklog.getId(),
