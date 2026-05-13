@@ -116,7 +116,11 @@ public final class GetWorklogDetailApiDto {
                 @Schema(description = "파일 확장자", example = "pdf")
                 String fileExtension,
                 @Schema(description = "파일 크기(byte)", example = "204800")
-                Long fileSizeBytes
+                Long fileSizeBytes,
+                @Schema(description = "파일 AI 요약 내용 (콜백 도착 전이면 null)")
+                String aiSummary,
+                @Schema(description = "파일 AI 처리 상태", example = "PROCESSING")
+                String aiProcessingStatus
         ) {
             /**
              * 내부 저장소 key 를 클라이언트 접근 URL 로 변환해 상세 응답의 파일 경계를 공개 계약에 맞춘다.
@@ -127,7 +131,9 @@ public final class GetWorklogDetailApiDto {
                         p.originalName(),
                         storageKeyToPublicUrl.apply(p.storedPath()),
                         p.fileExtension(),
-                        p.fileSizeBytes()
+                        p.fileSizeBytes(),
+                        p.aiSummary(),
+                        p.aiProcessingStatus() != null ? p.aiProcessingStatus().name() : null
                 );
             }
         }

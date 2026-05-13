@@ -44,7 +44,9 @@ public class FileJooqRepositoryImpl implements FileJooqRepository {
                         TB_FILE.ORIGINAL_NAME,
                         TB_FILE.STORED_PATH,
                         TB_FILE.FILE_EXTENSION,
-                        TB_FILE.FILE_SIZE_BYTES
+                        TB_FILE.FILE_SIZE_BYTES,
+                        TB_FILE.AI_SUMMARY,
+                        TB_FILE.AI_PROCESSING_STATUS
                 )
                 .from(TB_FILE)
                 .where(TB_FILE.WORKLOG_ID.eq(worklogId))
