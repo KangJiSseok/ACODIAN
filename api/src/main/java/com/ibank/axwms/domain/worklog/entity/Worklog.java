@@ -154,7 +154,7 @@ public class Worklog {
         if (title != null) this.title = title;
         if (requestContent != null) this.requestContent = requestContent;
         if (workContent != null) this.workContent = workContent;
-        if (statusCode != null) changeStatusForEdit(statusCode);
+        if (statusCode != null) changeStatus(statusCode);
         if (importanceCode != null) this.importanceCode = importanceCode;
         if (actualHours != null) this.actualHours = actualHours;
         if (instructionDate != null) this.instructionDate = instructionDate;
@@ -174,9 +174,9 @@ public class Worklog {
     }
 
     /**
-     * 사용자 수정으로 완료 상태에 도달한 날짜를 대시보드 완료 기간 집계 기준으로 함께 기록한다.
+     * 사용자 상태 변경으로 완료 상태에 도달한 날짜를 대시보드 완료 기간 집계 기준으로 함께 기록한다.
      */
-    private void changeStatusForEdit(WorklogStatus statusCode) {
+    public void changeStatus(WorklogStatus statusCode) {
         this.statusCode = statusCode;
         if (statusCode == WorklogStatus.COMPLETED) {
             this.completionDate = LocalDate.now();

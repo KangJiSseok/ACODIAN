@@ -11,6 +11,7 @@ import com.ibank.axwms.domain.worklog.dto.GetWorklogOptionsApiDto;
 import com.ibank.axwms.domain.worklog.dto.GetWorklogDetailApiDto;
 import com.ibank.axwms.domain.worklog.dto.GetWorklogsApiDto;
 import com.ibank.axwms.domain.worklog.dto.UpdateWorklogApiDto;
+import com.ibank.axwms.domain.worklog.dto.UpdateWorklogStatusApiDto;
 import com.ibank.axwms.domain.worklog.entity.Worklog;
 import com.ibank.axwms.domain.worklog.entity.WorklogTag;
 import com.ibank.axwms.domain.worklog.policy.WorklogStatusPolicy;
@@ -200,13 +201,7 @@ public class WorklogService {
                               Long worklogId,
                               UpdateWorklogApiDto.Request request,
                               List<MultipartFile> newFiles) {
-        Worklog worklog = worklogRepository.findById(worklogId)
-                .filter(w -> !Boolean.TRUE.equals(w.getIsDeleted()))
-                .orElseThrow(() -> new BusinessException(ErrorCode.WORKLOG_NOT_FOUND));
-
-        if (!worklog.getAuthorId().equals(principal.userId())) {
-            throw new BusinessException(ErrorCode.WORKLOG_EDIT_FORBIDDEN);
-        }
+        Worklog worklog = getEditableWorklogOrThrow(principal, worklogId);
 
         LocalDate effectiveInstructionDate = request.instructionDate() != null ? request.instructionDate() : worklog.getInstructionDate();
         LocalDate effectiveDueDate = request.dueDate() != null ? request.dueDate() : worklog.getDueDate();
@@ -250,6 +245,55 @@ public class WorklogService {
         }
 
         fileService.uploadWorklogFiles(worklogId, principal.userId(), newFiles);
+    }
+
+    /**
+     * 작성자 본인의 상태 변경 요청만 허용하고 상태 값/완료일/상태 이력을 함께 갱신한다.
+     *
+     * @param principal 현재 로그인 사용자
+     * @param worklogId 상태 변경 대상 worklog ID
+     * @param request   변경할 상태와 변경 사유
+     * @throws BusinessException WORKLOG_NOT_FOUND        worklog 가 없거나 소프트 삭제됨
+     * @throws BusinessException WORKLOG_EDIT_FORBIDDEN   작성자 본인이 아님
+     * @throws BusinessException WORKLOG_STATUS_TRANSITION_INVALID 현재 상태에서 요청 상태로 전이할 수 없음
+     */
+    @Transactional
+    public void updateWorklogStatus(CustomUserPrincipal principal,
+                                    Long worklogId,
+                                    UpdateWorklogStatusApiDto.Request request) {
+        Worklog worklog = getEditableWorklogOrThrow(principal, worklogId);
+        WorklogStatus previousStatusCode = worklog.getStatusCode();
+        boolean statusChanged = request.statusCode() != previousStatusCode;
+
+        validateStatusTransitionIfChanged(previousStatusCode, request.statusCode(), statusChanged);
+        if (!statusChanged) {
+            return;
+        }
+
+        worklog.changeStatus(request.statusCode());
+        createStatusHistoryIfChanged(
+                worklogId,
+                previousStatusCode,
+                request.statusCode(),
+                principal.userId(),
+                request.reason(),
+                true
+        );
+    }
+
+    /**
+     * 수정 계열 API 의 공통 작성자 경계로, 없는 업무와 작성자 불일치를 각각 표준 예외로 변환한다.
+     */
+    private Worklog getEditableWorklogOrThrow(CustomUserPrincipal principal, Long worklogId) {
+        Worklog worklog = worklogRepository.findById(worklogId)
+                .filter(w -> !Boolean.TRUE.equals(w.getIsDeleted()))
+                .orElseThrow(() -> new BusinessException(ErrorCode.WORKLOG_NOT_FOUND));
+
+        if (!worklog.getAuthorId().equals(principal.userId())) {
+            throw new BusinessException(ErrorCode.WORKLOG_EDIT_FORBIDDEN);
+        }
+
+        return worklog;
     }
 
     /**
