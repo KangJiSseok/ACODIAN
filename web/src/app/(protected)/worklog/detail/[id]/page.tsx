@@ -35,7 +35,7 @@ export default function WorklogDetailPage() {
       await transitionMutation.mutateAsync({ nextStatus, reason })
       await Promise.all([
         queryClient.invalidateQueries({
-          queryKey: worklogKeys.detail(selectedWorklog.id),
+          queryKey: worklogKeys.detail(worklogId),
         }),
         queryClient.invalidateQueries({ queryKey: worklogKeys.lists() }),
         queryClient.invalidateQueries({ queryKey: worklogKeys.searches() }),

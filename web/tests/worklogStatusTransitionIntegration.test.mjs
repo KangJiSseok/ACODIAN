@@ -58,7 +58,7 @@ test("worklog detail page invalidates detail, list, and search queries after sta
     detailPageFile,
     /mutationFn: \(\{ nextStatus, reason \}[\s\S]*\) =>\s*worklogService\.transitionStatus\(worklogId, nextStatus, reason\)/,
   );
-  assert.match(detailPageFile, /worklogKeys\.detail\(selectedWorklog\.id\)/);
+  assert.match(detailPageFile, /worklogKeys\.detail\(worklogId\)/);
   assert.match(detailPageFile, /worklogKeys\.lists\(\)/);
   assert.match(detailPageFile, /worklogKeys\.searches\(\)/);
   assert.match(detailPageFile, /getApiErrorMessage\(/);
