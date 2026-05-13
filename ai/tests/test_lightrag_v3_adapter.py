@@ -140,6 +140,32 @@ def test_lightrag_adapter_initializes_inserts_ids_and_finalizes() -> None:
     }
 
 
+def test_lightrag_adapter_batches_multiple_documents_with_ordered_ids_and_file_paths() -> None:
+    FakeLightRAG.instances = []
+    dependencies, _, _, _ = make_dependencies()
+    adapter = LightRagWorklogIndexAdapter(
+        settings_obj=make_settings(),
+        dependencies=dependencies,
+    )
+    documents = [make_document(101), make_document(103)]
+
+    async def run_case() -> None:
+        await adapter.index_documents(documents)
+        fake_rag = FakeLightRAG.instances[0]
+
+        assert fake_rag.calls == [
+            "initialize_storages",
+            (
+                "ainsert",
+                [documents[0].text, documents[1].text],
+                ["worklog-101", "worklog-103"],
+                ["worklog://101", "worklog://103"],
+            ),
+        ]
+
+    asyncio.run(run_case())
+
+
 def test_lightrag_adapter_maps_insert_timeout() -> None:
     class TimeoutLightRAG(FakeLightRAG):
         async def ainsert(

@@ -171,6 +171,25 @@ def test_index_worklogs_maps_timeout_to_all_found_worklogs() -> None:
     }
 
 
+def test_index_worklogs_maps_timeout_to_found_worklogs_only_when_some_are_missing() -> None:
+    reader = FakeSourceReader({101: make_source(101)})
+    adapter = FakeIndexAdapter(LightRagInsertTimeoutError("timeout"))
+    service = LightWorklogIndexService(
+        source_reader=reader,
+        document_builder=fake_document_builder,
+        index_adapter=adapter,
+    )
+
+    response = asyncio.run(service.index_worklogs([101, 102]))
+
+    assert response.model_dump(by_alias=True) == {
+        "items": [
+            {"worklogId": 101, "indexed": False, "error": ERROR_LIGHTRAG_INSERT_TIMEOUT},
+            {"worklogId": 102, "indexed": False, "error": ERROR_WORKLOG_NOT_FOUND},
+        ]
+    }
+
+
 def test_index_worklogs_maps_general_failure_to_found_worklogs_only() -> None:
     reader = FakeSourceReader({101: make_source(101)})
     adapter = FakeIndexAdapter(LightRagInsertFailedError("failed"))
@@ -186,6 +205,30 @@ def test_index_worklogs_maps_general_failure_to_found_worklogs_only() -> None:
         "items": [
             {"worklogId": 101, "indexed": False, "error": ERROR_LIGHTRAG_INSERT_FAILED},
             {"worklogId": 102, "indexed": False, "error": ERROR_WORKLOG_NOT_FOUND},
+        ]
+    }
+
+
+def test_index_worklogs_maps_general_failure_to_all_found_worklogs() -> None:
+    reader = FakeSourceReader({101: make_source(101), 103: make_source(103)})
+    adapter = FakeIndexAdapter(LightRagInsertFailedError("failed"))
+    service = LightWorklogIndexService(
+        source_reader=reader,
+        document_builder=fake_document_builder,
+        index_adapter=adapter,
+    )
+
+    response = asyncio.run(service.index_worklogs([101, 102, 103]))
+
+    assert [document.document_id for document in adapter.indexed_documents] == [
+        "worklog-101",
+        "worklog-103",
+    ]
+    assert response.model_dump(by_alias=True) == {
+        "items": [
+            {"worklogId": 101, "indexed": False, "error": ERROR_LIGHTRAG_INSERT_FAILED},
+            {"worklogId": 102, "indexed": False, "error": ERROR_WORKLOG_NOT_FOUND},
+            {"worklogId": 103, "indexed": False, "error": ERROR_LIGHTRAG_INSERT_FAILED},
         ]
     }
 

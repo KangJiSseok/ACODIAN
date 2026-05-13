@@ -113,6 +113,24 @@ def test_light_worklogs_v3_index_rejects_batch_size_over_default_limit() -> None
     assert response.status_code == 422
 
 
+def test_light_worklogs_v3_index_rejects_batch_size_over_configured_limit(
+    monkeypatch,
+) -> None:
+    from app.light.v3.router import worklog_index
+
+    monkeypatch.setattr(worklog_index.settings, "lightrag_index_max_batch_size", 1)
+
+    response = client.post(
+        "/ai/light/worklogs-v3/index",
+        json={"worklogIds": [101, 102]},
+    )
+
+    assert response.status_code == 422
+    assert response.json() == {
+        "detail": "worklogIds exceeds LIGHTRAG_INDEX_MAX_BATCH_SIZE"
+    }
+
+
 def test_light_worklogs_v3_index_rejects_duplicate_worklog_ids() -> None:
     response = client.post(
         "/ai/light/worklogs-v3/index",
