@@ -22,4 +22,15 @@ public interface TagRepository extends JpaRepository<MetaTag, Long>, MetaTagJooq
     @Modifying(clearAutomatically = true, flushAutomatically = true)
     @Query("update MetaTag tag set tag.usageCount = tag.usageCount + 1 where tag.id in :tagIds")
     int incrementUsageCountByIds(@Param("tagIds") Collection<Long> tagIds);
+
+    /**
+     * 업무일지 연결에서 실제 제거된 태그 집합에 대해서만 사용 횟수 캐시를 일괄 감소시킨다.
+     */
+    @Modifying(clearAutomatically = true, flushAutomatically = true)
+    @Query("""
+            update MetaTag tag
+               set tag.usageCount = case when tag.usageCount > 0 then tag.usageCount - 1 else 0 end
+             where tag.id in :tagIds
+            """)
+    int decrementUsageCountByIds(@Param("tagIds") Collection<Long> tagIds);
 }

@@ -121,8 +121,7 @@ export function WorklogDependencyModal({
 
           {incompleteDependencies.length > 0 && status === "IN_PROGRESS" ? (
             <p className="text-xs text-[color:var(--warning)]">
-              선행 업무가 아직 완료되지 않았습니다. 현재 와이어프레임에서는 경고만
-              하고 저장은 허용합니다.
+              선행 업무가 아직 완료되지 않았습니다.
             </p>
           ) : null}
           {circularDependencyDetected ? (

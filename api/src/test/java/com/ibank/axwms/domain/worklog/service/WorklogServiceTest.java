@@ -11,8 +11,10 @@ import com.ibank.axwms.domain.worklog.WorklogStatus;
 import com.ibank.axwms.domain.worklog.dto.CreateWorklogApiDto;
 import com.ibank.axwms.domain.worklog.dto.GetWorklogDetailApiDto;
 import com.ibank.axwms.domain.worklog.dto.GetWorklogsApiDto;
+import com.ibank.axwms.domain.worklog.dto.UpdateWorklogApiDto;
 import com.ibank.axwms.domain.worklog.entity.Worklog;
 import com.ibank.axwms.domain.worklog.entity.WorklogTag;
+import com.ibank.axwms.domain.worklog.policy.WorklogStatusPolicy;
 import com.ibank.axwms.domain.worklog.repository.WorklogDependencyRepository;
 import com.ibank.axwms.domain.worklog.repository.WorklogRepository;
 import com.ibank.axwms.domain.worklog.repository.WorklogStatusHistoryRepository;
@@ -65,6 +67,7 @@ class WorklogServiceTest {
     @Mock private FileService fileService;
     @Mock private WorklogStatusHistoryService worklogStatusHistoryService;
     @Mock private WorklogDependencyService worklogDependencyService;
+    @Mock private WorklogStatusPolicy worklogStatusPolicy;
     @Mock private TagService tagService;
 
     @InjectMocks private WorklogService worklogService;
@@ -254,6 +257,55 @@ class WorklogServiceTest {
     }
 
     @Test
+    @DisplayName("수정으로 상태가 COMPLETED 로 바뀌면 완료일을 오늘로 기록한다")
+    void updateWorklog_records_completion_date_when_status_changes_to_completed() {
+        // given
+        CustomUserPrincipal principal = principal();
+        Worklog worklog = savedWorklog(WorklogStatus.IN_PROGRESS);
+        UpdateWorklogApiDto.Request request = updateRequest(WorklogStatus.COMPLETED);
+
+        given(worklogRepository.findById(WORKLOG_ID)).willReturn(Optional.of(worklog));
+        given(worklogStatusPolicy.canTransition(WorklogStatus.IN_PROGRESS, WorklogStatus.COMPLETED)).willReturn(true);
+
+        // when
+        worklogService.updateWorklog(principal, WORKLOG_ID, request, List.of());
+
+        // then
+        assertThat(worklog.getStatusCode()).isEqualTo(WorklogStatus.COMPLETED);
+        assertThat(worklog.getCompletionDate()).isEqualTo(LocalDate.now());
+        verify(worklogStatusHistoryService).createStatusHistory(
+                eq(WORKLOG_ID),
+                eq(WorklogStatus.IN_PROGRESS),
+                eq(WorklogStatus.COMPLETED),
+                eq(USER_ID),
+                eq("완료 처리")
+        );
+    }
+
+    @Test
+    @DisplayName("허용되지 않은 상태 전이면 WORKLOG_STATUS_TRANSITION_INVALID 를 던진다")
+    void updateWorklog_rejects_invalid_status_transition() {
+        // given
+        CustomUserPrincipal principal = principal();
+        Worklog worklog = savedWorklog(WorklogStatus.PENDING);
+        UpdateWorklogApiDto.Request request = updateRequest(WorklogStatus.COMPLETED);
+
+        given(worklogRepository.findById(WORKLOG_ID)).willReturn(Optional.of(worklog));
+        given(worklogStatusPolicy.canTransition(WorklogStatus.PENDING, WorklogStatus.COMPLETED)).willReturn(false);
+
+        // when & then
+        assertThatThrownBy(() -> worklogService.updateWorklog(principal, WORKLOG_ID, request, List.of()))
+                .isInstanceOf(BusinessException.class)
+                .extracting(e -> ((BusinessException) e).getErrorCode())
+                .isEqualTo(ErrorCode.WORKLOG_STATUS_TRANSITION_INVALID);
+
+        assertThat(worklog.getStatusCode()).isEqualTo(WorklogStatus.PENDING);
+        assertThat(worklog.getCompletionDate()).isNull();
+        verify(fileService, never()).uploadWorklogFiles(any(), any(), any());
+        verify(worklogStatusHistoryService, never()).createStatusHistory(any(), any(), any(), any(), any());
+    }
+
+    @Test
     @DisplayName("getWorklogDetail 은 첨부 파일의 내부 저장 key 를 공개 URL 로 변환해 반환한다")
     void getWorklogDetail_은_첨부_파일의_내부_저장_key를_공개_URL로_변환해_반환한다() {
         // given
@@ -351,6 +403,44 @@ class WorklogServiceTest {
                 TAG_IDS,
                 null
         );
+    }
+
+    /** 상태 수정 테스트가 검증 대상 필드만 바꿀 수 있도록 공통 수정 요청 fixture 를 만든다. */
+    private static UpdateWorklogApiDto.Request updateRequest(WorklogStatus statusCode) {
+        return new UpdateWorklogApiDto.Request(
+                "updated title",
+                "updated request",
+                "updated work",
+                statusCode,
+                "완료 처리",
+                WorklogImportance.HIGH,
+                new BigDecimal("4.00"),
+                INSTRUCTION_DATE,
+                DUE_DATE,
+                List.of(),
+                List.of(),
+                List.of(),
+                "수정된 AI 요약",
+                List.of()
+        );
+    }
+
+    /** 수정 대상 업무의 현재 상태만 테스트별로 바꾸고 나머지 필드는 유효한 기본값으로 고정한다. */
+    private static Worklog savedWorklog(WorklogStatus statusCode) {
+        Worklog worklog = Worklog.create(
+                USER_ID,
+                TEAM_ID,
+                "test",
+                "test",
+                "test",
+                statusCode,
+                WorklogImportance.NORMAL,
+                new BigDecimal("1.00"),
+                INSTRUCTION_DATE,
+                DUE_DATE
+        );
+        ReflectionTestUtils.setField(worklog, "id", WORKLOG_ID);
+        return worklog;
     }
 
     private static List<MultipartFile> sampleFiles() {

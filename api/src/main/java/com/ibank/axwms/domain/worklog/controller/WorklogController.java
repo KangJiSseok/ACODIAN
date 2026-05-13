@@ -9,6 +9,7 @@ import com.ibank.axwms.domain.worklog.dto.SearchWorklogsApiDto;
 import com.ibank.axwms.domain.worklog.dto.UpdateWorklogApiDto;
 import com.ibank.axwms.domain.worklog.service.WorklogService;
 import com.ibank.axwms.domain.worklog.service.search.WorklogSearchService;
+import com.ibank.axwms.global.response.EmptyResponse;
 import com.ibank.axwms.global.response.PageResponse;
 import com.ibank.axwms.global.security.CustomUserPrincipal;
 import jakarta.validation.Valid;
@@ -91,13 +92,14 @@ public class WorklogController implements WorklogControllerDocs {
     @PatchMapping("/{worklogId}")
     @ResponseStatus(HttpStatus.OK)
     @PreAuthorize("hasAnyRole('DIRECTOR','DEPT_HEAD','TEAM_LEAD','MEMBER')")
-    public void updateWorklog(
+    public EmptyResponse updateWorklog(
             @AuthenticationPrincipal CustomUserPrincipal principal,
             @PathVariable Long worklogId,
             @Valid @RequestPart UpdateWorklogApiDto.Request request,
             @RequestPart(value = "files", required = false) List<MultipartFile> files
     ) {
         worklogService.updateWorklog(principal, worklogId, request, files);
+        return EmptyResponse.INSTANCE;
     }
 
     @Override

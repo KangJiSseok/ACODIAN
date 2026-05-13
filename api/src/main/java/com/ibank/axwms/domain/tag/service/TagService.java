@@ -59,6 +59,19 @@ public class TagService {
     }
 
     /**
+     * 업무일지와 연결 해제된 태그의 사용 횟수 캐시를 감소시키되 음수로 내려가지 않게 한다.
+     */
+    @Transactional
+    public void decrementUsageCountByIds(Collection<Long> tagIds) {
+        List<Long> normalizedIds = normalizeTagIds(tagIds);
+        if (normalizedIds.isEmpty()) {
+            return;
+        }
+
+        tagRepository.decrementUsageCountByIds(normalizedIds);
+    }
+
+    /**
      * null 과 중복을 제거해 저장 계층에서 안정적으로 사용할 태그 ID 목록을 만든다.
      */
     private List<Long> normalizeTagIds(Collection<Long> tagIds) {
