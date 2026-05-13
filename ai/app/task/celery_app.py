@@ -10,6 +10,7 @@ celery_app = Celery(
         "app.task.worklog_tasks",
         "app.task.tagging_tasks",
         "app.task.embedding_tasks",
+        "app.task.file_tasks",
     ],
 )
 

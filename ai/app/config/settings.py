@@ -20,6 +20,16 @@ class Settings(BaseSettings):
     gemini_model: str = "gemini-2.5-flash"                # 텍스트 생성 기본 모델 (요약/태그/청킹 등)
     gemini_request_timeout_seconds: int = 30              # 단일 호출 타임아웃 (초)
     gemini_max_retries: int = 3                           # 호출 실패 시 재시도 최대 횟수
+    gemini_file_active_poll_sec: float = 2.0              # Files API 업로드 ACTIVE 폴링 주기 (초)
+    gemini_file_active_timeout_sec: int = 120             # Files API ACTIVE 대기 타임아웃 (초)
+
+    # ---- 파일 AI 요약: S3 (api 와 같은 버킷/자격증명을 공유) ----
+    # api 의 ``storage.s3.*`` 와 동일 값을 주입한다. ai 는 GET (download) 만 수행한다.
+    aws_region: str = ""
+    aws_s3_bucket: str = ""
+    aws_s3_base_prefix: str = ""
+    aws_access_key_id: str = ""
+    aws_secret_access_key: str = ""
 
     # ---- 임베딩 / 청킹 (기획서 2.4) ----
     embedding_model: str = "gemini-embedding-001"           # 768 차원 출력 모델
