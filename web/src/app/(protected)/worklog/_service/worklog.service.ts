@@ -1,12 +1,5 @@
-import {
-  getNextNotificationId,
-  getNextStatusHistoryId,
-  notifications,
-  notifyMockDb,
-  worklogs,
-} from "../_mock/worklog.mock"
 import { apiClient } from "@/app/_common/service/api-client"
-import type { PageResponse } from "@/app/_common/types/api.types"
+import type { EmptyResponse, PageResponse } from "@/app/_common/types/api.types"
 
 import type {
   AiProcessingStatus,
@@ -22,7 +15,6 @@ import type {
   WorklogListApiItem,
   WorklogListItem,
   WorklogOptionsApiResponse,
-  WorklogRecord,
   WorklogSearchApiItem,
   WorklogStatus,
 } from "../_types/worklog.types"
@@ -189,34 +181,6 @@ function toWorklogDetail(item: WorklogDetailApiResponse): Worklog {
   }
 }
 
-const nextMap: Record<WorklogRecord["status"], WorklogRecord["status"][]> = {
-  PENDING: ["IN_PROGRESS"],
-  IN_PROGRESS: ["DONE", "ON_HOLD", "CANCELLED"],
-  ON_HOLD: ["IN_PROGRESS"],
-  DONE: [],
-  FAILED: ["IN_PROGRESS"],
-  CANCELLED: [],
-}
-
-function addDependencyNotifications(sourceWorklog: WorklogRecord) {
-  worklogs
-    .filter((worklog) => worklog.dependencyIds.includes(sourceWorklog.id))
-    .forEach((dependentWorklog) => {
-      notifications.unshift({
-        id: getNextNotificationId(),
-        userId: dependentWorklog.authorId,
-        type: "DEPENDENCY",
-        title: "선행 업무 상태가 변경되었습니다",
-        content: `${sourceWorklog.title} 업무 상태가 변경되어 후행 업무 진행 전 확인이 필요합니다.`,
-        referenceId: sourceWorklog.id,
-        isRead: false,
-        createdAt: new Date().toISOString(),
-        sourceScope: "PERSONAL",
-        deepLink: `/worklog/detail/${sourceWorklog.id}`,
-      })
-    })
-}
-
 export const worklogService = {
   async getWorklogs({
     page = 1,
@@ -327,48 +291,13 @@ export const worklogService = {
 
     return apiClient.patch<void, FormData>(`/worklogs/${id}`, formData)
   },
-  async transitionStatus(
-    id: number,
-    nextStatus: WorklogRecord["status"],
-    changedBy: number,
-    reason: string
-  ) {
-    const target = worklogs.find((worklog) => worklog.id === id && !worklog.isDeleted)
-    if (!target) return { worklog: undefined, warning: undefined }
-
-    if (!nextMap[target.status].includes(nextStatus)) {
-      throw new Error("허용되지 않은 상태 전이입니다.")
-    }
-
-    const predecessorIncomplete =
-      nextStatus === "IN_PROGRESS" &&
-      target.dependencyIds.some((dependencyId) => {
-        const dependency = worklogs.find((worklog) => worklog.id === dependencyId)
-        return dependency && dependency.status !== "DONE"
-      })
-
-    const previousStatus = target.status
-    target.status = nextStatus
-    target.updatedAt = new Date().toISOString()
-    target.completionDate =
-      nextStatus === "DONE" ? new Date().toISOString().slice(0, 10) : undefined
-    target.statusHistory.unshift({
-      id: getNextStatusHistoryId(),
-      previousStatus,
-      newStatus: nextStatus,
-      changedBy,
-      reason: reason.trim() || "상태 전환",
-      changedAt: new Date().toISOString(),
+  async transitionStatus(id: number, nextStatus: WorklogStatus, reason: string) {
+    return apiClient.patch<
+      EmptyResponse,
+      { statusCode: string; reason: string | null }
+    >(`/worklogs/${id}/status`, {
+      statusCode: worklogStatusApiCodeMap[nextStatus] ?? "PENDING",
+      reason: reason.trim() || null,
     })
-
-    addDependencyNotifications(target)
-    notifyMockDb()
-
-    return {
-      worklog: target,
-      warning: predecessorIncomplete
-        ? "선행 업무가 아직 완료되지 않았습니다. 현재 와이어프레임에서는 차단하지 않고 경고만 제공합니다."
-        : undefined,
-    }
   },
 }
