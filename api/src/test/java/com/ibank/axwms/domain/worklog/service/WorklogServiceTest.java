@@ -405,6 +405,44 @@ class WorklogServiceTest {
         );
     }
 
+    /** 상태 수정 테스트가 검증 대상 필드만 바꿀 수 있도록 공통 수정 요청 fixture 를 만든다. */
+    private static UpdateWorklogApiDto.Request updateRequest(WorklogStatus statusCode) {
+        return new UpdateWorklogApiDto.Request(
+                "updated title",
+                "updated request",
+                "updated work",
+                statusCode,
+                "완료 처리",
+                WorklogImportance.HIGH,
+                new BigDecimal("4.00"),
+                INSTRUCTION_DATE,
+                DUE_DATE,
+                List.of(),
+                List.of(),
+                List.of(),
+                "수정된 AI 요약",
+                List.of()
+        );
+    }
+
+    /** 수정 대상 업무의 현재 상태만 테스트별로 바꾸고 나머지 필드는 유효한 기본값으로 고정한다. */
+    private static Worklog savedWorklog(WorklogStatus statusCode) {
+        Worklog worklog = Worklog.create(
+                USER_ID,
+                TEAM_ID,
+                "test",
+                "test",
+                "test",
+                statusCode,
+                WorklogImportance.NORMAL,
+                new BigDecimal("1.00"),
+                INSTRUCTION_DATE,
+                DUE_DATE
+        );
+        ReflectionTestUtils.setField(worklog, "id", WORKLOG_ID);
+        return worklog;
+    }
+
     private static List<MultipartFile> sampleFiles() {
         return List.of(
                 new MockMultipartFile(
