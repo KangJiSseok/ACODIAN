@@ -23,6 +23,7 @@ import com.ibank.axwms.domain.worklog.repository.jooq.projection.WorklogDetailPr
 import com.ibank.axwms.domain.worklog.repository.jooq.projection.WorklogFileProjection;
 import com.ibank.axwms.domain.worklog.repository.jooq.projection.WorklogListProjection;
 import com.ibank.axwms.domain.worklog.repository.jooq.query.WorklogPageQuery;
+import com.ibank.axwms.global.enums.AiProcessingStatus;
 import com.ibank.axwms.global.error.BusinessException;
 import com.ibank.axwms.global.error.ErrorCode;
 import com.ibank.axwms.global.response.PageResponse;
@@ -317,7 +318,9 @@ class WorklogServiceTest {
                 "report.pdf",
                 storageKey,
                 "pdf",
-                204800L
+                204800L,
+                null,
+                AiProcessingStatus.PENDING
         );
 
         given(worklogRepository.findWorklogDetail(USER_ID, WORKLOG_ID))
