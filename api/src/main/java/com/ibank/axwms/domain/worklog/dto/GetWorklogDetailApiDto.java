@@ -125,7 +125,7 @@ public final class GetWorklogDetailApiDto {
             /**
              * 내부 저장소 key 를 클라이언트 접근 URL 로 변환해 상세 응답의 파일 경계를 공개 계약에 맞춘다.
              */
-            public static FileItem from(WorklogFileProjection p) {
+            public static FileItem from(WorklogFileProjection p, Function<String, String> storageKeyToPublicUrl) {
                 return new FileItem(
                         p.fileId(),
                         p.originalName(),
