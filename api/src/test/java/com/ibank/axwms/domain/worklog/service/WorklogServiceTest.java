@@ -11,6 +11,7 @@ import com.ibank.axwms.domain.worklog.WorklogStatus;
 import com.ibank.axwms.domain.worklog.dto.CreateWorklogApiDto;
 import com.ibank.axwms.domain.worklog.dto.GetWorklogDetailApiDto;
 import com.ibank.axwms.domain.worklog.dto.GetWorklogsApiDto;
+import com.ibank.axwms.domain.worklog.dto.UpdateWorklogStatusApiDto;
 import com.ibank.axwms.domain.worklog.dto.UpdateWorklogApiDto;
 import com.ibank.axwms.domain.worklog.entity.Worklog;
 import com.ibank.axwms.domain.worklog.entity.WorklogTag;
@@ -280,6 +281,82 @@ class WorklogServiceTest {
                 eq(USER_ID),
                 eq("완료 처리")
         );
+    }
+
+    @Test
+    @DisplayName("작성자 본인이 상태를 COMPLETED 로 변경하면 완료일과 상태 이력을 기록한다")
+    void updateWorklogStatus_records_completion_date_and_history() {
+        // given
+        CustomUserPrincipal principal = principal();
+        Worklog worklog = savedWorklog(WorklogStatus.IN_PROGRESS);
+        UpdateWorklogStatusApiDto.Request request = new UpdateWorklogStatusApiDto.Request(
+                WorklogStatus.COMPLETED,
+                "  완료 처리  "
+        );
+
+        given(worklogRepository.findById(WORKLOG_ID)).willReturn(Optional.of(worklog));
+        given(worklogStatusPolicy.canTransition(WorklogStatus.IN_PROGRESS, WorklogStatus.COMPLETED)).willReturn(true);
+
+        // when
+        worklogService.updateWorklogStatus(principal, WORKLOG_ID, request);
+
+        // then
+        assertThat(worklog.getStatusCode()).isEqualTo(WorklogStatus.COMPLETED);
+        assertThat(worklog.getCompletionDate()).isEqualTo(LocalDate.now());
+        verify(worklogStatusHistoryService).createStatusHistory(
+                eq(WORKLOG_ID),
+                eq(WorklogStatus.IN_PROGRESS),
+                eq(WorklogStatus.COMPLETED),
+                eq(USER_ID),
+                eq("완료 처리")
+        );
+    }
+
+    @Test
+    @DisplayName("작성자가 아니면 상태 변경 전용 API 는 WORKLOG_EDIT_FORBIDDEN 을 던진다")
+    void updateWorklogStatus_rejects_non_author() {
+        // given
+        CustomUserPrincipal principal = new CustomUserPrincipal(999L, "other@test.com", "MEMBER");
+        Worklog worklog = savedWorklog(WorklogStatus.IN_PROGRESS);
+        UpdateWorklogStatusApiDto.Request request = new UpdateWorklogStatusApiDto.Request(
+                WorklogStatus.COMPLETED,
+                "완료 처리"
+        );
+
+        given(worklogRepository.findById(WORKLOG_ID)).willReturn(Optional.of(worklog));
+
+        // when & then
+        assertThatThrownBy(() -> worklogService.updateWorklogStatus(principal, WORKLOG_ID, request))
+                .isInstanceOf(BusinessException.class)
+                .extracting(e -> ((BusinessException) e).getErrorCode())
+                .isEqualTo(ErrorCode.WORKLOG_EDIT_FORBIDDEN);
+
+        assertThat(worklog.getStatusCode()).isEqualTo(WorklogStatus.IN_PROGRESS);
+        verify(worklogStatusPolicy, never()).canTransition(any(), any());
+        verify(worklogStatusHistoryService, never()).createStatusHistory(any(), any(), any(), any(), any());
+    }
+
+    @Test
+    @DisplayName("상태가 실제로 바뀌지 않으면 상태 변경 전용 API 는 이력을 남기지 않는다")
+    void updateWorklogStatus_skips_history_when_status_is_unchanged() {
+        // given
+        CustomUserPrincipal principal = principal();
+        Worklog worklog = savedWorklog(WorklogStatus.IN_PROGRESS);
+        UpdateWorklogStatusApiDto.Request request = new UpdateWorklogStatusApiDto.Request(
+                WorklogStatus.IN_PROGRESS,
+                "   "
+        );
+
+        given(worklogRepository.findById(WORKLOG_ID)).willReturn(Optional.of(worklog));
+
+        // when
+        worklogService.updateWorklogStatus(principal, WORKLOG_ID, request);
+
+        // then
+        assertThat(worklog.getStatusCode()).isEqualTo(WorklogStatus.IN_PROGRESS);
+        assertThat(worklog.getCompletionDate()).isNull();
+        verify(worklogStatusPolicy, never()).canTransition(any(), any());
+        verify(worklogStatusHistoryService, never()).createStatusHistory(any(), any(), any(), any(), any());
     }
 
     @Test
