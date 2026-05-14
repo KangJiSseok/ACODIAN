@@ -40,7 +40,7 @@ export default function Sidebar() {
   return (
     <aside
       className={cn(
-        "dark workspace-sidebar sticky top-0 z-20 hidden h-screen shrink-0 flex-col overflow-hidden border-r border-white/10 text-white transition-[width,min-width,max-width,flex-basis] duration-300 ease-out md:flex",
+        "workspace-sidebar sticky top-0 z-20 hidden h-screen shrink-0 flex-col overflow-hidden border-r border-slate-200/80 dark:border-white/10 text-slate-900 transition-[width,min-width,max-width,flex-basis] duration-300 ease-out dark:text-white md:flex",
         sidebarCollapsed
           ? "w-[4.75rem] min-w-[4.75rem] max-w-[4.75rem] basis-[4.75rem]"
           : "w-[17.5rem] min-w-[17.5rem] max-w-[17.5rem] basis-[17.5rem]",
@@ -66,7 +66,7 @@ export default function Sidebar() {
               aria-expanded={false}
               title="사이드바 펼치기"
             >
-              <span className="flex size-9 items-center justify-center text-[16px] font-black tracking-[0.02em] text-white transition-colors hover:text-white/80">
+              <span className="flex size-9 items-center justify-center text-[16px] font-black tracking-[0.02em] text-slate-900 transition-colors hover:text-primary dark:text-white dark:hover:text-white/80">
                 IB
               </span>
             </button>
@@ -78,7 +78,7 @@ export default function Sidebar() {
               title="IBANK"
               aria-label="IBANK"
             >
-              <span className="flex size-9 items-center justify-center text-[16px] font-black tracking-[0.02em] text-white transition-colors hover:text-white/80">
+              <span className="flex size-9 items-center justify-center text-[16px] font-black tracking-[0.02em] text-slate-900 transition-colors hover:text-primary dark:text-white dark:hover:text-white/80">
                 IB
               </span>
             </Link>
@@ -88,7 +88,7 @@ export default function Sidebar() {
             <button
               type="button"
               onClick={toggleSidebarCollapsed}
-              className="col-start-3 flex size-9 shrink-0 items-center justify-center justify-self-end rounded-xl text-white/62 transition-colors hover:bg-white/8 hover:text-white"
+              className="col-start-3 flex size-9 shrink-0 items-center justify-center justify-self-end rounded-xl text-slate-500 transition-colors hover:bg-slate-200/70 hover:text-slate-900 dark:text-white/62 dark:hover:bg-white/8 dark:hover:text-white"
               aria-label="사이드바 접기"
               aria-expanded
               title="사이드바 접기"
@@ -139,8 +139,8 @@ export default function Sidebar() {
                     ? "w-[3.75rem] grid-cols-[3.75rem]"
                     : "w-full grid-cols-[3.75rem_minmax(0,1fr)] text-left",
                   isActive
-                    ? "bg-white/10 text-white"
-                    : "text-white hover:bg-white/8",
+                    ? "bg-primary/10 text-primary dark:bg-white/10 dark:text-white"
+                    : "text-slate-700 hover:bg-slate-200/70 hover:text-slate-950 dark:text-white dark:hover:bg-white/8 dark:hover:text-white",
                 )}
               >
                 <div className="flex w-[3.75rem] justify-center">
@@ -166,7 +166,7 @@ export default function Sidebar() {
             <Link
               href="/my-page"
               className={cn(
-                "col-span-2 grid h-14 w-full min-w-0 grid-cols-[3.75rem_minmax(0,1fr)] items-center rounded-xl text-white transition-colors hover:bg-white/8",
+                "col-span-2 grid h-14 w-full min-w-0 grid-cols-[3.75rem_minmax(0,1fr)] items-center rounded-xl text-slate-700 transition-colors hover:bg-slate-200/70 hover:text-slate-950 dark:text-white dark:hover:bg-white/8 dark:hover:text-white",
                 sidebarCollapsed
                   ? "pointer-events-auto"
                   : "pr-12",
@@ -176,7 +176,7 @@ export default function Sidebar() {
             >
               <div className="flex w-[3.75rem] justify-center">
                 <div
-                  className="flex size-10 items-center justify-center overflow-hidden rounded-full bg-white/10 text-sm font-bold text-white"
+                  className="flex size-10 items-center justify-center overflow-hidden rounded-full bg-primary/10 text-sm font-bold text-primary dark:bg-white/10 dark:text-white"
                   style={
                     profileImageUrl
                       ? {
@@ -193,10 +193,10 @@ export default function Sidebar() {
 
               {!sidebarCollapsed ? (
                 <div className="min-w-0 overflow-hidden">
-                  <p className="truncate text-[14px] font-bold leading-tight text-white">
+                  <p className="truncate text-[14px] font-bold leading-tight text-slate-900 dark:text-white">
                     {displayName}
                   </p>
-                  <p className="mt-1 truncate text-[12px] font-semibold text-white/55">
+                  <p className="mt-1 truncate text-[12px] font-semibold text-slate-500 dark:text-white/55">
                     {displayTitle}
                   </p>
                 </div>
@@ -207,7 +207,7 @@ export default function Sidebar() {
               <button
                 type="button"
                 onClick={handleLogout}
-                className="absolute right-0 top-1/2 flex size-10 -translate-y-1/2 shrink-0 items-center justify-center rounded-xl text-rose-300/80 transition-colors hover:bg-white/8 hover:text-rose-200"
+                className="absolute right-0 top-1/2 flex size-10 -translate-y-1/2 shrink-0 items-center justify-center rounded-xl text-rose-600 transition-colors hover:bg-rose-50/90 hover:text-rose-700 dark:text-rose-300/80 dark:hover:bg-white/8 dark:hover:text-rose-200"
                 aria-label="로그아웃"
                 title="로그아웃"
               >
@@ -259,10 +259,10 @@ function CollapsibleSidebarItem({
             ? "w-[3.75rem] grid-cols-[3.75rem]"
             : "w-full grid-cols-[3.75rem_minmax(0,1fr)_2.25rem] text-left",
           isActiveGroup
-            ? "bg-white/10 text-white"
+            ? "bg-primary/10 text-primary dark:bg-white/10 dark:text-white"
             : isOpen
-              ? "bg-white/8 text-white"
-              : "text-white hover:bg-white/8",
+              ? "bg-primary/5 text-slate-900 dark:bg-white/8 dark:text-white"
+              : "text-slate-700 hover:bg-slate-200/70 hover:text-slate-950 dark:text-white dark:hover:bg-white/8 dark:hover:text-white",
         )}
       >
         <div className="flex w-[3.75rem] justify-center">
@@ -323,8 +323,8 @@ function CollapsibleSidebarItem({
                       className={cn(
                         "relative flex items-center rounded-md px-3 py-2 text-[13px] font-medium transition-all before:absolute before:-left-3 before:top-1/2 before:h-1 before:w-1 before:-translate-y-1/2 before:rounded-full",
                         isSubActive
-                          ? "bg-white/10 text-white before:bg-white"
-                          : "text-white hover:bg-white/8 before:bg-transparent",
+                          ? "bg-primary/10 text-primary before:bg-primary dark:bg-white/10 dark:text-white dark:before:bg-white"
+                          : "text-slate-600 hover:bg-slate-200/70 hover:text-slate-900 before:bg-transparent dark:text-white dark:hover:bg-white/8 dark:hover:text-white",
                       )}
                     >
                       {sub.label}
@@ -336,8 +336,8 @@ function CollapsibleSidebarItem({
                         className={cn(
                           "relative ml-4 flex items-center rounded-md px-3 py-2 text-[12px] font-medium transition-all before:absolute before:-left-3 before:top-1/2 before:h-1 before:w-1 before:-translate-y-1/2 before:rounded-full",
                           isNestedChildActive
-                            ? "bg-white/10 text-white before:bg-white"
-                            : "text-white hover:bg-white/8 before:bg-transparent",
+                            ? "bg-primary/10 text-primary before:bg-primary dark:bg-white/10 dark:text-white dark:before:bg-white"
+                                : "text-slate-600 hover:bg-slate-200/70 hover:text-slate-900 before:bg-transparent dark:text-white dark:hover:bg-white/8 dark:hover:text-white",
                         )}
                       >
                         {nestedChild.label}

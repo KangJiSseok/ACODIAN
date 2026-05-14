@@ -88,10 +88,14 @@
   --sidebar-accent-foreground: #ffffff;
   --sidebar-border: rgba(255, 255, 255, 0.08);
   --sidebar-ring: #3b82f6;
-  --workspace-shell-base: #0f1a35;
+  --workspace-shell-base: #f1f5f9;
+  --workspace-shell-foreground: #0f172a;
+  --workspace-shell-muted-foreground: #64748b;
+  --workspace-shell-border: rgba(100, 116, 139, 0.18);
+  --workspace-shell-hover: rgba(100, 116, 139, 0.12);
+  --workspace-shell-active: rgba(71, 85, 105, 0.14);
   --workspace-shell-gradient:
-    radial-gradient(circle at 18% 0%, rgba(74, 121, 255, 0.14), transparent 32%),
-    linear-gradient(180deg, #18284f 0%, #132243 46%, #0f1a35 100%);
+    linear-gradient(180deg, #f8fafc 0%, #f1f5f9 48%, #e2e8f0 100%);
   --radius: 0.75rem;
   --chart-1: #3b82f6;
   --chart-2: #60a5fa;
@@ -386,6 +390,15 @@ pre {
   --sidebar-accent-foreground: #ffffff;
   --sidebar-border: rgba(255, 255, 255, 0.08);
   --sidebar-ring: #60a5fa;
+  --workspace-shell-base: #0f1a35;
+  --workspace-shell-foreground: #f8fafc;
+  --workspace-shell-muted-foreground: rgba(255, 255, 255, 0.58);
+  --workspace-shell-border: rgba(255, 255, 255, 0.08);
+  --workspace-shell-hover: rgba(255, 255, 255, 0.08);
+  --workspace-shell-active: rgba(255, 255, 255, 0.1);
+  --workspace-shell-gradient:
+    radial-gradient(circle at 18% 0%, rgba(74, 121, 255, 0.14), transparent 32%),
+    linear-gradient(180deg, #18284f 0%, #132243 46%, #0f1a35 100%);
   --shadow-panel: 0 32px 90px -52px rgba(0, 0, 0, 0.78);
   --shadow-panel-strong: 0 40px 110px -60px rgba(0, 0, 0, 0.92);
   --shadow-inset: inset 0 1px 0 rgba(255, 255, 255, 0.04);

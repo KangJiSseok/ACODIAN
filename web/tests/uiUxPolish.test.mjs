@@ -20,6 +20,8 @@ const notificationCenterPopover = readSource(
   "app/_common/components/layout/notificationCenterPopover.tsx",
 );
 const gnb = readSource("app/_common/components/layout/gnb.tsx");
+const sidebar = readSource("app/_common/components/layout/sidebar.tsx");
+const globals = readSource("app/globals.css");
 const cardSpotlight = readSource("components/ui/card-spotlight.tsx");
 const authService = readSource("app/_common/service/auth.ts");
 const myPage = readSource("app/(protected)/my-page/page.tsx");
@@ -66,11 +68,24 @@ test("notification center popover uses theme-specific opaque surface and text co
   assert.doesNotMatch(notificationCenterPopover, /bg-card text-card-foreground/);
 });
 
-test("notification center trigger keeps white text while open on topbar", () => {
+test("notification center trigger keeps theme-appropriate text while open on topbar", () => {
   assert.match(gnb, /aria-expanded=\{isNotificationOpen\}/);
-  assert.match(gnb, /aria-expanded:!text-white/);
-  assert.match(gnb, /active:!text-white/);
-  assert.match(gnb, /focus-visible:!text-white/);
+  assert.match(gnb, /aria-expanded:!text-slate-900/);
+  assert.match(gnb, /dark:aria-expanded:!text-white/);
+  assert.match(gnb, /dark:active:!text-white/);
+});
+
+test("workspace shell uses light gray navigation colors outside dark mode", () => {
+  assert.match(globals, /--workspace-shell-base: #f1f5f9/);
+  assert.match(globals, /#f8fafc 0%, #f1f5f9 48%, #e2e8f0 100%/);
+  assert.match(globals, /--workspace-shell-foreground: #0f172a/);
+  assert.match(globals, /\.dark \{[\s\S]*--workspace-shell-base: #0f1a35/);
+  assert.doesNotMatch(sidebar, /"dark workspace-sidebar/);
+  assert.match(sidebar, /text-slate-900 dark:text-white/);
+  assert.match(sidebar, /border-slate-200\/80 dark:border-white\/10/);
+  assert.match(gnb, /border-slate-200\/80/);
+  assert.match(gnb, /bg-slate-100\/70/);
+  assert.match(gnb, /dark:border-white\/10/);
 });
 
 test("my profile lets users change the primary team through users me", () => {
