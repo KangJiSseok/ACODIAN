@@ -8,6 +8,7 @@ import { PencilLine } from "lucide-react"
 import PageHeader from "@/app/_common/components/layout/pageHeader"
 import { useAuth } from "@/app/_common/hooks/useAuth"
 import { getApiErrorMessage } from "@/app/_common/service/api-client"
+import { dashboardKeys } from "../../../_dashboard/_hooks/useDirectorDashboard"
 import { WorklogDetail } from "../../_components/worklogDetail"
 import { worklogKeys, useWorklogDetail } from "../../_hooks/useWorklogList"
 import { worklogService } from "../../_service/worklog.service"
@@ -39,6 +40,7 @@ export default function WorklogDetailPage() {
         }),
         queryClient.invalidateQueries({ queryKey: worklogKeys.lists() }),
         queryClient.invalidateQueries({ queryKey: worklogKeys.searches() }),
+        queryClient.invalidateQueries({ queryKey: dashboardKeys.all }),
       ])
       setTransitionNotice("업무 상태를 변경했습니다.")
     } catch (error) {

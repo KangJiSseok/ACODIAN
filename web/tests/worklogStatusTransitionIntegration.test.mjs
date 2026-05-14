@@ -52,7 +52,7 @@ test("worklog query keys expose list and search prefixes for targeted invalidati
   assert.match(hookFile, /searches: \(\) => \[\.\.\.worklogKeys\.all, "search"\] as const/);
 });
 
-test("worklog detail page invalidates detail, list, and search queries after status change", () => {
+test("worklog detail page invalidates worklog and dashboard queries after status change", () => {
   assert.match(detailPageFile, /useMutation\(/);
   assert.match(
     detailPageFile,
@@ -61,6 +61,7 @@ test("worklog detail page invalidates detail, list, and search queries after sta
   assert.match(detailPageFile, /worklogKeys\.detail\(worklogId\)/);
   assert.match(detailPageFile, /worklogKeys\.lists\(\)/);
   assert.match(detailPageFile, /worklogKeys\.searches\(\)/);
+  assert.match(detailPageFile, /dashboardKeys\.all/);
   assert.match(detailPageFile, /getApiErrorMessage\(/);
   assert.doesNotMatch(detailPageFile, /setDisplayWorklog/);
   assert.doesNotMatch(detailPageFile, /team\.isLeader/);
