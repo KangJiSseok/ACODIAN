@@ -6,7 +6,7 @@ from app.task import tagging_tasks
 
 class FakeTaggingClient:
     def __init__(self) -> None:
-        self.updated_tag_ids: list[int] | None = None
+        self.created_request: tuple[int, list[int], list[str]] | None = None
 
     async def __aenter__(self) -> "FakeTaggingClient":
         return self
@@ -20,13 +20,16 @@ class FakeTaggingClient:
             MetaTag(tagId=2, tagName="MCP 개발"),
         ]
 
-    async def create_tag(self, tag_name: str) -> MetaTag:
-        assert tag_name == "배치자동화"
-        return MetaTag(tagId=3, tagName=tag_name)
-
-    async def update_worklog_tags(self, worklog_id: int, tag_ids: list[int]) -> None:
+    async def apply_worklog_ai_tags(
+        self,
+        worklog_id: int,
+        existing_tag_ids: list[int],
+        new_tag_names: list[str],
+    ) -> None:
         assert worklog_id == 10
-        self.updated_tag_ids = tag_ids
+        assert existing_tag_ids == [1]
+        assert new_tag_names == ["배치자동화"]
+        self.created_request = (worklog_id, existing_tag_ids, new_tag_names)
 
 
 class FakeTaggingService:
@@ -55,10 +58,9 @@ def test_generate_worklog_tags_creates_new_tags_and_updates_worklog(monkeypatch)
         )
     )
 
-    assert fake_client.updated_tag_ids == [1, 3]
+    assert fake_client.created_request == (10, [1], ["배치자동화"])
     assert result == {
         "worklog_id": 10,
-        "tag_ids": [1, 3],
         "existing_tags": ["재고"],
         "new_tags": ["배치자동화"],
     }

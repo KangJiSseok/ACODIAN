@@ -3,7 +3,8 @@ package com.ibank.axwms.domain.worklog.controller;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.BDDMockito.then;
 
-import com.ibank.axwms.domain.worklog.dto.ApplyWorklogTagsAiApiDto;
+import com.ibank.axwms.domain.tag.service.InternalTagAiCallbackService;
+import com.ibank.axwms.domain.worklog.dto.ApplyWorklogAiTagsApiDto;
 import com.ibank.axwms.domain.worklog.dto.UpdateWorklogAiApiDto;
 import com.ibank.axwms.domain.worklog.service.InternalWorklogAiCallbackService;
 import com.ibank.axwms.global.enums.AiProcessingStatus;
@@ -19,6 +20,7 @@ import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.web.bind.annotation.PatchMapping;
+import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
 
 @ExtendWith(MockitoExtension.class)
@@ -26,6 +28,9 @@ class InternalWorklogAiCallbackControllerTest {
 
     @Mock
     private InternalWorklogAiCallbackService internalWorklogAiCallbackService;
+
+    @Mock
+    private InternalTagAiCallbackService internalTagAiCallbackService;
 
     @InjectMocks
     private InternalWorklogAiCallbackController internalWorklogAiCallbackController;
@@ -70,32 +75,32 @@ class InternalWorklogAiCallbackControllerTest {
     }
 
     @Test
-    @DisplayName("AI 태그 반영 메서드는 PATCH 경로와 검증 파라미터를 사용한다")
-    void AI_태그_반영_메서드는_patch_경로와_검증_파라미터를_사용한다() throws NoSuchMethodException {
+    @DisplayName("AI 태그 적용 메서드는 POST 경로와 검증 파라미터를 사용한다")
+    void AI_태그_적용_메서드는_post_경로와_검증_파라미터를_사용한다() throws NoSuchMethodException {
         Method method = InternalWorklogAiCallbackController.class.getMethod(
                 "applyAiGeneratedTags",
                 Long.class,
-                ApplyWorklogTagsAiApiDto.Request.class
+                ApplyWorklogAiTagsApiDto.Request.class
         );
-        PatchMapping patchMapping = method.getAnnotation(PatchMapping.class);
+        PostMapping postMapping = method.getAnnotation(PostMapping.class);
         Parameter requestParameter = method.getParameters()[1];
 
-        assertThat(patchMapping).isNotNull();
-        assertThat(patchMapping.value()).containsExactly("/{worklogId}/tags");
+        assertThat(postMapping).isNotNull();
+        assertThat(postMapping.value()).containsExactly("/{worklogId}/ai-tags");
         assertThat(requestParameter.getAnnotation(Valid.class)).isNotNull();
     }
 
     @Test
-    @DisplayName("AI 태그 반영 메서드는 서비스를 호출하고 EmptyResponse 를 반환한다")
-    void AI_태그_반영_메서드는_서비스를_호출하고_empty_response_를_반환한다() {
-        ApplyWorklogTagsAiApiDto.Request request = new ApplyWorklogTagsAiApiDto.Request(
+    @DisplayName("AI 태그 적용 메서드는 서비스를 호출하고 EmptyResponse 를 반환한다")
+    void AI_태그_적용_메서드는_서비스를_호출하고_empty_response_를_반환한다() {
+        ApplyWorklogAiTagsApiDto.Request request = new ApplyWorklogAiTagsApiDto.Request(
                 List.of(1L, 2L),
                 List.of("신규 태그")
         );
 
         EmptyResponse response = internalWorklogAiCallbackController.applyAiGeneratedTags(501L, request);
 
-        then(internalWorklogAiCallbackService).should().applyAiGeneratedTags(501L, request);
+        then(internalTagAiCallbackService).should().applyAiGeneratedTags(501L, request);
         assertThat(response).isSameAs(EmptyResponse.INSTANCE);
     }
 }

@@ -34,6 +34,16 @@ const transitionFile = readFileSync(
   "utf8",
 );
 
+const createPageFile = readFileSync(
+  new URL("../src/app/(protected)/worklog/create/page.tsx", import.meta.url),
+  "utf8",
+);
+
+const accessControlFile = readFileSync(
+  new URL("../src/app/(protected)/worklog/_utils/accessControl.ts", import.meta.url),
+  "utf8",
+);
+
 test("worklog status transition service uses the dedicated PATCH endpoint", () => {
   assert.match(
     serviceFile,
@@ -75,4 +85,16 @@ test("status transition UI follows server policy and keeps final states closed",
   assert.match(transitionFile, /FAILED: \[\]/);
   assert.match(transitionFile, /CANCELLED: \[\]/);
   assert.doesNotMatch(transitionFile, /DONE: \["IN_PROGRESS"\]/);
+});
+
+test("worklog create page only exposes active teams and blocks directors", () => {
+  assert.match(createPageFile, /isDirectorProfile/);
+  assert.match(createPageFile, /!isDirectorProfile\(user\)/);
+  assert.match(createPageFile, /filterActiveTeams\(teamPage\?\.items \?\? \[\]\)/);
+  assert.match(createPageFile, /team\.statusCode === "ACTIVE"/);
+  assert.match(createPageFile, /업무 등록 권한이 없습니다/);
+});
+
+test("worklog create action is hidden from director role in worklog list", () => {
+  assert.match(accessControlFile, /return Boolean\(user && !isDirector\(user\)\)/);
 });
