@@ -13,7 +13,7 @@ logger = logging.getLogger(__name__)
 def generate_worklog_tags(
     worklog_id: int,
     work_content: str,
-) -> dict[str, int | list[int] | list[str]]:
+) -> dict[str, int | list[str]]:
     return asyncio.run(
         _generate_worklog_tags(
             worklog_id=worklog_id,
@@ -25,7 +25,7 @@ def generate_worklog_tags(
 async def _generate_worklog_tags(
     worklog_id: int,
     work_content: str,
-) -> dict[str, int | list[int] | list[str]]:
+) -> dict[str, int | list[str]]:
     async with TaggingClient() as tagging_client:
         existing_tags = await tagging_client.list_tags()
         tagging_result = await TaggingService().generate_tags(
@@ -37,20 +37,20 @@ async def _generate_worklog_tags(
             tag_names=tagging_result.existing_tags,
             existing_tags=existing_tags,
         )
-        new_tags = await asyncio.gather(
-            *(
-                tagging_client.create_tag(tag_name)
-                for tag_name in tagging_result.new_tags
-            )
+        await tagging_client.apply_worklog_ai_tags(
+            worklog_id=worklog_id,
+            existing_tag_ids=existing_tag_ids,
+            new_tag_names=tagging_result.new_tags,
         )
-        tag_ids = [*existing_tag_ids, *(tag.tag_id for tag in new_tags)]
-
-        await tagging_client.update_worklog_tags(worklog_id=worklog_id, tag_ids=tag_ids)
-    logger.info("태그 생성 완료: worklog_id=%s, tag_ids=%s", worklog_id, tag_ids)
+    logger.info(
+        "태그 생성 완료: worklog_id=%s, existing_tags=%s, new_tags=%s",
+        worklog_id,
+        tagging_result.existing_tags,
+        tagging_result.new_tags,
+    )
 
     return {
         "worklog_id": worklog_id,
-        "tag_ids": tag_ids,
         "existing_tags": tagging_result.existing_tags,
         "new_tags": tagging_result.new_tags,
     }
