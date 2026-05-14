@@ -29,9 +29,16 @@ export interface FileItem {
   worklog: FileWorklogSummary | null;
 }
 
+export interface FileTypeOption {
+  fileType: string;
+  extension: string;
+}
+
 export interface GetFilesParams {
   page?: number;
   pageSize?: number;
+  fileType?: string;
+  period?: number;
 }
 
 export interface FileFiltersValue {

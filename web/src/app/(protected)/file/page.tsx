@@ -18,7 +18,7 @@ import {
   SlidersHorizontal,
 } from "lucide-react";
 import { FileCard } from "./_components/fileCard";
-import { useFileList } from "./_hooks";
+import { useFileList, useFileTypes } from "./_hooks";
 import type { FileFiltersValue, FileItem, GetFilesParams } from "./_types/file.types";
 
 const ALL_FILTER_VALUE = "ALL";
@@ -39,8 +39,10 @@ export default function FilePage() {
     () => ({
       page,
       pageSize: FILE_PAGE_SIZE,
+      fileType: fileType === ALL_FILTER_VALUE ? undefined : fileType,
+      period: toPeriodDays(period),
     }),
-    [page],
+    [fileType, page, period],
   );
 
   const {
@@ -49,6 +51,17 @@ export default function FilePage() {
     error,
     refetch,
   } = useFileList(fileListParams);
+  const { data: fileTypes = [] } = useFileTypes();
+  const fileTypeOptions = useMemo(
+    () => [
+      { label: "전체 형식", value: ALL_FILTER_VALUE },
+      ...fileTypes.map((type) => ({
+        label: `${type.fileType} (.${type.extension})`,
+        value: type.fileType,
+      })),
+    ],
+    [fileTypes],
+  );
 
   const visibleFiles = useMemo(
     () =>
@@ -222,13 +235,7 @@ export default function FilePage() {
                       aria-label="파일 형식 필터"
                       value={fileType}
                       onChange={(event) => updateFileType(event.target.value)}
-                      options={[
-                        { label: "전체 형식", value: ALL_FILTER_VALUE },
-                        { label: "PDF", value: "PDF" },
-                        { label: "HWP", value: "HWP" },
-                        { label: "DOCX", value: "DOCX" },
-                        { label: "XLSX", value: "XLSX" },
-                      ]}
+                      options={fileTypeOptions}
                     />
                   </div>
                   <div className="space-y-2">
@@ -447,6 +454,16 @@ function matchesPeriod(value: string, period: FileFiltersValue["period"]) {
   }
 
   return Date.now() - uploadedAt <= days * 24 * 60 * 60 * 1000;
+}
+
+function toPeriodDays(period: FileFiltersValue["period"]) {
+  if (period === "ALL") {
+    return undefined;
+  }
+
+  const days = Number(period.replace("D", ""));
+
+  return Number.isFinite(days) ? days : undefined;
 }
 
 function toAiProcessingStatus(status: string | null | undefined): AiProcessingStatus {

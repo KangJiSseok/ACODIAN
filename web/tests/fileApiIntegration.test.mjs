@@ -17,17 +17,25 @@ test("file list uses the real /files PageResponse API instead of worklog mock da
   const types = readFileArea("_types/file.types.ts");
 
   assert.match(service, /apiClient\.get<PageResponse<FileItem>>\("\/files"/);
+  assert.match(service, /apiClient\.get<FileTypeOption\[\]>\("\/files\/types"\)/);
   assert.match(service, /params/);
   assert.match(hook, /fileKeys/);
   assert.match(hook, /useFileList\(params: GetFilesParams = \{\}\)/);
   assert.match(hook, /queryFn:\s*\(\) => fileService\.getFiles\(params\)/);
+  assert.match(hook, /useFileTypes\(\)/);
+  assert.match(hook, /queryFn:\s*\(\) => fileService\.getFileTypes\(\)/);
   assert.match(hookIndex, /export \* from "\.\/useFileList"/);
 
   assert.match(types, /export interface FileItem/);
+  assert.match(types, /export interface FileTypeOption/);
   assert.match(types, /worklog:\s*FileWorklogSummary \| null/);
   assert.doesNotMatch(types, /FileRecord/);
 
   assert.match(page, /useFileList\(fileListParams\)/);
+  assert.match(page, /useFileTypes\(\)/);
+  assert.match(page, /fileTypes\.map/);
+  assert.match(page, /fileType:\s*fileType === ALL_FILTER_VALUE \? undefined : fileType/);
+  assert.match(page, /period:\s*toPeriodDays\(period\)/);
   assert.match(page, /filePage\?\.items \?\? \[\]/);
   assert.match(page, /totalCount/);
   assert.match(page, /<Pagination/);
@@ -39,6 +47,7 @@ test("file list uses the real /files PageResponse API instead of worklog mock da
   assert.match(page, /link\.download = file\.originalName/);
   assert.match(page, /URL\.revokeObjectURL\(objectUrl\)/);
   assert.match(page, /onClick=\{\(\) => void handleDownloadSelectedFiles\(\)\}/);
+  assert.doesNotMatch(page, /\{ label: "PDF", value: "PDF" \}/);
   assert.doesNotMatch(page, /worklog\/_mock\/worklog\.mock/);
   assert.doesNotMatch(page, /sampleFile/);
 
