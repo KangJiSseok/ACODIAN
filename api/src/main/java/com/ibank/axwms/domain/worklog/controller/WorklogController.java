@@ -7,6 +7,7 @@ import com.ibank.axwms.domain.worklog.dto.GetWorklogOptionsApiDto;
 import com.ibank.axwms.domain.worklog.dto.GetWorklogsApiDto;
 import com.ibank.axwms.domain.worklog.dto.SearchWorklogsApiDto;
 import com.ibank.axwms.domain.worklog.dto.UpdateWorklogApiDto;
+import com.ibank.axwms.domain.worklog.dto.UpdateWorklogStatusApiDto;
 import com.ibank.axwms.domain.worklog.service.WorklogService;
 import com.ibank.axwms.domain.worklog.service.search.WorklogSearchService;
 import com.ibank.axwms.global.response.EmptyResponse;
@@ -23,6 +24,7 @@ import org.springframework.web.bind.annotation.PatchMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestPart;
 import org.springframework.web.bind.annotation.ResponseStatus;
 import org.springframework.web.bind.annotation.RestController;
@@ -99,6 +101,19 @@ public class WorklogController implements WorklogControllerDocs {
             @RequestPart(value = "files", required = false) List<MultipartFile> files
     ) {
         worklogService.updateWorklog(principal, worklogId, request, files);
+        return EmptyResponse.INSTANCE;
+    }
+
+    @Override
+    @PatchMapping("/{worklogId}/status")
+    @ResponseStatus(HttpStatus.OK)
+    @PreAuthorize("hasAnyRole('DIRECTOR','DEPT_HEAD','TEAM_LEAD','MEMBER')")
+    public EmptyResponse updateWorklogStatus(
+            @AuthenticationPrincipal CustomUserPrincipal principal,
+            @PathVariable Long worklogId,
+            @Valid @RequestBody UpdateWorklogStatusApiDto.Request request
+    ) {
+        worklogService.updateWorklogStatus(principal, worklogId, request);
         return EmptyResponse.INSTANCE;
     }
 

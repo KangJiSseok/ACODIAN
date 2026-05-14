@@ -243,10 +243,10 @@ export function WorklogSettingsModal({
           </div>
         <DialogFooter className="shrink-0 items-center justify-between border-t border-border/70 px-7 py-4">
           <p className="mr-auto text-xs text-muted-foreground">
-            변경 내용은 업무 등록 폼에 즉시 반영됩니다.
+            설정은 이미 폼에 반영됩니다. 최종 저장은 등록/수정 버튼으로 완료됩니다.
           </p>
-          <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>
-            닫기
+          <Button type="button" onClick={() => onOpenChange(false)}>
+            설정 반영
           </Button>
         </DialogFooter>
       </DialogContent>
