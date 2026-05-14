@@ -97,6 +97,11 @@ export default function UserPage() {
     () => buildFilterOptions(filterSourceUsers),
     [filterSourceUsers],
   );
+  const activeFilterCount = [
+    canUseDepartmentFilter ? departmentId : ALL_FILTER_VALUE,
+    positionName,
+    employmentStatus,
+  ].filter((value) => value !== ALL_FILTER_VALUE).length;
 
   function resetFilters() {
     setQuery("");
@@ -150,15 +155,20 @@ export default function UserPage() {
                 aria-label="사용자 검색"
               />
             </div>
-            <div className="flex items-center gap-2">
+            <div className="flex w-full items-center gap-2 sm:w-auto">
               <Button
                 variant="outline"
-                className="h-10"
+                className="h-12 justify-center"
                 type="button"
                 onClick={() => setShowFilters((prev) => !prev)}
               >
                 <SlidersHorizontal className="size-4" />
                 필터
+                {activeFilterCount > 0 ? (
+                  <span className="ml-1 rounded-full bg-primary px-2 py-0.5 text-[11px] font-semibold text-primary-foreground">
+                    {activeFilterCount}
+                  </span>
+                ) : null}
                 <ChevronDown
                   className={cn(
                     "ml-1 size-4 transition-transform duration-300 ease-out",
@@ -178,7 +188,7 @@ export default function UserPage() {
             )}
           >
             <div className="overflow-hidden">
-              <div className="space-y-4 pt-3">
+              <div className="space-y-4 pb-4 pt-3">
                 <div className="flex items-center justify-between gap-3">
                   <p className="text-[11px] font-bold uppercase tracking-[0.16em] text-muted-foreground">
                     User Filters
@@ -195,7 +205,7 @@ export default function UserPage() {
                   </Button>
                 </div>
 
-                <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
+                <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
                   {canUseDepartmentFilter ? (
                     <FilterField label="부서">
                       <Select

@@ -87,8 +87,8 @@ export function NotificationList({
                   {!notification.isRead ? (
                     <Button
                       type="button"
-                      variant="outline"
-                      className="h-9 rounded-2xl px-4 text-sm"
+                      variant="default"
+                      className="h-10 min-w-32 rounded-2xl px-6 text-sm font-semibold !text-primary-foreground shadow-[0_12px_28px_-20px_rgba(37,99,235,0.7)] hover:!text-primary-foreground focus-visible:!text-primary-foreground active:!text-primary-foreground"
                       onClick={() => onMarkRead(notification.id)}
                     >
                       읽음 처리
@@ -97,7 +97,7 @@ export function NotificationList({
                   <Button
                     asChild
                     variant="default"
-                    className="h-10 min-w-32 px-6 text-sm font-semibold !text-primary-foreground shadow-[0_12px_28px_-20px_rgba(37,99,235,0.7)] hover:!text-primary-foreground"
+                    className="h-10 min-w-32 rounded-2xl px-6 text-sm font-semibold !text-primary-foreground shadow-[0_12px_28px_-20px_rgba(37,99,235,0.7)] hover:!text-primary-foreground focus-visible:!text-primary-foreground active:!text-primary-foreground visited:!text-primary-foreground"
                   >
                     <Link
                       href={resolveNotificationDeepLink(notification)}

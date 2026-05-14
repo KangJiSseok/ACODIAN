@@ -22,6 +22,7 @@ import type {
 import type { AuthUser } from "@/app/_common/store/auth.store";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { Select } from "@/components/ui/select";
 import { cn } from "@/lib/utils";
 
 // 백엔드 EmploymentStatus enum 값을 화면용 한글 라벨로 변환한다.
@@ -39,6 +40,7 @@ interface ProfileFormValues {
   userName: string;
   email: string;
   phone: string;
+  primaryTeamId: string;
 }
 
 interface PasswordFormValues {
@@ -125,7 +127,7 @@ export default function MyPage() {
 
           {user ? (
             <EditableProfileForm
-              key={`${user.userId}:${user.userName}:${user.email}:${user.phone ?? ""}`}
+              key={`${user.userId}:${user.userName}:${user.email}:${user.phone ?? ""}:${primaryTeam?.teamId ?? ""}`}
               user={user}
               onUpdateProfile={updateMyProfile}
             />
@@ -200,6 +202,7 @@ function EditableProfileForm({
     userName: user.userName,
     email: user.email,
     phone: user.phone ?? "",
+    primaryTeamId: String(user.teams.find((team) => team.isPrimary)?.teamId ?? ""),
   });
   const [profileImage, setProfileImage] = useState<File | null>(null);
   const [profileInputKey, setProfileInputKey] = useState(0);
@@ -209,7 +212,7 @@ function EditableProfileForm({
     text: string;
   } | null>(null);
 
-  function handleChange(event: ChangeEvent<HTMLInputElement>) {
+  function handleChange(event: ChangeEvent<HTMLInputElement | HTMLSelectElement>) {
     const { name, value } = event.target;
 
     setValues((prev) => ({
@@ -230,6 +233,9 @@ function EditableProfileForm({
     const userName = values.userName.trim();
     const email = values.email.trim();
     const phone = values.phone.trim();
+    const primaryTeamId = values.primaryTeamId
+      ? Number(values.primaryTeamId)
+      : null;
 
     if (!userName || !email) {
       setMessage({
@@ -248,6 +254,7 @@ function EditableProfileForm({
         email,
         phone,
         profileImage,
+        primaryTeamId,
       });
       setProfileImage(null);
       setProfileInputKey((prev) => prev + 1);
@@ -304,6 +311,17 @@ function EditableProfileForm({
           onChange={handleChange}
           disabled={isSaving}
           placeholder="010-0000-0000"
+        />
+        <ProfileSelectField
+          label="주소속팀"
+          name="primaryTeamId"
+          value={values.primaryTeamId}
+          options={user.teams.map((team) => ({
+            label: team.teamName,
+            value: String(team.teamId),
+          }))}
+          onChange={handleChange}
+          disabled={isSaving || user.teams.length === 0}
         />
         <ProfileImageInput
           inputKey={profileInputKey}
@@ -476,6 +494,38 @@ function PasswordChangeForm({
         </Button>
       </div>
     </form>
+  );
+}
+
+function ProfileSelectField({
+  label,
+  name,
+  value,
+  options,
+  disabled,
+  onChange,
+}: {
+  label: string;
+  name: keyof ProfileFormValues;
+  value: string;
+  options: Array<{ label: string; value: string }>;
+  disabled?: boolean;
+  onChange: (event: ChangeEvent<HTMLSelectElement>) => void;
+}) {
+  return (
+    <label className="block">
+      <span className="mb-2 block text-sm font-bold text-foreground">
+        {label}
+      </span>
+      <Select
+        name={name}
+        value={value}
+        options={options}
+        onChange={onChange}
+        disabled={disabled}
+        className="h-14 border-primary/35 bg-background font-semibold shadow-sm focus-visible:ring-primary/30"
+      />
+    </label>
   );
 }
 

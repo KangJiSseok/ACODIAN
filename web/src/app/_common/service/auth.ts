@@ -39,6 +39,7 @@ export interface UpdateMyProfilePayload {
   email: string;
   phone: string;
   profileImage: File | null;
+  primaryTeamId: number | null;
 }
 // 현재 로그인한 사용자 프로필 수정 데이터
 
@@ -170,6 +171,7 @@ export async function updateMyProfile(payload: UpdateMyProfilePayload) {
     user_name: payload.userName,
     email: payload.email,
     phone: payload.phone || null,
+    primary_team_id: payload.primaryTeamId,
   };
 
   const formData = new FormData();

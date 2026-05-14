@@ -102,6 +102,9 @@ export default function NotificationPage() {
   const totalCount = totalCountQuery.notificationPage?.totalCount ?? 0;
   const unreadCount = unreadCountQuery.notificationPage?.totalCount ?? 0;
   const readCount = readCountQuery.notificationPage?.totalCount ?? 0;
+  const activeFilterCount = [departmentId, teamId].filter(
+    (value) => value !== ALL_FILTER_VALUE,
+  ).length;
 
   function updateView(nextView: NotificationView) {
     setActiveView(nextView);
@@ -136,8 +139,8 @@ export default function NotificationPage() {
           </h2>
           <Button
             type="button"
-            variant="outline"
-            className="h-10 rounded-2xl px-4 text-sm"
+            variant="default"
+            className="h-10 min-w-32 rounded-2xl px-5 text-sm font-semibold !text-primary-foreground hover:!text-primary-foreground focus-visible:!text-primary-foreground active:!text-primary-foreground"
             onClick={markAllRead}
             disabled={unreadCount === 0 || isMarkingAllRead}
           >
@@ -174,12 +177,17 @@ export default function NotificationPage() {
           </h2>
           <Button
             variant="outline"
-            className="h-10"
+            className="h-12 justify-center"
             type="button"
             onClick={() => setShowFilters((prev) => !prev)}
           >
             <SlidersHorizontal className="size-4" />
             필터
+            {activeFilterCount > 0 ? (
+              <span className="ml-1 rounded-full bg-primary px-2 py-0.5 text-[11px] font-semibold text-primary-foreground">
+                {activeFilterCount}
+              </span>
+            ) : null}
             <ChevronDown
               className={cn(
                 "ml-1 size-4 transition-transform duration-300 ease-out",
@@ -198,7 +206,7 @@ export default function NotificationPage() {
           )}
         >
           <div className="overflow-hidden">
-            <div className="space-y-4 pt-3">
+            <div className="space-y-4 pb-4 pt-3">
               <div className="flex items-center justify-between gap-3">
                 <p className="text-[11px] font-bold uppercase tracking-[0.16em] text-muted-foreground">
                   Notification Filters
