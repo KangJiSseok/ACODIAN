@@ -31,6 +31,14 @@ test("file list uses the real /files PageResponse API instead of worklog mock da
   assert.match(page, /filePage\?\.items \?\? \[\]/);
   assert.match(page, /totalCount/);
   assert.match(page, /<Pagination/);
+  assert.match(page, /handleDownloadSelectedFiles/);
+  assert.match(page, /fetch\(file\.storedPath/);
+  assert.match(page, /response\.blob\(\)/);
+  assert.match(page, /URL\.createObjectURL\(blob\)/);
+  assert.match(page, /link\.href = objectUrl/);
+  assert.match(page, /link\.download = file\.originalName/);
+  assert.match(page, /URL\.revokeObjectURL\(objectUrl\)/);
+  assert.match(page, /onClick=\{\(\) => void handleDownloadSelectedFiles\(\)\}/);
   assert.doesNotMatch(page, /worklog\/_mock\/worklog\.mock/);
   assert.doesNotMatch(page, /sampleFile/);
 
