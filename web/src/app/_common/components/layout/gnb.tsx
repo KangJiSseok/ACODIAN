@@ -135,7 +135,7 @@ export default function Gnb() {
           <Button
             type="button"
             variant="outline"
-            className="h-10 border-white/12 bg-black/10 px-3 text-white/80 hover:bg-black/18 hover:text-white"
+            className="h-10 border-white/12 bg-black/10 px-3 text-white/80 hover:bg-black/18 hover:text-white active:!text-white aria-expanded:!bg-black/18 aria-expanded:!text-white focus-visible:!text-white"
             onClick={() => setIsNotificationOpen((prev) => !prev)}
             aria-expanded={isNotificationOpen}
             aria-haspopup="dialog"

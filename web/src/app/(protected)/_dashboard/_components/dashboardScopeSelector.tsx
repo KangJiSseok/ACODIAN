@@ -1,7 +1,7 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import { Check, SlidersHorizontal } from "lucide-react";
+import { Check } from "lucide-react";
 import type { AuthUserTeam } from "@/app/_common/store/auth.store";
 import type { DepartmentSummary } from "@/app/(protected)/department/_types/department.types";
 import { Button } from "@/components/ui/button";
@@ -174,12 +174,12 @@ export function DashboardScopeSelector({
     <>
       <Button
         type="button"
-        variant="outline"
-        size="lg"
-        className="h-16 max-w-full justify-start gap-4 rounded-[32px] border-primary/20 bg-primary px-7 text-left text-lg font-semibold tracking-[-0.02em] !text-primary-foreground shadow-[0_18px_40px_-24px_color-mix(in_srgb,var(--primary)_82%,transparent)] hover:bg-primary/90 hover:!text-primary-foreground dark:border-white/10 dark:bg-primary dark:shadow-[0_18px_42px_-24px_rgba(59,130,246,0.72)] dark:hover:bg-primary/90 [&_svg]:size-5 [&_svg]:!text-primary-foreground"
+        variant="default"
+        className="h-10 max-w-[22rem] min-w-32 px-6 text-sm font-semibold"
         onClick={handleOpen}
+        aria-label={`대시보드 보기 기준 변경: ${selectedLabel}`}
+        title={selectedLabel}
       >
-        <SlidersHorizontal className="size-4" />
         <span className="min-w-0 truncate">{selectedLabel}</span>
       </Button>
 

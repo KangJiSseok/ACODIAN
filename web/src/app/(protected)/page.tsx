@@ -223,14 +223,14 @@ function getDashboardDescription(
   if (value.view === "ME") {
     const teamName =
       teams.find((team) => team.teamId === value.teamId)?.teamName ?? "소속 팀";
-    return `내 업무 · ${teamName} 기준 - 구성원 관점으로 내가 맡은 업무와 리스크를 확인합니다.`;
+    return `내 업무 · ${teamName} 기준`;
   }
 
   if (value.adminScope === "TEAM_DETAIL") {
     const teamName =
       adminTeams.find((team) => team.teamId === value.teamId)?.teamName ??
       "선택 팀";
-    return `관리자 관점 · ${teamName} 상세 기준 - 단일 팀의 진행률, 업무 부하, 마감 리스크를 확인합니다.`;
+    return `관리자 관점 · ${teamName} 상세 기준`;
   }
 
   if (value.adminScope === "DEPARTMENT_DETAIL") {
@@ -240,10 +240,10 @@ function getDashboardDescription(
       )?.departmentName ?? "선택 부서";
     const scopeLabel =
       role === "DEPARTMENT_HEAD" ? "내 부서 팀간 비교" : "팀간 비교";
-    return `관리자 관점 · ${departmentName} ${scopeLabel} 기준 - 선택 부서 범위에서 팀 간 편차, 리스크, AI 파이프라인 건강도를 비교합니다.`;
+    return `관리자 관점 · ${departmentName} ${scopeLabel} 기준`;
   }
 
-  return "관리자 관점 · 전체 부서 비교 기준 - 전사 범위에서 부서 간 편차, 리스크, AI 파이프라인 건강도를 비교합니다.";
+  return "관리자 관점 · 전체 부서 비교 기준";
 }
 
 function getDepartmentDashboardTeamOptions(
