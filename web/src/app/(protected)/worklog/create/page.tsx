@@ -4,6 +4,7 @@ import { useMemo, useState } from "react"
 import { useRouter } from "next/navigation"
 import PageHeader from "@/app/_common/components/layout/pageHeader"
 import { useAuth } from "@/app/_common/hooks/useAuth"
+import { isDirectorProfile } from "@/app/_common/utils/organizationAccess.utils"
 import { WorklogForm } from "../_components/worklogForm"
 import {
   useWorklogOptions,
@@ -38,9 +39,14 @@ export default function WorklogCreatePage() {
     isError: isTeamListError,
     isLoading: isTeamListLoading,
   } = useTeamList({ pageSize: 100 })
+  const canCreate = Boolean(user && !isDirectorProfile(user))
+  const activeTeams = useMemo(
+    () => filterActiveTeams(teamPage?.items ?? []),
+    [teamPage?.items]
+  )
   const defaultTeamId = useMemo(
-    () => resolveInitialTeamId(user, teamPage?.items ?? []),
-    [teamPage?.items, user]
+    () => resolveInitialTeamId(user, activeTeams),
+    [activeTeams, user]
   )
   const [selectedTeamId, setSelectedTeamId] = useState<number | null>(null)
   const effectiveTeamId = selectedTeamId ?? defaultTeamId
@@ -50,9 +56,13 @@ export default function WorklogCreatePage() {
     isLoading: isWorklogOptionsLoading,
   } = useWorklogOptions(effectiveTeamId)
   const formContext = useMemo(
-    () => buildCreateFormContext(teamPage?.items ?? [], worklogOptions, effectiveTeamId),
-    [effectiveTeamId, teamPage?.items, worklogOptions]
+    () => buildCreateFormContext(activeTeams, worklogOptions, effectiveTeamId),
+    [activeTeams, effectiveTeamId, worklogOptions]
   )
+
+  if (!canCreate) {
+    return <div>업무 등록 권한이 없습니다.</div>
+  }
 
   if (isTeamListLoading || isWorklogOptionsLoading) {
     return <div>업무 등록 정보를 불러오는 중입니다.</div>
@@ -108,7 +118,15 @@ function resolveInitialTeamId(
   teams: TeamSummary[]
 ) {
   const authPrimaryTeamId = user?.teams.find((team) => team.isPrimary)?.teamId
-  return authPrimaryTeamId ?? user?.teams[0]?.teamId ?? teams[0]?.teamId ?? null
+  const activeTeamIds = new Set(teams.map((team) => team.teamId))
+  const primaryTeamId = authPrimaryTeamId && activeTeamIds.has(authPrimaryTeamId)
+    ? authPrimaryTeamId
+    : null
+  const firstAuthActiveTeamId = user?.teams.find((team) =>
+    activeTeamIds.has(team.teamId)
+  )?.teamId
+
+  return primaryTeamId ?? firstAuthActiveTeamId ?? teams[0]?.teamId ?? null
 }
 
 function buildInitialValues(teamId: number): WorklogFormValues {
@@ -138,6 +156,10 @@ function buildTeamOptions(teams: TeamSummary[]): WorklogFormTeamOption[] {
     id: team.teamId,
     name: team.teamName,
   }))
+}
+
+function filterActiveTeams(teams: TeamSummary[]) {
+  return teams.filter((team) => team.statusCode === "ACTIVE")
 }
 
 function buildDependencyOptions(
