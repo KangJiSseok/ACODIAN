@@ -3,13 +3,12 @@ package com.ibank.axwms.domain.worklog.service;
 import com.ibank.axwms.domain.file.repository.FileRepository;
 import com.ibank.axwms.domain.file.service.FileService;
 import com.ibank.axwms.domain.organization.team.service.TeamService;
-import com.ibank.axwms.domain.tag.repository.jooq.projection.MetaTagDetailProjection;
 import com.ibank.axwms.domain.tag.service.TagService;
 import com.ibank.axwms.domain.worklog.WorklogStatus;
 import com.ibank.axwms.domain.worklog.dto.CreateWorklogApiDto;
 import com.ibank.axwms.domain.worklog.dto.GetWorklogDetailApiDto;
-import com.ibank.axwms.domain.worklog.dto.GetWorklogOptionsApiDto;
 import com.ibank.axwms.domain.worklog.dto.GetWorklogsApiDto;
+import com.ibank.axwms.domain.worklog.dto.SearchPredecessorApiDto;
 import com.ibank.axwms.domain.worklog.dto.UpdateWorklogApiDto;
 import com.ibank.axwms.domain.worklog.dto.UpdateWorklogStatusApiDto;
 import com.ibank.axwms.domain.worklog.entity.Worklog;
@@ -24,6 +23,7 @@ import com.ibank.axwms.domain.worklog.repository.jooq.projection.WorklogDetailPr
 import com.ibank.axwms.domain.worklog.repository.jooq.projection.WorklogFileProjection;
 import com.ibank.axwms.domain.worklog.repository.jooq.projection.WorklogListProjection;
 import com.ibank.axwms.domain.worklog.repository.jooq.projection.WorklogStatusHistoryProjection;
+import com.ibank.axwms.domain.worklog.repository.jooq.query.PredecessorCandidateSearchQuery;
 import com.ibank.axwms.domain.worklog.repository.jooq.query.WorklogPageQuery;
 import com.ibank.axwms.global.error.BusinessException;
 import com.ibank.axwms.global.error.ErrorCode;
@@ -148,6 +148,22 @@ public class WorklogService {
         Map<Long, Long> predecessorCountByWorklogId = worklogDependencyRepository.countByWorklogIds(worklogIds);
 
         return GetWorklogsApiDto.Response.fromPage(page, predecessorCountByWorklogId);
+    }
+
+    /**
+     * 같은 팀 내 미완료 worklog 를 선행 후보로 검색한다.
+     * 요청자는 teamId 의 ACTIVE 멤버여야 하며, query 가 있으면 제목 LIKE, excludeWorklogId 가 있으면 결과에서 제외한다.
+     *
+     * @throws BusinessException WORKLOG_TEAM_FORBIDDEN 사용자가 요청 팀의 ACTIVE 멤버가 아닐 때
+     */
+    public PageResponse<SearchPredecessorApiDto.Response.Item> searchPredecessor(CustomUserPrincipal principal,
+                                                                                 SearchPredecessorApiDto.Request request) {
+        if (!teamService.isMember(principal.userId(), request.teamId())) {
+            throw new BusinessException(ErrorCode.WORKLOG_TEAM_FORBIDDEN);
+        }
+        PredecessorCandidateSearchQuery query = PredecessorCandidateSearchQuery.from(request);
+        Page<WorklogListProjection> page = worklogRepository.searchPredecessorCandidatePage(query);
+        return SearchPredecessorApiDto.Response.fromPage(page);
     }
 
     /**
@@ -393,26 +409,6 @@ public class WorklogService {
                 .toList();
         worklogTagRepository.saveAll(worklogTags);
         tagService.incrementUsageCountByIds(newTagIds);
-    }
-
-    /**
-     * 업무 등록 화면 진입 시 사용할 폼 옵션을 한 번에 반환한다.
-     * 의존성은 같은 팀 내에서만 등록 가능하므로 선행 후보는 요청 teamId 의 미삭제, 미완료 worklog 만 최신순으로 포함한다.
-     * 호출 사용자는 해당 팀의 ACTIVE 멤버여야 한다.
-     * 태그는 메타 태그 전체를 이름순으로 포함한다.
-     *
-     * @throws BusinessException WORKLOG_TEAM_FORBIDDEN 사용자가 요청 팀의 ACTIVE 멤버가 아닐 때
-     */
-    public GetWorklogOptionsApiDto.Response getWorklogOptions(CustomUserPrincipal principal,
-                                                              GetWorklogOptionsApiDto.Request request) {
-        Long teamId = request.teamId();
-        if (!teamService.isMember(principal.userId(), teamId)) {
-            throw new BusinessException(ErrorCode.WORKLOG_TEAM_FORBIDDEN);
-        }
-        List<WorklogListProjection> predecessorCandidates =
-                worklogRepository.findActivePredecessorCandidates(teamId);
-        List<MetaTagDetailProjection> tags = tagService.findAllTagDetails();
-        return GetWorklogOptionsApiDto.Response.of(predecessorCandidates, tags);
     }
 
     private void validateDateRange(LocalDate instructionDate, LocalDate dueDate) {

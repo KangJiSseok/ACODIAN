@@ -1,7 +1,6 @@
 package com.ibank.axwms.domain.tag.service;
 
 import com.ibank.axwms.domain.tag.repository.TagRepository;
-import com.ibank.axwms.domain.tag.repository.jooq.projection.MetaTagDetailProjection;
 import com.ibank.axwms.global.error.BusinessException;
 import com.ibank.axwms.global.error.ErrorCode;
 import lombok.RequiredArgsConstructor;
@@ -18,14 +17,6 @@ import java.util.Objects;
 public class TagService {
 
     private final TagRepository tagRepository;
-
-    /**
-     * 메타 태그 전체를 5개 컬럼 모두 포함한 상세 형태로 이름순 반환한다.
-     * 업무 등록 화면 등 폼 옵션 노출에 사용된다.
-     */
-    public List<MetaTagDetailProjection> findAllTagDetails() {
-        return tagRepository.findAllTagDetails();
-    }
 
     /**
      * 요청에서 넘어온 태그 ID를 중복 제거하고 모두 실제 메타 태그인지 검증한다.

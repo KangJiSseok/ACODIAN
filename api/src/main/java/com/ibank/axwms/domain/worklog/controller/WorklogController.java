@@ -3,8 +3,8 @@ package com.ibank.axwms.domain.worklog.controller;
 import com.ibank.axwms.domain.worklog.dto.CreateWorklogApiDto;
 import com.ibank.axwms.domain.worklog.dto.GetWorklogDetailApiDto;
 import com.ibank.axwms.domain.worklog.dto.GetWorklogFilterOptionsApiDto;
-import com.ibank.axwms.domain.worklog.dto.GetWorklogOptionsApiDto;
 import com.ibank.axwms.domain.worklog.dto.GetWorklogsApiDto;
+import com.ibank.axwms.domain.worklog.dto.SearchPredecessorApiDto;
 import com.ibank.axwms.domain.worklog.dto.SearchWorklogsApiDto;
 import com.ibank.axwms.domain.worklog.dto.UpdateWorklogApiDto;
 import com.ibank.axwms.domain.worklog.dto.UpdateWorklogStatusApiDto;
@@ -23,8 +23,8 @@ import org.springframework.web.bind.annotation.ModelAttribute;
 import org.springframework.web.bind.annotation.PatchMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
-import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestBody;
+import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestPart;
 import org.springframework.web.bind.annotation.ResponseStatus;
 import org.springframework.web.bind.annotation.RestController;
@@ -118,12 +118,12 @@ public class WorklogController implements WorklogControllerDocs {
     }
 
     @Override
-    @GetMapping("/options")
+    @GetMapping("/predecessor-candidates/search")
     @PreAuthorize("hasAnyRole('DIRECTOR','DEPT_HEAD','TEAM_LEAD','MEMBER')")
-    public GetWorklogOptionsApiDto.Response getWorklogOptions(
+    public PageResponse<SearchPredecessorApiDto.Response.Item> searchPredecessor(
             @AuthenticationPrincipal CustomUserPrincipal principal,
-            @Valid @ModelAttribute GetWorklogOptionsApiDto.Request request
+            @Valid @ModelAttribute SearchPredecessorApiDto.Request request
     ) {
-        return worklogService.getWorklogOptions(principal, request);
+        return worklogService.searchPredecessor(principal, request);
     }
 }
