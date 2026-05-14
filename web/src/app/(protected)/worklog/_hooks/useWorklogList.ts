@@ -18,10 +18,12 @@ type WorklogPageQueryOptions = Pick<
 
 export const worklogKeys = {
   all: ["worklogs"] as const,
+  lists: () => [...worklogKeys.all, "list"] as const,
   list: (params: GetWorklogsParams = {}) =>
-    [...worklogKeys.all, "list", params] as const,
+    [...worklogKeys.lists(), params] as const,
+  searches: () => [...worklogKeys.all, "search"] as const,
   search: (params: SearchWorklogsParams = {}) =>
-    [...worklogKeys.all, "search", params] as const,
+    [...worklogKeys.searches(), params] as const,
   filterOptions: () => [...worklogKeys.all, "filter-options"] as const,
   options: (teamId: number | null | undefined) =>
     [...worklogKeys.all, "options", teamId] as const,

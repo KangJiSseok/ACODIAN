@@ -11,6 +11,7 @@ import { Button } from "@/components/ui/button"
 import { CardSpotlight } from "@/components/ui/card-spotlight"
 import { Input } from "@/components/ui/input"
 import { Textarea } from "@/components/ui/textarea"
+import { getApiErrorMessage } from "@/app/_common/service/api-client"
 import { cn } from "@/lib/utils"
 import type {
   WorklogFormDependencyOption,
@@ -29,16 +30,14 @@ import {
 
 const editableStatusTransitionMap: Record<WorklogStatus, WorklogStatus[]> = {
   PENDING: ["IN_PROGRESS"],
-  IN_PROGRESS: ["DONE", "ON_HOLD", "FAILED", "CANCELLED"],
+  IN_PROGRESS: ["DONE", "ON_HOLD", "CANCELLED"],
   DONE: [],
-  ON_HOLD: ["IN_PROGRESS", "FAILED"],
+  ON_HOLD: ["IN_PROGRESS"],
   FAILED: ["IN_PROGRESS"],
   CANCELLED: [],
 }
 
-const creatableStatusOptions = worklogStatusLegendOrder.filter(
-  (status) => status !== "FAILED",
-)
+const creatableStatusOptions = worklogStatusLegendOrder
 
 type SettingsValidationErrors = {
   actualHours?: string
@@ -138,7 +137,11 @@ export function WorklogForm({
     dependencyIds: [],
     attachmentNames: [],
     attachmentFiles: [],
+    attachmentFileItems: [],
+    removeFileIds: [],
     tagIds: [],
+    removeTagIds: [],
+    statusChangeReason: "",
   }
   const [activeModal, setActiveModal] = useState<WorklogFormModalKey | null>(null)
   const [values, setValues] = useState<WorklogFormValues>(resolvedInitialValues)
@@ -158,6 +161,8 @@ export function WorklogForm({
       validateInvalidNumber: showSettingsValidationErrors,
     },
   )
+  const initialStatus = initialValues?.status ?? resolvedInitialValues.status
+  const statusChangeReasonVisible = isEditMode && values.status !== initialStatus
 
   const teamSource = useMemo<WorklogFormTeamOption[]>(
     () => teamOptionsSource ?? [],
@@ -286,11 +291,34 @@ export function WorklogForm({
   }
 
   const addAttachmentFiles = (files: File[]) => {
+    const seenNames = new Set(values.attachmentNames)
+    const duplicateNames: string[] = []
+    const nextFiles = files.filter((file) => {
+      if (seenNames.has(file.name)) {
+        duplicateNames.push(file.name)
+        return false
+      }
+      seenNames.add(file.name)
+      return true
+    })
+
+    if (duplicateNames.length > 0) {
+      setSubmitError(
+        `이미 같은 이름의 첨부 파일이 있습니다: ${Array.from(new Set(duplicateNames)).join(", ")}`,
+      )
+    } else {
+      setSubmitError("")
+    }
+
+    if (nextFiles.length === 0) {
+      return
+    }
+
     setValues((previous) => ({
       ...previous,
       attachmentFiles: [
         ...previous.attachmentFiles,
-        ...files.filter(
+        ...nextFiles.filter(
           (file) =>
             !previous.attachmentFiles.some(
               (item) =>
@@ -303,7 +331,7 @@ export function WorklogForm({
       attachmentNames: Array.from(
         new Set([
           ...previous.attachmentNames,
-          ...files.map((file) => file.name).filter(Boolean),
+          ...nextFiles.map((file) => file.name).filter(Boolean),
         ]),
       ),
     }))
@@ -316,6 +344,7 @@ export function WorklogForm({
       attachmentFiles: previous.attachmentFiles.filter(
         (file) => file.name !== name,
       ),
+      removeFileIds: appendRemovedFileId(previous, name),
     }))
   }
 
@@ -323,6 +352,7 @@ export function WorklogForm({
     setValues((previous) => ({
       ...previous,
       tagIds: Array.from(new Set([...previous.tagIds, tagId])),
+      removeTagIds: (previous.removeTagIds ?? []).filter((item) => item !== tagId),
     }))
     setTagKeywordInput("")
     setTagSearchOpen(false)
@@ -332,6 +362,7 @@ export function WorklogForm({
     setValues((previous) => ({
       ...previous,
       tagIds: previous.tagIds.filter((item) => item !== tagId),
+      removeTagIds: Array.from(new Set([...(previous.removeTagIds ?? []), tagId])),
     }))
   }
 
@@ -414,7 +445,13 @@ export function WorklogForm({
         }
 
         setSubmitError("")
-        await onSubmit(submitValues)
+        try {
+          await onSubmit(submitValues)
+        } catch (error) {
+          setSubmitError(
+            getApiErrorMessage(error, "업무일지 저장 요청을 처리하지 못했습니다.")
+          )
+        }
       }}
     >
       <div className="grid gap-5">
@@ -481,14 +518,14 @@ export function WorklogForm({
 
             {isEditMode ? (
               <Field label="AI 요약">
-                <div
-                  className="min-h-[132px] rounded-[1.25rem] border border-dashed border-border bg-muted/45 px-4 py-4 shadow-inner shadow-background/60"
-                  aria-readonly="true"
-                >
-                  <p className="whitespace-pre-wrap text-sm leading-7 text-muted-foreground">
-                    {values.aiSummary?.trim() || "AI 요약 정보가 없습니다."}
-                  </p>
-                </div>
+                <Textarea
+                  value={values.aiSummary ?? ""}
+                  onChange={(event) =>
+                    setValues({ ...values, aiSummary: event.target.value })
+                  }
+                  className={`h-[132px] ${textareaClassName}`}
+                  placeholder="AI 요약을 직접 수정할 수 있습니다."
+                />
               </Field>
             ) : null}
 
@@ -520,6 +557,7 @@ export function WorklogForm({
         onValuesChange={updateValues}
         controlClassName={controlClassName}
         searchControlClassName={searchControlClassName}
+        disableTeamChange={isEditMode}
         teamOptions={teamOptions}
         statusOptions={statusOptions}
         settingsValidationErrors={settingsValidationErrors}
@@ -535,6 +573,7 @@ export function WorklogForm({
         onRemoveDependency={removeDependency}
         incompleteDependencies={incompleteDependencies}
         circularDependencyDetected={circularDependencyDetected}
+        statusChangeReasonVisible={statusChangeReasonVisible}
         tagKeywordInput={tagKeywordInput}
         onTagKeywordInputChange={setTagKeywordInput}
         tagSearchOpen={tagSearchOpen}
@@ -552,6 +591,15 @@ export function WorklogForm({
       ) : null}
     </form>
   )
+}
+
+function appendRemovedFileId(values: WorklogFormValues, filename: string) {
+  const removedFileId = values.attachmentFileItems?.find(
+    (file) => file.originalName === filename,
+  )?.fileId
+
+  if (!removedFileId) return values.removeFileIds ?? []
+  return Array.from(new Set([...(values.removeFileIds ?? []), removedFileId]))
 }
 
 function FormPanel({

@@ -65,7 +65,12 @@ export const useAuthStore = create<AuthState>()((set) => ({
       user,
       status: accessToken && user ? "authenticated" : "unauthenticated",
     }),
-  resetAuth: () => set(initialAuthState),
+  resetAuth: () =>
+    set({
+      accessToken: null,
+      user: null,
+      status: "unauthenticated",
+    }),
 }));
 
 // 컴포넌트가 필요한 조각만 구독할 수 있도록 selector를 분리합니다.

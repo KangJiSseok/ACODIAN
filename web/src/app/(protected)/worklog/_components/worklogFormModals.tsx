@@ -26,6 +26,7 @@ interface WorklogFormModalsProps {
   onValuesChange: (values: WorklogFormValues) => void
   controlClassName: string
   searchControlClassName: string
+  disableTeamChange?: boolean
   teamOptions: SelectOption[]
   statusOptions: SelectOption[]
   settingsValidationErrors: SettingsValidationErrors
@@ -41,6 +42,7 @@ interface WorklogFormModalsProps {
   onRemoveDependency: (dependencyId: number) => void
   incompleteDependencies: WorklogFormDependencyOption[]
   circularDependencyDetected: boolean
+  statusChangeReasonVisible: boolean
   tagKeywordInput: string
   onTagKeywordInputChange: (value: string) => void
   tagSearchOpen: boolean
@@ -58,6 +60,7 @@ export function WorklogFormModals({
   onValuesChange,
   controlClassName,
   searchControlClassName,
+  disableTeamChange,
   teamOptions,
   statusOptions,
   settingsValidationErrors,
@@ -73,6 +76,7 @@ export function WorklogFormModals({
   onRemoveDependency,
   incompleteDependencies,
   circularDependencyDetected,
+  statusChangeReasonVisible,
   tagKeywordInput,
   onTagKeywordInputChange,
   tagSearchOpen,
@@ -90,6 +94,7 @@ export function WorklogFormModals({
         values={values}
         onValuesChange={onValuesChange}
         controlClassName={controlClassName}
+        disableTeamChange={disableTeamChange}
         teamOptions={teamOptions}
         statusOptions={statusOptions}
         validationErrors={settingsValidationErrors}
@@ -106,6 +111,7 @@ export function WorklogFormModals({
         onRemoveDependency={onRemoveDependency}
         incompleteDependencies={incompleteDependencies}
         circularDependencyDetected={circularDependencyDetected}
+        statusChangeReasonVisible={statusChangeReasonVisible}
       />
 
       <WorklogTagModal

@@ -2,9 +2,11 @@
 
 import { useMemo, useState } from "react"
 import { useParams, useRouter } from "next/navigation"
+import { useQueryClient } from "@tanstack/react-query"
 import PageHeader from "@/app/_common/components/layout/pageHeader"
 import { WorklogForm } from "../../_components/worklogForm"
 import {
+  worklogKeys,
   useWorklogDetail,
   useWorklogOptions,
 } from "../../_hooks/useWorklogList"
@@ -33,6 +35,7 @@ const statusCodeMap: Record<string, WorklogStatus> = {
 
 export default function WorklogEditPage() {
   const router = useRouter()
+  const queryClient = useQueryClient()
   const params = useParams<{ id: string }>()
   const worklogId = Number(params.id)
   const {
@@ -89,6 +92,12 @@ export default function WorklogEditPage() {
         tagOptionsSource={formContext.tagOptionsSource}
         onSubmit={async (values) => {
           await worklogService.update(worklog.id, values)
+          await Promise.all([
+            queryClient.invalidateQueries({
+              queryKey: worklogKeys.detail(worklog.id),
+            }),
+            queryClient.invalidateQueries({ queryKey: worklogKeys.all }),
+          ])
           router.push(`/worklog/detail/${worklog.id}`)
         }}
       />
@@ -114,9 +123,13 @@ function toWorklogFormValues(
     attachmentNames:
       worklog.fileItems?.map((file) => file.originalName).filter(Boolean) ?? [],
     attachmentFiles: [],
+    attachmentFileItems: worklog.fileItems ?? [],
+    removeFileIds: [],
     tagIds,
+    removeTagIds: [],
     aiSummary: worklog.aiSummary,
     aiSummaryEdited: worklog.aiSummaryEdited,
+    statusChangeReason: "",
   }
 }
 

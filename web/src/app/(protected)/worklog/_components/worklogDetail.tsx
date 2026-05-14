@@ -21,13 +21,17 @@ export function WorklogDetail({
   worklog,
   canTransition = false,
   onTransition = async () => {},
+  isTransitionPending = false,
   transitionNotice,
+  transitionErrorMessage,
   transitionDisabledMessage,
 }: {
   worklog: Worklog | null
   canTransition?: boolean
   onTransition?: (nextStatus: WorklogStatus, reason: string) => Promise<void>
+  isTransitionPending?: boolean
   transitionNotice?: string
+  transitionErrorMessage?: string
   transitionDisabledMessage?: string
 }) {
   const [isStatusTransitionOpen, setIsStatusTransitionOpen] = useState(false)
@@ -156,8 +160,14 @@ export function WorklogDetail({
             worklog={worklog}
             canTransition={canTransition}
             onTransition={onTransition}
+            isPending={isTransitionPending}
             disabledMessage={transitionDisabledMessage}
           />
+          {transitionErrorMessage ? (
+            <div className="rounded-xl border border-destructive/40 bg-destructive/10 px-4 py-3 text-sm text-destructive">
+              {transitionErrorMessage}
+            </div>
+          ) : null}
           {transitionNotice ? (
             <div className="rounded-xl border border-warning/40 bg-warning/10 px-4 py-3 text-sm text-[color:var(--warning)]">
               {transitionNotice}

@@ -1,5 +1,6 @@
 package com.ibank.axwms.domain.file.dto;
 
+import com.ibank.axwms.domain.file.FileType;
 import com.ibank.axwms.domain.file.repository.jooq.projection.FileSummaryProjection;
 import com.ibank.axwms.global.enums.AiProcessingStatus;
 import com.ibank.axwms.global.response.PageResponse;
@@ -11,7 +12,6 @@ import lombok.NoArgsConstructor;
 import org.springframework.data.domain.Page;
 
 import java.time.LocalDateTime;
-import java.util.Map;
 
 @NoArgsConstructor(access = AccessLevel.PRIVATE)
 public final class GetFilesApiDto {
@@ -28,12 +28,22 @@ public final class GetFilesApiDto {
             @Schema(description = "페이지 크기", example = "20")
             @Min(value = 1, message = "pageSize 는 1 이상이어야 합니다.")
             @Max(value = MAX_PAGE_SIZE, message = "pageSize 는 100 이하여야 합니다.")
-            Integer pageSize
+            Integer pageSize,
+            @Schema(description = "파일 형식 필터. 생략하면 형식 조건을 적용하지 않는다.", example = "PDF")
+            FileType fileType,
+            @Schema(description = "파일 등록 시각 기준 최근 N일 기간 필터. 생략하면 기간 조건을 적용하지 않는다.", example = "30")
+            Integer period
     ) {
+        /**
+         * 목록 API 의 1-indexed 기본 페이지 계약을 service/repository 경계에 일관되게 제공한다.
+         */
         public int pageOrDefault() {
             return page == null ? DEFAULT_PAGE : page;
         }
 
+        /**
+         * 요청이 크기를 생략하면 공통 페이지 기본 크기를 적용해 기존 조회 계약을 유지한다.
+         */
         public int pageSizeOrDefault() {
             return pageSize == null ? DEFAULT_PAGE_SIZE : pageSize;
         }
@@ -43,13 +53,10 @@ public final class GetFilesApiDto {
     public static final class Response {
 
         /**
-         * repository projection 페이지를 API 응답 페이지로 변환하고,
-         * worklogId → FileWorklogItem 매핑이 있으면 각 item 에 함께 박아준다.
-         * 매핑에 없는 worklog (사용자가 못 보거나 조회 실패) 는 null 로 남는다.
+         * service 가 공개 URL 까지 확정해 조립한 파일 항목 페이지를 공통 페이지 응답으로 감싼다.
          */
-        public static PageResponse<Item> fromPage(Page<FileSummaryProjection> page,
-                                                  Map<Long, FileWorklogItem> worklogByWorklogId) {
-            return PageResponse.from(page.map(p -> Item.from(p, worklogByWorklogId.get(p.worklogId()))));
+        public static PageResponse<Item> fromPage(Page<Item> page) {
+            return PageResponse.from(page);
         }
 
         @Schema(description = "파일 목록 항목")
@@ -60,7 +67,7 @@ public final class GetFilesApiDto {
                 Long worklogId,
                 @Schema(description = "원본 파일명", example = "report.pdf")
                 String originalName,
-                @Schema(description = "스토리지 내 저장 경로(key)")
+                @Schema(description = "파일 공개 접근 URL", example = "https://cdn.example.com/worklog/2026/05/12/report.pdf")
                 String storedPath,
                 @Schema(description = "확장자", example = "pdf")
                 String fileExtension,
@@ -75,12 +82,17 @@ public final class GetFilesApiDto {
                 @Schema(description = "소속 업무 요약")
                 FileWorklogItem worklog
         ) {
-            public static Item from(FileSummaryProjection p, FileWorklogItem worklog) {
+            /**
+             * repository 조회 shape 와 service 가 계산한 공개 URL 을 결합해 파일 목록 응답 항목을 만든다.
+             */
+            public static Item from(FileSummaryProjection p,
+                                    FileWorklogItem worklog,
+                                    String storedPath) {
                 return new Item(
                         p.id(),
                         p.worklogId(),
                         p.originalName(),
-                        p.storedPath(),
+                        storedPath,
                         p.fileExtension(),
                         p.fileSizeBytes(),
                         p.aiSummary(),

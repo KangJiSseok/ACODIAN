@@ -1,40 +1,160 @@
 package com.ibank.axwms.domain.file.external;
 
-import java.time.Instant;
-import java.util.List;
-import lombok.RequiredArgsConstructor;
+import com.ibank.axwms.global.error.BusinessException;
+import com.ibank.axwms.global.error.ErrorCode;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Component;
+import org.springframework.util.StringUtils;
 import org.springframework.web.multipart.MultipartFile;
+import software.amazon.awssdk.core.sync.RequestBody;
+import software.amazon.awssdk.services.s3.S3Client;
+import software.amazon.awssdk.services.s3.model.CopyObjectRequest;
+import software.amazon.awssdk.services.s3.model.DeleteObjectRequest;
+import software.amazon.awssdk.services.s3.model.ListObjectsV2Request;
+import software.amazon.awssdk.services.s3.model.ListObjectsV2Response;
+import software.amazon.awssdk.services.s3.model.PutObjectRequest;
 
+import java.io.IOException;
+import java.io.InputStream;
+import java.time.Instant;
+import java.util.List;
+import java.util.Optional;
+
+/**
+ * 업무 첨부 파일 저장소 S3 어댑터.
+ * 키 정규화에 basePrefix 를 적용해 개발자/환경별 네임스페이스를 분리한다.
+ */
 @Slf4j
 @Component
-@RequiredArgsConstructor
 public class S3ObjectStorageAdapter implements ObjectStoragePort {
 
+    private final S3Client s3Client;
+    private final S3StorageProperties properties;
+
+    public S3ObjectStorageAdapter(S3Client s3Client, S3StorageProperties properties) {
+        this.s3Client = s3Client;
+        this.properties = properties;
+    }
+
+    /** 파일을 S3 에 업로드하고 포트 계약대로 상대 storage key 를 반환한다. */
     @Override
     public String upload(MultipartFile file, String key) {
-        log.info("[S3-STUB] upload key={} name={}", key, file.getOriginalFilename());
-        return key;
+        String qualifiedKey = qualify(key);
+        PutObjectRequest request = PutObjectRequest.builder()
+                .bucket(properties.bucket())
+                .key(qualifiedKey)
+                .contentType(file.getContentType())
+                .contentLength(file.getSize())
+                .build();
+        try (InputStream inputStream = file.getInputStream()) {
+            s3Client.putObject(request, RequestBody.fromInputStream(inputStream, file.getSize()));
+            return key;
+        } catch (IOException | RuntimeException exception) {
+            log.error("업무 첨부 파일 S3 업로드 실패 bucket={} key={} name={}",
+                    properties.bucket(), qualifiedKey, file.getOriginalFilename(), exception);
+            throw new BusinessException(ErrorCode.WORKLOG_FILE_UPLOAD_FAILED);
+        }
     }
 
+    /** S3 오브젝트를 삭제한다. 트랜잭션 롤백 보상 listener 가 고아 객체를 정리할 때 호출한다. */
     @Override
     public void delete(String key) {
-        log.info("[S3-STUB] delete key={}", key);
+        String qualifiedKey = qualify(key);
+        try {
+            s3Client.deleteObject(DeleteObjectRequest.builder()
+                    .bucket(properties.bucket())
+                    .key(qualifiedKey)
+                    .build());
+        } catch (RuntimeException exception) {
+            log.error("업무 첨부 파일 S3 삭제 실패 bucket={} key={}", properties.bucket(), qualifiedKey, exception);
+            throw new IllegalStateException("업무 첨부 파일 S3 삭제에 실패했습니다. key=" + qualifiedKey, exception);
+        }
     }
 
+    /** 버킷 내에서 sourceKey → targetKey 로 복사한다. */
     @Override
     public void copy(String sourceKey, String targetKey) {
-        log.info("[S3-STUB] copy source={} target={}", sourceKey, targetKey);
+        String qualifiedSource = qualify(sourceKey);
+        String qualifiedTarget = qualify(targetKey);
+        try {
+            s3Client.copyObject(CopyObjectRequest.builder()
+                    .sourceBucket(properties.bucket()).sourceKey(qualifiedSource)
+                    .destinationBucket(properties.bucket()).destinationKey(qualifiedTarget)
+                    .build());
+        } catch (RuntimeException exception) {
+            log.error("업무 첨부 파일 S3 복사 실패 source={} target={}", qualifiedSource, qualifiedTarget, exception);
+            throw new IllegalStateException("업무 첨부 파일 S3 복사에 실패했습니다. source=" + qualifiedSource, exception);
+        }
     }
 
+    /** S3 에 업로드하지 않고 key 만으로 공개 URL 을 미리 계산한다. */
     @Override
     public String toPublicUrl(String key) {
-        return key;
+        return buildPublicUrl(qualify(key));
     }
 
+    /** 공개 URL 이 이 어댑터의 publicBaseUrl 하위이면 상대 storage key 로 복원한다. */
+    @Override
+    public Optional<String> toStorageKey(String publicUrl) {
+        if (!StringUtils.hasText(publicUrl)) {
+            return Optional.empty();
+        }
+        String base = trimTrailingSlash(properties.publicBaseUrl());
+        String prefix = base + "/";
+        if (!publicUrl.startsWith(prefix)) {
+            return Optional.empty();
+        }
+        return Optional.of(unqualify(publicUrl.substring(prefix.length())));
+    }
+
+    /** prefix 하위에서 cutoff 이전에 업로드된 객체의 상대 키 목록을 반환한다. */
     @Override
     public List<String> listKeysUploadedBefore(String prefix, Instant cutoff) {
-        return List.of();
+        String qualifiedPrefix = qualify(prefix);
+        ListObjectsV2Response response = s3Client.listObjectsV2(
+                ListObjectsV2Request.builder()
+                        .bucket(properties.bucket())
+                        .prefix(qualifiedPrefix)
+                        .build()
+        );
+        return response.contents().stream()
+                .filter(obj -> obj.lastModified().isBefore(cutoff))
+                .map(obj -> unqualify(obj.key()))
+                .toList();
+    }
+
+    /** basePrefix 를 key 앞에 붙여 개발자별/환경별 S3 네임스페이스를 분리한다. */
+    private String qualify(String key) {
+        String prefix = properties.basePrefix();
+        if (!StringUtils.hasText(prefix)) {
+            return key;
+        }
+        return prefix + "/" + key;
+    }
+
+    /** qualify() 역연산: absoluteKey 에서 basePrefix/ 접두사를 제거해 상대 키를 반환한다. */
+    private String unqualify(String absoluteKey) {
+        String prefix = properties.basePrefix();
+        if (!StringUtils.hasText(prefix)) {
+            return absoluteKey;
+        }
+        String prefixWithSlash = prefix + "/";
+        return absoluteKey.startsWith(prefixWithSlash)
+                ? absoluteKey.substring(prefixWithSlash.length())
+                : absoluteKey;
+    }
+
+    /** publicBaseUrl 과 key 를 결합해 공개 접근 URL 을 만든다. */
+    private String buildPublicUrl(String qualifiedKey) {
+        String base = properties.publicBaseUrl();
+        return base.endsWith("/") ? base + qualifiedKey : base + "/" + qualifiedKey;
+    }
+
+    /** publicBaseUrl 비교가 trailing slash 유무에 흔들리지 않도록 정규화한다. */
+    private String trimTrailingSlash(String value) {
+        if (!StringUtils.hasText(value)) {
+            return "";
+        }
+        return value.endsWith("/") ? value.substring(0, value.length() - 1) : value;
     }
 }

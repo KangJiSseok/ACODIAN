@@ -91,16 +91,16 @@ public class Worklog {
     /**
      * 업무 등록 요청을 서버 기본값과 함께 초기 엔티티로 만든다.
      *
-     * @param authorId 작성자 사용자 ID
-     * @param teamId 소속 팀 ID
-     * @param title 업무 제목
-     * @param requestContent 업무 요청/지시 내용
-     * @param workContent 실제 수행 업무 내용
-     * @param statusCode 최초 업무 상태 코드
-     * @param importanceCode 중요도 코드
-     * @param actualHours 업무 소요 예상 시간
+     * @param authorId        작성자 사용자 ID
+     * @param teamId          소속 팀 ID
+     * @param title           업무 제목
+     * @param requestContent  업무 요청/지시 내용
+     * @param workContent     실제 수행 업무 내용
+     * @param statusCode      최초 업무 상태 코드
+     * @param importanceCode  중요도 코드
+     * @param actualHours     업무 소요 예상 시간
      * @param instructionDate 지시 일자
-     * @param dueDate 마감 일자
+     * @param dueDate         마감 일자
      * @return 저장 전 Worklog 엔티티
      */
     public static Worklog create(Long authorId,
@@ -130,6 +130,9 @@ public class Worklog {
         return worklog;
     }
 
+    /**
+     * AI 콜백이 생성한 요약을 반영한다. 사용자 편집이 아니므로 aiSummaryEdited 는 변경하지 않는다.
+     */
     public void changeAiSummary(String summary) {
         this.aiSummary = summary;
     }
@@ -142,6 +145,7 @@ public class Worklog {
     public void updatePartial(String title,
                               String requestContent,
                               String workContent,
+                              WorklogStatus statusCode,
                               WorklogImportance importanceCode,
                               BigDecimal actualHours,
                               LocalDate instructionDate,
@@ -150,6 +154,7 @@ public class Worklog {
         if (title != null) this.title = title;
         if (requestContent != null) this.requestContent = requestContent;
         if (workContent != null) this.workContent = workContent;
+        if (statusCode != null) changeStatus(statusCode);
         if (importanceCode != null) this.importanceCode = importanceCode;
         if (actualHours != null) this.actualHours = actualHours;
         if (instructionDate != null) this.instructionDate = instructionDate;
@@ -166,5 +171,15 @@ public class Worklog {
 
     public void failAiSummaryProcessing() {
         this.aiProcessingStatus = AiProcessingStatus.FAILED;
+    }
+
+    /**
+     * 사용자 상태 변경으로 완료 상태에 도달한 날짜를 대시보드 완료 기간 집계 기준으로 함께 기록한다.
+     */
+    public void changeStatus(WorklogStatus statusCode) {
+        this.statusCode = statusCode;
+        if (statusCode == WorklogStatus.COMPLETED) {
+            this.completionDate = LocalDate.now();
+        }
     }
 }

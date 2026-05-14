@@ -3,67 +3,57 @@
 import Link from "next/link"
 import { useParams } from "next/navigation"
 import { useState } from "react"
+import { useMutation, useQueryClient } from "@tanstack/react-query"
 import { PencilLine } from "lucide-react"
 import PageHeader from "@/app/_common/components/layout/pageHeader"
 import { useAuth } from "@/app/_common/hooks/useAuth"
+import { getApiErrorMessage } from "@/app/_common/service/api-client"
+import { dashboardKeys } from "../../../_dashboard/_hooks/useDirectorDashboard"
 import { WorklogDetail } from "../../_components/worklogDetail"
-import { useWorklogDetail } from "../../_hooks/useWorklogList"
+import { worklogKeys, useWorklogDetail } from "../../_hooks/useWorklogList"
+import { worklogService } from "../../_service/worklog.service"
 import { Button } from "@/components/ui/button"
 import type { Worklog, WorklogStatus } from "../../_types/worklog.types"
 
 export default function WorklogDetailPage() {
   const params = useParams<{ id: string }>()
   const { user } = useAuth()
+  const queryClient = useQueryClient()
   const worklogId = Number(params.id)
   const { data: worklog, isError, isLoading } = useWorklogDetail(worklogId)
-  const [displayWorklog, setDisplayWorklog] = useState<Worklog | null>(null)
-  const [transitionNotice, setTransitionNotice] = useState<{
-    worklogId: number
-    message: string
-  } | null>(null)
-
-  if (isLoading) return <div>업무를 불러오는 중입니다.</div>
-  const selectedWorklog =
-    displayWorklog?.id === worklog?.id ? displayWorklog : worklog
-  if (isError || !selectedWorklog) return <div>업무를 찾을 수 없습니다.</div>
+  const [transitionNotice, setTransitionNotice] = useState<string>()
+  const [transitionErrorMessage, setTransitionErrorMessage] = useState<string>()
+  const transitionMutation = useMutation({
+    mutationFn: ({ nextStatus, reason }: { nextStatus: WorklogStatus; reason: string }) =>
+      worklogService.transitionStatus(worklogId, nextStatus, reason),
+  })
 
   const handleTransition = async (nextStatus: WorklogStatus, reason: string) => {
-    const changedAt = new Date().toISOString()
-    const statusCode = nextStatus === "DONE" ? "COMPLETED" : nextStatus
+    setTransitionNotice(undefined)
+    setTransitionErrorMessage(undefined)
 
-    // TODO: 상태 변경 API 연동 후 로컬 낙관 업데이트 로직을 서버 응답 기반 갱신으로 교체.
-    setDisplayWorklog((current) => {
-      const target = current?.id === selectedWorklog.id ? current : selectedWorklog
-
-      return {
-        ...target,
-        status: nextStatus,
-        statusCode,
-        completionDate: nextStatus === "DONE" ? changedAt.slice(0, 10) : undefined,
-        updatedAt: changedAt,
-        statusHistory: [
-          {
-            id: Date.now(),
-            previousStatus: target.status,
-            newStatus: nextStatus,
-            changedBy: user?.userId ?? target.authorId,
-            changedByName: user?.userName,
-            reason: reason.trim() || "상태 변경",
-            changedAt,
-          },
-          ...target.statusHistory,
-        ],
-      }
-    })
-    setTransitionNotice({
-      worklogId: selectedWorklog.id,
-      message: "상태 변경 API 연동 전까지 현재 상세 화면에서만 변경 상태를 반영합니다.",
-    })
+    try {
+      await transitionMutation.mutateAsync({ nextStatus, reason })
+      await Promise.all([
+        queryClient.invalidateQueries({
+          queryKey: worklogKeys.detail(worklogId),
+        }),
+        queryClient.invalidateQueries({ queryKey: worklogKeys.lists() }),
+        queryClient.invalidateQueries({ queryKey: worklogKeys.searches() }),
+        queryClient.invalidateQueries({ queryKey: dashboardKeys.all }),
+      ])
+      setTransitionNotice("업무 상태를 변경했습니다.")
+    } catch (error) {
+      setTransitionErrorMessage(
+        getApiErrorMessage(error, "업무 상태를 변경하지 못했습니다.")
+      )
+      throw error
+    }
   }
-  const notice =
-    transitionNotice?.worklogId === selectedWorklog.id
-      ? transitionNotice.message
-      : undefined
+
+  if (isLoading) return <div>업무를 불러오는 중입니다.</div>
+  const selectedWorklog = worklog
+  if (isError || !selectedWorklog) return <div>업무를 찾을 수 없습니다.</div>
 
   return (
     <div className="flex flex-col gap-5 lg:gap-6">
@@ -89,7 +79,10 @@ export default function WorklogDetailPage() {
         worklog={selectedWorklog}
         canTransition={canTransitionSelectedWorklog(user, selectedWorklog)}
         onTransition={handleTransition}
-        transitionNotice={notice}
+        isTransitionPending={transitionMutation.isPending}
+        transitionNotice={transitionNotice}
+        transitionErrorMessage={transitionErrorMessage}
+        transitionDisabledMessage="업무 상태는 작성자 본인만 변경할 수 있습니다."
       />
     </div>
   )
@@ -103,7 +96,5 @@ function canTransitionSelectedWorklog(
   user: ReturnType<typeof useAuth>["user"],
   worklog: Worklog
 ) {
-  if (!user) return false
-  if (user.userId === worklog.authorId) return true
-  return user.teams.some((team) => team.teamId === worklog.teamId && team.isLeader)
+  return Boolean(user && user.userId === worklog.authorId)
 }

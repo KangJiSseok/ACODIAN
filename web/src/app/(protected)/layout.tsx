@@ -26,6 +26,11 @@ export default function ProtectedLayout({ children }: { children: ReactNode }) {
     // 이미 로그인된 상태면 세션 복구를 시도하지 않음
     if (isAuthenticated) return;
 
+    if (status === "unauthenticated") {
+      router.replace(`/login?redirect=${encodeURIComponent(pathname)}`);
+      return;
+    }
+
     // refreshSession 중복 호출 방지
     if (hasTriedRefresh.current) {
       return;
@@ -44,7 +49,7 @@ export default function ProtectedLayout({ children }: { children: ReactNode }) {
         // 인증 확인 종료
         setIsChecking(false);
       });
-  }, [isAuthenticated, pathname, refreshSession, router]);
+  }, [isAuthenticated, pathname, refreshSession, router, status]);
 
   /* 로딩 화면 */
   if (isChecking || status === "loading") {

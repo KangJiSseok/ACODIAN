@@ -10,10 +10,10 @@ import { StatusBadge } from "./statusBadge"
 
 const nextMap: Record<WorklogStatus, WorklogStatus[]> = {
   PENDING: ["IN_PROGRESS"],
-  IN_PROGRESS: ["DONE", "ON_HOLD", "FAILED", "CANCELLED"],
-  ON_HOLD: ["IN_PROGRESS", "FAILED"],
-  DONE: ["IN_PROGRESS"],
-  FAILED: ["IN_PROGRESS"],
+  IN_PROGRESS: ["DONE", "ON_HOLD", "CANCELLED"],
+  ON_HOLD: ["IN_PROGRESS"],
+  DONE: [],
+  FAILED: [],
   CANCELLED: [],
 }
 
@@ -21,11 +21,13 @@ export function StatusTransition({
   worklog,
   canTransition,
   onTransition,
+  isPending = false,
   disabledMessage = "현재 역할에서는 이 업무 상태를 변경할 수 없습니다.",
 }: {
   worklog: Worklog
   canTransition: boolean
   onTransition: (nextStatus: WorklogStatus, reason: string) => Promise<void>
+  isPending?: boolean
   disabledMessage?: string
 }) {
   const [draft, setDraft] = useState<{
@@ -62,7 +64,7 @@ export function StatusTransition({
   }, [canTransition, worklog.dependOnWorklogs])
   const hasNextStatus = nextMap[worklog.status].length > 0
   const isStatusChanged = nextStatus !== worklog.status
-  const canSubmit = canTransition && hasNextStatus && isStatusChanged
+  const canSubmit = canTransition && hasNextStatus && isStatusChanged && !isPending
 
   return (
     <div className="space-y-4">
@@ -97,7 +99,7 @@ export function StatusTransition({
             })
           }
           options={statusOptions}
-          disabled={!canTransition || !hasNextStatus}
+          disabled={!canTransition || !hasNextStatus || isPending}
         />
         {!hasNextStatus ? (
           <p className="text-sm text-muted-foreground">최종 상태입니다.</p>
@@ -117,7 +119,7 @@ export function StatusTransition({
             })
           }
           placeholder="상태 변경 사유를 기록하세요."
-          disabled={!canTransition || !hasNextStatus}
+          disabled={!canTransition || !hasNextStatus || isPending}
           className="min-h-28"
         />
       </div>
@@ -127,16 +129,20 @@ export function StatusTransition({
           type="button"
           disabled={!canSubmit}
           onClick={async () => {
-            await onTransition(nextStatus, reason)
-            setDraft({
-              worklogId: worklog.id,
-              currentStatus: nextStatus,
-              nextStatus,
-              reason: "",
-            })
+            try {
+              await onTransition(nextStatus, reason)
+              setDraft({
+                worklogId: worklog.id,
+                currentStatus: nextStatus,
+                nextStatus,
+                reason: "",
+              })
+            } catch {
+              // 상세 화면에서 에러 메시지를 렌더링하므로 여기서는 draft를 유지합니다.
+            }
           }}
         >
-          상태 변경
+          {isPending ? "변경 중..." : "상태 변경"}
         </Button>
       </div>
     </div>

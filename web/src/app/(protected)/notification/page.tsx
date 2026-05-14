@@ -4,7 +4,10 @@ import type { ReactNode } from "react";
 import { useMemo, useState } from "react";
 import { ChevronDown, RefreshCw, SlidersHorizontal } from "lucide-react";
 import { Pagination } from "@/app/_common/components/data-display/pagination";
+import { useAuth } from "@/app/_common/hooks/useAuth";
 import PageHeader from "@/app/_common/components/layout/pageHeader";
+import type { AuthUser } from "@/app/_common/store/auth.store";
+import { isDirectorProfile } from "@/app/_common/utils/organizationAccess.utils";
 import { Button } from "@/components/ui/button";
 import { CardSpotlight } from "@/components/ui/card-spotlight";
 import { Select } from "@/components/ui/select";
@@ -23,8 +26,17 @@ import type {
 
 const ALL_FILTER_VALUE = "all";
 const NOTIFICATION_PAGE_SIZE = 6;
+const ACTIVE_TEAM_STATUS = "ACTIVE";
+
+interface NotificationTeamOption {
+  teamId: number;
+  teamName: string;
+  statusCode?: string | null;
+}
 
 export default function NotificationPage() {
+  const { user } = useAuth();
+  const isDirector = isDirectorProfile(user);
   const [activeView, setActiveView] = useState<NotificationView>("TOTAL");
   const [showFilters, setShowFilters] = useState(false);
   const [departmentId, setDepartmentId] = useState(ALL_FILTER_VALUE);
@@ -72,19 +84,27 @@ export default function NotificationPage() {
     ...countBaseParams,
     isRead: true,
   });
-  const { data: departmentData } = useDepartmentList();
-  const { data: teamPage } = useTeamList({ pageSize: 100 });
+  const { data: departmentData } = useDepartmentList(isDirector);
+  const { data: teamPage } = useTeamList({ pageSize: 100 }, isDirector);
   const { data: selectedDepartment } = useDepartmentDetail(
-    selectedDepartmentId ?? Number.NaN,
+    isDirector ? selectedDepartmentId ?? Number.NaN : Number.NaN,
   );
 
-  const departments = departmentData?.departments ?? [];
-  const teamOptionsSource = selectedDepartmentId
-    ? selectedDepartment?.teams ?? []
-    : teamPage?.items ?? [];
+  const departments = isDirector
+    ? departmentData?.departments ?? []
+    : getUserDepartmentOptions(user);
+  const teamOptionsSource = isDirector
+    ? selectedDepartmentId
+      ? selectedDepartment?.teams ?? []
+      : teamPage?.items ?? []
+    : getUserTeamOptions(user);
+  const teamOptions = teamOptionsSource.filter(isActiveTeamOption);
   const totalCount = totalCountQuery.notificationPage?.totalCount ?? 0;
   const unreadCount = unreadCountQuery.notificationPage?.totalCount ?? 0;
   const readCount = readCountQuery.notificationPage?.totalCount ?? 0;
+  const activeFilterCount = [departmentId, teamId].filter(
+    (value) => value !== ALL_FILTER_VALUE,
+  ).length;
 
   function updateView(nextView: NotificationView) {
     setActiveView(nextView);
@@ -119,8 +139,8 @@ export default function NotificationPage() {
           </h2>
           <Button
             type="button"
-            variant="outline"
-            className="h-10 rounded-2xl px-4 text-sm"
+            variant="default"
+            className="h-10 min-w-32 rounded-2xl px-5 text-sm font-semibold !text-primary-foreground hover:!text-primary-foreground focus-visible:!text-primary-foreground active:!text-primary-foreground"
             onClick={markAllRead}
             disabled={unreadCount === 0 || isMarkingAllRead}
           >
@@ -157,12 +177,17 @@ export default function NotificationPage() {
           </h2>
           <Button
             variant="outline"
-            className="h-10"
+            className="h-12 justify-center"
             type="button"
             onClick={() => setShowFilters((prev) => !prev)}
           >
             <SlidersHorizontal className="size-4" />
             필터
+            {activeFilterCount > 0 ? (
+              <span className="ml-1 rounded-full bg-primary px-2 py-0.5 text-[11px] font-semibold text-primary-foreground">
+                {activeFilterCount}
+              </span>
+            ) : null}
             <ChevronDown
               className={cn(
                 "ml-1 size-4 transition-transform duration-300 ease-out",
@@ -181,7 +206,7 @@ export default function NotificationPage() {
           )}
         >
           <div className="overflow-hidden">
-            <div className="space-y-4 pt-3">
+            <div className="space-y-4 pb-4 pt-3">
               <div className="flex items-center justify-between gap-3">
                 <p className="text-[11px] font-bold uppercase tracking-[0.16em] text-muted-foreground">
                   Notification Filters
@@ -220,7 +245,7 @@ export default function NotificationPage() {
                     onChange={(event) => updateTeam(event.target.value)}
                     options={[
                       { label: "전체 팀", value: ALL_FILTER_VALUE },
-                      ...teamOptionsSource.map((team) => ({
+                      ...teamOptions.map((team) => ({
                         label: team.teamName,
                         value: String(team.teamId),
                       })),
@@ -330,6 +355,29 @@ function FilterField({
       {children}
     </div>
   );
+}
+
+function getUserDepartmentOptions(user: AuthUser | null | undefined) {
+  if (!Number.isFinite(user?.departmentId)) {
+    return [];
+  }
+
+  return [
+    {
+      departmentId: user?.departmentId as number,
+      departmentName: user?.departmentName ?? "내 부서",
+    },
+  ];
+}
+
+function getUserTeamOptions(
+  user: AuthUser | null | undefined,
+): NotificationTeamOption[] {
+  return user?.teams ?? [];
+}
+
+function isActiveTeamOption(team: NotificationTeamOption) {
+  return (team.statusCode ?? ACTIVE_TEAM_STATUS) === ACTIVE_TEAM_STATUS;
 }
 
 function parseFilterNumber(value: string) {

@@ -29,7 +29,7 @@ export function isTeamLead(user: AuthUser | null | undefined) {
 }
 
 export function canCreateWorklog(user: AuthUser | null | undefined) {
-  return Boolean(user)
+  return Boolean(user && !isDirector(user))
 }
 
 export function getVisibleDepartments(

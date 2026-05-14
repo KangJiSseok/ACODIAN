@@ -1,12 +1,14 @@
 package com.ibank.axwms.domain.worklog.controller;
 
 import com.ibank.axwms.domain.worklog.dto.CreateWorklogApiDto;
-import com.ibank.axwms.domain.worklog.dto.GetWorklogOptionsApiDto;
 import com.ibank.axwms.domain.worklog.dto.GetWorklogDetailApiDto;
 import com.ibank.axwms.domain.worklog.dto.GetWorklogFilterOptionsApiDto;
+import com.ibank.axwms.domain.worklog.dto.GetWorklogOptionsApiDto;
 import com.ibank.axwms.domain.worklog.dto.GetWorklogsApiDto;
 import com.ibank.axwms.domain.worklog.dto.SearchWorklogsApiDto;
 import com.ibank.axwms.domain.worklog.dto.UpdateWorklogApiDto;
+import com.ibank.axwms.domain.worklog.dto.UpdateWorklogStatusApiDto;
+import com.ibank.axwms.global.response.EmptyResponse;
 import com.ibank.axwms.global.response.PageResponse;
 import com.ibank.axwms.global.security.CustomUserPrincipal;
 import io.swagger.v3.oas.annotations.Operation;
@@ -113,11 +115,29 @@ public interface WorklogControllerDocs {
             @ApiResponse(responseCode = "403", description = "작성자가 아님", content = @Content),
             @ApiResponse(responseCode = "404", description = "업무가 없거나 소프트 삭제됨, 또는 삭제 대상 첨부 파일을 찾을 수 없음", content = @Content)
     })
-    void updateWorklog(
+    EmptyResponse updateWorklog(
             @Parameter(hidden = true) CustomUserPrincipal principal,
             @Parameter(description = "수정 대상 업무 ID", example = "501") Long worklogId,
             UpdateWorklogApiDto.Request request,
             List<MultipartFile> files
+    );
+
+    @Operation(summary = "업무 상태 변경",
+            description = "작성자 본인이 업무 상태만 변경한다. "
+                    + "서버 상태 전이 정책을 통과한 경우에만 저장하며, 실제 변경 시 상태 이력을 기록한다. "
+                    + "COMPLETED 로 전환되면 완료일을 서버 현재 날짜로 기록한다.")
+    @SecurityRequirement(name = "bearerAuth")
+    @ApiResponses({
+            @ApiResponse(responseCode = "200", description = "상태 변경에 성공한다."),
+            @ApiResponse(responseCode = "400", description = "요청 값이 올바르지 않거나 허용되지 않은 상태 전이", content = @Content),
+            @ApiResponse(responseCode = "401", description = "인증이 필요하다.", content = @Content),
+            @ApiResponse(responseCode = "403", description = "작성자가 아님", content = @Content),
+            @ApiResponse(responseCode = "404", description = "업무가 없거나 소프트 삭제됨", content = @Content)
+    })
+    EmptyResponse updateWorklogStatus(
+            @Parameter(hidden = true) CustomUserPrincipal principal,
+            @Parameter(description = "상태 변경 대상 업무 ID", example = "501") Long worklogId,
+            UpdateWorklogStatusApiDto.Request request
     );
 
     @Operation(summary = "업무 등록 화면 폼 옵션 조회",

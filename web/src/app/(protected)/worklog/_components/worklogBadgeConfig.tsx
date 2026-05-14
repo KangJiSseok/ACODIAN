@@ -121,7 +121,6 @@ export const worklogStatusLegendOrder: WorklogStatus[] = [
   "PENDING",
   "DONE",
   "ON_HOLD",
-  "FAILED",
   "CANCELLED",
 ]
 

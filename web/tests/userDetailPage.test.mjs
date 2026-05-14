@@ -128,7 +128,7 @@ test("사용자 목록 검색 필터는 파일 탭과 같은 컨트롤 패턴을
 
   assert.match(page, /aria-label="사용자 검색"/);
   assert.match(page, /className="h-12 pl-11"/);
-  assert.match(page, /variant="outline"[\s\S]*className="h-10"/);
+  assert.match(page, /variant="outline"[\s\S]*className="h-12 justify-center"/);
   assert.match(page, /showFilters && "rotate-180"/);
   assert.match(page, /transition-\[grid-template-rows,opacity,margin\]/);
   assert.match(page, /text-\[11px\] font-bold uppercase tracking-\[0\.16em\]/);

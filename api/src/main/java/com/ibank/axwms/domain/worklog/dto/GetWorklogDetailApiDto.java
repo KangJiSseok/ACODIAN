@@ -12,6 +12,7 @@ import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.List;
+import java.util.function.Function;
 
 @NoArgsConstructor(access = AccessLevel.PRIVATE)
 public final class GetWorklogDetailApiDto {
@@ -67,14 +68,15 @@ public final class GetWorklogDetailApiDto {
     ) {
 
         /**
-         * 본문 projection 과 부가 목록 조회 결과를 상세조회 API 응답 계약으로 조립한다.
+         * 본문 projection 과 부가 목록 조회 결과를 조립하면서 첨부 파일 key 는 공개 URL 계약으로 변환한다.
          */
         public static Response of(
                 WorklogDetailProjection detail,
                 List<WorklogFileProjection> files,
                 List<String> tags,
                 List<WorklogDependencyProjection> dependencies,
-                List<WorklogStatusHistoryProjection> statusHistories
+                List<WorklogStatusHistoryProjection> statusHistories,
+                Function<String, String> storageKeyToPublicUrl
         ) {
             return new Response(
                     detail.worklogId(),
@@ -96,7 +98,7 @@ public final class GetWorklogDetailApiDto {
                     detail.completionDate(),
                     detail.createdAt(),
                     detail.updatedAt(),
-                    files.stream().map(FileItem::from).toList(),
+                    files.stream().map(file -> FileItem.from(file, storageKeyToPublicUrl)).toList(),
                     tags,
                     dependencies.stream().map(DependencyItem::from).toList(),
                     statusHistories.stream().map(StatusHistoryItem::from).toList()
@@ -109,15 +111,30 @@ public final class GetWorklogDetailApiDto {
                 Long fileId,
                 @Schema(description = "원본 파일명", example = "report.pdf")
                 String originalName,
-                @Schema(description = "저장 경로", example = "/uploads/2026/04/abc.pdf")
+                @Schema(description = "프론트에서 접근 가능한 공개 파일 URL", example = "https://cdn.example.com/worklog/2026/04/abc.pdf")
                 String storedPath,
                 @Schema(description = "파일 확장자", example = "pdf")
                 String fileExtension,
                 @Schema(description = "파일 크기(byte)", example = "204800")
-                Long fileSizeBytes
+                Long fileSizeBytes,
+                @Schema(description = "파일 AI 요약 내용 (콜백 도착 전이면 null)")
+                String aiSummary,
+                @Schema(description = "파일 AI 처리 상태", example = "PROCESSING")
+                String aiProcessingStatus
         ) {
-            public static FileItem from(WorklogFileProjection p) {
-                return new FileItem(p.fileId(), p.originalName(), p.storedPath(), p.fileExtension(), p.fileSizeBytes());
+            /**
+             * 내부 저장소 key 를 클라이언트 접근 URL 로 변환해 상세 응답의 파일 경계를 공개 계약에 맞춘다.
+             */
+            public static FileItem from(WorklogFileProjection p, Function<String, String> storageKeyToPublicUrl) {
+                return new FileItem(
+                        p.fileId(),
+                        p.originalName(),
+                        storageKeyToPublicUrl.apply(p.storedPath()),
+                        p.fileExtension(),
+                        p.fileSizeBytes(),
+                        p.aiSummary(),
+                        p.aiProcessingStatus() != null ? p.aiProcessingStatus().name() : null
+                );
             }
         }
 

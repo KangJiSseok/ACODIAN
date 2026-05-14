@@ -9,15 +9,22 @@ import com.ibank.axwms.domain.tag.service.TagService;
 import com.ibank.axwms.domain.worklog.WorklogImportance;
 import com.ibank.axwms.domain.worklog.WorklogStatus;
 import com.ibank.axwms.domain.worklog.dto.CreateWorklogApiDto;
+import com.ibank.axwms.domain.worklog.dto.GetWorklogDetailApiDto;
 import com.ibank.axwms.domain.worklog.dto.GetWorklogsApiDto;
+import com.ibank.axwms.domain.worklog.dto.UpdateWorklogStatusApiDto;
+import com.ibank.axwms.domain.worklog.dto.UpdateWorklogApiDto;
 import com.ibank.axwms.domain.worklog.entity.Worklog;
 import com.ibank.axwms.domain.worklog.entity.WorklogTag;
+import com.ibank.axwms.domain.worklog.policy.WorklogStatusPolicy;
 import com.ibank.axwms.domain.worklog.repository.WorklogDependencyRepository;
 import com.ibank.axwms.domain.worklog.repository.WorklogRepository;
 import com.ibank.axwms.domain.worklog.repository.WorklogStatusHistoryRepository;
 import com.ibank.axwms.domain.worklog.repository.WorklogTagRepository;
+import com.ibank.axwms.domain.worklog.repository.jooq.projection.WorklogDetailProjection;
+import com.ibank.axwms.domain.worklog.repository.jooq.projection.WorklogFileProjection;
 import com.ibank.axwms.domain.worklog.repository.jooq.projection.WorklogListProjection;
 import com.ibank.axwms.domain.worklog.repository.jooq.query.WorklogPageQuery;
+import com.ibank.axwms.global.enums.AiProcessingStatus;
 import com.ibank.axwms.global.error.BusinessException;
 import com.ibank.axwms.global.error.ErrorCode;
 import com.ibank.axwms.global.response.PageResponse;
@@ -38,8 +45,10 @@ import org.springframework.web.multipart.MultipartFile;
 
 import java.math.BigDecimal;
 import java.time.LocalDate;
+import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
@@ -60,6 +69,7 @@ class WorklogServiceTest {
     @Mock private FileService fileService;
     @Mock private WorklogStatusHistoryService worklogStatusHistoryService;
     @Mock private WorklogDependencyService worklogDependencyService;
+    @Mock private WorklogStatusPolicy worklogStatusPolicy;
     @Mock private TagService tagService;
 
     @InjectMocks private WorklogService worklogService;
@@ -248,6 +258,166 @@ class WorklogServiceTest {
         assertThat(queryCaptor.getValue().pageIndex()).isEqualTo(0);
     }
 
+    @Test
+    @DisplayName("수정으로 상태가 COMPLETED 로 바뀌면 완료일을 오늘로 기록한다")
+    void updateWorklog_records_completion_date_when_status_changes_to_completed() {
+        // given
+        CustomUserPrincipal principal = principal();
+        Worklog worklog = savedWorklog(WorklogStatus.IN_PROGRESS);
+        UpdateWorklogApiDto.Request request = updateRequest(WorklogStatus.COMPLETED);
+
+        given(worklogRepository.findById(WORKLOG_ID)).willReturn(Optional.of(worklog));
+        given(worklogStatusPolicy.canTransition(WorklogStatus.IN_PROGRESS, WorklogStatus.COMPLETED)).willReturn(true);
+
+        // when
+        worklogService.updateWorklog(principal, WORKLOG_ID, request, List.of());
+
+        // then
+        assertThat(worklog.getStatusCode()).isEqualTo(WorklogStatus.COMPLETED);
+        assertThat(worklog.getCompletionDate()).isEqualTo(LocalDate.now());
+        verify(worklogStatusHistoryService).createStatusHistory(
+                eq(WORKLOG_ID),
+                eq(WorklogStatus.IN_PROGRESS),
+                eq(WorklogStatus.COMPLETED),
+                eq(USER_ID),
+                eq("완료 처리")
+        );
+    }
+
+    @Test
+    @DisplayName("작성자 본인이 상태를 COMPLETED 로 변경하면 완료일과 상태 이력을 기록한다")
+    void updateWorklogStatus_records_completion_date_and_history() {
+        // given
+        CustomUserPrincipal principal = principal();
+        Worklog worklog = savedWorklog(WorklogStatus.IN_PROGRESS);
+        UpdateWorklogStatusApiDto.Request request = new UpdateWorklogStatusApiDto.Request(
+                WorklogStatus.COMPLETED,
+                "  완료 처리  "
+        );
+
+        given(worklogRepository.findById(WORKLOG_ID)).willReturn(Optional.of(worklog));
+        given(worklogStatusPolicy.canTransition(WorklogStatus.IN_PROGRESS, WorklogStatus.COMPLETED)).willReturn(true);
+
+        // when
+        worklogService.updateWorklogStatus(principal, WORKLOG_ID, request);
+
+        // then
+        assertThat(worklog.getStatusCode()).isEqualTo(WorklogStatus.COMPLETED);
+        assertThat(worklog.getCompletionDate()).isEqualTo(LocalDate.now());
+        verify(worklogStatusHistoryService).createStatusHistory(
+                eq(WORKLOG_ID),
+                eq(WorklogStatus.IN_PROGRESS),
+                eq(WorklogStatus.COMPLETED),
+                eq(USER_ID),
+                eq("완료 처리")
+        );
+    }
+
+    @Test
+    @DisplayName("작성자가 아니면 상태 변경 전용 API 는 WORKLOG_EDIT_FORBIDDEN 을 던진다")
+    void updateWorklogStatus_rejects_non_author() {
+        // given
+        CustomUserPrincipal principal = new CustomUserPrincipal(999L, "other@test.com", "MEMBER");
+        Worklog worklog = savedWorklog(WorklogStatus.IN_PROGRESS);
+        UpdateWorklogStatusApiDto.Request request = new UpdateWorklogStatusApiDto.Request(
+                WorklogStatus.COMPLETED,
+                "완료 처리"
+        );
+
+        given(worklogRepository.findById(WORKLOG_ID)).willReturn(Optional.of(worklog));
+
+        // when & then
+        assertThatThrownBy(() -> worklogService.updateWorklogStatus(principal, WORKLOG_ID, request))
+                .isInstanceOf(BusinessException.class)
+                .extracting(e -> ((BusinessException) e).getErrorCode())
+                .isEqualTo(ErrorCode.WORKLOG_EDIT_FORBIDDEN);
+
+        assertThat(worklog.getStatusCode()).isEqualTo(WorklogStatus.IN_PROGRESS);
+        verify(worklogStatusPolicy, never()).canTransition(any(), any());
+        verify(worklogStatusHistoryService, never()).createStatusHistory(any(), any(), any(), any(), any());
+    }
+
+    @Test
+    @DisplayName("상태가 실제로 바뀌지 않으면 상태 변경 전용 API 는 이력을 남기지 않는다")
+    void updateWorklogStatus_skips_history_when_status_is_unchanged() {
+        // given
+        CustomUserPrincipal principal = principal();
+        Worklog worklog = savedWorklog(WorklogStatus.IN_PROGRESS);
+        UpdateWorklogStatusApiDto.Request request = new UpdateWorklogStatusApiDto.Request(
+                WorklogStatus.IN_PROGRESS,
+                "   "
+        );
+
+        given(worklogRepository.findById(WORKLOG_ID)).willReturn(Optional.of(worklog));
+
+        // when
+        worklogService.updateWorklogStatus(principal, WORKLOG_ID, request);
+
+        // then
+        assertThat(worklog.getStatusCode()).isEqualTo(WorklogStatus.IN_PROGRESS);
+        assertThat(worklog.getCompletionDate()).isNull();
+        verify(worklogStatusPolicy, never()).canTransition(any(), any());
+        verify(worklogStatusHistoryService, never()).createStatusHistory(any(), any(), any(), any(), any());
+    }
+
+    @Test
+    @DisplayName("허용되지 않은 상태 전이면 WORKLOG_STATUS_TRANSITION_INVALID 를 던진다")
+    void updateWorklog_rejects_invalid_status_transition() {
+        // given
+        CustomUserPrincipal principal = principal();
+        Worklog worklog = savedWorklog(WorklogStatus.PENDING);
+        UpdateWorklogApiDto.Request request = updateRequest(WorklogStatus.COMPLETED);
+
+        given(worklogRepository.findById(WORKLOG_ID)).willReturn(Optional.of(worklog));
+        given(worklogStatusPolicy.canTransition(WorklogStatus.PENDING, WorklogStatus.COMPLETED)).willReturn(false);
+
+        // when & then
+        assertThatThrownBy(() -> worklogService.updateWorklog(principal, WORKLOG_ID, request, List.of()))
+                .isInstanceOf(BusinessException.class)
+                .extracting(e -> ((BusinessException) e).getErrorCode())
+                .isEqualTo(ErrorCode.WORKLOG_STATUS_TRANSITION_INVALID);
+
+        assertThat(worklog.getStatusCode()).isEqualTo(WorklogStatus.PENDING);
+        assertThat(worklog.getCompletionDate()).isNull();
+        verify(fileService, never()).uploadWorklogFiles(any(), any(), any());
+        verify(worklogStatusHistoryService, never()).createStatusHistory(any(), any(), any(), any(), any());
+    }
+
+    @Test
+    @DisplayName("getWorklogDetail 은 첨부 파일의 내부 저장 key 를 공개 URL 로 변환해 반환한다")
+    void getWorklogDetail_은_첨부_파일의_내부_저장_key를_공개_URL로_변환해_반환한다() {
+        // given
+        CustomUserPrincipal principal = principal();
+        String storageKey = "worklog/2026/04/report.pdf";
+        String publicUrl = "https://cdn.example.com/worklog/2026/04/report.pdf";
+        WorklogFileProjection fileProjection = new WorklogFileProjection(
+                9001L,
+                "report.pdf",
+                storageKey,
+                "pdf",
+                204800L,
+                null,
+                AiProcessingStatus.PENDING
+        );
+
+        given(worklogRepository.findWorklogDetail(USER_ID, WORKLOG_ID))
+                .willReturn(Optional.of(sampleDetailProjection()));
+        given(fileRepository.findByWorklogId(WORKLOG_ID))
+                .willReturn(List.of(fileProjection));
+        given(worklogTagRepository.findTagNames(WORKLOG_ID)).willReturn(List.of("결산"));
+        given(worklogDependencyRepository.findDirectDependencies(WORKLOG_ID)).willReturn(List.of());
+        given(worklogStatusHistoryRepository.findStatusHistories(WORKLOG_ID)).willReturn(List.of());
+        given(fileService.toPublicUrl(storageKey)).willReturn(publicUrl);
+
+        // when
+        GetWorklogDetailApiDto.Response response = worklogService.getWorklogDetail(principal, WORKLOG_ID);
+
+        // then
+        assertThat(response.files()).hasSize(1);
+        assertThat(response.files().get(0).storedPath()).isEqualTo(publicUrl);
+        verify(fileService).toPublicUrl(storageKey);
+    }
+
     private static WorklogListProjection sampleProjection() {
         return new WorklogListProjection(
                 WORKLOG_ID,
@@ -265,6 +435,33 @@ class WorklogServiceTest {
                 "홍길동",
                 INSTRUCTION_DATE,
                 DUE_DATE
+        );
+    }
+
+    /**
+     * 상세조회 응답 조립 경로만 검증하도록 본문 projection 은 성공 케이스의 필수 필드로 고정한다.
+     */
+    private static WorklogDetailProjection sampleDetailProjection() {
+        return new WorklogDetailProjection(
+                WORKLOG_ID,
+                TEAM_ID,
+                "물류혁신TF",
+                USER_ID,
+                "홍길동",
+                "결산 보고서 작성",
+                "요청 내용",
+                "수행 내용",
+                "AI 요약",
+                Boolean.FALSE,
+                "COMPLETED",
+                "IN_PROGRESS",
+                "HIGH",
+                new BigDecimal("3.10"),
+                INSTRUCTION_DATE,
+                DUE_DATE,
+                null,
+                LocalDateTime.of(2026, 4, 22, 9, 0),
+                LocalDateTime.of(2026, 4, 22, 10, 0)
         );
     }
 
@@ -286,6 +483,44 @@ class WorklogServiceTest {
                 TAG_IDS,
                 null
         );
+    }
+
+    /** 상태 수정 테스트가 검증 대상 필드만 바꿀 수 있도록 공통 수정 요청 fixture 를 만든다. */
+    private static UpdateWorklogApiDto.Request updateRequest(WorklogStatus statusCode) {
+        return new UpdateWorklogApiDto.Request(
+                "updated title",
+                "updated request",
+                "updated work",
+                statusCode,
+                "완료 처리",
+                WorklogImportance.HIGH,
+                new BigDecimal("4.00"),
+                INSTRUCTION_DATE,
+                DUE_DATE,
+                List.of(),
+                List.of(),
+                List.of(),
+                "수정된 AI 요약",
+                List.of()
+        );
+    }
+
+    /** 수정 대상 업무의 현재 상태만 테스트별로 바꾸고 나머지 필드는 유효한 기본값으로 고정한다. */
+    private static Worklog savedWorklog(WorklogStatus statusCode) {
+        Worklog worklog = Worklog.create(
+                USER_ID,
+                TEAM_ID,
+                "test",
+                "test",
+                "test",
+                statusCode,
+                WorklogImportance.NORMAL,
+                new BigDecimal("1.00"),
+                INSTRUCTION_DATE,
+                DUE_DATE
+        );
+        ReflectionTestUtils.setField(worklog, "id", WORKLOG_ID);
+        return worklog;
     }
 
     private static List<MultipartFile> sampleFiles() {

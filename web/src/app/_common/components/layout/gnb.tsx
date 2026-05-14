@@ -9,6 +9,7 @@ import { resolveBreadcrumbs } from "@/app/_common/service/breadcrumbs";
 import {
   useNotificationCenter,
   useNotificationMutation,
+  useNotificationStream,
 } from "@/app/(protected)/notification/_hooks";
 import { resolveNotificationDeepLink } from "@/app/(protected)/notification/_utils/resolveNotificationDeepLink";
 import { getNotificationTypeLabel } from "@/app/(protected)/notification/_utils/notificationLabel";
@@ -22,6 +23,7 @@ export default function Gnb() {
   const breadcrumbs = resolveBreadcrumbs(pathname);
   const { unreadCount, recentUnreadNotifications } = useNotificationCenter();
   const { markAllRead, markRead } = useNotificationMutation();
+  useNotificationStream();
   const [isNotificationOpen, setIsNotificationOpen] = useState(false);
   const notificationRef = useRef<HTMLDivElement>(null);
   const notificationCenterItems: NotificationCenterItem[] =
@@ -80,15 +82,15 @@ export default function Gnb() {
   }, [isNotificationOpen]);
 
   return (
-    <header className="workspace-topbar sticky top-0 z-40 flex w-full items-center gap-4 border-b border-white/10 px-4 py-4 text-white shadow-[0_16px_60px_-32px_rgba(0,0,0,0.55)] md:px-8">
+    <header className="workspace-topbar sticky top-0 z-40 flex w-full items-center gap-4 border-b border-slate-200/80 px-4 py-4 text-slate-900 shadow-[0_16px_48px_-36px_rgba(15,23,42,0.18)] dark:border-white/10 dark:text-white dark:shadow-[0_16px_60px_-32px_rgba(0,0,0,0.55)] md:px-8">
       <div className="min-w-0 flex-1">
-        <div className="inline-flex items-center rounded border border-white/10 bg-black/10 px-2 py-0.5 text-[8px] font-medium uppercase tracking-[0.13em] text-white/65">
+        <div className="inline-flex items-center rounded border border-slate-200/80 bg-slate-100/70 px-2 py-0.5 text-[8px] font-medium uppercase tracking-[0.13em] text-slate-500 dark:border-white/10 dark:bg-black/10 dark:text-white/65">
           IBANK AX 사업본부
         </div>
 
         <nav
           aria-label="breadcrumb"
-          className="mt-2 flex flex-wrap items-center gap-1.5 text-[1.05rem] font-semibold tracking-[-0.04em] text-white"
+          className="mt-2 flex flex-wrap items-center gap-1.5 text-[1.05rem] font-semibold tracking-[-0.04em] text-slate-900 dark:text-white"
         >
           {breadcrumbs.map((item, index) => {
             const isCurrent = index === breadcrumbs.length - 1;
@@ -99,13 +101,15 @@ export default function Gnb() {
                 className="flex items-center gap-1.5"
               >
                 {index > 0 ? (
-                  <ChevronRight className="size-4 text-white/42" />
+                  <ChevronRight className="size-4 text-slate-400 dark:text-white/42" />
                 ) : null}
 
                 <span
                   className={cn(
                     "text-sm",
-                    isCurrent ? "text-white" : "text-white/52",
+                    isCurrent
+                      ? "text-slate-900 dark:text-white"
+                      : "text-slate-500 dark:text-white/52",
                   )}
                 >
                   {item.label}
@@ -122,7 +126,7 @@ export default function Gnb() {
           variant="outline"
           size="icon"
           onClick={toggleTheme}
-          className="h-10 w-10 border-white/12 bg-black/10 text-white/75 hover:bg-black/18 hover:text-white"
+          className="h-10 w-10 border-slate-200/80 bg-slate-100/80 text-slate-600 hover:bg-slate-200/70 hover:text-slate-900 dark:border-white/12 dark:bg-black/10 dark:text-white/75 dark:hover:bg-black/18 dark:hover:text-white"
           title="테마 전환"
         >
           <Sun className="hidden size-4 dark:block" />
@@ -133,7 +137,7 @@ export default function Gnb() {
           <Button
             type="button"
             variant="outline"
-            className="h-10 border-white/12 bg-black/10 px-3 text-white/80 hover:bg-black/18 hover:text-white"
+            className="h-10 border-slate-200/80 bg-slate-100/80 px-3 text-slate-700 hover:bg-slate-200/70 hover:text-slate-900 active:!text-slate-900 aria-expanded:!bg-slate-200/70 aria-expanded:!text-slate-900 focus-visible:!text-slate-900 dark:border-white/12 dark:bg-black/10 dark:text-white/80 dark:hover:bg-black/18 dark:hover:text-white dark:active:!text-white dark:aria-expanded:!bg-black/18 dark:aria-expanded:!text-white dark:focus-visible:!text-white"
             onClick={() => setIsNotificationOpen((prev) => !prev)}
             aria-expanded={isNotificationOpen}
             aria-haspopup="dialog"

@@ -5,13 +5,16 @@ import com.ibank.axwms.domain.file.service.FileService;
 import com.ibank.axwms.domain.organization.team.service.TeamService;
 import com.ibank.axwms.domain.tag.repository.jooq.projection.MetaTagDetailProjection;
 import com.ibank.axwms.domain.tag.service.TagService;
+import com.ibank.axwms.domain.worklog.WorklogStatus;
 import com.ibank.axwms.domain.worklog.dto.CreateWorklogApiDto;
-import com.ibank.axwms.domain.worklog.dto.GetWorklogOptionsApiDto;
 import com.ibank.axwms.domain.worklog.dto.GetWorklogDetailApiDto;
+import com.ibank.axwms.domain.worklog.dto.GetWorklogOptionsApiDto;
 import com.ibank.axwms.domain.worklog.dto.GetWorklogsApiDto;
 import com.ibank.axwms.domain.worklog.dto.UpdateWorklogApiDto;
+import com.ibank.axwms.domain.worklog.dto.UpdateWorklogStatusApiDto;
 import com.ibank.axwms.domain.worklog.entity.Worklog;
 import com.ibank.axwms.domain.worklog.entity.WorklogTag;
+import com.ibank.axwms.domain.worklog.policy.WorklogStatusPolicy;
 import com.ibank.axwms.domain.worklog.repository.WorklogDependencyRepository;
 import com.ibank.axwms.domain.worklog.repository.WorklogRepository;
 import com.ibank.axwms.domain.worklog.repository.WorklogStatusHistoryRepository;
@@ -27,6 +30,7 @@ import com.ibank.axwms.global.error.ErrorCode;
 import com.ibank.axwms.global.response.PageResponse;
 import com.ibank.axwms.global.security.CustomUserPrincipal;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.domain.Page;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -35,7 +39,10 @@ import org.springframework.web.multipart.MultipartFile;
 import java.time.LocalDate;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
+import java.util.stream.Collectors;
 
+@Slf4j
 @Service
 @RequiredArgsConstructor
 @Transactional(readOnly = true)
@@ -50,6 +57,7 @@ public class WorklogService {
     private final FileService fileService;
     private final WorklogStatusHistoryService worklogStatusHistoryService;
     private final WorklogDependencyService worklogDependencyService;
+    private final WorklogStatusPolicy worklogStatusPolicy;
     private final TagService tagService;
 
     /**
@@ -89,6 +97,7 @@ public class WorklogService {
                 request.dueDate()
         ));
 
+        log.info("access worklog create service");
         fileService.uploadWorklogFiles(savedWorklog.getId(), principal.userId(), files);
         worklogStatusHistoryService.createStatusHistory(
                 savedWorklog.getId(),
@@ -161,7 +170,14 @@ public class WorklogService {
         List<WorklogDependencyProjection> dependencies = worklogDependencyRepository.findDirectDependencies(worklogId);
         List<WorklogStatusHistoryProjection> statusHistories = worklogStatusHistoryRepository.findStatusHistories(worklogId);
 
-        return GetWorklogDetailApiDto.Response.of(detail, files, tags, dependencies, statusHistories);
+        return GetWorklogDetailApiDto.Response.of(
+                detail,
+                files,
+                tags,
+                dependencies,
+                statusHistories,
+                fileService::toPublicUrl
+        );
     }
 
     /**
@@ -170,6 +186,7 @@ public class WorklogService {
      * null 필드는 변경되지 않으며, predecessorWorklogIds 는 null=변경없음 / []=모두 제거 / [...]=전체 replace 시멘틱.
      * teamId 는 수정 불가. 일자 범위는 변경 후 합산값 기준으로 검증.
      * aiSummary 가 들어오면 aiSummaryEdited 가 true 로 자동 표시.
+     * statusCode 가 실제로 변경되면 reason 을 상태 이력 사유로 함께 기록한다.
      * 파일 추가/삭제 중 어느 단계든 실패하면 본문 수정까지 함께 롤백된다.
      *
      * @param principal 현재 로그인 사용자
@@ -187,27 +204,34 @@ public class WorklogService {
                               Long worklogId,
                               UpdateWorklogApiDto.Request request,
                               List<MultipartFile> newFiles) {
-        Worklog worklog = worklogRepository.findById(worklogId)
-                .filter(w -> !Boolean.TRUE.equals(w.getIsDeleted()))
-                .orElseThrow(() -> new BusinessException(ErrorCode.WORKLOG_NOT_FOUND));
-
-        if (!worklog.getAuthorId().equals(principal.userId())) {
-            throw new BusinessException(ErrorCode.WORKLOG_EDIT_FORBIDDEN);
-        }
+        Worklog worklog = getEditableWorklogOrThrow(principal, worklogId);
 
         LocalDate effectiveInstructionDate = request.instructionDate() != null ? request.instructionDate() : worklog.getInstructionDate();
         LocalDate effectiveDueDate = request.dueDate() != null ? request.dueDate() : worklog.getDueDate();
         validateDateRange(effectiveInstructionDate, effectiveDueDate);
 
+        WorklogStatus previousStatusCode = worklog.getStatusCode();
+        boolean statusChanged = request.statusCode() != null && request.statusCode() != previousStatusCode;
+        validateStatusTransitionIfChanged(previousStatusCode, request.statusCode(), statusChanged);
+
         worklog.updatePartial(
                 request.title(),
                 request.requestContent(),
                 request.workContent(),
+                request.statusCode(),
                 request.importanceCode(),
                 request.actualHours(),
                 request.instructionDate(),
                 request.dueDate(),
                 request.aiSummary()
+        );
+        createStatusHistoryIfChanged(
+                worklogId,
+                previousStatusCode,
+                request.statusCode(),
+                principal.userId(),
+                request.reason(),
+                statusChanged
         );
 
         worklogDependencyService.replacePredecessors(
@@ -216,11 +240,159 @@ public class WorklogService {
                 request.predecessorWorklogIds()
         );
 
+        removeManualTags(worklogId, request.removeTagIds());
+        registerAdditionalManualTags(worklogId, request.tagIds());
+
         if (request.removeFileIds() != null && !request.removeFileIds().isEmpty()) {
             fileService.softDeleteWorklogFiles(worklogId, request.removeFileIds());
         }
 
         fileService.uploadWorklogFiles(worklogId, principal.userId(), newFiles);
+    }
+
+    /**
+     * 작성자 본인의 상태 변경 요청만 허용하고 상태 값/완료일/상태 이력을 함께 갱신한다.
+     *
+     * @param principal 현재 로그인 사용자
+     * @param worklogId 상태 변경 대상 worklog ID
+     * @param request   변경할 상태와 변경 사유
+     * @throws BusinessException WORKLOG_NOT_FOUND        worklog 가 없거나 소프트 삭제됨
+     * @throws BusinessException WORKLOG_EDIT_FORBIDDEN   작성자 본인이 아님
+     * @throws BusinessException WORKLOG_STATUS_TRANSITION_INVALID 현재 상태에서 요청 상태로 전이할 수 없음
+     */
+    @Transactional
+    public void updateWorklogStatus(CustomUserPrincipal principal,
+                                    Long worklogId,
+                                    UpdateWorklogStatusApiDto.Request request) {
+        Worklog worklog = getEditableWorklogOrThrow(principal, worklogId);
+        WorklogStatus previousStatusCode = worklog.getStatusCode();
+        boolean statusChanged = request.statusCode() != previousStatusCode;
+
+        validateStatusTransitionIfChanged(previousStatusCode, request.statusCode(), statusChanged);
+        if (!statusChanged) {
+            return;
+        }
+
+        worklog.changeStatus(request.statusCode());
+        createStatusHistoryIfChanged(
+                worklogId,
+                previousStatusCode,
+                request.statusCode(),
+                principal.userId(),
+                request.reason(),
+                true
+        );
+    }
+
+    /**
+     * 수정 계열 API 의 공통 작성자 경계로, 없는 업무와 작성자 불일치를 각각 표준 예외로 변환한다.
+     */
+    private Worklog getEditableWorklogOrThrow(CustomUserPrincipal principal, Long worklogId) {
+        Worklog worklog = worklogRepository.findById(worklogId)
+                .filter(w -> !Boolean.TRUE.equals(w.getIsDeleted()))
+                .orElseThrow(() -> new BusinessException(ErrorCode.WORKLOG_NOT_FOUND));
+
+        if (!worklog.getAuthorId().equals(principal.userId())) {
+            throw new BusinessException(ErrorCode.WORKLOG_EDIT_FORBIDDEN);
+        }
+
+        return worklog;
+    }
+
+    /**
+     * 클라이언트 우회 요청도 프론트 수정 화면과 같은 상태 전이 규칙을 통과한 경우에만 저장한다.
+     */
+    private void validateStatusTransitionIfChanged(WorklogStatus previousStatusCode,
+                                                   WorklogStatus nextStatusCode,
+                                                   boolean statusChanged) {
+        if (!statusChanged) {
+            return;
+        }
+        if (!worklogStatusPolicy.canTransition(previousStatusCode, nextStatusCode)) {
+            throw new BusinessException(ErrorCode.WORKLOG_STATUS_TRANSITION_INVALID);
+        }
+    }
+
+    /**
+     * 상태 값이 실제 변경된 요청만 상태 이력으로 남겨 수정 저장과 이력 표시를 동기화한다.
+     */
+    private void createStatusHistoryIfChanged(Long worklogId,
+                                              WorklogStatus previousStatusCode,
+                                              WorklogStatus newStatusCode,
+                                              Long changedBy,
+                                              String reason,
+                                              boolean statusChanged) {
+        if (!statusChanged) {
+            return;
+        }
+
+        worklogStatusHistoryService.createStatusHistory(
+                worklogId,
+                previousStatusCode,
+                newStatusCode,
+                changedBy,
+                normalizeStatusChangeReason(reason)
+        );
+    }
+
+    /**
+     * 빈 상태 변경 사유는 이력 조회에서 무의미한 공백으로 보이지 않도록 null 로 정규화한다.
+     */
+    private String normalizeStatusChangeReason(String reason) {
+        if (reason == null || reason.isBlank()) {
+            return null;
+        }
+
+        return reason.trim();
+    }
+
+    /**
+     * 수정 요청에서 삭제를 명시한 태그만 연결 해제한다.
+     */
+    private void removeManualTags(Long worklogId, List<Long> removeTagIds) {
+        List<Long> normalizedRemoveTagIds = tagService.normalizeExistingTagIds(removeTagIds);
+        if (normalizedRemoveTagIds.isEmpty()) {
+            return;
+        }
+
+        List<Long> linkedRemoveTagIds = worklogTagRepository
+                .findByWorklogIdAndTagIdIn(worklogId, normalizedRemoveTagIds)
+                .stream()
+                .map(WorklogTag::getTagId)
+                .toList();
+        if (linkedRemoveTagIds.isEmpty()) {
+            return;
+        }
+
+        worklogTagRepository.deleteByWorklogIdAndTagIdIn(worklogId, linkedRemoveTagIds);
+        tagService.decrementUsageCountByIds(linkedRemoveTagIds);
+    }
+
+    /**
+     * 최종 선택 태그 목록에서 이미 연결된 태그를 제외하고 새 수동 태그만 추가한다.
+     */
+    private void registerAdditionalManualTags(Long worklogId, List<Long> tagIds) {
+        List<Long> normalizedTagIds = tagService.normalizeExistingTagIds(tagIds);
+        if (normalizedTagIds.isEmpty()) {
+            return;
+        }
+
+        Set<Long> linkedTagIds = worklogTagRepository.findByWorklogIdAndTagIdIn(worklogId, normalizedTagIds)
+                .stream()
+                .map(WorklogTag::getTagId)
+                .collect(Collectors.toSet());
+        List<Long> newTagIds = normalizedTagIds.stream()
+                .filter(tagId -> !linkedTagIds.contains(tagId))
+                .toList();
+        if (newTagIds.isEmpty()) {
+            return;
+        }
+
+        List<WorklogTag> worklogTags = newTagIds.stream()
+                .map(tagId -> WorklogTag.createManualSelected(worklogId, tagId))
+                .toList();
+        worklogTagRepository.saveAll(worklogTags);
+        tagService.incrementUsageCountByIds(newTagIds);
     }
 
     /**

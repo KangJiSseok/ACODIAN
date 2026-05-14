@@ -38,7 +38,10 @@ public class SecurityConfig {
             PathPatternRequestMatcher.pathPattern("/auth/login"),
             PathPatternRequestMatcher.pathPattern("/auth/signup"),
             PathPatternRequestMatcher.pathPattern("/auth/logout"),
-            PathPatternRequestMatcher.pathPattern("/auth/refresh")
+            PathPatternRequestMatcher.pathPattern("/auth/refresh"),
+            // /internal/** 은 같은 도커 브릿지의 ai 컨테이너 전용 콜백 경로다.
+            // 외부 노출은 nginx 가 차단하므로 인증 면제 처리한다.
+            PathPatternRequestMatcher.pathPattern("/internal/**")
     };
 
     private final RequestTraceFilter requestTraceFilter;
