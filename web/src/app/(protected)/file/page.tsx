@@ -24,10 +24,16 @@ import type { FileFiltersValue, FileItem, GetFilesParams } from "./_types/file.t
 const ALL_FILTER_VALUE = "ALL";
 const FILE_PAGE_SIZE = 10;
 
+type DownloadResultMessage = {
+  tone: "success" | "error";
+  text: string;
+};
+
 export default function FilePage() {
   const [selectedFileIds, setSelectedFileIds] = useState<Set<number>>(new Set());
   const [isDownloading, setIsDownloading] = useState(false);
-  const [downloadErrorMessage, setDownloadErrorMessage] = useState<string | null>(null);
+  const [downloadResultMessage, setDownloadResultMessage] =
+    useState<DownloadResultMessage | null>(null);
   const [showFilters, setShowFilters] = useState(false);
   const [query, setQuery] = useState("");
   const [fileType, setFileType] = useState(ALL_FILTER_VALUE);
@@ -144,18 +150,24 @@ export default function FilePage() {
       return;
     }
 
-    setDownloadErrorMessage(null);
+    const filesToDownload = selectedFiles;
+    const failedFiles: FileItem[] = [];
+    let successCount = 0;
+
+    setDownloadResultMessage(null);
     setIsDownloading(true);
 
-    try {
-      for (const file of selectedFiles) {
+    for (const file of filesToDownload) {
+      try {
         await downloadFile(file);
+        successCount += 1;
+      } catch {
+        failedFiles.push(file);
       }
-    } catch {
-      setDownloadErrorMessage("파일 다운로드를 완료하지 못했습니다.");
-    } finally {
-      setIsDownloading(false);
     }
+
+    setDownloadResultMessage(createDownloadResultMessage(successCount, failedFiles));
+    setIsDownloading(false);
   }
 
   return (
@@ -319,9 +331,16 @@ export default function FilePage() {
             </div>
           </div>
 
-          {downloadErrorMessage ? (
-            <p className="mt-3 text-right text-sm font-medium text-destructive">
-              {downloadErrorMessage}
+          {downloadResultMessage ? (
+            <p
+              className={cn(
+                "mt-3 text-right text-sm font-medium",
+                downloadResultMessage.tone === "error"
+                  ? "text-destructive"
+                  : "text-muted-foreground",
+              )}
+            >
+              {downloadResultMessage.text}
             </p>
           ) : null}
         </div>
@@ -393,6 +412,32 @@ async function downloadFile(file: FileItem) {
   link.click();
   link.remove();
   window.setTimeout(() => URL.revokeObjectURL(objectUrl), 0);
+}
+
+function createDownloadResultMessage(
+  successCount: number,
+  failedFiles: FileItem[],
+): DownloadResultMessage {
+  const failedNames = failedFiles.map((file) => file.originalName);
+
+  if (failedFiles.length === 0) {
+    return {
+      tone: "success",
+      text: `${successCount}개 파일 다운로드를 시작했습니다.`,
+    };
+  }
+
+  if (successCount === 0) {
+    return {
+      tone: "error",
+      text: `다운로드에 실패했습니다: ${failedNames.join(", ")}`,
+    };
+  }
+
+  return {
+    tone: "error",
+    text: `${successCount}개 파일 다운로드를 시작했고, ${failedFiles.length}개 파일은 실패했습니다: ${failedNames.join(", ")}`,
+  };
 }
 
 function filterFiles(

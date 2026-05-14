@@ -55,3 +55,16 @@ test("file list uses the real /files PageResponse API instead of worklog mock da
   assert.match(card, /file\.aiProcessingStatus/);
   assert.doesNotMatch(card, /worklog\/_mock\/worklog\.mock/);
 });
+
+test("selected file download continues after failures and reports failed file names", () => {
+  const page = readFileArea("page.tsx");
+
+  assert.match(page, /const \[downloadResultMessage, setDownloadResultMessage\]/);
+  assert.match(page, /const failedFiles: FileItem\[\] = \[\]/);
+  assert.match(page, /successCount \+= 1/);
+  assert.match(page, /failedFiles\.push\(file\)/);
+  assert.match(page, /createDownloadResultMessage\(successCount, failedFiles\)/);
+  assert.match(page, /failedFiles\.map\(\(file\) => file\.originalName\)/);
+  assert.match(page, /downloadResultMessage\.tone === "error"/);
+  assert.doesNotMatch(page, /파일 다운로드를 완료하지 못했습니다/);
+});
