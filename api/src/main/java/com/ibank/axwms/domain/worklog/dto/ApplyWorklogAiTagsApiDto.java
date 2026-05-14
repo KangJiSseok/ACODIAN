@@ -1,5 +1,6 @@
 package com.ibank.axwms.domain.worklog.dto;
 
+import com.ibank.axwms.domain.tag.policy.TagMergePolicy;
 import io.swagger.v3.oas.annotations.media.Schema;
 import jakarta.validation.constraints.AssertTrue;
 import jakarta.validation.constraints.NotBlank;
@@ -12,9 +13,9 @@ import lombok.NoArgsConstructor;
 import java.util.List;
 
 @NoArgsConstructor(access = AccessLevel.PRIVATE)
-public final class ApplyWorklogTagsAiApiDto {
+public final class ApplyWorklogAiTagsApiDto {
 
-    @Schema(description = "AI 태그 파이프라인 호출용 내부 API")
+    @Schema(description = "AI 태그 결과를 특정 업무일지에 적용하는 내부 API")
     public record Request(
 
             @NotNull
@@ -31,11 +32,7 @@ public final class ApplyWorklogTagsAiApiDto {
          */
         @AssertTrue(message = "기존 태그 또는 신규 태그가 최소 1개 이상 필요합니다.")
         public boolean hasAnyTag() {
-            if (existingTagIds == null || newTagNames == null) {
-                return true;
-            }
-
-            return !existingTagIds.isEmpty() || !newTagNames.isEmpty();
+            return TagMergePolicy.hasAnyAiTag(existingTagIds, newTagNames);
         }
 
         /**
@@ -43,11 +40,7 @@ public final class ApplyWorklogTagsAiApiDto {
          */
         @AssertTrue(message = "태그는 최대 5개까지 적용할 수 있습니다.")
         public boolean isWithinTagLimit() {
-            if (existingTagIds == null || newTagNames == null) {
-                return true;
-            }
-
-            return existingTagIds.size() + newTagNames.size() <= 5;
+            return TagMergePolicy.isWithinAiTagLimit(existingTagIds, newTagNames);
         }
     }
 }

@@ -1,6 +1,6 @@
 package com.ibank.axwms.domain.worklog.controller;
 
-import com.ibank.axwms.domain.worklog.dto.ApplyWorklogTagsAiApiDto;
+import com.ibank.axwms.domain.worklog.dto.ApplyWorklogAiTagsApiDto;
 import com.ibank.axwms.domain.worklog.dto.UpdateWorklogAiApiDto;
 import com.ibank.axwms.global.response.EmptyResponse;
 import io.swagger.v3.oas.annotations.Operation;
@@ -19,12 +19,12 @@ public interface InternalWorklogAiCallbackControllerDocs {
     })
     EmptyResponse updateWorklogAiResult(Long worklogId, UpdateWorklogAiApiDto.Request request);
 
-    @Operation(summary = "내부용 업무일지 AI 태그 반영 API", description = "AI가 선택한 기존 태그와 새로 제안한 태그를 업무일지에 반영한다.")
+    @Operation(summary = "내부용 업무일지 AI 태그 적용 API", description = "AI가 선택한 기존 태그와 새로 제안한 태그를 특정 업무일지에 AI 생성 태그로 적용한다.")
     @ApiResponses({
-            @ApiResponse(responseCode = "200", description = "업무일지 AI 태그 반영 성공"),
+            @ApiResponse(responseCode = "200", description = "업무일지 AI 태그 적용 성공"),
             @ApiResponse(responseCode = "400", description = "요청 값이 올바르지 않다.", content = @Content),
             @ApiResponse(responseCode = "404", description = "대상 업무일지를 찾을 수 없다.", content = @Content),
     })
-    EmptyResponse applyAiGeneratedTags(Long worklogId, ApplyWorklogTagsAiApiDto.Request request);
+    EmptyResponse applyAiGeneratedTags(Long worklogId, ApplyWorklogAiTagsApiDto.Request request);
 
 }
