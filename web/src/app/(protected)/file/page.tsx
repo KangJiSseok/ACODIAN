@@ -18,14 +18,22 @@ import {
   SlidersHorizontal,
 } from "lucide-react";
 import { FileCard } from "./_components/fileCard";
-import { useFileList } from "./_hooks";
+import { useFileList, useFileTypes } from "./_hooks";
 import type { FileFiltersValue, FileItem, GetFilesParams } from "./_types/file.types";
 
 const ALL_FILTER_VALUE = "ALL";
 const FILE_PAGE_SIZE = 10;
 
+type DownloadResultMessage = {
+  tone: "success" | "error";
+  text: string;
+};
+
 export default function FilePage() {
   const [selectedFileIds, setSelectedFileIds] = useState<Set<number>>(new Set());
+  const [isDownloading, setIsDownloading] = useState(false);
+  const [downloadResultMessage, setDownloadResultMessage] =
+    useState<DownloadResultMessage | null>(null);
   const [showFilters, setShowFilters] = useState(false);
   const [query, setQuery] = useState("");
   const [fileType, setFileType] = useState(ALL_FILTER_VALUE);
@@ -37,8 +45,10 @@ export default function FilePage() {
     () => ({
       page,
       pageSize: FILE_PAGE_SIZE,
+      fileType: fileType === ALL_FILTER_VALUE ? undefined : fileType,
+      period: toPeriodDays(period),
     }),
-    [page],
+    [fileType, page, period],
   );
 
   const {
@@ -47,6 +57,17 @@ export default function FilePage() {
     error,
     refetch,
   } = useFileList(fileListParams);
+  const { data: fileTypes = [] } = useFileTypes();
+  const fileTypeOptions = useMemo(
+    () => [
+      { label: "전체 형식", value: ALL_FILTER_VALUE },
+      ...fileTypes.map((type) => ({
+        label: `${type.fileType} (.${type.extension})`,
+        value: type.fileType,
+      })),
+    ],
+    [fileTypes],
+  );
 
   const visibleFiles = useMemo(
     () =>
@@ -60,7 +81,11 @@ export default function FilePage() {
   );
   const allVisibleFilesSelected =
     visibleFiles.length > 0 && visibleFiles.every((file) => selectedFileIds.has(file.id));
-  const selectedCount = selectedFileIds.size;
+  const selectedFiles = useMemo(
+    () => visibleFiles.filter((file) => selectedFileIds.has(file.id)),
+    [selectedFileIds, visibleFiles],
+  );
+  const selectedCount = selectedFiles.length;
 
   function resetFilters() {
     setQuery("");
@@ -118,6 +143,31 @@ export default function FilePage() {
 
       return next;
     });
+  }
+
+  async function handleDownloadSelectedFiles() {
+    if (selectedFiles.length === 0 || isDownloading) {
+      return;
+    }
+
+    const filesToDownload = selectedFiles;
+    const failedFiles: FileItem[] = [];
+    let successCount = 0;
+
+    setDownloadResultMessage(null);
+    setIsDownloading(true);
+
+    for (const file of filesToDownload) {
+      try {
+        await downloadFile(file);
+        successCount += 1;
+      } catch {
+        failedFiles.push(file);
+      }
+    }
+
+    setDownloadResultMessage(createDownloadResultMessage(successCount, failedFiles));
+    setIsDownloading(false);
   }
 
   return (
@@ -197,13 +247,7 @@ export default function FilePage() {
                       aria-label="파일 형식 필터"
                       value={fileType}
                       onChange={(event) => updateFileType(event.target.value)}
-                      options={[
-                        { label: "전체 형식", value: ALL_FILTER_VALUE },
-                        { label: "PDF", value: "PDF" },
-                        { label: "HWP", value: "HWP" },
-                        { label: "DOCX", value: "DOCX" },
-                        { label: "XLSX", value: "XLSX" },
-                      ]}
+                      options={fileTypeOptions}
                     />
                   </div>
                   <div className="space-y-2">
@@ -278,13 +322,27 @@ export default function FilePage() {
                 variant="secondary"
                 className="h-11 min-w-28 px-5 text-sm font-semibold"
                 type="button"
-                disabled={selectedCount === 0}
+                onClick={() => void handleDownloadSelectedFiles()}
+                disabled={selectedCount === 0 || isDownloading}
               >
                 <Download className="size-4" />
-                다운로드
+                {isDownloading ? "다운로드 중" : "다운로드"}
               </Button>
             </div>
           </div>
+
+          {downloadResultMessage ? (
+            <p
+              className={cn(
+                "mt-3 text-right text-sm font-medium",
+                downloadResultMessage.tone === "error"
+                  ? "text-destructive"
+                  : "text-muted-foreground",
+              )}
+            >
+              {downloadResultMessage.text}
+            </p>
+          ) : null}
         </div>
 
         {isLoading ? (
@@ -331,6 +389,55 @@ export default function FilePage() {
       </div>
     </div>
   );
+}
+
+async function downloadFile(file: FileItem) {
+  if (!file.storedPath) {
+    throw new Error("파일 다운로드 URL이 없습니다.");
+  }
+
+  const response = await fetch(file.storedPath);
+
+  if (!response.ok) {
+    throw new Error("파일 다운로드 요청에 실패했습니다.");
+  }
+
+  const blob = await response.blob();
+  const objectUrl = URL.createObjectURL(blob);
+  const link = document.createElement("a");
+
+  link.href = objectUrl;
+  link.download = file.originalName;
+  document.body.appendChild(link);
+  link.click();
+  link.remove();
+  window.setTimeout(() => URL.revokeObjectURL(objectUrl), 0);
+}
+
+function createDownloadResultMessage(
+  successCount: number,
+  failedFiles: FileItem[],
+): DownloadResultMessage {
+  const failedNames = failedFiles.map((file) => file.originalName);
+
+  if (failedFiles.length === 0) {
+    return {
+      tone: "success",
+      text: `${successCount}개 파일 다운로드를 시작했습니다.`,
+    };
+  }
+
+  if (successCount === 0) {
+    return {
+      tone: "error",
+      text: `다운로드에 실패했습니다: ${failedNames.join(", ")}`,
+    };
+  }
+
+  return {
+    tone: "error",
+    text: `${successCount}개 파일 다운로드를 시작했고, ${failedFiles.length}개 파일은 실패했습니다: ${failedNames.join(", ")}`,
+  };
 }
 
 function filterFiles(
@@ -392,6 +499,16 @@ function matchesPeriod(value: string, period: FileFiltersValue["period"]) {
   }
 
   return Date.now() - uploadedAt <= days * 24 * 60 * 60 * 1000;
+}
+
+function toPeriodDays(period: FileFiltersValue["period"]) {
+  if (period === "ALL") {
+    return undefined;
+  }
+
+  const days = Number(period.replace("D", ""));
+
+  return Number.isFinite(days) ? days : undefined;
 }
 
 function toAiProcessingStatus(status: string | null | undefined): AiProcessingStatus {
