@@ -8,7 +8,6 @@ import lombok.RequiredArgsConstructor;
 import org.jooq.Condition;
 import org.jooq.DSLContext;
 import org.jooq.Query;
-import org.jooq.impl.DSL;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageImpl;
 import org.springframework.data.domain.PageRequest;
@@ -67,8 +66,7 @@ public class MetaTagJooqRepositoryImpl implements MetaTagJooqRepository {
         int pageIndex = query.pageIndex();
         int pageSize = query.pageSize();
         PageRequest pageRequest = PageRequest.of(pageIndex, pageSize);
-
-        Condition condition = DSL.noCondition();
+        Condition condition = TB_META_TAG.IS_DELETED.isFalse();
         if (query.query() != null) {
             condition = condition.and(TB_META_TAG.TAG_NAME.containsIgnoreCase(query.query()));
         }
