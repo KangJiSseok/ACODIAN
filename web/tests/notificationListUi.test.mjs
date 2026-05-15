@@ -14,6 +14,8 @@ test("notification list keeps title meta inline without extra help chrome", () =
   assert.doesNotMatch(notificationListFile, /CircleHelp/);
   assert.doesNotMatch(notificationListFile, /NotificationMetaBadge/);
   assert.doesNotMatch(notificationListFile, /aria-label="알림 상태 도움말"/);
+  assert.doesNotMatch(notificationListFile, /getNotificationTypeLabel/);
+  assert.doesNotMatch(notificationListFile, /Clock3/);
   assert.match(notificationListFile, /getNotificationReadLabel/);
 });
 
@@ -24,27 +26,33 @@ test("notification list does not render read timestamp", () => {
   );
 });
 
-test("notification list moves due date to the meta row instead of created timestamp", () => {
-  assert.match(notificationListFile, /getNotificationDueDateLabel/);
-  assert.match(notificationListFile, /getNotificationContentWithoutDueDate/);
-  assert.match(notificationListFile, /마감일 :/);
+test("notification list hides backend date suffix from content and meta row", () => {
+  assert.match(notificationListFile, /getNotificationDisplayContent/);
+  assert.match(notificationListFile, /확인 기준일/);
+  assert.doesNotMatch(notificationListFile, /getNotificationDueDateLabel/);
+  assert.doesNotMatch(notificationListFile, /dueDateLabel/);
   assert.doesNotMatch(
     notificationListFile,
     /formatDateTime\(notification\.createdAt\)/,
   );
 });
 
-test("notification deep link action uses primary worklog-style button", () => {
-  assert.match(notificationListFile, /variant="default"/);
-  assert.match(notificationListFile, /min-w-32/);
-  assert.match(notificationListFile, /!text-primary-foreground/);
+test("notification item actions follow worklog detail and edit button variants", () => {
+  assert.match(
+    notificationListFile,
+    /variant="default"[\s\S]*onClick=\{\(\) => onMarkRead\(notification\.id\)\}/,
+  );
+  assert.match(notificationListFile, /variant="secondary"[\s\S]*관련 화면 이동/);
+  assert.match(notificationListFile, /h-11 px-5 text-sm font-semibold/);
+  assert.doesNotMatch(notificationListFile, /shadow-\[/);
+  assert.doesNotMatch(notificationListFile, /className="h-10 min-w-32 rounded-2xl/);
   assert.match(notificationListFile, /관련 화면 이동/);
 });
 
 test("notification card keeps bottom action with worklog-list spacing", () => {
   assert.doesNotMatch(notificationListFile, /lg:flex-row lg:items-start/);
   assert.match(notificationListFile, /flex flex-col gap-4 p-5/);
-  assert.match(notificationListFile, /sm:flex-row sm:items-center sm:justify-between/);
+  assert.match(notificationListFile, /flex flex-wrap justify-end gap-2/);
   assert.match(notificationListFile, /p-5/);
   assert.match(notificationListFile, /line-clamp-2/);
   assert.match(notificationListFile, /leading-7/);

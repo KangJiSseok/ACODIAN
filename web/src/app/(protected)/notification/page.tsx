@@ -133,19 +133,10 @@ export default function NotificationPage() {
       <PageHeader title="알림" description="업무 마감 알림과 읽음 상태를 확인합니다." />
 
       <section className="space-y-4">
-        <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+        <div>
           <h2 className="text-[20px] font-semibold tracking-[-0.04em] text-foreground">
             알림 현황
           </h2>
-          <Button
-            type="button"
-            variant="default"
-            className="h-10 min-w-32 rounded-2xl px-5 text-sm font-semibold !text-primary-foreground hover:!text-primary-foreground focus-visible:!text-primary-foreground active:!text-primary-foreground"
-            onClick={markAllRead}
-            disabled={unreadCount === 0 || isMarkingAllRead}
-          >
-            전체 읽음 처리
-          </Button>
         </div>
 
         <div className="grid gap-3 md:grid-cols-3">
@@ -260,21 +251,32 @@ export default function NotificationPage() {
 
       <section className="space-y-4">
         <div className="border-t-2 border-foreground/70 pt-5">
-          <div className="flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
-            <div>
+          <div className="space-y-2">
+            <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
               <h2 className="text-[20px] font-semibold tracking-[-0.04em] text-foreground">
                 알림 목록
               </h2>
+              <Button
+                type="button"
+                variant="default"
+                className="h-11 px-5 text-sm font-semibold sm:min-w-36"
+                onClick={markAllRead}
+                disabled={unreadCount === 0 || isMarkingAllRead}
+              >
+                전체 읽음 처리
+              </Button>
+            </div>
+            <div className="flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
               <p className="mt-2 text-sm leading-6 text-muted-foreground">
                 알림을 선택하면 관련 업무 화면으로 이동합니다.
               </p>
+              <p className="text-sm font-medium text-muted-foreground">
+                표시 중인 알림{" "}
+                <span className="text-lg font-semibold text-foreground">
+                  {notificationPage?.totalCount ?? 0}건
+                </span>
+              </p>
             </div>
-            <p className="text-sm font-medium text-muted-foreground">
-              표시 중인 알림{" "}
-              <span className="text-lg font-semibold text-foreground">
-                {notificationPage?.totalCount ?? 0}건
-              </span>
-            </p>
           </div>
         </div>
 

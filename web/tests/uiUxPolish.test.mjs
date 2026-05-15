@@ -53,11 +53,14 @@ test("card spotlight gradient only appears on hover or focus", () => {
   assert.doesNotMatch(cardSpotlight, /radial-gradient\(280px circle at 12% 0%/);
 });
 
-test("notification read actions share primary action styling", () => {
+test("notification actions use worklog-style variants with distinct colors", () => {
   assert.match(notificationPage, /variant="default"[\s\S]*onClick=\{markAllRead\}/);
+  assert.match(notificationPage, /알림 목록[\s\S]*onClick=\{markAllRead\}/);
   assert.match(notificationPage, /className="h-12 justify-center"/);
   assert.match(notificationList, /variant="default"[\s\S]*onClick=\{\(\) => onMarkRead\(notification\.id\)\}/);
-  assert.match(notificationList, /focus-visible:!text-primary-foreground active:!text-primary-foreground/);
+  assert.match(notificationList, /variant="secondary"[\s\S]*관련 화면 이동/);
+  assert.match(notificationList, /h-11 px-5 text-sm font-semibold/);
+  assert.doesNotMatch(notificationList, /shadow-\[/);
 });
 
 test("notification center popover uses theme-specific opaque surface and text colors", () => {
@@ -73,6 +76,20 @@ test("notification center trigger keeps theme-appropriate text while open on top
   assert.match(gnb, /aria-expanded:!text-slate-900/);
   assert.match(gnb, /dark:aria-expanded:!text-white/);
   assert.match(gnb, /dark:active:!text-white/);
+});
+
+test("notification center count is plain text without a circular badge", () => {
+  assert.match(gnb, /unreadCount > 0/);
+  assert.match(gnb, /text-primary/);
+  assert.doesNotMatch(gnb, /rounded-full bg-primary/);
+  assert.doesNotMatch(gnb, /text-primary-foreground/);
+});
+
+test("notification center trigger shows only icon and count visually", () => {
+  assert.match(gnb, /<Bell className="size-4" \/>/);
+  assert.match(gnb, /<span className="sr-only">알림 센터<\/span>/);
+  assert.doesNotMatch(gnb, /className="hidden text-left md:inline">알림 센터/);
+  assert.match(gnb, /font-bold/);
 });
 
 test("workspace shell uses light gray navigation colors outside dark mode", () => {

@@ -144,9 +144,9 @@ export default function Gnb() {
             aria-label={`알림 ${unreadCount}개`}
           >
             <Bell className="size-4" />
-            <span className="hidden text-left md:inline">알림 센터</span>
+            <span className="sr-only">알림 센터</span>
             {unreadCount > 0 ? (
-              <span className="ml-1 inline-flex min-w-5 items-center justify-center rounded-full bg-primary px-1.5 text-[11px] font-semibold text-primary-foreground">
+              <span className="ml-0.5 text-xs font-bold text-primary dark:text-blue-300">
                 {unreadCount > 99 ? "99+" : unreadCount}
               </span>
             ) : null}
