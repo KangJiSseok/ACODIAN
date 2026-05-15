@@ -58,15 +58,21 @@ export default function WorklogPage() {
   const { data: filterOptions } = useWorklogFilterOptions()
   const memberOptions = useMemo(() => {
     const indexed = new Map<number, string>()
+    const teams =
+      filters.teamId === "all"
+        ? filterOptions?.teams ?? []
+        : (filterOptions?.teams ?? []).filter(
+            (team) => String(team.teamId) === filters.teamId
+          )
 
-    filterOptions?.teams.forEach((team) => {
+    teams.forEach((team) => {
       team.members.forEach((member) => {
         indexed.set(member.userId, member.userName)
       })
     })
 
     return Array.from(indexed, ([userId, userName]) => ({ userId, userName }))
-  }, [filterOptions])
+  }, [filterOptions, filters.teamId])
   const hasSearchCondition =
     query.trim().length > 0 ||
     Object.values(filters).some((value) => value !== "all" && value !== "ALL")
@@ -148,7 +154,7 @@ export default function WorklogPage() {
                 value={searchInput}
                 onChange={(event) => setSearchInput(event.target.value)}
                 className="h-12 pl-11"
-                placeholder="업무 제목으로 검색하세요"
+                placeholder="업무 제목 또는 내용으로 검색하세요"
               />
             </div>
             <div className="flex w-full items-center gap-2 sm:w-auto">
@@ -162,7 +168,7 @@ export default function WorklogPage() {
               </Button>
               <Button
                 type="button"
-                variant="outline"
+                variant="secondary"
                 className="h-12 justify-center"
                 onClick={() => setShowFilters((prev) => !prev)}
               >

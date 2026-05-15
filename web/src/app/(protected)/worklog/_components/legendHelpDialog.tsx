@@ -75,19 +75,19 @@ export function LegendHelpDialog({
       >
         <div
           className={cn(
-            "absolute -top-2 h-4 w-4 rotate-45 border border-border bg-popover shadow-sm",
+            "absolute -top-2 h-4 w-4 rotate-45 border border-border bg-background shadow-sm",
             align === "end" ? "right-3" : "left-3"
           )}
         />
-        <div className="relative rounded-2xl border border-border bg-popover p-4 text-popover-foreground shadow-2xl">
+        <div className="relative rounded-xl border border-border bg-background p-4 text-foreground shadow-2xl">
           <div className="space-y-1">
-            <h3 className="text-sm font-semibold text-popover-foreground">{title}</h3>
+            <h3 className="text-sm font-semibold text-foreground">{title}</h3>
             <p className="text-sm leading-6 text-muted-foreground">{description}</p>
           </div>
           <div className="mt-4 space-y-5">
             {sections.map((section) => (
               <section key={section.title} className="space-y-3">
-                <h4 className="text-sm font-semibold text-popover-foreground">
+                <h4 className="text-sm font-semibold text-foreground">
                   {section.title}
                 </h4>
                 <div className="flex flex-wrap gap-2">{section.content}</div>
