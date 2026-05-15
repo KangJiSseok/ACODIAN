@@ -81,7 +81,7 @@ export function WorklogFileUpload({
         role="button"
         tabIndex={0}
         className={cn(
-          "rounded-2xl border border-dashed border-border/70 bg-input/95 p-5 shadow-sm transition-colors hover:border-primary/35 hover:bg-primary/5",
+          "rounded-2xl border border-dashed border-border/70 bg-input/95 p-5 shadow-sm transition-colors",
           isDragging && "border-primary/60 bg-primary/10"
         )}
         onClick={openFilePicker}
@@ -135,7 +135,7 @@ export function WorklogFileUpload({
               </span>
               <button
                 type="button"
-                className="flex size-7 shrink-0 items-center justify-center rounded-lg text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+                className="flex size-7 shrink-0 items-center justify-center rounded-lg text-muted-foreground"
                 aria-label={`${name} 제거`}
                 onClick={() => onRemoveAttachmentName(name)}
               >

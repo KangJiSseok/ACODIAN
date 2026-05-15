@@ -339,7 +339,7 @@ function DependencyDropdown({
                   <button
                     key={dependency.id}
                     type="button"
-                    className="block w-full rounded-xl px-3 py-2.5 text-left transition-colors hover:bg-muted"
+                    className="block w-full rounded-xl px-3 py-2.5 text-left"
                     onMouseDown={(event) => event.preventDefault()}
                     onClick={() => onAddDependency(dependency.id)}
                   >
@@ -410,7 +410,7 @@ function DependencySelectionList({
           </div>
           <button
             type="button"
-            className="flex size-7 shrink-0 items-center justify-center rounded-lg text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+            className="flex size-7 shrink-0 items-center justify-center rounded-lg text-muted-foreground"
             aria-label={`${dependency.title} 선행 업무 제거`}
             onClick={() => onRemoveDependency(dependency.id)}
           >
@@ -432,7 +432,7 @@ function ScheduleDateControl({
   onChange: (value: string) => void
 }) {
   return (
-    <label className="group flex min-h-[76px] items-center gap-3 rounded-2xl border border-border/80 bg-background/75 px-4 py-3 shadow-sm transition-all hover:-translate-y-0.5 hover:border-primary/35 hover:bg-primary/5 hover:shadow-[0_16px_38px_-28px_rgba(30,58,138,0.8)] focus-within:border-primary/45 focus-within:ring-2 focus-within:ring-primary/15">
+    <label className="group flex min-h-[76px] items-center gap-3 rounded-2xl border border-border/80 bg-background/75 px-4 py-3 shadow-sm focus-within:border-primary/45 focus-within:ring-2 focus-within:ring-primary/15">
       <span className="flex size-10 shrink-0 items-center justify-center rounded-full border border-primary/20 bg-primary/10 text-primary">
         <CalendarDays className="size-5" />
       </span>
@@ -442,7 +442,7 @@ function ScheduleDateControl({
         </span>
         <input
           type="date"
-          className="schedule-date-input mt-1 h-10 w-full rounded-full border border-border/70 bg-background px-3 text-sm font-semibold text-foreground outline-none transition-colors [color-scheme:light] hover:border-primary/35 focus:border-primary dark:[color-scheme:dark]"
+          className="schedule-date-input mt-1 h-10 w-full rounded-full border border-border/70 bg-background px-3 text-sm font-semibold text-foreground outline-none transition-colors [color-scheme:light] focus:border-primary dark:[color-scheme:dark]"
           value={value}
           onChange={(event) => onChange(event.target.value)}
           aria-label={`${label} 날짜 입력`}
