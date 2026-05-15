@@ -67,33 +67,41 @@ export function NotificationList({
                 </div>
               </div>
 
-              <div className="flex flex-wrap justify-end gap-2">
-                {!notification.isRead ? (
-                  <Button
-                    type="button"
-                    variant="default"
-                    className="h-11 px-5 text-sm font-semibold sm:min-w-32"
-                    onClick={() => onMarkRead(notification.id)}
-                  >
-                    읽음 처리
-                  </Button>
-                ) : null}
-                <Button
-                  asChild
-                  variant="secondary"
-                  className="h-11 px-5 text-sm font-semibold sm:min-w-32"
+              <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
+                <time
+                  dateTime={notification.createdAt}
+                  className="text-xs font-medium text-muted-foreground"
                 >
-                  <Link
-                    href={resolveNotificationDeepLink(notification)}
-                    onClick={() => {
-                      if (!notification.isRead) {
-                        onMarkRead(notification.id);
-                      }
-                    }}
+                  {formatNotificationCreatedAt(notification.createdAt)}
+                </time>
+                <div className="flex flex-wrap justify-end gap-2">
+                  {!notification.isRead ? (
+                    <Button
+                      type="button"
+                      variant="default"
+                      className="h-11 px-5 text-sm font-semibold sm:min-w-32"
+                      onClick={() => onMarkRead(notification.id)}
+                    >
+                      읽음 처리
+                    </Button>
+                  ) : null}
+                  <Button
+                    asChild
+                    variant="secondary"
+                    className="h-11 px-5 text-sm font-semibold sm:min-w-32"
                   >
-                    관련 화면 이동
-                  </Link>
-                </Button>
+                    <Link
+                      href={resolveNotificationDeepLink(notification)}
+                      onClick={() => {
+                        if (!notification.isRead) {
+                          onMarkRead(notification.id);
+                        }
+                      }}
+                    >
+                      관련 화면 이동
+                    </Link>
+                  </Button>
+                </div>
               </div>
             </div>
           </CardSpotlight>
@@ -105,6 +113,16 @@ export function NotificationList({
 
 function getNotificationDisplayContent(content?: string | null) {
   return content?.replace(TRAILING_NOTIFICATION_DATE_PATTERN, "").trim() ?? "";
+}
+
+function formatNotificationCreatedAt(value: string) {
+  return new Intl.DateTimeFormat("ko-KR", {
+    year: "numeric",
+    month: "long",
+    day: "numeric",
+    hour: "2-digit",
+    minute: "2-digit",
+  }).format(new Date(value));
 }
 
 function getNotificationReadLabel(notification: NotificationItem) {

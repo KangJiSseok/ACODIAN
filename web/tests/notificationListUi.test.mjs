@@ -31,9 +31,14 @@ test("notification list hides backend date suffix from content and meta row", ()
   assert.match(notificationListFile, /확인 기준일/);
   assert.doesNotMatch(notificationListFile, /getNotificationDueDateLabel/);
   assert.doesNotMatch(notificationListFile, /dueDateLabel/);
-  assert.doesNotMatch(
+});
+
+test("notification list renders received date at the card bottom", () => {
+  assert.match(notificationListFile, /<time/);
+  assert.match(notificationListFile, /dateTime=\{notification\.createdAt\}/);
+  assert.match(
     notificationListFile,
-    /formatDateTime\(notification\.createdAt\)/,
+    /formatNotificationCreatedAt\(notification\.createdAt\)/,
   );
 });
 
@@ -52,7 +57,7 @@ test("notification item actions follow worklog detail and edit button variants",
 test("notification card keeps bottom action with worklog-list spacing", () => {
   assert.doesNotMatch(notificationListFile, /lg:flex-row lg:items-start/);
   assert.match(notificationListFile, /flex flex-col gap-4 p-5/);
-  assert.match(notificationListFile, /flex flex-wrap justify-end gap-2/);
+  assert.match(notificationListFile, /sm:flex-row sm:items-end sm:justify-between/);
   assert.match(notificationListFile, /p-5/);
   assert.match(notificationListFile, /line-clamp-2/);
   assert.match(notificationListFile, /leading-7/);

@@ -141,12 +141,6 @@ export default function NotificationPage() {
 
         <div className="grid gap-3 md:grid-cols-3">
           <SummaryCard
-            label="전체 알림"
-            value={totalCount}
-            active={activeView === "TOTAL"}
-            onClick={() => updateView("TOTAL")}
-          />
-          <SummaryCard
             label="읽지 않은 알림"
             value={unreadCount}
             active={activeView === "UNREAD"}
@@ -157,6 +151,12 @@ export default function NotificationPage() {
             value={readCount}
             active={activeView === "READ"}
             onClick={() => updateView("READ")}
+          />
+          <SummaryCard
+            label="전체 알림"
+            value={totalCount}
+            active={activeView === "TOTAL"}
+            onClick={() => updateView("TOTAL")}
           />
         </div>
       </section>

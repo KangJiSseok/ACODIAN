@@ -63,6 +63,13 @@ test("notification actions use worklog-style variants with distinct colors", () 
   assert.doesNotMatch(notificationList, /shadow-\[/);
 });
 
+test("notification summary cards prioritize unread then read before total", () => {
+  assert.match(
+    notificationPage,
+    /label="읽지 않은 알림"[\s\S]*label="읽은 알림"[\s\S]*label="전체 알림"/,
+  );
+});
+
 test("notification center popover uses theme-specific opaque surface and text colors", () => {
   assert.match(notificationCenterPopover, /bg-white text-slate-950/);
   assert.match(notificationCenterPopover, /dark:bg-slate-950 dark:text-slate-50/);
@@ -78,11 +85,12 @@ test("notification center trigger keeps theme-appropriate text while open on top
   assert.match(gnb, /dark:active:!text-white/);
 });
 
-test("notification center count is plain text without a circular badge", () => {
+test("notification center count uses the worklog red count badge", () => {
   assert.match(gnb, /unreadCount > 0/);
-  assert.match(gnb, /text-primary/);
-  assert.doesNotMatch(gnb, /rounded-full bg-primary/);
-  assert.doesNotMatch(gnb, /text-primary-foreground/);
+  assert.match(gnb, /group relative h-10 w-10/);
+  assert.match(gnb, /absolute -right-1\.5 -top-1\.5/);
+  assert.match(gnb, /rounded-full bg-red-600/);
+  assert.match(gnb, /ring-2 ring-background/);
 });
 
 test("notification center trigger shows only icon and count visually", () => {

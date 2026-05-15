@@ -137,7 +137,7 @@ export default function Gnb() {
           <Button
             type="button"
             variant="outline"
-            className="h-10 border-slate-200/80 bg-slate-100/80 px-3 text-slate-700 hover:bg-slate-200/70 hover:text-slate-900 active:!text-slate-900 aria-expanded:!bg-slate-200/70 aria-expanded:!text-slate-900 focus-visible:!text-slate-900 dark:border-white/12 dark:bg-black/10 dark:text-white/80 dark:hover:bg-black/18 dark:hover:text-white dark:active:!text-white dark:aria-expanded:!bg-black/18 dark:aria-expanded:!text-white dark:focus-visible:!text-white"
+            className="group relative h-10 w-10 border-slate-200/80 bg-slate-100/80 px-0 text-slate-700 hover:bg-slate-200/70 hover:text-slate-900 active:!text-slate-900 aria-expanded:!bg-slate-200/70 aria-expanded:!text-slate-900 focus-visible:!text-slate-900 dark:border-white/12 dark:bg-black/10 dark:text-white/80 dark:hover:bg-black/18 dark:hover:text-white dark:active:!text-white dark:aria-expanded:!bg-black/18 dark:aria-expanded:!text-white dark:focus-visible:!text-white"
             onClick={() => setIsNotificationOpen((prev) => !prev)}
             aria-expanded={isNotificationOpen}
             aria-haspopup="dialog"
@@ -146,7 +146,7 @@ export default function Gnb() {
             <Bell className="size-4" />
             <span className="sr-only">알림 센터</span>
             {unreadCount > 0 ? (
-              <span className="ml-0.5 text-xs font-bold text-primary dark:text-blue-300">
+              <span className="absolute -right-1.5 -top-1.5 flex min-w-4 items-center justify-center rounded-full bg-red-600 px-1 text-[10px] font-bold leading-4 text-white ring-2 ring-background group-hover:bg-red-600 group-hover:text-white">
                 {unreadCount > 99 ? "99+" : unreadCount}
               </span>
             ) : null}
