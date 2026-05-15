@@ -84,7 +84,7 @@ export function WorklogPreviewDialog({
               <div className="flex flex-wrap justify-end gap-3">
                 <Button
                   variant="secondary"
-                  className="bg-muted text-muted-foreground shadow-sm hover:bg-muted/80 hover:text-foreground"
+                  className="h-11 min-w-[108px] rounded-xl bg-muted px-5 text-sm font-semibold text-muted-foreground shadow-sm hover:bg-muted/80 hover:text-foreground"
                   asChild
                 >
                   <Link
@@ -94,7 +94,10 @@ export function WorklogPreviewDialog({
                     상세페이지
                   </Link>
                 </Button>
-                <Button className="shadow-sm" asChild>
+                <Button
+                  className="h-11 min-w-[108px] rounded-xl px-5 text-sm font-semibold shadow-sm"
+                  asChild
+                >
                   <a
                     href="#"
                     onClick={(event) => {
