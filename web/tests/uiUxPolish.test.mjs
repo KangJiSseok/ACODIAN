@@ -70,6 +70,15 @@ test("notification summary cards prioritize unread then read before total", () =
   );
 });
 
+test("notification page places status description under the status heading", () => {
+  assert.match(notificationPage, /<PageHeader title="알림" \/>/);
+  assert.doesNotMatch(notificationPage, /PageHeader title="알림" description=/);
+  assert.match(
+    notificationPage,
+    /알림 현황[\s\S]*업무 마감 알림과 읽음 상태를 확인합니다\.[\s\S]*className="grid gap-3 md:grid-cols-3"/,
+  );
+});
+
 test("notification center popover uses theme-specific opaque surface and text colors", () => {
   assert.match(notificationCenterPopover, /bg-white text-slate-950/);
   assert.match(notificationCenterPopover, /dark:bg-slate-950 dark:text-slate-50/);

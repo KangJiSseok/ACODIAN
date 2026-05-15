@@ -130,13 +130,16 @@ export default function NotificationPage() {
 
   return (
     <section className="space-y-6">
-      <PageHeader title="알림" description="업무 마감 알림과 읽음 상태를 확인합니다." />
+      <PageHeader title="알림" />
 
       <section className="space-y-4">
         <div>
           <h2 className="text-[20px] font-semibold tracking-[-0.04em] text-foreground">
             알림 현황
           </h2>
+          <p className="mt-2 text-sm leading-6 text-muted-foreground">
+            업무 마감 알림과 읽음 상태를 확인합니다.
+          </p>
         </div>
 
         <div className="grid gap-3 md:grid-cols-3">
