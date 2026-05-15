@@ -3,8 +3,8 @@ package com.ibank.axwms.domain.worklog.controller;
 import com.ibank.axwms.domain.worklog.dto.CreateWorklogApiDto;
 import com.ibank.axwms.domain.worklog.dto.GetWorklogDetailApiDto;
 import com.ibank.axwms.domain.worklog.dto.GetWorklogFilterOptionsApiDto;
-import com.ibank.axwms.domain.worklog.dto.GetWorklogOptionsApiDto;
 import com.ibank.axwms.domain.worklog.dto.GetWorklogsApiDto;
+import com.ibank.axwms.domain.worklog.dto.SearchPredecessorApiDto;
 import com.ibank.axwms.domain.worklog.dto.SearchWorklogsApiDto;
 import com.ibank.axwms.domain.worklog.dto.UpdateWorklogApiDto;
 import com.ibank.axwms.domain.worklog.dto.UpdateWorklogStatusApiDto;
@@ -140,20 +140,21 @@ public interface WorklogControllerDocs {
             UpdateWorklogStatusApiDto.Request request
     );
 
-    @Operation(summary = "업무 등록 화면 폼 옵션 조회",
-            description = "업무 등록 화면 진입 시 사용할 폼 옵션을 한 번에 반환한다. "
-                    + "의존성은 같은 팀 내에서만 등록 가능하므로 선행 후보는 요청 teamId 의 미삭제, 미완료 worklog 만 최신순으로 포함된다. "
-                    + "요청자는 해당 팀의 ACTIVE 멤버여야 한다. "
-                    + "태그는 메타 태그 전체를 이름순으로 반환한다.")
+    @Operation(summary = "선행 업무 후보 검색",
+            description = "업무 등록/수정 화면에서 선행으로 지정할 worklog 후보를 검색한다. "
+                    + "의존성은 같은 팀 한정이라 요청 teamId 의 ACTIVE 멤버여야 하며, "
+                    + "후보는 해당 팀의 미삭제 + 미완료 worklog 만 노출된다. "
+                    + "query 가 있으면 제목 LIKE 로 좁히고, excludeWorklogId 가 있으면 결과에서 제외한다. "
+                    + "정렬은 created_at 내림차순으로 고정된다.")
     @SecurityRequirement(name = "bearerAuth")
     @ApiResponses({
-            @ApiResponse(responseCode = "200", description = "폼 옵션을 반환한다."),
+            @ApiResponse(responseCode = "200", description = "선행 후보 페이지를 반환한다."),
             @ApiResponse(responseCode = "400", description = "요청 값이 올바르지 않다.", content = @Content),
             @ApiResponse(responseCode = "401", description = "인증이 필요하다.", content = @Content),
             @ApiResponse(responseCode = "403", description = "요청 팀의 ACTIVE 멤버가 아니다.", content = @Content)
     })
-    GetWorklogOptionsApiDto.Response getWorklogOptions(
+    PageResponse<SearchPredecessorApiDto.Response.Item> searchPredecessor(
             @Parameter(hidden = true) CustomUserPrincipal principal,
-            @ParameterObject GetWorklogOptionsApiDto.Request request
+            @ParameterObject SearchPredecessorApiDto.Request request
     );
 }
