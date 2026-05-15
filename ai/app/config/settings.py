@@ -54,6 +54,7 @@ class Settings(BaseSettings):
     lightrag_embedding_max_token_size: int = 2048
     lightrag_index_max_batch_size: int = 10
     lightrag_insert_timeout_seconds: int = 120
+    lightrag_kg_language: str = "Korean"
 
     model_config = SettingsConfigDict(
         # ai/.env 를 자동 로드한다 (없으면 위 기본값을 사용).

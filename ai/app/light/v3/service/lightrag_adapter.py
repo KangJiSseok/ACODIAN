@@ -132,6 +132,7 @@ class LightRagWorklogIndexAdapter:
             llm_model_func=llm_model_func,
             llm_model_name=self._settings.lightrag_llm_model,
             embedding_func=embedding_func,
+            addon_params={"language": self._settings.lightrag_kg_language},
         )
 
     def _ensure_required_config(self) -> None:

@@ -116,6 +116,7 @@ def test_lightrag_adapter_initializes_inserts_ids_and_finalizes() -> None:
         ]
         assert fake_rag.kwargs["working_dir"] == "./data/lightrag-v3"
         assert fake_rag.kwargs["llm_model_name"] == "gemini-2.5-flash"
+        assert fake_rag.kwargs["addon_params"] == {"language": "Korean"}
 
         await fake_rag.kwargs["llm_model_func"]("prompt", keyword_extraction=True)
         await fake_rag.kwargs["embedding_func"](["text"])
@@ -140,6 +141,25 @@ def test_lightrag_adapter_initializes_inserts_ids_and_finalizes() -> None:
         "embedding_dim": 768,
         "max_token_size": 2048,
     }
+
+
+def test_lightrag_adapter_passes_configured_kg_language_to_lightrag() -> None:
+    FakeLightRAG.instances = []
+    dependencies, _, _, _ = make_dependencies()
+    settings = make_settings()
+    settings.lightrag_kg_language = "한국어"
+    adapter = LightRagWorklogIndexAdapter(
+        settings_obj=settings,
+        dependencies=dependencies,
+    )
+
+    async def run_case() -> None:
+        await adapter.index_documents([make_document()])
+        fake_rag = FakeLightRAG.instances[0]
+
+        assert fake_rag.kwargs["addon_params"] == {"language": "한국어"}
+
+    asyncio.run(run_case())
 
 
 def test_lightrag_adapter_batches_multiple_documents_with_ordered_ids_and_file_paths() -> None:
