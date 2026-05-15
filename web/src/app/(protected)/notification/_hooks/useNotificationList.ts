@@ -41,18 +41,17 @@ export function useNotificationList(params: GetNotificationsParams = {}) {
 
 export function useNotificationCenter() {
   const notificationListQuery = useNotificationList({
-    page: 1,
-    pageSize: 100,
-  });
-  const unreadCountQuery = useNotificationList({
     isRead: false,
     page: 1,
-    pageSize: 1,
+    pageSize: 10,
   });
+  const unreadNotifications = notificationListQuery.notifications.filter(
+    (notification) => !notification.isRead,
+  );
 
   return {
     ...notificationListQuery,
-    unreadCount: unreadCountQuery.notificationPage?.totalCount ?? 0,
-    notificationCenterNotifications: notificationListQuery.notifications,
+    unreadCount: notificationListQuery.notificationPage?.totalCount ?? 0,
+    notificationCenterNotifications: unreadNotifications,
   };
 }

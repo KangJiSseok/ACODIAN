@@ -34,7 +34,7 @@ export function NotificationCenterPopover({
         <div>
           <h2 className="text-sm font-semibold">알림 센터</h2>
           <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">
-            최대 100개 표시 · 미읽음 {unreadCount}건
+            최대 10개 표시 · 미읽음 {unreadCount}건
           </p>
         </div>
 
@@ -87,7 +87,7 @@ export function NotificationCenterPopover({
           </ul>
         ) : (
           <div className="rounded-xl border border-dashed border-slate-200 px-4 py-8 text-center text-sm text-slate-500 dark:border-slate-800 dark:text-slate-400">
-            표시할 알림이 없습니다.
+            읽지 않은 알림이 없습니다.
           </div>
         )}
       </div>
@@ -95,8 +95,8 @@ export function NotificationCenterPopover({
       <div className="border-t border-slate-200 p-4 dark:border-slate-800">
         <Button
           asChild
-          variant="outline"
-          className="w-full border-slate-200 bg-white text-slate-950 hover:bg-slate-50 hover:text-slate-950 dark:border-slate-800 dark:bg-slate-950 dark:text-slate-50 dark:hover:bg-slate-900 dark:hover:text-slate-50"
+          variant="default"
+          className="w-full rounded-xl bg-primary !text-primary-foreground shadow-[0_14px_28px_-20px_rgba(30,64,175,0.9)] hover:bg-primary/90 hover:!text-primary-foreground focus-visible:!text-primary-foreground active:!text-primary-foreground dark:bg-primary dark:!text-primary-foreground dark:hover:bg-primary/90 dark:hover:!text-primary-foreground [&_svg]:!text-primary-foreground"
         >
           <Link href="/notification" onClick={onClose}>
             전체 보기
