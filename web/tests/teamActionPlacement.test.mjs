@@ -45,7 +45,9 @@ test("team management page shows helper description copy", () => {
 test("team create action is exposed only to organization managers", () => {
   assert.match(teamPage, /useAuth\(\)/);
   assert.match(teamPage, /canCreateTeams\(user\)/);
-  assert.match(teamPage, /actions=\{canCreateTeam \?/);
+  assert.doesNotMatch(teamPage, /actions=\{canCreateTeam \?/);
+  assert.match(teamPage, /팀 목록[\s\S]*canCreateTeam \?/);
+  assert.match(teamPage, /팀 목록[\s\S]*\/team\/create[\s\S]*팀 등록/);
 });
 
 test("team detail owns edit and delete actions", () => {

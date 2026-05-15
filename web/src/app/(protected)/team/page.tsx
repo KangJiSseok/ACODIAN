@@ -75,16 +75,6 @@ export default function TeamPage() {
       <PageHeader
         title="팀 관리"
         description="관리 가능한 팀과 소속 구성원을 확인합니다."
-        actions={canCreateTeam ? (
-          <Button
-            asChild
-            type="button"
-            variant="default"
-            className="h-10 min-w-32 px-6 text-sm font-semibold !text-primary-foreground hover:!text-primary-foreground"
-          >
-            <Link href="/team/create">팀 등록</Link>
-          </Button>
-        ) : null}
       />
 
       <div className="grid gap-4 md:grid-cols-3">
@@ -121,19 +111,29 @@ export default function TeamPage() {
 
       <section className="space-y-4">
         <div className="border-t-2 border-foreground/70 pt-5">
-          <div className="grid gap-3 sm:grid-cols-[minmax(0,1fr)_auto] sm:items-end">
-                <div>
-                  <h2 className="text-[20px] font-semibold tracking-[-0.04em] text-foreground">
-                    {filter === "all" ? "팀 목록" : `${getTeamStatusLabel(filter)} 팀`}
-                  </h2>
-                  <p className="mt-2 text-sm leading-6 text-muted-foreground">
-                    팀 상태, 팀장, 관리자, 구성원 수와 운영 기간을 한눈에 확인합니다.
-                  </p>
-                </div>
-                <div className="flex flex-col gap-3 sm:items-end">
-                  <p className="text-sm font-medium text-muted-foreground">
-                    표시 중인 팀 {filteredTeams.length}개
-                  </p>
+          <div className="space-y-2">
+            <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+              <h2 className="text-[20px] font-semibold tracking-[-0.04em] text-foreground">
+                {filter === "all" ? "팀 목록" : `${getTeamStatusLabel(filter)} 팀`}
+              </h2>
+              {canCreateTeam ? (
+                <Button
+                  asChild
+                  type="button"
+                  variant="default"
+                  className="h-10 min-w-32 px-6 text-sm font-semibold !text-primary-foreground hover:!text-primary-foreground"
+                >
+                  <Link href="/team/create">팀 등록</Link>
+                </Button>
+              ) : null}
+            </div>
+            <div className="flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
+              <p className="mt-2 text-sm leading-6 text-muted-foreground">
+                팀 상태, 팀장, 관리자, 구성원 수와 운영 기간을 한눈에 확인합니다.
+              </p>
+              <p className="text-sm font-medium text-muted-foreground">
+                표시 중인 팀 {filteredTeams.length}개
+              </p>
             </div>
           </div>
         </div>

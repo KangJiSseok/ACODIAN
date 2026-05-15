@@ -37,6 +37,14 @@ test("department management page shows helper description copy", () => {
   assert.doesNotMatch(departmentPage, /삭제 제약/);
 });
 
+test("department create action is aligned with the department list title", () => {
+  assert.match(departmentPage, /부서 목록[\s\S]*\/department\/create[\s\S]*부서 등록/);
+  assert.match(
+    departmentPage,
+    /flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between/,
+  );
+});
+
 test("department detail owns edit and delete actions", () => {
   assert.match(
     departmentDetailPage,

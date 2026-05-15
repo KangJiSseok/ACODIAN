@@ -1,10 +1,11 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { usePathname } from "next/navigation";
 import { Bell, ChevronRight, Moon, Sun } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
+import { useAuth } from "@/app/_common/hooks/useAuth";
 import { resolveBreadcrumbs } from "@/app/_common/service/breadcrumbs";
 import {
   useNotificationCenter,
@@ -12,7 +13,7 @@ import {
   useNotificationStream,
 } from "@/app/(protected)/notification/_hooks";
 import { resolveNotificationDeepLink } from "@/app/(protected)/notification/_utils/resolveNotificationDeepLink";
-import { getNotificationTypeLabel } from "@/app/(protected)/notification/_utils/notificationLabel";
+import type { NotificationItem } from "@/app/(protected)/notification/_types/notification.types";
 import {
   NotificationCenterPopover,
   type NotificationCenterItem,
@@ -21,17 +22,26 @@ import {
 export default function Gnb() {
   const pathname = usePathname();
   const breadcrumbs = resolveBreadcrumbs(pathname);
-  const { unreadCount, recentUnreadNotifications } = useNotificationCenter();
+  const { user } = useAuth();
+  const { unreadCount, notificationCenterNotifications } =
+    useNotificationCenter();
   const { markAllRead, markRead } = useNotificationMutation();
   useNotificationStream();
   const [isNotificationOpen, setIsNotificationOpen] = useState(false);
   const notificationRef = useRef<HTMLDivElement>(null);
+  const teamNameById = useMemo(
+    () =>
+      new Map(
+        (user?.teams ?? []).map((team) => [team.teamId, team.teamName] as const),
+      ),
+    [user?.teams],
+  );
   const notificationCenterItems: NotificationCenterItem[] =
-    recentUnreadNotifications.map((notification) => ({
+    notificationCenterNotifications.map((notification) => ({
       id: notification.id,
-      typeLabel: getNotificationTypeLabel(notification.type),
       title: notification.title,
-      content: notification.content ?? "",
+      isRead: notification.isRead,
+      teamName: getNotificationCenterTeamName(notification, teamNameById),
       createdAt: notification.createdAt,
       href: resolveNotificationDeepLink(notification),
     }));
@@ -137,16 +147,16 @@ export default function Gnb() {
           <Button
             type="button"
             variant="outline"
-            className="h-10 border-slate-200/80 bg-slate-100/80 px-3 text-slate-700 hover:bg-slate-200/70 hover:text-slate-900 active:!text-slate-900 aria-expanded:!bg-slate-200/70 aria-expanded:!text-slate-900 focus-visible:!text-slate-900 dark:border-white/12 dark:bg-black/10 dark:text-white/80 dark:hover:bg-black/18 dark:hover:text-white dark:active:!text-white dark:aria-expanded:!bg-black/18 dark:aria-expanded:!text-white dark:focus-visible:!text-white"
+            className="group relative h-10 w-10 border-slate-200/80 bg-slate-100/80 px-0 text-slate-700 hover:bg-slate-200/70 hover:text-slate-900 active:!text-slate-900 aria-expanded:!bg-slate-200/70 aria-expanded:!text-slate-900 focus-visible:!text-slate-900 dark:border-white/12 dark:bg-black/10 dark:text-white/80 dark:hover:bg-black/18 dark:hover:text-white dark:active:!text-white dark:aria-expanded:!bg-black/18 dark:aria-expanded:!text-white dark:focus-visible:!text-white"
             onClick={() => setIsNotificationOpen((prev) => !prev)}
             aria-expanded={isNotificationOpen}
             aria-haspopup="dialog"
             aria-label={`알림 ${unreadCount}개`}
           >
             <Bell className="size-4" />
-            <span className="hidden text-left md:inline">알림 센터</span>
+            <span className="sr-only">알림 센터</span>
             {unreadCount > 0 ? (
-              <span className="ml-1 inline-flex min-w-5 items-center justify-center rounded-full bg-primary px-1.5 text-[11px] font-semibold text-primary-foreground">
+              <span className="absolute -right-1.5 -top-1.5 flex min-w-4 items-center justify-center rounded-full bg-red-600 px-1 text-[10px] font-bold leading-4 text-white ring-2 ring-background group-hover:bg-red-600 group-hover:text-white">
                 {unreadCount > 99 ? "99+" : unreadCount}
               </span>
             ) : null}
@@ -165,4 +175,19 @@ export default function Gnb() {
       </div>
     </header>
   );
+}
+
+function getNotificationCenterTeamName(
+  notification: NotificationItem,
+  teamNameById: ReadonlyMap<number, string>,
+) {
+  if (notification.teamName?.trim()) {
+    return notification.teamName.trim();
+  }
+
+  if (!notification.teamId) {
+    return null;
+  }
+
+  return teamNameById.get(notification.teamId) ?? null;
 }
