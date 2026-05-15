@@ -1,9 +1,15 @@
 package com.ibank.axwms.domain.tag.service;
 
+import com.ibank.axwms.domain.tag.dto.SearchTagApiDto;
 import com.ibank.axwms.domain.tag.repository.TagRepository;
+import com.ibank.axwms.domain.tag.repository.jooq.projection.SearchTagProjection;
+import com.ibank.axwms.domain.tag.repository.jooq.query.SearchTagQuery;
 import com.ibank.axwms.global.error.BusinessException;
 import com.ibank.axwms.global.error.ErrorCode;
+import com.ibank.axwms.global.response.PageResponse;
+import com.ibank.axwms.global.security.CustomUserPrincipal;
 import lombok.RequiredArgsConstructor;
+import org.springframework.data.domain.Page;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -60,6 +66,17 @@ public class TagService {
         }
 
         tagRepository.decrementUsageCountByIds(normalizedIds);
+    }
+
+    /**
+     * 메타 태그를 태그명 LIKE (대소문자 무시) 로 검색해 페이지로 반환한다.
+     * worklog 등록/수정 화면의 태그 picker, file 목록의 태그 필터 등 공통 lookup 으로 사용된다.
+     */
+    public PageResponse<SearchTagApiDto.Response.Item> searchTag(CustomUserPrincipal principal,
+                                                                 SearchTagApiDto.Request request) {
+        SearchTagQuery query = SearchTagQuery.from(request);
+        Page<SearchTagProjection> page = tagRepository.searchTagPage(query);
+        return SearchTagApiDto.Response.fromPage(page);
     }
 
     /**
