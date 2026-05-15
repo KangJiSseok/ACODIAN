@@ -141,6 +141,7 @@ public interface UserControllerDocs {
             description = "DIRECTOR 또는 DEPT_HEAD 가 사용자 목록을 페이지네이션으로 조회한다. "
                     + "userName, departmentId, positionName, employmentStatus optional filter 를 적용하며, "
                     + "employmentStatus 가 없으면 ACTIVE/LEAVE 만 포함하고 RETIRED 는 항상 제외한다. "
+                    + "각 목록 항목은 사용자의 입사일 joinDate 를 포함한다. "
                     + "page 기본값은 1, pageSize 기본값은 20이고 최대 100이다. "
                     + "정렬은 DIRECTOR, DEPT_HEAD, TEAM_LEAD, MEMBER 순서다."
     )

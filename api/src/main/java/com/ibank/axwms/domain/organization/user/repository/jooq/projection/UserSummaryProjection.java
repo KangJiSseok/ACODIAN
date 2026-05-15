@@ -1,6 +1,7 @@
 package com.ibank.axwms.domain.organization.user.repository.jooq.projection;
 
 import com.ibank.axwms.domain.organization.user.EmploymentStatus;
+import java.time.LocalDate;
 import org.jooq.Record;
 
 /** 사용자 목록 한 행에 필요한 필드만 담는 읽기 전용 projection 이다. */
@@ -9,6 +10,7 @@ public record UserSummaryProjection(
         String userName,
         String email,
         String phone,
+        LocalDate joinDate,
         Long departmentId,
         String departmentName,
         String profileImageUrl,
@@ -27,6 +29,7 @@ public record UserSummaryProjection(
                 record.get("user_name", String.class),
                 record.get("email", String.class),
                 record.get("phone", String.class),
+                record.get("join_date", LocalDate.class),
                 record.get("department_id", Long.class),
                 record.get("department_name", String.class),
                 record.get("profile_image_url", String.class),
