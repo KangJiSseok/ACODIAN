@@ -64,8 +64,8 @@ export default function WorklogDetailPage() {
           canEditSelectedWorklog(user?.userId, selectedWorklog) ? (
             <Button
               asChild
-              variant="outline"
-              className="h-12 min-w-32 px-6 text-sm font-semibold"
+              variant="secondary"
+              className="h-10 min-w-32 px-5 text-sm font-semibold"
             >
               <Link href={`/worklog/edit/${selectedWorklog.id}`}>
                 <PencilLine className="size-4" />

@@ -138,6 +138,10 @@ export default function WorklogPage() {
           <h2 className="text-[20px] font-semibold tracking-[-0.04em] text-foreground">
             업무 탐색
           </h2>
+          <p className="mt-2 text-sm leading-6 text-muted-foreground">
+            업무 제목과 내용을 검색하고 팀, 상태, 중요도 등 조건을 조합해 필요한
+            업무일지를 빠르게 찾아보세요.
+          </p>
         </div>
 
         <div className="flex flex-col gap-4">
