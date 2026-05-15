@@ -362,6 +362,7 @@ class UserControllerTest {
                                 "홍길동",
                                 "hong@axwms.com",
                                 "010-1234-1234",
+                                LocalDate.of(2025, 1, 1),
                                 10L,
                                 "물류본부",
                                 "https://cdn.axwms.com/profile/101.png",
@@ -388,6 +389,7 @@ class UserControllerTest {
 
         assertThat(response).isEqualTo(responseFromService);
         assertThat(json).contains("\"phone\":\"010-1234-1234\"");
+        assertThat(json).contains("\"joinDate\":\"2025-01-01\"");
         assertThat(json).contains("\"items\"", "\"pageSize\":20", "\"totalCount\":1");
     }
 
@@ -400,6 +402,7 @@ class UserControllerTest {
                                 "무소속",
                                 "no-department@example.com",
                                 "010-0000-0023",
+                                null,
                                 null,
                                 null,
                                 null,
@@ -433,6 +436,7 @@ class UserControllerTest {
 
         assertThat(item.get("departmentId").isNull()).isTrue();
         assertThat(item.get("departmentName").isNull()).isTrue();
+        assertThat(item.get("joinDate").isNull()).isTrue();
         assertThat(item.get("teamId").isNull()).isTrue();
         assertThat(item.get("teamName").isNull()).isTrue();
     }

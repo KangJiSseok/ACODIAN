@@ -7,6 +7,7 @@ import io.swagger.v3.oas.annotations.media.Schema;
 import jakarta.validation.constraints.Max;
 import jakarta.validation.constraints.Min;
 import jakarta.validation.constraints.Size;
+import java.time.LocalDate;
 import lombok.AccessLevel;
 import lombok.NoArgsConstructor;
 import org.springframework.data.domain.Page;
@@ -59,6 +60,8 @@ public final class GetUsersApiDto {
             String email,
             @Schema(description = "전화번호", example = "010-1234-1234")
             String phone,
+            @Schema(description = "입사일", example = "2024-03-01")
+            LocalDate joinDate,
             @Schema(description = "부서 ID", example = "10")
             Long departmentId,
             @Schema(description = "부서명", example = "물류본부")
@@ -89,6 +92,7 @@ public final class GetUsersApiDto {
                     projection.userName(),
                     projection.email(),
                     projection.phone(),
+                    projection.joinDate(),
                     projection.departmentId(),
                     projection.departmentName(),
                     projection.profileImageUrl(),
