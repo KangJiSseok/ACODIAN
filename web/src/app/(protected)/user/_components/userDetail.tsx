@@ -83,6 +83,7 @@ export default function UserDetail({
   evaluations,
   isSkillsLoading = false,
   isEvaluationsLoading = false,
+  isSelfProfile = false,
 }: {
   user: UserDetailType;
   departments: DepartmentSummary[];
@@ -90,10 +91,17 @@ export default function UserDetail({
   evaluations: UserEvaluationSummary[];
   isSkillsLoading?: boolean;
   isEvaluationsLoading?: boolean;
+  isSelfProfile?: boolean;
 }) {
   const [activeTab, setActiveTab] = useState<UserDetailTab>("profile");
   const currentUser = useAuthStore(selectAuthUser);
   const canCreateUserInsights = canWriteUserInsight(currentUser, user);
+  const visibleTabs = useMemo(
+    () => tabs.filter((tab) => !isSelfProfile || tab.value === "profile"),
+    [isSelfProfile],
+  );
+  const activeDetailTab =
+    isSelfProfile && activeTab !== "profile" ? "profile" : activeTab;
 
   return (
     <section className="space-y-6">
@@ -123,15 +131,15 @@ export default function UserDetail({
             aria-label="사용자 상세 탭"
             className="inline-flex flex-wrap rounded-2xl bg-muted/45 p-1"
           >
-            {tabs.map((tab) => (
+            {visibleTabs.map((tab) => (
               <button
                 key={tab.value}
                 type="button"
                 role="tab"
-                aria-selected={activeTab === tab.value}
+                aria-selected={activeDetailTab === tab.value}
                 className={cn(
                   "h-12 min-w-32 rounded-2xl px-5 text-sm font-semibold text-muted-foreground transition-all",
-                  activeTab === tab.value &&
+                  activeDetailTab === tab.value &&
                     "bg-background text-foreground shadow-sm ring-1 ring-border/80",
                 )}
                 onClick={() => setActiveTab(tab.value)}
@@ -141,14 +149,15 @@ export default function UserDetail({
             ))}
           </div>
 
-          {activeTab === "profile" ? (
+          {activeDetailTab === "profile" ? (
             <ProfileTab
               key={user.userId}
               user={user}
               departments={departments}
+              isReadOnly={isSelfProfile}
             />
           ) : null}
-          {activeTab === "skills" ? (
+          {activeDetailTab === "skills" ? (
             <SkillsTab
               userId={user.userId}
               skills={skills}
@@ -156,7 +165,7 @@ export default function UserDetail({
               canCreate={canCreateUserInsights}
             />
           ) : null}
-          {activeTab === "evaluations" ? (
+          {activeDetailTab === "evaluations" ? (
             <EvaluationsTab
               userId={user.userId}
               evaluations={evaluations}
@@ -173,9 +182,11 @@ export default function UserDetail({
 function ProfileTab({
   user,
   departments,
+  isReadOnly = false,
 }: {
   user: UserDetailType;
   departments: DepartmentSummary[];
+  isReadOnly?: boolean;
 }) {
   const updateUser = useUpdateUser(user.userId);
   const [values, setValues] = useState<UserDetailFormValues>(() =>
@@ -202,6 +213,47 @@ function ProfileTab({
     [user.teams],
   );
   const isSaving = updateUser.isPending;
+
+  if (isReadOnly) {
+    return (
+      <div className="space-y-8">
+        <div className="space-y-4">
+          <p className="text-sm font-semibold text-muted-foreground">기본 정보</p>
+          <div className="grid gap-4 xl:grid-cols-3">
+            <ReadOnlyField label="이름" value={user.userName} />
+            <ReadOnlyField label="이메일" value={user.email} />
+            <ReadOnlyProfileImage user={user} />
+          </div>
+        </div>
+
+        <div className="border-t border-border/70 pt-8">
+          <p className="mb-4 text-sm font-semibold text-muted-foreground">
+            조직 배치
+          </p>
+          <div className="grid gap-4 xl:grid-cols-3">
+            <ReadOnlyField label="소속 부서" value={user.departmentName} />
+            <ReadOnlyField label="직급" value={user.positionName} />
+            <ReadOnlyField label="직책" value={user.titleName} />
+            <ReadOnlyTeamList label="다른 소속 팀" teams={otherTeams} />
+          </div>
+        </div>
+
+        <div className="border-t border-border/70 pt-8">
+          <p className="mb-4 text-sm font-semibold text-muted-foreground">
+            인사 정보
+          </p>
+          <div className="grid gap-4 xl:grid-cols-3">
+            <ReadOnlyField label="연락처" value={user.phone} />
+            <ReadOnlyField
+              label="상태"
+              value={getEmploymentStatusOptionLabel(user.employmentStatus)}
+            />
+            <ReadOnlyField label="입사일" value={formatDateInput(user.joinDate)} />
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   function handleChange(
     event: ChangeEvent<HTMLInputElement | HTMLSelectElement>,
@@ -750,6 +802,42 @@ function ReadOnlyField({
   );
 }
 
+function ReadOnlyTeamList({
+  label,
+  teams,
+}: {
+  label: string;
+  teams: UserDetailType["teams"];
+}) {
+  return (
+    <div className="space-y-2 xl:col-span-3">
+      <p className="text-sm font-semibold text-foreground">{label}</p>
+      {teams.length === 0 ? (
+        <span className="text-sm font-medium text-muted-foreground">-</span>
+      ) : (
+        <div className="flex flex-wrap gap-2">
+          {teams.map((team) => (
+            <span
+              key={team.teamId}
+              className="inline-flex max-w-full items-center gap-2 rounded-full border border-border/70 bg-background/70 px-3 py-2 text-sm font-semibold text-foreground shadow-sm"
+            >
+              <span className="max-w-64 truncate">{team.teamName}</span>
+              {team.isLeader ? (
+                <Badge
+                  variant="secondary"
+                  className="h-6 rounded-full px-2 text-[11px] font-semibold"
+                >
+                  팀 리더
+                </Badge>
+              ) : null}
+            </span>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
 function SelectField({
   label,
   name,
@@ -907,6 +995,16 @@ function buildTeamOptionLabel(team: UserDetailType["teams"][number]) {
   const label = `${team.teamName}${suffix}`;
 
   return label.length > 36 ? `${label.slice(0, 35)}…` : label;
+}
+
+function getEmploymentStatusOptionLabel(
+  status: EmploymentStatusCode | null | undefined,
+) {
+  return (
+    employmentStatusOptions.find((option) => option.value === status)?.label ??
+    status ??
+    null
+  );
 }
 
 function valueOrNull(value: string) {
