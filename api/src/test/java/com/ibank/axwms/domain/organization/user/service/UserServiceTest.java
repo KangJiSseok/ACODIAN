@@ -414,6 +414,7 @@ class UserServiceTest {
                 "홍길동",
                 "hong@axwms.com",
                 "010-1234-1234",
+                LocalDate.of(2025, 1, 1),
                 10L,
                 "물류본부",
                 "https://cdn.axwms.com/profile/101.png",
@@ -433,6 +434,7 @@ class UserServiceTest {
                         GetUsersApiDto.Response::userName,
                         GetUsersApiDto.Response::email,
                         GetUsersApiDto.Response::phone,
+                        GetUsersApiDto.Response::joinDate,
                         GetUsersApiDto.Response::departmentId,
                         GetUsersApiDto.Response::departmentName,
                         GetUsersApiDto.Response::teamId,
@@ -443,6 +445,7 @@ class UserServiceTest {
                         "홍길동",
                         "hong@axwms.com",
                         "010-1234-1234",
+                        LocalDate.of(2025, 1, 1),
                         10L,
                         "물류본부",
                         21L,
@@ -468,6 +471,7 @@ class UserServiceTest {
                 null,
                 null,
                 null,
+                null,
                 "사원",
                 "팀원",
                 EmploymentStatus.ACTIVE
@@ -482,10 +486,11 @@ class UserServiceTest {
                         GetUsersApiDto.Response::userId,
                         GetUsersApiDto.Response::departmentId,
                         GetUsersApiDto.Response::departmentName,
+                        GetUsersApiDto.Response::joinDate,
                         GetUsersApiDto.Response::teamId,
                         GetUsersApiDto.Response::teamName
                 )
-                .containsExactly(Tuple.tuple(102L, null, null, null, null));
+                .containsExactly(Tuple.tuple(102L, null, null, null, null, null));
         assertThat(result.totalCount()).isEqualTo(1);
     }
 
