@@ -38,7 +38,7 @@ public class Worklog {
     @Column(name = "team_id", nullable = false)
     private Long teamId;
 
-    @Column(name = "title", nullable = false, length = 200)
+    @Column(name = "title", nullable = false, length = 50)
     private String title;
 
     @Column(name = "request_content", columnDefinition = "TEXT")

@@ -27,7 +27,7 @@ public final class CreateWorklogApiDto {
 
             @Schema(description = "업무 제목", example = "4월 결산 보고서 작성")
             @NotBlank(message = "title 은 비어 있을 수 없습니다.")
-            @Size(max = 200, message = "title 은 200자를 초과할 수 없습니다.")
+            @Size(max = 50, message = "title 은 50자를 초과할 수 없습니다.")
             String title,
 
             @Schema(description = "업무 요청/지시 내용", example = "재무팀 요청사항을 반영해 결산 보고서를 작성합니다.")

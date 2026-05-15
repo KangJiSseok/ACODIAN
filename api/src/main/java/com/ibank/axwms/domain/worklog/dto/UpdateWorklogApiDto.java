@@ -28,7 +28,7 @@ public final class UpdateWorklogApiDto {
     @Schema(description = "업무일지 부분 수정 요청 (multipart JSON part). null 인 필드는 변경되지 않는다. teamId 는 수정할 수 없다.")
     public record Request(
             @Schema(description = "업무 제목", example = "4월 결산 보고서 작성 (수정)")
-            @Size(min = 1, max = 200, message = "title 은 1~200자여야 합니다.")
+            @Size(min = 1, max = 50, message = "title 은 1~50자여야 합니다.")
             String title,
 
             @Schema(description = "업무 요청/지시 내용")

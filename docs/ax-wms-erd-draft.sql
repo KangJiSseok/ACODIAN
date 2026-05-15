@@ -287,7 +287,7 @@ CREATE TABLE tb_worklog (
     worklog_id            BIGSERIAL PRIMARY KEY,                -- PK, 업무일지 식별자
     author_id             BIGINT NOT NULL,                     -- N:1, 작성자 사용자 ID -> tb_user.user_id
     team_id               BIGINT NOT NULL,                     -- N:1, 실제 수행 팀 ID -> tb_team.team_id
-    title                 VARCHAR(200) NOT NULL,               -- 업무 제목
+    title                 VARCHAR(50) NOT NULL,                -- 업무 제목
     request_content       TEXT,                                -- 요청/지시 내용 원문
     work_content          TEXT NOT NULL,                       -- 실제 업무 상세 내용
     status_code           VARCHAR(20) NOT NULL DEFAULT 'PENDING', -- 업무 상태 코드
