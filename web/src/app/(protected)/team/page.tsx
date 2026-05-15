@@ -33,7 +33,6 @@ const teamFilters: Array<{
     inactive: TeamCount;
   }) => TeamCount;
 }> = [
-  { key: "all", label: "전체 팀", getCount: (summary) => summary.total },
   {
     key: "ACTIVE",
     label: "활성화된 팀",
@@ -44,6 +43,7 @@ const teamFilters: Array<{
     label: "비활성화된 팀",
     getCount: (summary) => summary.inactive,
   },
+  { key: "all", label: "전체 팀", getCount: (summary) => summary.total },
 ];
 
 export default function TeamPage() {

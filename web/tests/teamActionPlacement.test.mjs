@@ -42,6 +42,13 @@ test("team management page shows helper description copy", () => {
   assert.doesNotMatch(teamPage, /팀 상태, 책임자/);
 });
 
+test("team summary cards show active and inactive before total", () => {
+  assert.match(
+    teamPage,
+    /label: "활성화된 팀"[\s\S]*label: "비활성화된 팀"[\s\S]*label: "전체 팀"/,
+  );
+});
+
 test("team create action is exposed only to organization managers", () => {
   assert.match(teamPage, /useAuth\(\)/);
   assert.match(teamPage, /canCreateTeams\(user\)/);
