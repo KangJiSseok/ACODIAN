@@ -27,6 +27,9 @@ interface WorklogTagModalProps {
   onTagSearchOpenChange: (open: boolean) => void
   filteredTagCandidates: WorklogFormTagOption[]
   selectedTags: WorklogFormTagOption[]
+  hasMoreTagCandidates?: boolean
+  isFetchingMoreTagCandidates?: boolean
+  onLoadMoreTagCandidates?: () => void
   onAddTag: (tagId: number) => void
   onRemoveTag: (tagId: number) => void
 }
@@ -41,6 +44,9 @@ export function WorklogTagModal({
   onTagSearchOpenChange,
   filteredTagCandidates,
   selectedTags,
+  hasMoreTagCandidates,
+  isFetchingMoreTagCandidates,
+  onLoadMoreTagCandidates,
   onAddTag,
   onRemoveTag,
 }: WorklogTagModalProps) {
@@ -73,7 +79,7 @@ export function WorklogTagModal({
                   onTagKeywordInputChange(event.target.value)
                   onTagSearchOpenChange(true)
                 }}
-                placeholder="태그명, 분류, 힌트로 검색"
+                placeholder="태그명으로 검색"
               />
             </div>
 
@@ -103,6 +109,20 @@ export function WorklogTagModal({
                     ))
                   )}
                 </div>
+                {hasMoreTagCandidates ? (
+                  <div className="border-t border-border/70 px-2 pt-2">
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      className="h-9 w-full rounded-xl text-sm"
+                      disabled={isFetchingMoreTagCandidates}
+                      onMouseDown={(event) => event.preventDefault()}
+                      onClick={onLoadMoreTagCandidates}
+                    >
+                      {isFetchingMoreTagCandidates ? "불러오는 중..." : "더보기"}
+                    </Button>
+                  </div>
+                ) : null}
               </div>
             ) : null}
           </div>

@@ -111,6 +111,10 @@ export function WorklogForm({
   teamOptionsSource,
   dependencyOptionsSource,
   tagOptionsSource,
+  hasMoreTagCandidates,
+  isFetchingMoreTagCandidates,
+  onTagSearchKeywordChange,
+  onLoadMoreTagCandidates,
 }: {
   initialValues?: WorklogFormValues
   onSubmit: (values: WorklogFormValues) => Promise<void> | void
@@ -120,6 +124,10 @@ export function WorklogForm({
   teamOptionsSource?: WorklogFormTeamOption[]
   dependencyOptionsSource?: WorklogFormDependencyOption[]
   tagOptionsSource?: WorklogFormTagOption[]
+  hasMoreTagCandidates?: boolean
+  isFetchingMoreTagCandidates?: boolean
+  onTagSearchKeywordChange?: (keyword: string) => void
+  onLoadMoreTagCandidates?: () => void
 }) {
   const controlClassName = "h-11 rounded-2xl px-4 text-sm"
   const searchControlClassName = "h-11 rounded-2xl pl-11 pr-4 text-sm"
@@ -247,26 +255,9 @@ export function WorklogForm({
     [tagSource, values.tagIds],
   )
   const filteredTagCandidates = useMemo(() => {
-    const normalizedKeyword = tagKeywordInput.trim().toLowerCase()
-    if (!normalizedKeyword) return []
-
     return tagSource
-      .filter((tag) => {
-        if (values.tagIds.includes(tag.id)) return false
-
-        const searchableText = [
-          tag.name,
-          tag.category,
-          tag.source,
-          tag.reuseHint,
-        ]
-          .join(" ")
-          .toLowerCase()
-
-        return searchableText.includes(normalizedKeyword)
-      })
-      .slice(0, 8)
-  }, [tagKeywordInput, tagSource, values.tagIds])
+      .filter((tag) => !values.tagIds.includes(tag.id))
+  }, [tagSource, values.tagIds])
 
   const incompleteDependencies = dependencyCandidates.filter(
     (worklog) =>
@@ -357,7 +348,13 @@ export function WorklogForm({
       removeTagIds: (previous.removeTagIds ?? []).filter((item) => item !== tagId),
     }))
     setTagKeywordInput("")
+    onTagSearchKeywordChange?.("")
     setTagSearchOpen(false)
+  }
+
+  const updateTagKeywordInput = (nextKeyword: string) => {
+    setTagKeywordInput(nextKeyword)
+    onTagSearchKeywordChange?.(nextKeyword)
   }
 
   const removeTag = (tagId: number) => {
@@ -589,11 +586,14 @@ export function WorklogForm({
         circularDependencyDetected={circularDependencyDetected}
         statusChangeReasonVisible={statusChangeReasonVisible}
         tagKeywordInput={tagKeywordInput}
-        onTagKeywordInputChange={setTagKeywordInput}
+        onTagKeywordInputChange={updateTagKeywordInput}
         tagSearchOpen={tagSearchOpen}
         onTagSearchOpenChange={setTagSearchOpen}
         filteredTagCandidates={filteredTagCandidates}
         selectedTags={selectedTags}
+        hasMoreTagCandidates={hasMoreTagCandidates}
+        isFetchingMoreTagCandidates={isFetchingMoreTagCandidates}
+        onLoadMoreTagCandidates={onLoadMoreTagCandidates}
         onAddTag={addTag}
         onRemoveTag={removeTag}
       />

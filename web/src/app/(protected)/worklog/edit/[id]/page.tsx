@@ -7,8 +7,10 @@ import PageHeader from "@/app/_common/components/layout/pageHeader"
 import { WorklogForm } from "../../_components/worklogForm"
 import {
   worklogKeys,
+  usePredecessorCandidates,
+  useResolvedWorklogTags,
+  useWorklogTagInfiniteSearch,
   useWorklogDetail,
-  useWorklogOptions,
 } from "../../_hooks/useWorklogList"
 import { worklogService } from "../../_service/worklog.service"
 import { useTeamList } from "../../../team/_hooks/useTeamList"
@@ -19,7 +21,8 @@ import type {
   WorklogFormTagOption,
   WorklogFormTeamOption,
   WorklogFormValues,
-  WorklogOptionsApiResponse,
+  WorklogOptionPredecessorCandidate,
+  WorklogOptionTagItem,
   WorklogStatus,
 } from "../../_types/worklog.types"
 
@@ -48,18 +51,51 @@ export default function WorklogEditPage() {
     isLoading: isTeamListLoading,
   } = useTeamList({ pageSize: 100 })
   const [selectedTeamId, setSelectedTeamId] = useState<number | null>(null)
+  const [tagSearchQuery, setTagSearchQuery] = useState("")
   const effectiveTeamId = selectedTeamId ?? worklog?.teamId
   const {
-    data: worklogOptions,
-    isLoading: isWorklogOptionsLoading,
-  } = useWorklogOptions(effectiveTeamId)
+    data: predecessorCandidates,
+    isLoading: isPredecessorCandidatesLoading,
+  } = usePredecessorCandidates(
+    {
+      teamId: effectiveTeamId ?? 0,
+      excludeWorklogId: worklogId,
+      pageSize: 100,
+    },
+    { enabled: Boolean(worklog && effectiveTeamId) }
+  )
+  const {
+    data: tagPages,
+    fetchNextPage: fetchNextTagPage,
+    hasNextPage: hasNextTagPage,
+    isFetchingNextPage: isFetchingNextTagPage,
+  } = useWorklogTagInfiniteSearch(tagSearchQuery, { retry: false })
+  const {
+    data: resolvedTags = [],
+    isError: isTagSearchError,
+    isLoading: isTagSearchLoading,
+  } = useResolvedWorklogTags(worklog?.tagNames ?? [], {
+    enabled: Boolean(worklog?.tagNames?.length),
+    retry: false,
+  })
+  const tagOptions = useMemo(
+    () =>
+      mergeTagOptions([
+        ...resolvedTags,
+        ...(tagPages?.pages.flatMap((page) => page.items) ?? []),
+      ]),
+    [resolvedTags, tagPages?.pages]
+  )
 
   const formContext = useMemo(() => {
-    if (!worklog || !worklogOptions) return null
+    if (!worklog || !predecessorCandidates) return null
 
     const teamOptionsSource = buildTeamOptions(worklog, teamPage?.items ?? [])
-    const tagOptionsSource = buildTagOptions(worklogOptions)
-    const dependencyOptionsSource = buildDependencyOptions(worklog, worklogOptions)
+    const tagOptionsSource = buildTagOptions(tagOptions)
+    const dependencyOptionsSource = buildDependencyOptions(
+      worklog,
+      predecessorCandidates.items
+    )
     const tagIds = resolveTagIds(worklog.tagNames ?? [], tagOptionsSource)
 
     return {
@@ -68,9 +104,14 @@ export default function WorklogEditPage() {
       dependencyOptionsSource,
       tagOptionsSource,
     }
-  }, [teamPage?.items, worklog, worklogOptions])
+  }, [predecessorCandidates, tagOptions, teamPage?.items, worklog])
 
-  if (isWorklogLoading || isTeamListLoading || isWorklogOptionsLoading) {
+  if (
+    isWorklogLoading ||
+    isTeamListLoading ||
+    isPredecessorCandidatesLoading ||
+    (isTagSearchLoading && !isTagSearchError)
+  ) {
     return <div>업무를 불러오는 중입니다.</div>
   }
 
@@ -90,6 +131,10 @@ export default function WorklogEditPage() {
         teamOptionsSource={formContext.teamOptionsSource}
         dependencyOptionsSource={formContext.dependencyOptionsSource}
         tagOptionsSource={formContext.tagOptionsSource}
+        hasMoreTagCandidates={Boolean(hasNextTagPage)}
+        isFetchingMoreTagCandidates={isFetchingNextTagPage}
+        onTagSearchKeywordChange={setTagSearchQuery}
+        onLoadMoreTagCandidates={() => fetchNextTagPage()}
         onSubmit={async (values) => {
           await worklogService.update(worklog.id, values)
           await Promise.all([
@@ -149,9 +194,9 @@ function buildTeamOptions(
 }
 
 function buildTagOptions(
-  worklogOptions: WorklogOptionsApiResponse
+  tags: WorklogOptionTagItem[]
 ): WorklogFormTagOption[] {
-  return worklogOptions.tags.map((tag) => ({
+  return tags.map((tag) => ({
     id: tag.tagId,
     name: tag.tagName,
     usageCount: tag.usageCount,
@@ -163,10 +208,10 @@ function buildTagOptions(
 
 function buildDependencyOptions(
   worklog: Worklog,
-  worklogOptions: WorklogOptionsApiResponse
+  predecessorCandidates: WorklogOptionPredecessorCandidate[]
 ): WorklogFormDependencyOption[] {
   const options: WorklogFormDependencyOption[] =
-    worklogOptions.predecessorCandidates.map((candidate) => ({
+    predecessorCandidates.map((candidate) => ({
       id: candidate.worklogId,
       title: candidate.title,
       status: statusCodeMap[candidate.statusCode] ?? "PENDING",
@@ -203,4 +248,10 @@ function resolveTagIds(
 function ensureOption<T extends { id: number }>(options: T[], current: T): T[] {
   if (options.some((option) => option.id === current.id)) return options
   return [current, ...options]
+}
+
+function mergeTagOptions(tags: WorklogOptionTagItem[]) {
+  return Array.from(
+    new Map(tags.map((tag) => [tag.tagId, tag])).values()
+  )
 }
