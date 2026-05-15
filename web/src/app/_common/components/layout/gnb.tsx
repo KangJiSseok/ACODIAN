@@ -1,10 +1,11 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { usePathname } from "next/navigation";
 import { Bell, ChevronRight, Moon, Sun } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
+import { useAuth } from "@/app/_common/hooks/useAuth";
 import { resolveBreadcrumbs } from "@/app/_common/service/breadcrumbs";
 import {
   useNotificationCenter,
@@ -12,7 +13,7 @@ import {
   useNotificationStream,
 } from "@/app/(protected)/notification/_hooks";
 import { resolveNotificationDeepLink } from "@/app/(protected)/notification/_utils/resolveNotificationDeepLink";
-import { getNotificationTypeLabel } from "@/app/(protected)/notification/_utils/notificationLabel";
+import type { NotificationItem } from "@/app/(protected)/notification/_types/notification.types";
 import {
   NotificationCenterPopover,
   type NotificationCenterItem,
@@ -21,17 +22,26 @@ import {
 export default function Gnb() {
   const pathname = usePathname();
   const breadcrumbs = resolveBreadcrumbs(pathname);
-  const { unreadCount, recentUnreadNotifications } = useNotificationCenter();
+  const { user } = useAuth();
+  const { unreadCount, notificationCenterNotifications } =
+    useNotificationCenter();
   const { markAllRead, markRead } = useNotificationMutation();
   useNotificationStream();
   const [isNotificationOpen, setIsNotificationOpen] = useState(false);
   const notificationRef = useRef<HTMLDivElement>(null);
+  const teamNameById = useMemo(
+    () =>
+      new Map(
+        (user?.teams ?? []).map((team) => [team.teamId, team.teamName] as const),
+      ),
+    [user?.teams],
+  );
   const notificationCenterItems: NotificationCenterItem[] =
-    recentUnreadNotifications.map((notification) => ({
+    notificationCenterNotifications.map((notification) => ({
       id: notification.id,
-      typeLabel: getNotificationTypeLabel(notification.type),
       title: notification.title,
-      content: notification.content ?? "",
+      isRead: notification.isRead,
+      teamName: getNotificationCenterTeamName(notification, teamNameById),
       createdAt: notification.createdAt,
       href: resolveNotificationDeepLink(notification),
     }));
@@ -165,4 +175,19 @@ export default function Gnb() {
       </div>
     </header>
   );
+}
+
+function getNotificationCenterTeamName(
+  notification: NotificationItem,
+  teamNameById: ReadonlyMap<number, string>,
+) {
+  if (notification.teamName?.trim()) {
+    return notification.teamName.trim();
+  }
+
+  if (!notification.teamId) {
+    return null;
+  }
+
+  return teamNameById.get(notification.teamId) ?? null;
 }

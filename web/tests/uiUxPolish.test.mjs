@@ -78,6 +78,28 @@ test("notification center popover uses theme-specific opaque surface and text co
   assert.doesNotMatch(notificationCenterPopover, /bg-card text-card-foreground/);
 });
 
+test("notification center popover shows compact all-notification cards", () => {
+  assert.match(notificationCenterPopover, /max-h-\[420px\] overflow-y-auto/);
+  assert.match(notificationCenterPopover, /formatNotificationCenterDate\(notification\.createdAt\)/);
+  assert.match(notificationCenterPopover, /notification\.teamName/);
+  assert.doesNotMatch(notificationCenterPopover, /typeLabel/);
+  assert.doesNotMatch(notificationCenterPopover, /notification\.content/);
+});
+
+test("gnb maps notification team ids into notification center items", () => {
+  assert.match(gnb, /useAuth/);
+  assert.match(gnb, /teamNameById/);
+  assert.match(gnb, /teamName: getNotificationCenterTeamName/);
+});
+
+test("notification center mark-all action has a visible primary button surface", () => {
+  assert.match(notificationCenterPopover, /variant="default"/);
+  assert.match(notificationCenterPopover, /h-9 rounded-xl bg-primary px-3\.5/);
+  assert.match(notificationCenterPopover, /전체 읽음/);
+  assert.doesNotMatch(notificationCenterPopover, /CheckCheck/);
+  assert.match(notificationCenterPopover, /disabled=\{unreadCount === 0\}/);
+});
+
 test("notification center trigger keeps theme-appropriate text while open on topbar", () => {
   assert.match(gnb, /aria-expanded=\{isNotificationOpen\}/);
   assert.match(gnb, /aria-expanded:!text-slate-900/);

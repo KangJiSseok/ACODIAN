@@ -1,14 +1,14 @@
 "use client";
 
 import Link from "next/link";
-import { CheckCheck, ChevronRight } from "lucide-react";
+import { ChevronRight } from "lucide-react";
 import { Button } from "@/components/ui/button";
 
 export type NotificationCenterItem = {
   id: number;
-  typeLabel: string;
   title: string;
-  content: string;
+  isRead: boolean;
+  teamName?: string | null;
   createdAt: string;
   href: string;
 };
@@ -30,68 +30,57 @@ export function NotificationCenterPopover({
 }: NotificationCenterPopoverProps) {
   return (
     <div className="absolute right-0 top-12 z-50 w-[360px] overflow-hidden rounded-2xl border border-slate-200 bg-white text-slate-950 shadow-2xl dark:border-slate-800 dark:bg-slate-950 dark:text-slate-50">
-      <div className="flex items-start justify-between border-b border-slate-200 px-5 py-4 dark:border-slate-800">
+      <div className="flex items-center justify-between border-b border-slate-200 px-5 py-4 dark:border-slate-800">
         <div>
           <h2 className="text-sm font-semibold">알림 센터</h2>
           <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">
-            내 알림 기준 · 미읽음 {unreadCount}건
+            최대 100개 표시 · 미읽음 {unreadCount}건
           </p>
         </div>
 
         <Button
           type="button"
-          variant="ghost"
-          size="icon"
-          className="h-8 w-8 text-slate-700 hover:bg-slate-100 hover:text-slate-950 dark:text-slate-200 dark:hover:bg-slate-800 dark:hover:text-slate-50"
+          variant="default"
+          className="h-9 rounded-xl bg-primary px-3.5 text-xs font-semibold text-primary-foreground shadow-[0_12px_24px_-18px_rgba(30,64,175,0.9)] hover:bg-primary/90 disabled:pointer-events-none disabled:opacity-45"
           onClick={onMarkAllRead}
+          disabled={unreadCount === 0}
           aria-label="전체 읽음 처리"
         >
-          <CheckCheck className="size-4" />
+          전체 읽음
         </Button>
       </div>
 
-      <div className="max-h-[320px] overflow-y-auto px-5 py-4">
+      <div className="max-h-[420px] overflow-y-auto px-5 py-4">
         {notifications.length > 0 ? (
-          <ul className="space-y-4">
+          <ul className="space-y-2.5">
             {notifications.map((notification) => (
               <li key={notification.id}>
                 <Link
                   href={notification.href}
                   onClick={() => {
-                    onMarkRead(notification.id);
+                    if (!notification.isRead) {
+                      onMarkRead(notification.id);
+                    }
                     onClose();
                   }}
-                  className="block rounded-xl bg-slate-50 p-3 text-slate-950 transition hover:bg-slate-100 hover:text-slate-950 focus-visible:text-slate-950 active:text-slate-950 dark:bg-slate-900 dark:text-slate-50 dark:hover:bg-slate-800 dark:hover:text-slate-50 dark:focus-visible:text-slate-50 dark:active:text-slate-50"
+                  className="flex items-center justify-between gap-3 rounded-xl border border-slate-200/70 bg-slate-50 px-3.5 py-3 text-slate-950 transition hover:border-slate-300 hover:bg-slate-100 hover:text-slate-950 focus-visible:text-slate-950 active:text-slate-950 dark:border-slate-800 dark:bg-slate-900 dark:text-slate-50 dark:hover:border-slate-700 dark:hover:bg-slate-800 dark:hover:text-slate-50 dark:focus-visible:text-slate-50 dark:active:text-slate-50"
                 >
-                  <div className="mb-2 flex items-center gap-2">
-                    <span className="rounded-full bg-slate-100 px-3 py-1 text-xs font-medium text-slate-700 dark:bg-slate-800 dark:text-slate-200">
-                      {notification.typeLabel}
-                    </span>
-                    <span className="rounded-full bg-slate-100 px-3 py-1 text-xs font-medium text-slate-700 dark:bg-slate-800 dark:text-slate-200">
-                      미읽음
-                    </span>
-                  </div>
-
-                  <div className="flex items-center justify-between gap-3">
-                    <strong className="text-sm font-semibold">
+                  <div className="min-w-0">
+                    <strong className="line-clamp-1 text-sm font-semibold">
                       {notification.title}
                     </strong>
-                    <ChevronRight className="size-4 text-slate-500 dark:text-slate-400" />
+                    <div className="mt-1.5 flex flex-wrap items-center gap-x-2 gap-y-1 text-xs font-medium text-slate-500 dark:text-slate-400">
+                      {notification.teamName ? (
+                        <span className="line-clamp-1">
+                          {notification.teamName}
+                        </span>
+                      ) : null}
+                      <time dateTime={notification.createdAt}>
+                        {formatNotificationCenterDate(notification.createdAt)}
+                      </time>
+                    </div>
                   </div>
-
-                  <p className="mt-2 line-clamp-2 text-xs text-slate-500 dark:text-slate-400">
-                    {notification.content}
-                  </p>
-
-                  <time className="mt-3 block text-xs font-medium text-slate-500 dark:text-slate-400">
-                    {new Date(notification.createdAt).toLocaleString("ko-KR", {
-                      year: "numeric",
-                      month: "long",
-                      day: "numeric",
-                      hour: "2-digit",
-                      minute: "2-digit",
-                    })}
-                  </time>
+                  <ChevronRight className="size-4 shrink-0 text-slate-500 dark:text-slate-400" />
                 </Link>
               </li>
             ))}
@@ -117,4 +106,14 @@ export function NotificationCenterPopover({
       </div>
     </div>
   );
+}
+
+function formatNotificationCenterDate(value: string) {
+  return new Intl.DateTimeFormat("ko-KR", {
+    year: "numeric",
+    month: "long",
+    day: "numeric",
+    hour: "2-digit",
+    minute: "2-digit",
+  }).format(new Date(value));
 }
