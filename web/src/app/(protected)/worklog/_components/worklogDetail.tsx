@@ -96,6 +96,17 @@ export function WorklogDetail({
 
         <Card>
           <CardHeader>
+            <CardTitle>선행 업무</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <DependencyGraph
+              dependencies={worklog.dependOnWorklogs}
+            />
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader>
             <CardTitle>첨부 파일</CardTitle>
           </CardHeader>
           <CardContent>
@@ -137,17 +148,6 @@ export function WorklogDetail({
               <InfoRow label="생성일" value={createdAt} />
               <InfoRow label="수정일" value={updatedAt} />
             </div>
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardHeader>
-            <CardTitle>선행 업무</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <DependencyGraph
-              dependencies={worklog.dependOnWorklogs}
-            />
           </CardContent>
         </Card>
 

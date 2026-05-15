@@ -817,7 +817,7 @@ function OtherTeamsSelect({
         options={options}
         disabled={disabled || teams.length === 0}
         onChange={(event) => setValue(event.target.value)}
-        className="h-14 bg-input/80 font-medium"
+        className="h-14 bg-input/80 pr-12 font-medium"
       />
     </label>
   );
@@ -903,13 +903,10 @@ function buildOptionsWithCurrentValue(
 }
 
 function buildTeamOptionLabel(team: UserDetailType["teams"][number]) {
-  return [
-    team.teamName,
-    team.isLeader ? "팀 대표" : null,
-    team.teamRole,
-  ]
-    .filter(Boolean)
-    .join(" · ");
+  const suffix = team.isLeader ? " · 팀 대표" : "";
+  const label = `${team.teamName}${suffix}`;
+
+  return label.length > 36 ? `${label.slice(0, 35)}…` : label;
 }
 
 function valueOrNull(value: string) {

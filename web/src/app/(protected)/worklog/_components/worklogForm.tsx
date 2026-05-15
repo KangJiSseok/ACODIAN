@@ -38,6 +38,8 @@ const editableStatusTransitionMap: Record<WorklogStatus, WorklogStatus[]> = {
 }
 
 const creatableStatusOptions = worklogStatusLegendOrder
+const TITLE_MAX_LENGTH = 100
+const CONTENT_MAX_LENGTH = 2000
 
 type SettingsValidationErrors = {
   actualHours?: string
@@ -469,11 +471,15 @@ export function WorklogForm({
               <Input
                 className={controlClassName}
                 value={values.title}
+                maxLength={TITLE_MAX_LENGTH}
                 onChange={(event) =>
                   setValues({ ...values, title: event.target.value })
                 }
                 placeholder="업무의 제목을 간결하게 작성하세요."
               />
+              <p className="mt-1 text-right text-xs text-muted-foreground">
+                {values.title.length}/{TITLE_MAX_LENGTH}
+              </p>
             </Field>
 
             <Field
@@ -497,23 +503,31 @@ export function WorklogForm({
             >
               <Textarea
                 value={values.requestContent}
+                maxLength={CONTENT_MAX_LENGTH}
                 onChange={(event) =>
                   setValues({ ...values, requestContent: event.target.value })
                 }
                 className={`h-[220px] ${textareaClassName}`}
                 placeholder="이 업무를 수행해야 하는 목적과 배경을 작성합니다."
               />
+              <p className="mt-1 text-right text-xs text-muted-foreground">
+                {values.requestContent.length}/{CONTENT_MAX_LENGTH}
+              </p>
             </Field>
 
             <Field label="업무 내용">
               <Textarea
                 value={values.workContent}
+                maxLength={CONTENT_MAX_LENGTH}
                 onChange={(event) =>
                   setValues({ ...values, workContent: event.target.value })
                 }
                 className={`h-[300px] ${textareaClassName}`}
                 placeholder="실제로 수행할 업무의 상세 내용을 작성합니다."
               />
+              <p className="mt-1 text-right text-xs text-muted-foreground">
+                {values.workContent.length}/{CONTENT_MAX_LENGTH}
+              </p>
             </Field>
 
             {isEditMode ? (
@@ -627,7 +641,7 @@ function FormPanel({
               {title}
             </h2>
           </div>
-          <div className="flex size-11 items-center justify-center rounded-2xl border border-primary/20 bg-gradient-to-br from-primary/16 via-primary/8 to-transparent text-primary">
+          <div className="flex size-11 items-center justify-center rounded-xl border border-primary/20 bg-gradient-to-br from-primary/16 via-primary/8 to-transparent text-primary">
             {icon}
           </div>
         </div>
@@ -673,18 +687,22 @@ function InlineActionButton({
   return (
     <button
       type="button"
-      className="group inline-flex h-9 items-center gap-2 rounded-2xl border border-primary/25 bg-primary/10 px-3.5 text-xs font-semibold text-primary shadow-[0_12px_28px_-22px_rgba(30,58,138,0.85)] transition-all hover:-translate-y-0.5 hover:border-primary/50 hover:bg-primary hover:text-primary-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background"
+      className="group relative inline-flex h-9 items-center gap-2 rounded-lg border border-primary/25 bg-primary/10 px-3.5 text-xs font-semibold text-primary shadow-[0_12px_28px_-22px_rgba(30,58,138,0.85)] transition-all hover:-translate-y-0.5 hover:border-primary/50 hover:bg-primary hover:text-primary-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background"
       onClick={onClick}
-      aria-label={`${label} 설정 모달 열기`}
+      aria-label={
+        count && count > 0
+          ? `${label} 설정 모달 열기, 선택 ${count}개`
+          : `${label} 설정 모달 열기`
+      }
     >
       {icon}
       <span>{label}</span>
-      {count !== undefined ? (
-        <span className="rounded-full bg-primary px-1.5 py-0.5 text-[10px] leading-none text-primary-foreground transition-colors group-hover:bg-primary-foreground group-hover:text-primary">
-          {count}개
+      <ChevronRight className="size-3.5 transition-transform group-hover:translate-x-0.5" />
+      {count && count > 0 ? (
+        <span className="absolute -right-1.5 -top-1.5 flex min-w-4 items-center justify-center rounded-full bg-red-600 px-1 text-[10px] font-bold leading-4 text-white ring-2 ring-background group-hover:bg-red-600 group-hover:text-white">
+          {count > 99 ? "99+" : count}
         </span>
       ) : null}
-      <ChevronRight className="size-3.5 transition-transform group-hover:translate-x-0.5" />
     </button>
   )
 }
