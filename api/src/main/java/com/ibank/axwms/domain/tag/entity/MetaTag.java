@@ -34,6 +34,12 @@ public class MetaTag {
     @Column(name = "usage_count", nullable = false)
     private Integer usageCount;
 
+    @Column(name = "description", columnDefinition = "TEXT")
+    private String description;
+
+    @Column(name = "is_ai_generated", nullable = false)
+    private Boolean isAiGenerated;
+
     @CreationTimestamp
     @Column(name = "created_at", nullable = false, updatable = false)
     private LocalDateTime createdAt;
@@ -52,6 +58,8 @@ public class MetaTag {
         MetaTag metaTag = new MetaTag();
         metaTag.tagName = tagName;
         metaTag.usageCount = 0;
+        metaTag.isAiGenerated = Boolean.FALSE;
+        metaTag.isDeleted = Boolean.FALSE;
         return metaTag;
     }
 }

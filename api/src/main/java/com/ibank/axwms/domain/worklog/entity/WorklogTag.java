@@ -33,32 +33,17 @@ public class WorklogTag {
     @Column(name = "tag_id", nullable = false)
     private Long tagId;
 
-    @Column(name = "is_ai_generated", nullable = false)
-    private Boolean isAiGenerated;
-
     @CreationTimestamp
     @Column(name = "created_at", nullable = false, updatable = false)
     private LocalDateTime createdAt;
 
     /**
-     * AI가 선택하거나 제안한 태그를 업무일지에 연결하는 관계 엔티티를 생성한다.
+     * 태그의 생성 출처와 무관하게 업무일지와 태그 풀 항목 사이의 연결만 생성한다.
      */
-    public static WorklogTag createAiGenerated(Long worklogId, Long tagId) {
+    public static WorklogTag create(Long worklogId, Long tagId) {
         WorklogTag worklogTag = new WorklogTag();
         worklogTag.worklogId = worklogId;
         worklogTag.tagId = tagId;
-        worklogTag.isAiGenerated = Boolean.TRUE;
-        return worklogTag;
-    }
-
-    /**
-     * 사용자가 등록 폼에서 직접 선택한 태그를 업무일지에 연결하는 관계 엔티티를 생성한다.
-     */
-    public static WorklogTag createManualSelected(Long worklogId, Long tagId) {
-        WorklogTag worklogTag = new WorklogTag();
-        worklogTag.worklogId = worklogId;
-        worklogTag.tagId = tagId;
-        worklogTag.isAiGenerated = Boolean.FALSE;
         return worklogTag;
     }
 }

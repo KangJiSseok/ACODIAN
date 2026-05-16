@@ -124,7 +124,7 @@ public class WorklogService {
         }
 
         List<WorklogTag> worklogTags = normalizedTagIds.stream()
-                .map(tagId -> WorklogTag.createManualSelected(worklogId, tagId))
+                .map(tagId -> WorklogTag.create(worklogId, tagId))
                 .toList();
         worklogTagRepository.saveAll(worklogTags);
         tagService.incrementUsageCountByIds(normalizedTagIds);
@@ -405,7 +405,7 @@ public class WorklogService {
         }
 
         List<WorklogTag> worklogTags = newTagIds.stream()
-                .map(tagId -> WorklogTag.createManualSelected(worklogId, tagId))
+                .map(tagId -> WorklogTag.create(worklogId, tagId))
                 .toList();
         worklogTagRepository.saveAll(worklogTags);
         tagService.incrementUsageCountByIds(newTagIds);
