@@ -14,18 +14,18 @@ export function useUserDetail(userId: number) {
   });
 }
 
-export function useUserSkills(userId: number) {
+export function useUserSkills(userId: number, enabled = true) {
   return useQuery({
     queryKey: userKeys.skills(userId),
     queryFn: () => userService.getUserSkills(userId),
-    enabled: isValidUserId(userId),
+    enabled: enabled && isValidUserId(userId),
   });
 }
 
-export function useUserEvaluations(userId: number) {
+export function useUserEvaluations(userId: number, enabled = true) {
   return useQuery({
     queryKey: userKeys.evaluations(userId),
     queryFn: () => userService.getUserEvaluations(userId),
-    enabled: isValidUserId(userId),
+    enabled: enabled && isValidUserId(userId),
   });
 }

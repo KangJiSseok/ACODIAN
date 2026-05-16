@@ -87,8 +87,9 @@ test("notification center popover uses theme-specific opaque surface and text co
   assert.doesNotMatch(notificationCenterPopover, /bg-card text-card-foreground/);
 });
 
-test("notification center popover shows compact all-notification cards", () => {
+test("notification center popover shows compact unread-notification cards", () => {
   assert.match(notificationCenterPopover, /max-h-\[420px\] overflow-y-auto/);
+  assert.match(notificationCenterPopover, /최대 10개 표시/);
   assert.match(notificationCenterPopover, /formatNotificationCenterDate\(notification\.createdAt\)/);
   assert.match(notificationCenterPopover, /notification\.teamName/);
   assert.doesNotMatch(notificationCenterPopover, /typeLabel/);
@@ -107,6 +108,14 @@ test("notification center mark-all action has a visible primary button surface",
   assert.match(notificationCenterPopover, /전체 읽음/);
   assert.doesNotMatch(notificationCenterPopover, /CheckCheck/);
   assert.match(notificationCenterPopover, /disabled=\{unreadCount === 0\}/);
+});
+
+test("notification center all-view action uses the primary component color", () => {
+  assert.match(notificationCenterPopover, /asChild[\s\S]*variant="default"[\s\S]*className="w-full rounded-xl bg-primary/);
+  assert.match(notificationCenterPopover, /!text-primary-foreground/);
+  assert.match(notificationCenterPopover, /hover:!text-primary-foreground/);
+  assert.match(notificationCenterPopover, /\[\&_svg\]:!text-primary-foreground/);
+  assert.match(notificationCenterPopover, /<Link href="\/notification" onClick=\{onClose\}>/);
 });
 
 test("notification center trigger keeps theme-appropriate text while open on topbar", () => {
