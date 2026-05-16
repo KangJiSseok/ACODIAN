@@ -27,6 +27,14 @@ class LightWorklogSourceRow:
     tag_ids: list[int]
 
 
+@dataclass(frozen=True)
+class _WorklogPredecessor:
+    """LightRAG 문맥에 포함할 선행 업무일지의 최소 정보."""
+
+    worklog_id: int
+    title: str
+
+
 class LightWorklogSourceStore:
     """LightRAG v3 업무일지 source 조회 SQL을 소유한다."""
 
@@ -69,15 +77,7 @@ class LightWorklogSourceStore:
         if row is None:
             return None
 
-        predecessor_rows = (
-            await session.execute(
-                select(WorklogDependency.depends_on_worklog_id, Worklog.title)
-                .join(Worklog, Worklog.worklog_id == WorklogDependency.depends_on_worklog_id)
-                .where(WorklogDependency.worklog_id == worklog_id)
-                .order_by(WorklogDependency.depends_on_worklog_id)
-                .limit(3)
-            )
-        ).all()
+        predecessors = await self._fetch_predecessors(session, worklog_id)
         tag_ids = (
             await session.execute(
                 select(WorklogTag.tag_id)
@@ -104,12 +104,59 @@ class LightWorklogSourceStore:
             team_id=row.team_id,
             team_name=row.team_name,
             department_id=row.department_id,
-            predecessor_titles=[predecessor.title for predecessor in predecessor_rows],
-            predecessor_worklog_ids=[
-                predecessor.depends_on_worklog_id for predecessor in predecessor_rows
-            ],
+            predecessor_titles=[predecessor.title for predecessor in predecessors],
+            predecessor_worklog_ids=[predecessor.worklog_id for predecessor in predecessors],
             tag_ids=list(tag_ids),
         )
+
+    async def _fetch_predecessors(
+        self,
+        session: AsyncSession,
+        worklog_id: int,
+    ) -> list[_WorklogPredecessor]:
+        """직접/간접 선행 업무를 depth와 개수 제한 없이 조회한다."""
+        predecessors: list[_WorklogPredecessor] = []
+        seen_worklog_ids = {worklog_id}
+        frontier_worklog_ids = [worklog_id]
+
+        while frontier_worklog_ids:
+            next_frontier_worklog_ids: list[int] = []
+            for frontier_worklog_id in frontier_worklog_ids:
+                direct_predecessors = await self._fetch_direct_predecessors(
+                    session,
+                    frontier_worklog_id,
+                )
+                for predecessor in direct_predecessors:
+                    if predecessor.worklog_id in seen_worklog_ids:
+                        continue
+                    seen_worklog_ids.add(predecessor.worklog_id)
+                    predecessors.append(predecessor)
+                    next_frontier_worklog_ids.append(predecessor.worklog_id)
+            frontier_worklog_ids = next_frontier_worklog_ids
+
+        return predecessors
+
+    async def _fetch_direct_predecessors(
+        self,
+        session: AsyncSession,
+        worklog_id: int,
+    ) -> list[_WorklogPredecessor]:
+        """업무일지 하나의 직접 선행 업무를 개수 제한 없이 조회한다."""
+        rows = (
+            await session.execute(
+                select(WorklogDependency.depends_on_worklog_id, Worklog.title)
+                .join(Worklog, Worklog.worklog_id == WorklogDependency.depends_on_worklog_id)
+                .where(WorklogDependency.worklog_id == worklog_id)
+                .order_by(WorklogDependency.depends_on_worklog_id)
+            )
+        ).all()
+        return [
+            _WorklogPredecessor(
+                worklog_id=row.depends_on_worklog_id,
+                title=row.title,
+            )
+            for row in rows
+        ]
 
     def _format_author_role(
         self,
