@@ -131,13 +131,36 @@ def test_light_worklogs_v3_index_rejects_batch_size_over_configured_limit(
     }
 
 
-def test_light_worklogs_v3_index_rejects_duplicate_worklog_ids() -> None:
+def test_light_worklogs_v3_index_allows_duplicate_worklog_ids(monkeypatch) -> None:
+    from app.light.v3.router import worklog_index
+
+    async def fake_index_worklogs(worklog_ids: list[int]) -> WorklogLightIndexResponse:
+        assert worklog_ids == [101, 101]
+        return WorklogLightIndexResponse(
+            items=[
+                WorklogLightIndexItem(worklogId=101, indexed=True),
+                WorklogLightIndexItem(worklogId=101, indexed=True),
+            ]
+        )
+
+    monkeypatch.setattr(
+        worklog_index.worklog_index_service,
+        "index_worklogs",
+        fake_index_worklogs,
+    )
+
     response = client.post(
         "/ai/light/worklogs-v3/index",
         json={"worklogIds": [101, 101]},
     )
 
-    assert response.status_code == 422
+    assert response.status_code == 200
+    assert response.json() == {
+        "items": [
+            {"worklogId": 101, "indexed": True, "error": None},
+            {"worklogId": 101, "indexed": True, "error": None},
+        ]
+    }
 
 
 def test_light_worklogs_v3_index_maps_configuration_error_to_500(monkeypatch) -> None:

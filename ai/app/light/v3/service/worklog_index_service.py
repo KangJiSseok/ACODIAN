@@ -1,8 +1,6 @@
 """LightRAG v3 업무일지 index orchestration service 경계."""
 
-from collections.abc import Callable
 from dataclasses import dataclass
-from typing import Protocol
 
 from app.light.v3.model.worklog_index import (
     WorklogLightIndexItem,
@@ -16,24 +14,13 @@ from app.light.v3.service.lightrag_adapter import (
     LightRagConfigurationError,
     LightRagInsertFailedError,
     LightRagInsertTimeoutError,
-    WorklogLightIndexAdapter,
     get_lightrag_worklog_index_adapter,
 )
-from app.light.v3.service.worklog_source_reader import (
-    LightRagWorklogSource,
-    WorklogLightSourceReader,
-)
+from app.light.v3.service.worklog_source_reader import WorklogLightSourceReader
 
 ERROR_WORKLOG_NOT_FOUND = "WORKLOG_NOT_FOUND"
 ERROR_LIGHTRAG_INSERT_TIMEOUT = "LIGHTRAG_INSERT_TIMEOUT"
 ERROR_LIGHTRAG_INSERT_FAILED = "LIGHTRAG_INSERT_FAILED"
-
-
-class WorklogSourceReader(Protocol):
-    """LightRAG source reader가 제공해야 하는 최소 interface."""
-
-    async def fetch_sources(self, worklog_ids: list[int]) -> dict[int, LightRagWorklogSource]:
-        """존재하는 업무일지 source를 ID keyed mapping으로 반환한다."""
 
 
 @dataclass(frozen=True)
@@ -52,25 +39,9 @@ class LightWorklogIndexService:
     동기 index 결과를 ID별로 조립한다.
     """
 
-    def __init__(
-        self,
-        *,
-        source_reader: WorklogSourceReader | None = None,
-        document_builder: Callable[
-            [LightRagWorklogSource],
-            LightRagWorklogDocument,
-        ] = build_worklog_light_document,
-        index_adapter: WorklogLightIndexAdapter | None = None,
-    ) -> None:
-        """source reader와 document builder 의존성을 구성한다."""
-        self._source_reader = source_reader
-        self._document_builder = document_builder
-        self._index_adapter = index_adapter
-
     async def prepare_documents(self, worklog_ids: list[int]) -> PreparedLightWorklogDocuments:
         """업무일지 ID 목록을 LightRAG document 목록과 missing ID 목록으로 나눈다."""
-        source_reader = self._source_reader or WorklogLightSourceReader()
-        sources_by_id = await source_reader.fetch_sources(worklog_ids)
+        sources_by_id = await WorklogLightSourceReader().fetch_sources(worklog_ids)
         documents: list[LightRagWorklogDocument] = []
         found_worklog_ids: list[int] = []
         missing_worklog_ids: list[int] = []
@@ -81,7 +52,7 @@ class LightWorklogIndexService:
                 missing_worklog_ids.append(worklog_id)
                 continue
             found_worklog_ids.append(worklog_id)
-            documents.append(self._document_builder(source))
+            documents.append(build_worklog_light_document(source))
 
         return PreparedLightWorklogDocuments(
             documents=documents,
@@ -118,7 +89,7 @@ class LightWorklogIndexService:
             return {}
 
         try:
-            await self._get_index_adapter().index_documents(prepared.documents)
+            await get_lightrag_worklog_index_adapter().index_documents(prepared.documents)
         except LightRagConfigurationError:
             raise
         except LightRagInsertTimeoutError:
@@ -133,10 +104,6 @@ class LightWorklogIndexService:
             }
 
         return {}
-
-    def _get_index_adapter(self) -> WorklogLightIndexAdapter:
-        """주입된 adapter 또는 운영 singleton adapter를 반환한다."""
-        return self._index_adapter or get_lightrag_worklog_index_adapter()
 
     def _build_response_item(
         self,

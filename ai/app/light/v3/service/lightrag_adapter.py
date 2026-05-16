@@ -64,6 +64,7 @@ class LightRagWorklogIndexAdapter:
         self._dependencies = dependencies
         self._rag: Any | None = None
         self._initialized = False
+        # _initialize_lock : 동시요청와도 싱글톤 반환되도록
         self._initialize_lock = asyncio.Lock()
 
     async def index_documents(self, documents: list[LightRagWorklogDocument]) -> None:
@@ -221,7 +222,9 @@ def get_lightrag_worklog_index_adapter() -> LightRagWorklogIndexAdapter:
 
 
 async def close_lightrag_worklog_index_adapter() -> None:
-    """FastAPI shutdown/lifespan에서 호출할 수 있는 LightRAG finalize 경계."""
+    """FastAPI shutdown/lifespan에서 호출할 수 있는 LightRAG finalize 경계.
+        lightRAG가 여러 DB들에 connect 열어놓은거 닫는 함수. FastAPI 종료될 때 호출 되어야함.
+    """
     global _lightrag_worklog_index_adapter
     if _lightrag_worklog_index_adapter is not None:
         await _lightrag_worklog_index_adapter.close()

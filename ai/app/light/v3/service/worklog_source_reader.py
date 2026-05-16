@@ -7,12 +7,11 @@ embedding DTO에 직접 의존하지 않게 한다.
 
 from dataclasses import dataclass
 
-from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
-
 from app.store.embedding_store import EmbeddingStore, WorklogEmbeddingSource
 from app.store.session import get_session_factory
 
 
+"""frozen=true : class 만든 후 변경 불가"""
 @dataclass(frozen=True)
 class LightRagWorklogSource:
     """LightRAG 업무일지 KG 생성을 위한 원문/문맥 source contract."""
@@ -35,26 +34,13 @@ class LightRagWorklogSource:
 class WorklogLightSourceReader:
     """업무일지 ID 목록을 LightRAG source contract로 조회한다."""
 
-    def __init__(
-        self,
-        *,
-        embedding_store: EmbeddingStore | None = None,
-        session_factory: async_sessionmaker[AsyncSession] | None = None,
-    ) -> None:
-        """reader 의존성을 주입한다.
-
-        기본값은 운영 경로용 lazy factory이며, 테스트에서는 fake store/factory를 주입해
-        실제 DB 연결 없이 변환 경계를 검증한다.
-        """
-        self._embedding_store = embedding_store or EmbeddingStore()
-        self._session_factory = session_factory or get_session_factory()
-
     async def fetch_sources(self, worklog_ids: list[int]) -> dict[int, LightRagWorklogSource]:
         """존재하는 업무일지만 LightRAG source로 반환한다."""
-        async with self._session_factory() as session:
+        embedding_store = EmbeddingStore()
+        async with get_session_factory()() as session:
             sources: dict[int, LightRagWorklogSource] = {}
             for worklog_id in worklog_ids:
-                embedding_source = await self._embedding_store.fetch_worklog_source(
+                embedding_source = await embedding_store.fetch_worklog_source(
                     session,
                     worklog_id,
                 )

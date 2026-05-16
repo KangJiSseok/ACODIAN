@@ -8,10 +8,23 @@
   운영 진단이 필요하면 인증된 내부 경로로만 임시 활성화한다.
 """
 
+from collections.abc import AsyncIterator
+from contextlib import asynccontextmanager
+
 from fastapi import FastAPI
 
 from app.config.settings import settings
+from app.light.v3.service.lightrag_adapter import close_lightrag_worklog_index_adapter
 from app.router import api_router
+
+
+@asynccontextmanager
+async def lifespan(_: FastAPI) -> AsyncIterator[None]:
+    """FastAPI 종료 시 LightRAG storage lifecycle을 정리한다."""
+    try:
+        yield
+    finally:
+        await close_lightrag_worklog_index_adapter()
 
 
 def create_app() -> FastAPI:
@@ -19,6 +32,7 @@ def create_app() -> FastAPI:
     app = FastAPI(
         title=settings.app_name,
         version=settings.app_version,
+        lifespan=lifespan,
         # 운영에서는 문서 페이지를 노출하지 않는다 (None 으로 비활성화).
         docs_url=None if is_production else f"{settings.api_prefix}/docs",
         redoc_url=None if is_production else f"{settings.api_prefix}/redoc",
