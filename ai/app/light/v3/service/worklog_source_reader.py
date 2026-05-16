@@ -37,7 +37,6 @@ class LightRagWorklogSource:
     author_role: str
     team_id: int
     team_name: str
-    department_id: int
     predecessor_titles: list[str]
     predecessor_worklog_ids: list[int]
     tag_ids: list[int]
@@ -74,7 +73,6 @@ def to_light_worklog_source(source: LightWorklogSourceRow) -> LightRagWorklogSou
         author_role=source.author_role,
         team_id=source.team_id,
         team_name=source.team_name,
-        department_id=source.department_id,
         predecessor_titles=list(source.predecessor_titles),
         predecessor_worklog_ids=list(source.predecessor_worklog_ids),
         tag_ids=list(source.tag_ids),

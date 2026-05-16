@@ -43,7 +43,6 @@ def test_fetch_sources_uses_light_v3_source_store(monkeypatch: pytest.MonkeyPatc
         author_role="팀원 / 사원",
         team_id=3,
         team_name="정산 고도화 TF",
-        department_id=2,
         predecessor_titles=["배치 모니터링 개선"],
         predecessor_worklog_ids=[88],
         tag_ids=[4, 9],

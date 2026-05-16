@@ -41,7 +41,6 @@ def _build_document_text(source: LightRagWorklogSource) -> str:
         f"author_role: {source.author_role}",
         f"team_id: {source.team_id}",
         f"team_name: {source.team_name}",
-        f"department_id: {source.department_id}",
         f"predecessor_worklog_ids: {_format_int_list(source.predecessor_worklog_ids)}",
         f"predecessor_titles: {_format_text_list(source.predecessor_titles)}",
         f"tag_ids: {_format_int_list(source.tag_ids)}",

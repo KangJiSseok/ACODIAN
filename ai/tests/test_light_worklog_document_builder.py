@@ -20,7 +20,6 @@ def test_to_light_worklog_source_keeps_light_store_source_snapshot() -> None:
         author_role="팀원 / 사원",
         team_id=3,
         team_name="정산 고도화 TF",
-        department_id=2,
         predecessor_titles=["배치 모니터링 개선"],
         predecessor_worklog_ids=[88],
         tag_ids=[4, 9],
@@ -42,7 +41,6 @@ def test_to_light_worklog_source_keeps_light_store_source_snapshot() -> None:
         "author_role": "팀원 / 사원",
         "team_id": 3,
         "team_name": "정산 고도화 TF",
-        "department_id": 2,
         "predecessor_titles": ["배치 모니터링 개선"],
         "predecessor_worklog_ids": [88],
         "tag_ids": [4, 9],
@@ -68,7 +66,6 @@ def test_build_worklog_light_document_preserves_worklog_id_in_three_places() -> 
         author_role="팀원 / 사원",
         team_id=3,
         team_name="정산 고도화 TF",
-        department_id=2,
         predecessor_titles=["배치 모니터링 개선"],
         predecessor_worklog_ids=[88],
         tag_ids=[4, 9],
@@ -87,7 +84,6 @@ def test_build_worklog_light_document_preserves_worklog_id_in_three_places() -> 
     assert "title: 정산 배치 오류 분석" in document.text
     assert "author_id: 7" in document.text
     assert "team_id: 3" in document.text
-    assert "department_id: 2" in document.text
     assert "predecessor_worklog_ids: 88" in document.text
     assert "tag_ids: 4, 9" in document.text
     assert "tags: [4] 정산: 정산 배치와 대사 업무 | [9] 장애분석" in document.text

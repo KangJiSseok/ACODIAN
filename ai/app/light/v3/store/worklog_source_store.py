@@ -30,7 +30,6 @@ class LightWorklogSourceRow:
     author_role: str
     team_id: int
     team_name: str
-    department_id: int
     predecessor_titles: list[str]
     predecessor_worklog_ids: list[int]
     tag_ids: list[int]
@@ -66,7 +65,6 @@ class LightWorklogSourceStore:
                     User.role_code,
                     User.position_name,
                     User.title_name,
-                    User.department_id,
                     Team.team_id,
                     Team.team_name,
                     UserTeam.team_role,
@@ -107,7 +105,6 @@ class LightWorklogSourceStore:
             author_role=author_role,
             team_id=row.team_id,
             team_name=row.team_name,
-            department_id=row.department_id,
             predecessor_titles=[predecessor.title for predecessor in predecessors],
             predecessor_worklog_ids=[predecessor.worklog_id for predecessor in predecessors],
             tag_ids=[tag.tag_id for tag in tags],
