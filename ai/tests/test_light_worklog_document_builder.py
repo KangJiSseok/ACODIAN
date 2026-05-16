@@ -5,11 +5,11 @@ from app.light.v3.service.worklog_source_reader import (
     LightRagWorklogSource,
     to_light_worklog_source,
 )
-from app.store.embedding_store import WorklogEmbeddingSource
+from app.light.v3.store.worklog_source_store import LightWorklogSourceRow
 
 
-def test_to_light_worklog_source_keeps_embedding_source_contract_snapshot() -> None:
-    embedding_source = WorklogEmbeddingSource(
+def test_to_light_worklog_source_keeps_light_store_source_snapshot() -> None:
+    source_row = LightWorklogSourceRow(
         worklog_id=101,
         title="정산 배치 오류 분석",
         request_content="정산 배치 실패 원인을 확인해 주세요.",
@@ -25,7 +25,7 @@ def test_to_light_worklog_source_keeps_embedding_source_contract_snapshot() -> N
         tag_ids=[4, 9],
     )
 
-    light_source = to_light_worklog_source(embedding_source)
+    light_source = to_light_worklog_source(source_row)
 
     assert asdict(light_source) == {
         "worklog_id": 101,

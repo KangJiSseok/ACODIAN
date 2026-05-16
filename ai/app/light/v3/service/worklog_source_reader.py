@@ -1,13 +1,16 @@
 """LightRAG v3 업무일지 source reader.
 
-기존 임베딩 source 조회 SQL은 `EmbeddingStore`가 계속 소유한다. 이 모듈은 그 결과를
-LightRAG index 전용 source contract로 변환해 후속 adapter/service 변경이 기존
-embedding DTO에 직접 의존하지 않게 한다.
+LightRAG v3 source 조회 SQL은 v3-local store가 소유한다. 이 모듈은 그 결과를
+LightRAG index 전용 source contract로 변환해 후속 adapter/service가 전역
+embedding store에 직접 의존하지 않게 한다.
 """
 
 from dataclasses import dataclass
 
-from app.store.embedding_store import EmbeddingStore, WorklogEmbeddingSource
+from app.light.v3.store.worklog_source_store import (
+    LightWorklogSourceRow,
+    LightWorklogSourceStore,
+)
 from app.store.session import get_session_factory
 
 
@@ -36,21 +39,21 @@ class WorklogLightSourceReader:
 
     async def fetch_sources(self, worklog_ids: list[int]) -> dict[int, LightRagWorklogSource]:
         """존재하는 업무일지만 LightRAG source로 반환한다."""
-        embedding_store = EmbeddingStore()
+        source_store = LightWorklogSourceStore()
         async with get_session_factory()() as session:
             sources: dict[int, LightRagWorklogSource] = {}
             for worklog_id in worklog_ids:
-                embedding_source = await embedding_store.fetch_worklog_source(
+                source_row = await source_store.fetch_worklog_source(
                     session,
                     worklog_id,
                 )
-                if embedding_source is not None:
-                    sources[worklog_id] = to_light_worklog_source(embedding_source)
+                if source_row is not None:
+                    sources[worklog_id] = to_light_worklog_source(source_row)
             return sources
 
 
-def to_light_worklog_source(source: WorklogEmbeddingSource) -> LightRagWorklogSource:
-    """임베딩 source DTO를 LightRAG source contract로 변환한다."""
+def to_light_worklog_source(source: LightWorklogSourceRow) -> LightRagWorklogSource:
+    """LightRAG v3 source row를 LightRAG source contract로 변환한다."""
     return LightRagWorklogSource(
         worklog_id=source.worklog_id,
         title=source.title,
