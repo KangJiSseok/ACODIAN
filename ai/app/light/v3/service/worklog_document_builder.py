@@ -2,7 +2,11 @@
 
 from dataclasses import dataclass
 
-from app.light.v3.service.worklog_source_reader import LightRagWorklogSource
+from app.light.v3.service.worklog_source_reader import (
+    LightRagWorklogPredecessor,
+    LightRagWorklogSource,
+    LightRagWorklogTag,
+)
 
 
 @dataclass(frozen=True)
@@ -36,15 +40,10 @@ def _build_document_text(source: LightRagWorklogSource) -> str:
         "source_type: WORKLOG",
         f"worklog_id: {source.worklog_id}",
         f"title: {source.title}",
-        f"author_id: {source.author_id}",
         f"author_name: {source.author_name}",
-        f"author_role: {source.author_role}",
-        f"team_id: {source.team_id}",
         f"team_name: {source.team_name}",
-        f"department_id: {source.department_id}",
-        f"predecessor_worklog_ids: {_format_int_list(source.predecessor_worklog_ids)}",
-        f"predecessor_titles: {_format_text_list(source.predecessor_titles)}",
-        f"tag_ids: {_format_int_list(source.tag_ids)}",
+        f"predecessors: {_format_predecessor_list(source.predecessors)}",
+        f"tags: {_format_tag_list(source.tags)}",
         "",
         "request_content:",
         source.request_content or "",
@@ -55,11 +54,21 @@ def _build_document_text(source: LightRagWorklogSource) -> str:
     return "\n".join(lines).strip()
 
 
-def _format_int_list(values: list[int]) -> str:
-    """ID 목록을 marker 친화적인 짧은 문자열로 직렬화한다."""
-    return ", ".join(str(value) for value in values) if values else "-"
+def _format_predecessor_list(values: list[LightRagWorklogPredecessor]) -> str:
+    """선행 업무 ID와 제목을 LightRAG 의미 추출에 쓰기 좋은 문자열로 직렬화한다."""
+    return (
+        " | ".join(f"[{predecessor.worklog_id}] {predecessor.title}" for predecessor in values)
+        if values
+        else "-"
+    )
 
 
-def _format_text_list(values: list[str]) -> str:
-    """텍스트 목록을 LightRAG 입력에 넣기 좋은 짧은 문자열로 직렬화한다."""
-    return " | ".join(values) if values else "-"
+def _format_tag_list(values: list[LightRagWorklogTag]) -> str:
+    """태그 ID, 이름, 설명을 LightRAG 의미 추출에 쓰기 좋은 문자열로 직렬화한다."""
+    formatted_tags: list[str] = []
+    for tag in values:
+        if tag.description:
+            formatted_tags.append(f"{tag.tag_name}: {tag.description}")
+        else:
+            formatted_tags.append(tag.tag_name)
+    return " | ".join(formatted_tags) if formatted_tags else "-"

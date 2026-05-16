@@ -78,6 +78,15 @@ class WorklogTag(Base):
     tag_id: Mapped[int] = mapped_column(BigInteger, nullable=False)
 
 
+class MetaTag(Base):
+    __tablename__ = "tb_meta_tag"
+
+    tag_id: Mapped[int] = mapped_column(BigInteger, primary_key=True)
+    tag_name: Mapped[str] = mapped_column(Text, nullable=False)
+    description: Mapped[str | None] = mapped_column(Text)
+    is_deleted: Mapped[bool] = mapped_column(Boolean, nullable=False)
+
+
 class WorklogEmbedding(Base):
     __tablename__ = "tb_worklog_embedding"
     __table_args__ = (UniqueConstraint("worklog_id", "chunk_index", name="uq_worklog_embedding_chunk"),)
