@@ -9,12 +9,15 @@ LightRAG v1.4.10 문서 기준으로 `LightRAG` instance를 만들고,
 from __future__ import annotations
 
 import asyncio
+import os
 from collections.abc import Awaitable, Callable
 from dataclasses import dataclass
 from typing import Any, Protocol
 
 from app.config.settings import Settings, settings
 from app.light.v3.service.worklog_document_builder import LightRagWorklogDocument
+
+_QDRANT_VECTOR_STORAGE = "QdrantVectorDBStorage"
 
 
 class LightRagConfigurationError(RuntimeError):
@@ -119,6 +122,7 @@ class LightRagWorklogIndexAdapter:
     def _build_lightrag(self) -> Any:
         """현재 settings로 LightRAG instance를 생성한다."""
         self._ensure_required_config()
+        _configure_qdrant_environment(self._settings)
         dependencies = self._dependencies or _load_lightrag_dependencies()
         embedding_func = _build_gemini_embedding_func(
             settings_obj=self._settings,
@@ -133,13 +137,23 @@ class LightRagWorklogIndexAdapter:
             llm_model_func=llm_model_func,
             llm_model_name=self._settings.lightrag_llm_model,
             embedding_func=embedding_func,
+            vector_storage=self._settings.lightrag_vector_storage.strip(),
+            vector_db_storage_cls_kwargs={},
             addon_params={"language": self._settings.lightrag_kg_language},
         )
 
+    """방어로직"""
     def _ensure_required_config(self) -> None:
         """LightRAG runtime에 필요한 설정이 있는지 확인한다."""
         if not self._settings.gemini_api_key:
             raise LightRagConfigurationError("GEMINI_API_KEY is required for LightRAG")
+        if self._settings.lightrag_vector_storage.strip() != _QDRANT_VECTOR_STORAGE:
+            raise LightRagConfigurationError(
+                "LightRAG v3 requires QdrantVectorDBStorage for vector storage"
+            )
+        if not self._settings.lightrag_qdrant_url.strip():
+            raise LightRagConfigurationError("LIGHTRAG_QDRANT_URL is required for Qdrant")
+
 
 
 def _load_lightrag_dependencies() -> LightRagDependencies:
@@ -229,3 +243,13 @@ async def close_lightrag_worklog_index_adapter() -> None:
     if _lightrag_worklog_index_adapter is not None:
         await _lightrag_worklog_index_adapter.close()
     _lightrag_worklog_index_adapter = None
+
+
+def _configure_qdrant_environment(settings_obj: Settings) -> None:
+    """Bridge Settings values into LightRAG v1.4.10's Qdrant env contract."""
+    os.environ["QDRANT_URL"] = settings_obj.lightrag_qdrant_url.strip()
+    qdrant_api_key = settings_obj.lightrag_qdrant_api_key.strip()
+    if qdrant_api_key:
+        os.environ["QDRANT_API_KEY"] = qdrant_api_key
+    else:
+        os.environ.pop("QDRANT_API_KEY", None)

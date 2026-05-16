@@ -31,6 +31,20 @@ services:
       timeout: 5s
       retries: 10
 
+  qdrant:
+    image: qdrant/qdrant:v1.17.1
+    container_name: axwms-qdrant
+    ports:
+      - "127.0.0.1:6333:6333"
+    volumes:
+      - axwms-qdrant-data:/qdrant/storage
+    healthcheck:
+      test: ["CMD-SHELL", "timeout 3 bash -c '</dev/tcp/127.0.0.1/6333'"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
 volumes:
   axwms-postgres-data:
   axwms-redis-data:
+  axwms-qdrant-data:

@@ -2,7 +2,7 @@
 
 from dataclasses import dataclass
 
-from sqlalchemy import select
+from sqlalchemy import literal, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.store.models import MetaTag, Team, User, Worklog, WorklogDependency, WorklogTag
@@ -86,13 +86,13 @@ class LightWorklogSourceStore:
         session: AsyncSession,
         worklog_id: int,
     ) -> list[LightWorklogTag]:
-        """업무일지에 연결된 활성 태그의 이름과 설명을 조회한다."""
+        """업무일지에 연결된 태그 이름과 optional 설명을 조회한다."""
         rows = (
             await session.execute(
-                select(MetaTag.tag_name, MetaTag.description)
+                select(MetaTag.tag_name, literal(None).label("description"))
+                .select_from(WorklogTag)
                 .join(MetaTag, MetaTag.tag_id == WorklogTag.tag_id)
                 .where(WorklogTag.worklog_id == worklog_id)
-                .where(MetaTag.is_deleted.is_(False))
                 .order_by(WorklogTag.tag_id)
             )
         ).all()

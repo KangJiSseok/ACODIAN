@@ -114,6 +114,9 @@ def test_fetch_tags_keeps_name_and_description() -> None:
 
     class _Session:
         async def execute(self, statement: object) -> _Result:
+            compiled = str(statement.compile())
+            assert "tb_meta_tag.description" not in compiled
+            assert "is_deleted" not in compiled
             return _Result()
 
     tags = asyncio.run(
