@@ -35,7 +35,7 @@ async def index_worklogs(
     worklog_ids = [int(worklog_id) for worklog_id in request.worklog_ids]
     if len(worklog_ids) > settings.lightrag_index_max_batch_size:
         raise HTTPException(
-            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
             detail="worklogIds exceeds LIGHTRAG_INDEX_MAX_BATCH_SIZE",
         )
 
