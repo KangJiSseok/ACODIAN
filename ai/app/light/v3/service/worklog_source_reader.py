@@ -19,9 +19,16 @@ from app.store.session import get_session_factory
 class LightRagWorklogTag:
     """LightRAG source contract에 포함할 태그 문맥."""
 
-    tag_id: int
     tag_name: str
     description: str | None
+
+
+@dataclass(frozen=True)
+class LightRagWorklogPredecessor:
+    """LightRAG source contract에 포함할 선행 업무 문맥."""
+
+    worklog_id: int
+    title: str
 
 
 @dataclass(frozen=True)
@@ -32,14 +39,9 @@ class LightRagWorklogSource:
     title: str
     request_content: str | None
     work_content: str
-    author_id: int
     author_name: str
-    author_role: str
-    team_id: int
     team_name: str
-    predecessor_titles: list[str]
-    predecessor_worklog_ids: list[int]
-    tag_ids: list[int]
+    predecessors: list[LightRagWorklogPredecessor]
     tags: list[LightRagWorklogTag]
 
 
@@ -68,17 +70,17 @@ def to_light_worklog_source(source: LightWorklogSourceRow) -> LightRagWorklogSou
         title=source.title,
         request_content=source.request_content,
         work_content=source.work_content,
-        author_id=source.author_id,
         author_name=source.author_name,
-        author_role=source.author_role,
-        team_id=source.team_id,
         team_name=source.team_name,
-        predecessor_titles=list(source.predecessor_titles),
-        predecessor_worklog_ids=list(source.predecessor_worklog_ids),
-        tag_ids=list(source.tag_ids),
+        predecessors=[
+            LightRagWorklogPredecessor(
+                worklog_id=predecessor.worklog_id,
+                title=predecessor.title,
+            )
+            for predecessor in source.predecessors
+        ],
         tags=[
             LightRagWorklogTag(
-                tag_id=tag.tag_id,
                 tag_name=tag.tag_name,
                 description=tag.description,
             )

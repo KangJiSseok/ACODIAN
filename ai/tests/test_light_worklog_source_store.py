@@ -4,8 +4,8 @@ from types import SimpleNamespace
 import pytest
 
 from app.light.v3.store.worklog_source_store import (
+    LightWorklogPredecessor,
     LightWorklogTag,
-    _WorklogPredecessor,
     LightWorklogSourceStore,
 )
 
@@ -15,22 +15,22 @@ def test_fetch_predecessors_traces_all_depths_without_count_limit(
 ) -> None:
     graph = {
         1: [
-            _WorklogPredecessor(worklog_id=2, title="직접 선행 2"),
-            _WorklogPredecessor(worklog_id=3, title="직접 선행 3"),
-            _WorklogPredecessor(worklog_id=4, title="직접 선행 4"),
-            _WorklogPredecessor(worklog_id=5, title="직접 선행 5"),
+            LightWorklogPredecessor(worklog_id=2, title="직접 선행 2"),
+            LightWorklogPredecessor(worklog_id=3, title="직접 선행 3"),
+            LightWorklogPredecessor(worklog_id=4, title="직접 선행 4"),
+            LightWorklogPredecessor(worklog_id=5, title="직접 선행 5"),
         ],
-        2: [_WorklogPredecessor(worklog_id=6, title="2단계 선행 6")],
-        6: [_WorklogPredecessor(worklog_id=7, title="3단계 선행 7")],
-        7: [_WorklogPredecessor(worklog_id=8, title="4단계 선행 8")],
-        8: [_WorklogPredecessor(worklog_id=9, title="5단계 선행 9")],
+        2: [LightWorklogPredecessor(worklog_id=6, title="2단계 선행 6")],
+        6: [LightWorklogPredecessor(worklog_id=7, title="3단계 선행 7")],
+        7: [LightWorklogPredecessor(worklog_id=8, title="4단계 선행 8")],
+        8: [LightWorklogPredecessor(worklog_id=9, title="5단계 선행 9")],
     }
 
     async def fake_fetch_direct_predecessors(
         self: LightWorklogSourceStore,
         session: object,
         worklog_id: int,
-    ) -> list[_WorklogPredecessor]:
+    ) -> list[LightWorklogPredecessor]:
         return graph.get(worklog_id, [])
 
     monkeypatch.setattr(
@@ -70,19 +70,19 @@ def test_fetch_predecessors_traces_all_depths_without_count_limit(
 
 def test_fetch_predecessors_deduplicates_cycles(monkeypatch: pytest.MonkeyPatch) -> None:
     graph = {
-        1: [_WorklogPredecessor(worklog_id=2, title="직접 선행 2")],
+        1: [LightWorklogPredecessor(worklog_id=2, title="직접 선행 2")],
         2: [
-            _WorklogPredecessor(worklog_id=1, title="순환 루트 1"),
-            _WorklogPredecessor(worklog_id=3, title="2단계 선행 3"),
+            LightWorklogPredecessor(worklog_id=1, title="순환 루트 1"),
+            LightWorklogPredecessor(worklog_id=3, title="2단계 선행 3"),
         ],
-        3: [_WorklogPredecessor(worklog_id=2, title="순환 선행 2")],
+        3: [LightWorklogPredecessor(worklog_id=2, title="순환 선행 2")],
     }
 
     async def fake_fetch_direct_predecessors(
         self: LightWorklogSourceStore,
         session: object,
         worklog_id: int,
-    ) -> list[_WorklogPredecessor]:
+    ) -> list[LightWorklogPredecessor]:
         return graph.get(worklog_id, [])
 
     monkeypatch.setattr(
@@ -101,16 +101,15 @@ def test_fetch_predecessors_deduplicates_cycles(monkeypatch: pytest.MonkeyPatch)
     assert [predecessor.worklog_id for predecessor in predecessors] == [2, 3]
 
 
-def test_fetch_tags_keeps_id_name_and_description() -> None:
+def test_fetch_tags_keeps_name_and_description() -> None:
     class _Result:
         def all(self) -> list[SimpleNamespace]:
             return [
                 SimpleNamespace(
-                    tag_id=4,
                     tag_name="정산",
                     description="정산 배치와 대사 업무",
                 ),
-                SimpleNamespace(tag_id=9, tag_name="장애분석", description=None),
+                SimpleNamespace(tag_name="장애분석", description=None),
             ]
 
     class _Session:
@@ -126,9 +125,8 @@ def test_fetch_tags_keeps_id_name_and_description() -> None:
 
     assert tags == [
         LightWorklogTag(
-            tag_id=4,
             tag_name="정산",
             description="정산 배치와 대사 업무",
         ),
-        LightWorklogTag(tag_id=9, tag_name="장애분석", description=None),
+        LightWorklogTag(tag_name="장애분석", description=None),
     ]

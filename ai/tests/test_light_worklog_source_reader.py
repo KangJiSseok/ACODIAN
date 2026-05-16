@@ -3,7 +3,11 @@ import asyncio
 import pytest
 
 from app.light.v3.service import worklog_source_reader
-from app.light.v3.store.worklog_source_store import LightWorklogTag, LightWorklogSourceRow
+from app.light.v3.store.worklog_source_store import (
+    LightWorklogPredecessor,
+    LightWorklogTag,
+    LightWorklogSourceRow,
+)
 
 
 class _AsyncSessionContext:
@@ -38,17 +42,14 @@ def test_fetch_sources_uses_light_v3_source_store(monkeypatch: pytest.MonkeyPatc
         title="정산 배치 오류 분석",
         request_content="정산 배치 실패 원인을 확인해 주세요.",
         work_content="로그 기준으로 API timeout과 재시도 누락을 확인했습니다.",
-        author_id=7,
         author_name="김도윤",
-        author_role="팀원 / 사원",
-        team_id=3,
         team_name="정산 고도화 TF",
-        predecessor_titles=["배치 모니터링 개선"],
-        predecessor_worklog_ids=[88],
-        tag_ids=[4, 9],
+        predecessors=[
+            LightWorklogPredecessor(worklog_id=88, title="배치 모니터링 개선"),
+        ],
         tags=[
-            LightWorklogTag(tag_id=4, tag_name="정산", description="정산 배치와 대사 업무"),
-            LightWorklogTag(tag_id=9, tag_name="장애분석", description=None),
+            LightWorklogTag(tag_name="정산", description="정산 배치와 대사 업무"),
+            LightWorklogTag(tag_name="장애분석", description=None),
         ],
     )
     fake_store = _FakeSourceStore({101: source_row})
@@ -70,7 +71,7 @@ def test_fetch_sources_uses_light_v3_source_store(monkeypatch: pytest.MonkeyPatc
 
     assert list(sources) == [101]
     assert sources[101].worklog_id == 101
-    assert sources[101].predecessor_worklog_ids == [88]
-    assert sources[101].tag_ids == [4, 9]
+    assert sources[101].predecessors[0].worklog_id == 88
+    assert sources[101].predecessors[0].title == "배치 모니터링 개선"
     assert [tag.tag_name for tag in sources[101].tags] == ["정산", "장애분석"]
     assert fake_store.calls == [(session, 101), (session, 999)]
