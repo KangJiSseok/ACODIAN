@@ -39,6 +39,28 @@ def test_settings_accepts_lightrag_kg_language_env_override(monkeypatch) -> None
     assert settings.lightrag_kg_language == "한국어"
 
 
+def test_settings_has_lightrag_qdrant_defaults(monkeypatch) -> None:
+    """LightRAG v3 vector storage는 기본적으로 로컬 Qdrant를 바라본다."""
+    monkeypatch.delenv("LIGHTRAG_VECTOR_STORAGE", raising=False)
+    monkeypatch.delenv("LIGHTRAG_QDRANT_URL", raising=False)
+    monkeypatch.delenv("LIGHTRAG_QDRANT_API_KEY", raising=False)
+    settings = Settings(_env_file=None)
+    assert settings.lightrag_vector_storage == "QdrantVectorDBStorage"
+    assert settings.lightrag_qdrant_url == "http://localhost:6333"
+    assert settings.lightrag_qdrant_api_key == ""
+
+
+def test_settings_accepts_lightrag_qdrant_env_override(monkeypatch) -> None:
+    """환경별 Qdrant URL/API key를 Settings로 주입할 수 있어야 한다."""
+    monkeypatch.setenv("LIGHTRAG_VECTOR_STORAGE", "QdrantVectorDBStorage")
+    monkeypatch.setenv("LIGHTRAG_QDRANT_URL", "http://qdrant:6333")
+    monkeypatch.setenv("LIGHTRAG_QDRANT_API_KEY", "fake-key")
+    settings = Settings(_env_file=None)
+    assert settings.lightrag_vector_storage == "QdrantVectorDBStorage"
+    assert settings.lightrag_qdrant_url == "http://qdrant:6333"
+    assert settings.lightrag_qdrant_api_key == "fake-key"
+
+
 def test_async_database_url_uses_asyncpg_driver() -> None:
     """런타임 비동기 URL 은 asyncpg 드라이버 prefix 를 가져야 한다."""
     settings = get_settings()
@@ -49,3 +71,27 @@ def test_sync_database_url_uses_psycopg_driver() -> None:
     """Alembic 용 동기 URL 은 psycopg 드라이버 prefix 를 가져야 한다."""
     settings = get_settings()
     assert settings.sync_database_url.startswith("postgresql+psycopg://")
+
+
+def test_settings_has_lightrag_qdrant_defaults(monkeypatch) -> None:
+    """LightRAG Qdrant 연동 기본값이 정의되어 있는지 확인한다."""
+    monkeypatch.delenv("LIGHTRAG_VECTOR_STORAGE", raising=False)
+    monkeypatch.delenv("LIGHTRAG_QDRANT_URL", raising=False)
+    monkeypatch.delenv("LIGHTRAG_QDRANT_API_KEY", raising=False)
+
+    settings = Settings(_env_file=None)
+    assert settings.lightrag_vector_storage == "QdrantVectorDBStorage"
+    assert settings.lightrag_qdrant_url == "http://localhost:6333"
+    assert settings.lightrag_qdrant_api_key == ""
+
+
+def test_settings_accepts_lightrag_qdrant_env_override(monkeypatch) -> None:
+    """운영 환경 env로 Qdrant URL/키를 override할 수 있어야 한다."""
+    monkeypatch.setenv("LIGHTRAG_VECTOR_STORAGE", "QdrantVectorDBStorage")
+    monkeypatch.setenv("LIGHTRAG_QDRANT_URL", "https://qdrant.example.com:6333")
+    monkeypatch.setenv("LIGHTRAG_QDRANT_API_KEY", "secret")
+
+    settings = Settings(_env_file=None)
+    assert settings.lightrag_vector_storage == "QdrantVectorDBStorage"
+    assert settings.lightrag_qdrant_url == "https://qdrant.example.com:6333"
+    assert settings.lightrag_qdrant_api_key == "secret"
