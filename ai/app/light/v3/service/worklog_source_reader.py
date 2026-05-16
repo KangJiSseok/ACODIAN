@@ -16,6 +16,15 @@ from app.store.session import get_session_factory
 
 """frozen=true : class 만든 후 변경 불가"""
 @dataclass(frozen=True)
+class LightRagWorklogTag:
+    """LightRAG source contract에 포함할 태그 문맥."""
+
+    tag_id: int
+    tag_name: str
+    description: str | None
+
+
+@dataclass(frozen=True)
 class LightRagWorklogSource:
     """LightRAG 업무일지 KG 생성을 위한 원문/문맥 source contract."""
 
@@ -32,6 +41,7 @@ class LightRagWorklogSource:
     predecessor_titles: list[str]
     predecessor_worklog_ids: list[int]
     tag_ids: list[int]
+    tags: list[LightRagWorklogTag]
 
 
 class WorklogLightSourceReader:
@@ -68,4 +78,12 @@ def to_light_worklog_source(source: LightWorklogSourceRow) -> LightRagWorklogSou
         predecessor_titles=list(source.predecessor_titles),
         predecessor_worklog_ids=list(source.predecessor_worklog_ids),
         tag_ids=list(source.tag_ids),
+        tags=[
+            LightRagWorklogTag(
+                tag_id=tag.tag_id,
+                tag_name=tag.tag_name,
+                description=tag.description,
+            )
+            for tag in source.tags
+        ],
     )

@@ -1,8 +1,10 @@
 import asyncio
+from types import SimpleNamespace
 
 import pytest
 
 from app.light.v3.store.worklog_source_store import (
+    LightWorklogTag,
     _WorklogPredecessor,
     LightWorklogSourceStore,
 )
@@ -97,3 +99,36 @@ def test_fetch_predecessors_deduplicates_cycles(monkeypatch: pytest.MonkeyPatch)
     )
 
     assert [predecessor.worklog_id for predecessor in predecessors] == [2, 3]
+
+
+def test_fetch_tags_keeps_id_name_and_description() -> None:
+    class _Result:
+        def all(self) -> list[SimpleNamespace]:
+            return [
+                SimpleNamespace(
+                    tag_id=4,
+                    tag_name="정산",
+                    description="정산 배치와 대사 업무",
+                ),
+                SimpleNamespace(tag_id=9, tag_name="장애분석", description=None),
+            ]
+
+    class _Session:
+        async def execute(self, statement: object) -> _Result:
+            return _Result()
+
+    tags = asyncio.run(
+        LightWorklogSourceStore()._fetch_tags(
+            session=_Session(),
+            worklog_id=101,
+        )
+    )
+
+    assert tags == [
+        LightWorklogTag(
+            tag_id=4,
+            tag_name="정산",
+            description="정산 배치와 대사 업무",
+        ),
+        LightWorklogTag(tag_id=9, tag_name="장애분석", description=None),
+    ]

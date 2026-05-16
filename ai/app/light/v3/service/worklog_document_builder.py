@@ -2,7 +2,7 @@
 
 from dataclasses import dataclass
 
-from app.light.v3.service.worklog_source_reader import LightRagWorklogSource
+from app.light.v3.service.worklog_source_reader import LightRagWorklogSource, LightRagWorklogTag
 
 
 @dataclass(frozen=True)
@@ -45,6 +45,7 @@ def _build_document_text(source: LightRagWorklogSource) -> str:
         f"predecessor_worklog_ids: {_format_int_list(source.predecessor_worklog_ids)}",
         f"predecessor_titles: {_format_text_list(source.predecessor_titles)}",
         f"tag_ids: {_format_int_list(source.tag_ids)}",
+        f"tags: {_format_tag_list(source.tags)}",
         "",
         "request_content:",
         source.request_content or "",
@@ -63,3 +64,14 @@ def _format_int_list(values: list[int]) -> str:
 def _format_text_list(values: list[str]) -> str:
     """텍스트 목록을 LightRAG 입력에 넣기 좋은 짧은 문자열로 직렬화한다."""
     return " | ".join(values) if values else "-"
+
+
+def _format_tag_list(values: list[LightRagWorklogTag]) -> str:
+    """태그 ID, 이름, 설명을 LightRAG 의미 추출에 쓰기 좋은 문자열로 직렬화한다."""
+    formatted_tags: list[str] = []
+    for tag in values:
+        if tag.description:
+            formatted_tags.append(f"[{tag.tag_id}] {tag.tag_name}: {tag.description}")
+        else:
+            formatted_tags.append(f"[{tag.tag_id}] {tag.tag_name}")
+    return " | ".join(formatted_tags) if formatted_tags else "-"

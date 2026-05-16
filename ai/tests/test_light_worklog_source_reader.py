@@ -3,7 +3,7 @@ import asyncio
 import pytest
 
 from app.light.v3.service import worklog_source_reader
-from app.light.v3.store.worklog_source_store import LightWorklogSourceRow
+from app.light.v3.store.worklog_source_store import LightWorklogTag, LightWorklogSourceRow
 
 
 class _AsyncSessionContext:
@@ -47,6 +47,10 @@ def test_fetch_sources_uses_light_v3_source_store(monkeypatch: pytest.MonkeyPatc
         predecessor_titles=["배치 모니터링 개선"],
         predecessor_worklog_ids=[88],
         tag_ids=[4, 9],
+        tags=[
+            LightWorklogTag(tag_id=4, tag_name="정산", description="정산 배치와 대사 업무"),
+            LightWorklogTag(tag_id=9, tag_name="장애분석", description=None),
+        ],
     )
     fake_store = _FakeSourceStore({101: source_row})
 
@@ -69,4 +73,5 @@ def test_fetch_sources_uses_light_v3_source_store(monkeypatch: pytest.MonkeyPatc
     assert sources[101].worklog_id == 101
     assert sources[101].predecessor_worklog_ids == [88]
     assert sources[101].tag_ids == [4, 9]
+    assert [tag.tag_name for tag in sources[101].tags] == ["정산", "장애분석"]
     assert fake_store.calls == [(session, 101), (session, 999)]

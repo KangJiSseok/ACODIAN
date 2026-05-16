@@ -5,7 +5,16 @@ from dataclasses import dataclass
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.store.models import Team, User, UserTeam, Worklog, WorklogDependency, WorklogTag
+from app.store.models import MetaTag, Team, User, UserTeam, Worklog, WorklogDependency, WorklogTag
+
+
+@dataclass(frozen=True)
+class LightWorklogTag:
+    """LightRAG 문맥에 포함할 업무일지 태그 정보."""
+
+    tag_id: int
+    tag_name: str
+    description: str | None
 
 
 @dataclass(frozen=True)
@@ -25,6 +34,7 @@ class LightWorklogSourceRow:
     predecessor_titles: list[str]
     predecessor_worklog_ids: list[int]
     tag_ids: list[int]
+    tags: list[LightWorklogTag]
 
 
 @dataclass(frozen=True)
@@ -78,13 +88,7 @@ class LightWorklogSourceStore:
             return None
 
         predecessors = await self._fetch_predecessors(session, worklog_id)
-        tag_ids = (
-            await session.execute(
-                select(WorklogTag.tag_id)
-                .where(WorklogTag.worklog_id == worklog_id)
-                .order_by(WorklogTag.tag_id)
-            )
-        ).scalars().all()
+        tags = await self._fetch_tags(session, worklog_id)
 
         author_role = self._format_author_role(
             role_code=row.role_code,
@@ -106,8 +110,33 @@ class LightWorklogSourceStore:
             department_id=row.department_id,
             predecessor_titles=[predecessor.title for predecessor in predecessors],
             predecessor_worklog_ids=[predecessor.worklog_id for predecessor in predecessors],
-            tag_ids=list(tag_ids),
+            tag_ids=[tag.tag_id for tag in tags],
+            tags=tags,
         )
+
+    async def _fetch_tags(
+        self,
+        session: AsyncSession,
+        worklog_id: int,
+    ) -> list[LightWorklogTag]:
+        """업무일지에 연결된 활성 태그의 ID, 이름, 설명을 조회한다."""
+        rows = (
+            await session.execute(
+                select(WorklogTag.tag_id, MetaTag.tag_name, MetaTag.description)
+                .join(MetaTag, MetaTag.tag_id == WorklogTag.tag_id)
+                .where(WorklogTag.worklog_id == worklog_id)
+                .where(MetaTag.is_deleted.is_(False))
+                .order_by(WorklogTag.tag_id)
+            )
+        ).all()
+        return [
+            LightWorklogTag(
+                tag_id=row.tag_id,
+                tag_name=row.tag_name,
+                description=row.description,
+            )
+            for row in rows
+        ]
 
     async def _fetch_predecessors(
         self,

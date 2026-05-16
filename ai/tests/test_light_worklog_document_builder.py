@@ -3,9 +3,10 @@ from dataclasses import asdict
 from app.light.v3.service.worklog_document_builder import build_worklog_light_document
 from app.light.v3.service.worklog_source_reader import (
     LightRagWorklogSource,
+    LightRagWorklogTag,
     to_light_worklog_source,
 )
-from app.light.v3.store.worklog_source_store import LightWorklogSourceRow
+from app.light.v3.store.worklog_source_store import LightWorklogTag, LightWorklogSourceRow
 
 
 def test_to_light_worklog_source_keeps_light_store_source_snapshot() -> None:
@@ -23,6 +24,10 @@ def test_to_light_worklog_source_keeps_light_store_source_snapshot() -> None:
         predecessor_titles=["배치 모니터링 개선"],
         predecessor_worklog_ids=[88],
         tag_ids=[4, 9],
+        tags=[
+            LightWorklogTag(tag_id=4, tag_name="정산", description="정산 배치와 대사 업무"),
+            LightWorklogTag(tag_id=9, tag_name="장애분석", description=None),
+        ],
     )
 
     light_source = to_light_worklog_source(source_row)
@@ -41,6 +46,14 @@ def test_to_light_worklog_source_keeps_light_store_source_snapshot() -> None:
         "predecessor_titles": ["배치 모니터링 개선"],
         "predecessor_worklog_ids": [88],
         "tag_ids": [4, 9],
+        "tags": [
+            {
+                "tag_id": 4,
+                "tag_name": "정산",
+                "description": "정산 배치와 대사 업무",
+            },
+            {"tag_id": 9, "tag_name": "장애분석", "description": None},
+        ],
     }
 
 
@@ -59,6 +72,10 @@ def test_build_worklog_light_document_preserves_worklog_id_in_three_places() -> 
         predecessor_titles=["배치 모니터링 개선"],
         predecessor_worklog_ids=[88],
         tag_ids=[4, 9],
+        tags=[
+            LightRagWorklogTag(tag_id=4, tag_name="정산", description="정산 배치와 대사 업무"),
+            LightRagWorklogTag(tag_id=9, tag_name="장애분석", description=None),
+        ],
     )
 
     document = build_worklog_light_document(source)
@@ -73,4 +90,5 @@ def test_build_worklog_light_document_preserves_worklog_id_in_three_places() -> 
     assert "department_id: 2" in document.text
     assert "predecessor_worklog_ids: 88" in document.text
     assert "tag_ids: 4, 9" in document.text
+    assert "tags: [4] 정산: 정산 배치와 대사 업무 | [9] 장애분석" in document.text
     assert "work_content:\n로그 기준으로 API timeout과 재시도 누락을 확인했습니다." in document.text
