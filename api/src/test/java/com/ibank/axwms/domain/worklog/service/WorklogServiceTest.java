@@ -119,9 +119,6 @@ class WorklogServiceTest {
         assertThat(tagCaptor.getValue())
                 .extracting(WorklogTag::getTagId)
                 .containsExactly(1L, 2L);
-        assertThat(tagCaptor.getValue())
-                .extracting(WorklogTag::getIsAiGenerated)
-                .containsOnly(Boolean.FALSE);
         verify(tagService).incrementUsageCountByIds(TAG_IDS);
         verify(worklogDependencyService).registerPredecessor(eq(WORKLOG_ID), eq(TEAM_ID), eq(request.predecessorWorklogIds()));
     }

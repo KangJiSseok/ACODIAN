@@ -71,15 +71,15 @@ class InternalTagAiCallbackServiceTest {
 
         internalTagAiCallbackService.applyAiGeneratedTags(WORKLOG_ID, request);
 
-        verify(tagRepository).insertTagNamesIgnoreDuplicates(List.of("재고"));
+        verify(tagRepository).insertAiGeneratedTagNamesIgnoreDuplicates(List.of("재고"));
         verify(worklogTagRepository).saveAll(org.mockito.ArgumentMatchers.<List<WorklogTag>>any());
         verify(tagService).incrementUsageCountByIds(List.of(1L, 3L));
     }
 
     @Test
     @SuppressWarnings("unchecked")
-    @DisplayName("내부 태그 생성 요청이면 신규 태그를 만들고 AI 생성 관계로 업무일지에 연결한다")
-    void 내부_태그_생성_요청이면_신규_태그를_만들고_ai_생성_관계로_업무일지에_연결한다() {
+    @DisplayName("내부 태그 생성 요청이면 신규 태그를 만들고 업무일지에 연결한다")
+    void 내부_태그_생성_요청이면_신규_태그를_만들고_업무일지에_연결한다() {
         ApplyWorklogAiTagsApiDto.Request request = new ApplyWorklogAiTagsApiDto.Request(
                 List.of(1L),
                 List.of(" 배치자동화 ")
@@ -98,11 +98,11 @@ class InternalTagAiCallbackServiceTest {
 
         internalTagAiCallbackService.applyAiGeneratedTags(WORKLOG_ID, request);
 
-        verify(tagRepository).insertTagNamesIgnoreDuplicates(List.of("배치자동화"));
+        verify(tagRepository).insertAiGeneratedTagNamesIgnoreDuplicates(List.of("배치자동화"));
         verify(worklogTagRepository).saveAll(linkCaptor.capture());
         assertThat(linkCaptor.getValue())
-                .extracting(WorklogTag::getIsAiGenerated)
-                .containsExactly(Boolean.TRUE, Boolean.TRUE);
+                .extracting(WorklogTag::getTagId)
+                .containsExactly(1L, 3L);
         verify(tagService).incrementUsageCountByIds(List.of(1L, 3L));
     }
 
@@ -120,7 +120,7 @@ class InternalTagAiCallbackServiceTest {
                 .extracting(error -> ((BusinessException) error).getErrorCode())
                 .isEqualTo(ErrorCode.WORKLOG_NOT_FOUND);
 
-        verify(tagRepository, never()).insertTagNamesIgnoreDuplicates(org.mockito.ArgumentMatchers.any());
+        verify(tagRepository, never()).insertAiGeneratedTagNamesIgnoreDuplicates(org.mockito.ArgumentMatchers.any());
         verify(worklogTagRepository, never()).saveAll(org.mockito.ArgumentMatchers.<List<WorklogTag>>any());
         verify(tagService, never()).incrementUsageCountByIds(org.mockito.ArgumentMatchers.any());
     }
@@ -147,6 +147,6 @@ class InternalTagAiCallbackServiceTest {
     }
 
     private WorklogTag createWorklogTag(Long worklogId, Long tagId) {
-        return WorklogTag.createAiGenerated(worklogId, tagId);
+        return WorklogTag.create(worklogId, tagId);
     }
 }

@@ -46,8 +46,8 @@ ON CONFLICT (tag_name) DO UPDATE SET
   usage_count = tb_meta_tag.usage_count + EXCLUDED.usage_count,
   updated_at = CURRENT_TIMESTAMP;
 
-INSERT INTO tb_worklog_tag (worklog_id, tag_id, is_ai_generated)
-SELECT v.worklog_id, mt.tag_id, true
+INSERT INTO tb_worklog_tag (worklog_id, tag_id)
+SELECT v.worklog_id, mt.tag_id
 FROM (VALUES
   (1, '데이터 정합성'),
   (1, 'WMS'),

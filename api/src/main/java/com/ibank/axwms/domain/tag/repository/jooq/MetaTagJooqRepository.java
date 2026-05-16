@@ -12,9 +12,9 @@ import java.util.List;
 public interface MetaTagJooqRepository {
 
     /**
-     * AI 태그 콜백 재시도나 병렬 처리에서 동일 태그명이 들어와도 이미 존재하면 무시하고 없는 값만 추가한다.
+     * AI가 새로 제안한 태그만 생성 출처를 AI로 기록하고 이미 존재하는 태그는 그대로 둔다.
      */
-    void insertTagNamesIgnoreDuplicates(Collection<String> tagNames);
+    void insertAiGeneratedTagNamesIgnoreDuplicates(Collection<String> tagNames);
 
     /**
      * 필터 옵션 등에 노출할 모든 태그를 (id, name) 형태로 조회한다.
