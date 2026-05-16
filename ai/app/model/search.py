@@ -18,7 +18,7 @@ class SemanticWorklogSearchRequest(BaseModel):
     model_config = ConfigDict(populate_by_name=True)
 
     # public API DTO와 같은 camelCase 계약을 유지하기 위해 Field alias를 사용한다.
-    keyword: str = Field(min_length=1, max_length=100)
+    keyword: str = Field(min_length=1, max_length=1000)
     team_id: int | None = Field(default=None, alias="teamId", ge=1)
     team_status: TeamStatus | None = Field(default=None, alias="teamStatus")
     status_code: WorklogStatus | None = Field(default=None, alias="statusCode")

@@ -47,6 +47,15 @@ class Settings(BaseSettings):
     neo4j_user: str = "neo4j"
     neo4j_password: str = "neo4j"
 
+    # ---- LightRAG v3 업무일지 index ----
+    lightrag_working_dir: str = "./data/lightrag-v3"
+    lightrag_llm_model: str = "gemini-2.5-flash"
+    lightrag_embedding_model: str = "gemini-embedding-001"
+    lightrag_embedding_max_token_size: int = 2048
+    lightrag_index_max_batch_size: int = 10
+    lightrag_insert_timeout_seconds: int = 120
+    lightrag_kg_language: str = "Korean"
+
     model_config = SettingsConfigDict(
         # ai/.env 를 자동 로드한다 (없으면 위 기본값을 사용).
         env_file=Path(__file__).resolve().parents[2] / ".env",

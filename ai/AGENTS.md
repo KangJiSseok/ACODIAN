@@ -104,6 +104,7 @@ ai/
 | `app/store/models.py` (Worklog/File Embedding) | 임베딩·검색 |
 | `app/store/embedding_store.py` | 임베딩·검색 |
 | `app/store/tag_store.py` (필요 시) | 태그 |
+| `app/light/v3/**` | LightRAG v3 업무일지 index/search |
 
 ## 공유 파일과 수정 규칙
 

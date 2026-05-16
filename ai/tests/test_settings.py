@@ -25,6 +25,20 @@ def test_settings_has_gemini_request_policy() -> None:
     assert settings.gemini_max_retries >= 0
 
 
+def test_settings_has_lightrag_kg_language_default(monkeypatch) -> None:
+    """LightRAG KG 추출 언어 기본값이 한국어 지시로 고정되는지 확인한다."""
+    monkeypatch.delenv("LIGHTRAG_KG_LANGUAGE", raising=False)
+    settings = Settings(_env_file=None)
+    assert settings.lightrag_kg_language == "Korean"
+
+
+def test_settings_accepts_lightrag_kg_language_env_override(monkeypatch) -> None:
+    """운영 환경에서 LightRAG KG 추출 언어를 명시 override할 수 있어야 한다."""
+    monkeypatch.setenv("LIGHTRAG_KG_LANGUAGE", "한국어")
+    settings = Settings(_env_file=None)
+    assert settings.lightrag_kg_language == "한국어"
+
+
 def test_async_database_url_uses_asyncpg_driver() -> None:
     """런타임 비동기 URL 은 asyncpg 드라이버 prefix 를 가져야 한다."""
     settings = get_settings()
