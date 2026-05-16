@@ -70,7 +70,7 @@ public class InternalTagAiCallbackService {
             return List.of();
         }
 
-        tagRepository.insertTagNamesIgnoreDuplicates(tagNames);
+        tagRepository.insertAiGeneratedTagNamesIgnoreDuplicates(tagNames);
         return tagRepository.findAllByTagNameIn(tagNames).stream()
                 .map(tag -> tag.getId())
                 .toList();
@@ -89,7 +89,7 @@ public class InternalTagAiCallbackService {
                 .collect(Collectors.toSet());
         List<WorklogTag> newLinks = tagIds.stream()
                 .filter(tagId -> !linkedTagIds.contains(tagId))
-                .map(tagId -> WorklogTag.createAiGenerated(worklogId, tagId))
+                .map(tagId -> WorklogTag.create(worklogId, tagId))
                 .toList();
 
         if (newLinks.isEmpty()) {

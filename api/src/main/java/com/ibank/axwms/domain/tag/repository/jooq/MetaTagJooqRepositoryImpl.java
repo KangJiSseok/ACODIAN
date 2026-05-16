@@ -25,10 +25,10 @@ public class MetaTagJooqRepositoryImpl implements MetaTagJooqRepository {
     private final DSLContext dsl;
 
     /**
-     * 태그명 unique 제약 충돌을 DB upsert 문법으로 흡수해 병렬 AI 콜백을 멱등하게 처리한다.
+     * 태그명 unique 제약 충돌 시 기존 태그 출처를 승격하지 않아 생성 출처 의미를 보존한다.
      */
     @Override
-    public void insertTagNamesIgnoreDuplicates(Collection<String> tagNames) {
+    public void insertAiGeneratedTagNamesIgnoreDuplicates(Collection<String> tagNames) {
         if (tagNames == null || tagNames.isEmpty()) {
             return;
         }
@@ -37,6 +37,7 @@ public class MetaTagJooqRepositoryImpl implements MetaTagJooqRepository {
                 .map(tagName -> dsl.insertInto(TB_META_TAG)
                         .set(TB_META_TAG.TAG_NAME, tagName)
                         .set(TB_META_TAG.USAGE_COUNT, 0)
+                        .set(TB_META_TAG.IS_AI_GENERATED, Boolean.TRUE)
                         .onConflict(TB_META_TAG.TAG_NAME)
                         .doNothing())
                 .map(Query.class::cast)
