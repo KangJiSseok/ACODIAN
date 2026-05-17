@@ -339,6 +339,31 @@ pre {
   color: var(--muted-foreground);
 }
 
+.dashboard-workload-bar {
+  transform: scaleY(0);
+  transform-origin: bottom;
+  animation: dashboard-workload-rise 640ms cubic-bezier(0.22, 1, 0.36, 1) forwards;
+  will-change: transform;
+}
+
+@keyframes dashboard-workload-rise {
+  from {
+    transform: scaleY(0);
+  }
+
+  to {
+    transform: scaleY(1);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .dashboard-workload-bar {
+    animation: none;
+    transform: scaleY(1);
+    will-change: auto;
+  }
+}
+
 .worklog-divider-top {
   border-top: 2px solid rgba(0, 0, 0, 0.82) !important;
 }

@@ -107,6 +107,63 @@ test("director dashboard places workload above completion and imminent panels", 
   assert.doesNotMatch(componentFile, /title="최근 알림"/);
 });
 
+test("director dashboard panels use the shared card spotlight surface", () => {
+  const componentFile = readFileSync(
+    new URL(
+      "../src/app/(protected)/_dashboard/_components/directorDashboard.tsx",
+      import.meta.url,
+    ),
+    "utf8",
+  );
+
+  assert.match(componentFile, /<CardSpotlight className="rounded-\[24px\] p-5">/);
+  assert.doesNotMatch(
+    componentFile,
+    /<section className="workspace-panel-soft rounded-2xl p-5">/,
+  );
+});
+
+test("dashboard panel content reacts to the card spotlight hover state", () => {
+  const componentFile = readFileSync(
+    new URL(
+      "../src/app/(protected)/_dashboard/_components/directorDashboard.tsx",
+      import.meta.url,
+    ),
+    "utf8",
+  );
+
+  assert.match(componentFile, /group-hover\/card-spotlight:border-primary\/30/);
+  assert.match(componentFile, /group-hover\/card-spotlight:bg-primary\/8/);
+  assert.match(componentFile, /group-hover\/card-spotlight:text-primary/);
+  assert.match(componentFile, /group-hover\/card-spotlight:bg-primary\/90/);
+  assert.match(componentFile, /group-hover\/card-spotlight:bg-background\/60/);
+  assert.match(componentFile, /group-hover\/card-spotlight:bg-muted\/45/);
+});
+
+test("workload bars rise sequentially and respect reduced motion", () => {
+  const componentFile = readFileSync(
+    new URL(
+      "../src/app/(protected)/_dashboard/_components/directorDashboard.tsx",
+      import.meta.url,
+    ),
+    "utf8",
+  );
+  const globalsCss = readFileSync(
+    new URL("../src/app/globals.css", import.meta.url),
+    "utf8",
+  );
+
+  assert.match(componentFile, /items\.map\(\(item, index\) =>/);
+  assert.match(
+    componentFile,
+    /className="dashboard-workload-bar w-full rounded-t-2xl bg-primary[^"]*group-hover\/card-spotlight:bg-primary\/90"/,
+  );
+  assert.match(componentFile, /animationDelay: `\$\{index \* 75\}ms`/);
+  assert.match(globalsCss, /@keyframes dashboard-workload-rise/);
+  assert.match(globalsCss, /prefers-reduced-motion: reduce/);
+  assert.match(globalsCss, /\.dashboard-workload-bar/);
+});
+
 test("dashboard worklog cards show due date without raw status code", () => {
   const componentFile = readFileSync(
     new URL(
