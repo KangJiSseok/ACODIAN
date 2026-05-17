@@ -283,7 +283,10 @@ function AuthEntry() {
                 : "text-7xl sm:text-8xl lg:text-9xl",
             )}
           >
-            AX-WMS
+            <span className="block">Acodian</span>
+            <span className="mt-4 block text-[11px] font-semibold leading-none tracking-[0.2em] text-white/78 sm:text-sm sm:tracking-[0.34em] lg:text-base lg:tracking-[0.42em]">
+              Ax Coworking ObsiDIAN
+            </span>
           </h1>
         </div>
 
