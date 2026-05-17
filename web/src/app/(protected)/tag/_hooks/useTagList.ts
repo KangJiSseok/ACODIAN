@@ -7,6 +7,7 @@ export const tagKeys = {
   searches: () => [...tagKeys.all, "search"] as const,
   search: (params: SearchTagsParams = {}) =>
     [...tagKeys.searches(), params] as const,
+  mergeCandidates: () => [...tagKeys.all, "merge-candidates"] as const,
 }
 
 export function useTagList(params: SearchTagsParams = {}) {
@@ -14,5 +15,12 @@ export function useTagList(params: SearchTagsParams = {}) {
     queryKey: tagKeys.search(params),
     queryFn: () => tagService.search(params),
     placeholderData: keepPreviousData,
+  })
+}
+
+export function useTagMergeCandidates() {
+  return useQuery({
+    queryKey: tagKeys.mergeCandidates(),
+    queryFn: () => tagService.getMergeCandidates(),
   })
 }
