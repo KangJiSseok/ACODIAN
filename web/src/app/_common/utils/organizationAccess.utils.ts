@@ -53,6 +53,17 @@ export function canAccessOrganizationPath(
   return true;
 }
 
+export function canAccessWorklogPath(
+  user: AuthUser | null | undefined,
+  href: string,
+) {
+  if (href === "/worklog/create") {
+    return !isDirectorProfile(user);
+  }
+
+  return true;
+}
+
 export function filterNavItemsForUser(
   user: AuthUser | null | undefined,
   items: NavItem[],
@@ -64,7 +75,10 @@ export function filterNavItemsForUser(
       }
 
       const submenus = item.submenus.filter((submenu) => {
-        return canAccessOrganizationPath(user, submenu.href);
+        return (
+          canAccessOrganizationPath(user, submenu.href) &&
+          canAccessWorklogPath(user, submenu.href)
+        );
       });
 
       return submenus.length > 0 ? { ...item, submenus } : null;

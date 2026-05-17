@@ -111,6 +111,10 @@ export function WorklogForm({
   teamOptionsSource,
   dependencyOptionsSource,
   tagOptionsSource,
+  hasMoreTagCandidates,
+  isFetchingMoreTagCandidates,
+  onTagSearchKeywordChange,
+  onLoadMoreTagCandidates,
 }: {
   initialValues?: WorklogFormValues
   onSubmit: (values: WorklogFormValues) => Promise<void> | void
@@ -120,6 +124,10 @@ export function WorklogForm({
   teamOptionsSource?: WorklogFormTeamOption[]
   dependencyOptionsSource?: WorklogFormDependencyOption[]
   tagOptionsSource?: WorklogFormTagOption[]
+  hasMoreTagCandidates?: boolean
+  isFetchingMoreTagCandidates?: boolean
+  onTagSearchKeywordChange?: (keyword: string) => void
+  onLoadMoreTagCandidates?: () => void
 }) {
   const controlClassName = "h-11 rounded-2xl px-4 text-sm"
   const searchControlClassName = "h-11 rounded-2xl pl-11 pr-4 text-sm"
@@ -157,6 +165,13 @@ export function WorklogForm({
   const [dependencySearchOpen, setDependencySearchOpen] = useState(false)
   const [tagKeywordInput, setTagKeywordInput] = useState("")
   const [tagSearchOpen, setTagSearchOpen] = useState(false)
+  const [selectedTagOptions, setSelectedTagOptions] = useState<
+    WorklogFormTagOption[]
+  >(() =>
+    (tagOptionsSource ?? []).filter((tag) =>
+      resolvedInitialValues.tagIds.includes(tag.id),
+    ),
+  )
   const settingsValidationErrors = getSettingsValidationErrors(
     actualHoursInput,
     {
@@ -243,30 +258,16 @@ export function WorklogForm({
     [dependencyCandidates, values.dependencyIds],
   )
   const selectedTags = useMemo(
-    () => tagSource.filter((tag) => values.tagIds.includes(tag.id)),
-    [tagSource, values.tagIds],
+    () =>
+      mergeTagOptions([...selectedTagOptions, ...tagSource]).filter((tag) =>
+        values.tagIds.includes(tag.id),
+      ),
+    [selectedTagOptions, tagSource, values.tagIds],
   )
   const filteredTagCandidates = useMemo(() => {
-    const normalizedKeyword = tagKeywordInput.trim().toLowerCase()
-    if (!normalizedKeyword) return []
-
     return tagSource
-      .filter((tag) => {
-        if (values.tagIds.includes(tag.id)) return false
-
-        const searchableText = [
-          tag.name,
-          tag.category,
-          tag.source,
-          tag.reuseHint,
-        ]
-          .join(" ")
-          .toLowerCase()
-
-        return searchableText.includes(normalizedKeyword)
-      })
-      .slice(0, 8)
-  }, [tagKeywordInput, tagSource, values.tagIds])
+      .filter((tag) => !values.tagIds.includes(tag.id))
+  }, [tagSource, values.tagIds])
 
   const incompleteDependencies = dependencyCandidates.filter(
     (worklog) =>
@@ -351,13 +352,27 @@ export function WorklogForm({
   }
 
   const addTag = (tagId: number) => {
+    const selectedTag = tagSource.find((tag) => tag.id === tagId)
+
+    if (selectedTag) {
+      setSelectedTagOptions((current) =>
+        mergeTagOptions([...current, selectedTag]),
+      )
+    }
+
     setValues((previous) => ({
       ...previous,
       tagIds: Array.from(new Set([...previous.tagIds, tagId])),
       removeTagIds: (previous.removeTagIds ?? []).filter((item) => item !== tagId),
     }))
     setTagKeywordInput("")
+    onTagSearchKeywordChange?.("")
     setTagSearchOpen(false)
+  }
+
+  const updateTagKeywordInput = (nextKeyword: string) => {
+    setTagKeywordInput(nextKeyword)
+    onTagSearchKeywordChange?.(nextKeyword)
   }
 
   const removeTag = (tagId: number) => {
@@ -366,6 +381,7 @@ export function WorklogForm({
       tagIds: previous.tagIds.filter((item) => item !== tagId),
       removeTagIds: Array.from(new Set([...(previous.removeTagIds ?? []), tagId])),
     }))
+    setSelectedTagOptions((current) => current.filter((tag) => tag.id !== tagId))
   }
 
   const updateValues = (nextValues: WorklogFormValues) => {
@@ -589,11 +605,14 @@ export function WorklogForm({
         circularDependencyDetected={circularDependencyDetected}
         statusChangeReasonVisible={statusChangeReasonVisible}
         tagKeywordInput={tagKeywordInput}
-        onTagKeywordInputChange={setTagKeywordInput}
+        onTagKeywordInputChange={updateTagKeywordInput}
         tagSearchOpen={tagSearchOpen}
         onTagSearchOpenChange={setTagSearchOpen}
         filteredTagCandidates={filteredTagCandidates}
         selectedTags={selectedTags}
+        hasMoreTagCandidates={hasMoreTagCandidates}
+        isFetchingMoreTagCandidates={isFetchingMoreTagCandidates}
+        onLoadMoreTagCandidates={onLoadMoreTagCandidates}
         onAddTag={addTag}
         onRemoveTag={removeTag}
       />
@@ -616,6 +635,10 @@ function appendRemovedFileId(values: WorklogFormValues, filename: string) {
   return Array.from(new Set([...(values.removeFileIds ?? []), removedFileId]))
 }
 
+function mergeTagOptions(tags: WorklogFormTagOption[]) {
+  return Array.from(new Map(tags.map((tag) => [tag.id, tag])).values())
+}
+
 function FormPanel({
   eyebrow,
   title,
@@ -630,7 +653,7 @@ function FormPanel({
   children: ReactNode
 }) {
   return (
-    <CardSpotlight className={cn("rounded-[28px]", className)}>
+    <CardSpotlight className={cn("rounded-[28px]", className)} disableSpotlight>
       <div className="space-y-6 p-6">
         <div className="flex items-start justify-between gap-4">
           <div className="space-y-2">
@@ -687,7 +710,7 @@ function InlineActionButton({
   return (
     <button
       type="button"
-      className="group relative inline-flex h-9 items-center gap-2 rounded-lg border border-primary/25 bg-primary/10 px-3.5 text-xs font-semibold text-primary shadow-[0_12px_28px_-22px_rgba(30,58,138,0.85)] transition-all hover:-translate-y-0.5 hover:border-primary/50 hover:bg-primary hover:text-primary-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background"
+      className="relative inline-flex h-9 items-center gap-2 rounded-lg border border-primary/25 bg-primary/10 px-3.5 text-xs font-semibold text-primary shadow-[0_12px_28px_-22px_rgba(30,58,138,0.85)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background"
       onClick={onClick}
       aria-label={
         count && count > 0
@@ -697,9 +720,9 @@ function InlineActionButton({
     >
       {icon}
       <span>{label}</span>
-      <ChevronRight className="size-3.5 transition-transform group-hover:translate-x-0.5" />
+      <ChevronRight className="size-3.5" />
       {count && count > 0 ? (
-        <span className="absolute -right-1.5 -top-1.5 flex min-w-4 items-center justify-center rounded-full bg-red-600 px-1 text-[10px] font-bold leading-4 text-white ring-2 ring-background group-hover:bg-red-600 group-hover:text-white">
+        <span className="absolute -right-1.5 -top-1.5 flex min-w-4 items-center justify-center rounded-full bg-red-600 px-1 text-[10px] font-bold leading-4 text-white ring-2 ring-background">
           {count > 99 ? "99+" : count}
         </span>
       ) : null}

@@ -49,6 +49,9 @@ interface WorklogFormModalsProps {
   onTagSearchOpenChange: (open: boolean) => void
   filteredTagCandidates: WorklogFormTagOption[]
   selectedTags: WorklogFormTagOption[]
+  hasMoreTagCandidates?: boolean
+  isFetchingMoreTagCandidates?: boolean
+  onLoadMoreTagCandidates?: () => void
   onAddTag: (tagId: number) => void
   onRemoveTag: (tagId: number) => void
 }
@@ -83,6 +86,9 @@ export function WorklogFormModals({
   onTagSearchOpenChange,
   filteredTagCandidates,
   selectedTags,
+  hasMoreTagCandidates,
+  isFetchingMoreTagCandidates,
+  onLoadMoreTagCandidates,
   onAddTag,
   onRemoveTag,
 }: WorklogFormModalsProps) {
@@ -124,6 +130,9 @@ export function WorklogFormModals({
         onTagSearchOpenChange={onTagSearchOpenChange}
         filteredTagCandidates={filteredTagCandidates}
         selectedTags={selectedTags}
+        hasMoreTagCandidates={hasMoreTagCandidates}
+        isFetchingMoreTagCandidates={isFetchingMoreTagCandidates}
+        onLoadMoreTagCandidates={onLoadMoreTagCandidates}
         onAddTag={onAddTag}
         onRemoveTag={onRemoveTag}
       />
