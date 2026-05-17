@@ -2,32 +2,32 @@ from dataclasses import asdict
 
 from app.light.v3.service.worklog_document_builder import build_worklog_light_document
 from app.light.v3.service.worklog_source_reader import (
-    LightRagWorklogPredecessor,
     LightRagWorklogSource,
-    LightRagWorklogTag,
     to_light_worklog_source,
 )
 from app.light.v3.store.worklog_source_store import (
     LightWorklogPredecessor,
-    LightWorklogTag,
     LightWorklogSourceRow,
+    LightWorklogTag,
 )
 
 
-def test_to_light_worklog_source_keeps_light_store_source_snapshot() -> None:
+def test_to_light_worklog_source_keeps_only_text_document_fields() -> None:
     source_row = LightWorklogSourceRow(
         worklog_id=101,
         title="정산 배치 오류 분석",
         request_content="정산 배치 실패 원인을 확인해 주세요.",
         work_content="로그 기준으로 API timeout과 재시도 누락을 확인했습니다.",
+        author_id=5,
         author_name="김도윤",
+        team_id=7,
         team_name="정산 고도화 TF",
-        predecessors=[
-            LightWorklogPredecessor(worklog_id=88, title="배치 모니터링 개선"),
-        ],
         tags=[
-            LightWorklogTag(tag_name="정산", description="정산 배치와 대사 업무"),
-            LightWorklogTag(tag_name="장애분석", description=None),
+            LightWorklogTag(tag_id=11, tag_name="정산", description="정산 배치와 대사 업무"),
+            LightWorklogTag(tag_id=12, tag_name="장애분석", description=None),
+        ],
+        direct_predecessors=[
+            LightWorklogPredecessor(worklog_id=88, title="배치 모니터링 개선"),
         ],
     )
 
@@ -38,21 +38,6 @@ def test_to_light_worklog_source_keeps_light_store_source_snapshot() -> None:
         "title": "정산 배치 오류 분석",
         "request_content": "정산 배치 실패 원인을 확인해 주세요.",
         "work_content": "로그 기준으로 API timeout과 재시도 누락을 확인했습니다.",
-        "author_name": "김도윤",
-        "team_name": "정산 고도화 TF",
-        "predecessors": [
-            {
-                "worklog_id": 88,
-                "title": "배치 모니터링 개선",
-            },
-        ],
-        "tags": [
-            {
-                "tag_name": "정산",
-                "description": "정산 배치와 대사 업무",
-            },
-            {"tag_name": "장애분석", "description": None},
-        ],
     }
 
 
@@ -62,15 +47,6 @@ def test_build_worklog_light_document_preserves_worklog_id_in_three_places() -> 
         title="정산 배치 오류 분석",
         request_content=None,
         work_content="로그 기준으로 API timeout과 재시도 누락을 확인했습니다.",
-        author_name="김도윤",
-        team_name="정산 고도화 TF",
-        predecessors=[
-            LightRagWorklogPredecessor(worklog_id=88, title="배치 모니터링 개선"),
-        ],
-        tags=[
-            LightRagWorklogTag(tag_name="정산", description="정산 배치와 대사 업무"),
-            LightRagWorklogTag(tag_name="장애분석", description=None),
-        ],
     )
 
     document = build_worklog_light_document(source)
@@ -85,6 +61,7 @@ def test_build_worklog_light_document_preserves_worklog_id_in_three_places() -> 
     assert "author_role:" not in document.text
     assert "team_id:" not in document.text
     assert "team_name:" not in document.text
+    assert "direct_predecessors:" not in document.text
     assert "predecessors:" not in document.text
     assert "tags:" not in document.text
     assert "work_content:\n로그 기준으로 API timeout과 재시도 누락을 확인했습니다." in document.text

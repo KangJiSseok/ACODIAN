@@ -5,8 +5,8 @@ import pytest
 from app.light.v3.service import worklog_source_reader
 from app.light.v3.store.worklog_source_store import (
     LightWorklogPredecessor,
-    LightWorklogTag,
     LightWorklogSourceRow,
+    LightWorklogTag,
 )
 
 
@@ -24,32 +24,34 @@ class _AsyncSessionContext:
 class _FakeSourceStore:
     def __init__(self, rows: dict[int, LightWorklogSourceRow]) -> None:
         self.rows = rows
-        self.calls: list[tuple[object, int]] = []
+        self.calls: list[tuple[object, list[int]]] = []
 
-    async def fetch_worklog_source(
+    async def fetch_worklog_sources(
         self,
         session: object,
-        worklog_id: int,
-    ) -> LightWorklogSourceRow | None:
-        self.calls.append((session, worklog_id))
-        return self.rows.get(worklog_id)
+        worklog_ids: list[int],
+    ) -> dict[int, LightWorklogSourceRow]:
+        self.calls.append((session, worklog_ids))
+        return {worklog_id: self.rows[worklog_id] for worklog_id in worklog_ids if worklog_id in self.rows}
 
 
-def test_fetch_sources_uses_light_v3_source_store(monkeypatch: pytest.MonkeyPatch) -> None:
+def test_fetch_sources_uses_light_v3_source_store_once(monkeypatch: pytest.MonkeyPatch) -> None:
     session = object()
     source_row = LightWorklogSourceRow(
         worklog_id=101,
         title="정산 배치 오류 분석",
         request_content="정산 배치 실패 원인을 확인해 주세요.",
         work_content="로그 기준으로 API timeout과 재시도 누락을 확인했습니다.",
+        author_id=5,
         author_name="김도윤",
+        team_id=7,
         team_name="정산 고도화 TF",
-        predecessors=[
-            LightWorklogPredecessor(worklog_id=88, title="배치 모니터링 개선"),
-        ],
         tags=[
-            LightWorklogTag(tag_name="정산", description="정산 배치와 대사 업무"),
-            LightWorklogTag(tag_name="장애분석", description=None),
+            LightWorklogTag(tag_id=11, tag_name="정산", description="정산 배치와 대사 업무"),
+            LightWorklogTag(tag_id=12, tag_name="장애분석", description=None),
+        ],
+        direct_predecessors=[
+            LightWorklogPredecessor(worklog_id=88, title="배치 모니터링 개선"),
         ],
     )
     fake_store = _FakeSourceStore({101: source_row})
@@ -71,7 +73,10 @@ def test_fetch_sources_uses_light_v3_source_store(monkeypatch: pytest.MonkeyPatc
 
     assert list(sources) == [101]
     assert sources[101].worklog_id == 101
-    assert sources[101].predecessors[0].worklog_id == 88
-    assert sources[101].predecessors[0].title == "배치 모니터링 개선"
-    assert [tag.tag_name for tag in sources[101].tags] == ["정산", "장애분석"]
-    assert fake_store.calls == [(session, 101), (session, 999)]
+    assert sources[101].title == "정산 배치 오류 분석"
+    assert sources[101].request_content == "정산 배치 실패 원인을 확인해 주세요."
+    assert sources[101].work_content == "로그 기준으로 API timeout과 재시도 누락을 확인했습니다."
+    assert not hasattr(sources[101], "author_id")
+    assert not hasattr(sources[101], "tags")
+    assert not hasattr(sources[101], "direct_predecessors")
+    assert fake_store.calls == [(session, [101, 999])]

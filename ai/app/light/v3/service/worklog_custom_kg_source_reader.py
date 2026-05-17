@@ -2,18 +2,16 @@
 
 from dataclasses import dataclass
 
-from app.light.v3.store.worklog_custom_kg_source_store import (
-    LightWorklogCustomKgPredecessor,
-    LightWorklogCustomKgSourceRow,
-    LightWorklogCustomKgSourceStore,
-    LightWorklogCustomKgTag,
+from app.light.v3.store.worklog_source_store import (
+    LightWorklogSourceRow,
+    LightWorklogSourceStore,
 )
 from app.store.session import get_session_factory
 
 
 @dataclass(frozen=True)
 class LightRagCustomKgTag:
-    """custom KG source contract에 포함할 태그."""
+    """LightRAG custom KG 관계에 포함할 태그 문맥."""
 
     tag_id: int
     tag_name: str
@@ -22,7 +20,7 @@ class LightRagCustomKgTag:
 
 @dataclass(frozen=True)
 class LightRagCustomKgPredecessor:
-    """custom KG source contract에 포함할 직접 선행 업무."""
+    """LightRAG custom KG DEPENDS_ON 관계에 포함할 직접 선행 업무 문맥."""
 
     worklog_id: int
     title: str
@@ -30,7 +28,7 @@ class LightRagCustomKgPredecessor:
 
 @dataclass(frozen=True)
 class LightRagCustomKgSource:
-    """업무일지 1건의 LightRAG custom KG source contract."""
+    """LightRAG 업무일지 custom KG 생성을 위한 source contract."""
 
     worklog_id: int
     title: str
@@ -46,21 +44,18 @@ class WorklogCustomKgSourceReader:
     """업무일지 ID 목록을 LightRAG custom KG source contract로 조회한다."""
 
     async def fetch_sources(self, worklog_ids: list[int]) -> dict[int, LightRagCustomKgSource]:
-        """존재하는 업무일지만 custom KG source로 반환한다."""
-        source_store = LightWorklogCustomKgSourceStore()
+        """존재하는 업무일지만 LightRAG custom KG source로 batch 반환한다."""
+        source_store = LightWorklogSourceStore()
         async with get_session_factory()() as session:
-            sources: dict[int, LightRagCustomKgSource] = {}
-            for worklog_id in worklog_ids:
-                source_row = await source_store.fetch_custom_kg_source(session, worklog_id)
-                if source_row is not None:
-                    sources[worklog_id] = to_light_worklog_custom_kg_source(source_row)
-            return sources
+            source_rows = await source_store.fetch_worklog_sources(session, worklog_ids)
+            return {
+                worklog_id: to_light_worklog_custom_kg_source(source_row)
+                for worklog_id, source_row in source_rows.items()
+            }
 
 
-def to_light_worklog_custom_kg_source(
-    source: LightWorklogCustomKgSourceRow,
-) -> LightRagCustomKgSource:
-    """store row를 custom KG source contract로 변환한다."""
+def to_light_worklog_custom_kg_source(source: LightWorklogSourceRow) -> LightRagCustomKgSource:
+    """LightRAG v3 source row를 custom KG source contract로 변환한다."""
     return LightRagCustomKgSource(
         worklog_id=source.worklog_id,
         title=source.title,

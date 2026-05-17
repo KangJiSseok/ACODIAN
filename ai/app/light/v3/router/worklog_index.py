@@ -49,6 +49,7 @@ async def index_worklogs(
     request: WorklogLightIndexRequest,
     service: Annotated[LightWorklogIndexService, Depends(get_worklog_index_service)],
 ) -> WorklogLightIndexResponse:
+    """업무일지 text document와 confirmed relation custom KG를 함께 index한다."""
     worklog_ids = [int(worklog_id) for worklog_id in request.worklog_ids]
     validate_index_batch_size(worklog_ids)
 

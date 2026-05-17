@@ -35,7 +35,7 @@ class PreparedLightWorklogCustomKgDocuments:
 class WorklogCustomKgIndexService:
     """업무일지 confirmed relation custom KG index 유스케이스 진입점.
 
-    DB source reader, custom KG document builder, LightRAG adapter를 순서대로 호출해
+    통합 source reader를 재사용해 custom KG document만 LightRAG에 insert하고
     요청 하나의 동기 index 결과를 ID별로 조립한다.
     """
 
