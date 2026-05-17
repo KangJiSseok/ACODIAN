@@ -1,40 +1,56 @@
-import { tags } from "../../worklog/_mock/worklog.mock"
-import type { TagItem } from "../_types/tag.types"
+import { apiClient } from "@/app/_common/service/api-client"
+import type { PageResponse } from "@/app/_common/types/api.types"
+import type {
+  SearchTagsParams,
+  TagItem,
+  TagSearchApiItem,
+} from "../_types/tag.types"
 
-const displayTags: TagItem[] = [
-  ...tags,
-  {
-    id: 5,
-    name: "요구사항정의",
-    usageCount: 9,
-    category: "업무",
-    source: "MANUAL",
-    mergeState: "REVIEW",
-    reuseHint: "기획 문서/프로젝트 착수 태그와 통합 검토 중입니다.",
-  },
-  {
-    id: 6,
-    name: "솔루션개발사업부",
-    usageCount: 17,
-    category: "부서",
-    source: "AI",
-    mergeState: "ACTIVE",
-    reuseHint: "부서 컨텍스트 추론 시 자동 부여됩니다.",
-  },
-  {
-    id: 7,
-    name: "문서자동화",
-    usageCount: 7,
-    category: "업무",
-    source: "AI",
-    mergeState: "MERGE_CANDIDATE",
-    reuseHint: "업무자동화 태그와 유사해 병합 후보로 표시됩니다.",
-    mergeTargetId: 4,
-  },
-]
+function toNumber(value: number | string | null | undefined) {
+  const parsed = Number(value)
+  return Number.isFinite(parsed) ? parsed : 0
+}
+
+function toTagItem(item: TagSearchApiItem): TagItem | null {
+  const id = Number(item.tagId ?? item.id)
+  const name = item.tagName ?? item.name
+
+  if (!Number.isFinite(id) || !name) {
+    return null
+  }
+
+  return {
+    id,
+    name,
+    usageCount: toNumber(item.usageCount),
+    createdAt: item.createdAt ?? undefined,
+    updatedAt: item.updatedAt ?? undefined,
+  }
+}
+
+function normalizeSearchParams(params: SearchTagsParams) {
+  return {
+    page: params.page ?? 1,
+    pageSize: params.pageSize ?? 20,
+    query: params.query?.trim() || undefined,
+  }
+}
 
 export const tagService = {
-  list(): TagItem[] {
-    return [...displayTags]
+  async search(params: SearchTagsParams = {}) {
+    const normalizedParams = normalizeSearchParams(params)
+    const response = await apiClient.get<PageResponse<TagSearchApiItem>>(
+      "/tags/search",
+      {
+        params: normalizedParams,
+      }
+    )
+
+    return {
+      ...response,
+      items: response.items
+        .map(toTagItem)
+        .filter((tag): tag is TagItem => tag !== null),
+    }
   },
 }
