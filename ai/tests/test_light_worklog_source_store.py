@@ -1,123 +1,111 @@
 import asyncio
 from types import SimpleNamespace
 
-import pytest
-
 from app.light.v3.store.worklog_source_store import (
     LightWorklogPredecessor,
-    LightWorklogTag,
     LightWorklogSourceStore,
+    LightWorklogTag,
 )
 
 
-def test_fetch_predecessors_traces_all_depths_without_count_limit(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    graph = {
-        1: [
-            LightWorklogPredecessor(worklog_id=2, title="직접 선행 2"),
-            LightWorklogPredecessor(worklog_id=3, title="직접 선행 3"),
-            LightWorklogPredecessor(worklog_id=4, title="직접 선행 4"),
-            LightWorklogPredecessor(worklog_id=5, title="직접 선행 5"),
-        ],
-        2: [LightWorklogPredecessor(worklog_id=6, title="2단계 선행 6")],
-        6: [LightWorklogPredecessor(worklog_id=7, title="3단계 선행 7")],
-        7: [LightWorklogPredecessor(worklog_id=8, title="4단계 선행 8")],
-        8: [LightWorklogPredecessor(worklog_id=9, title="5단계 선행 9")],
-    }
+class _Result:
+    def __init__(self, rows: list[SimpleNamespace]) -> None:
+        self._rows = rows
 
-    async def fake_fetch_direct_predecessors(
-        self: LightWorklogSourceStore,
-        session: object,
-        worklog_id: int,
-    ) -> list[LightWorklogPredecessor]:
-        return graph.get(worklog_id, [])
+    def all(self) -> list[SimpleNamespace]:
+        return self._rows
 
-    monkeypatch.setattr(
-        LightWorklogSourceStore,
-        "_fetch_direct_predecessors",
-        fake_fetch_direct_predecessors,
-    )
 
-    predecessors = asyncio.run(
-        LightWorklogSourceStore()._fetch_predecessors(
-            session=object(),
-            worklog_id=1,
+def test_fetch_worklog_sources_batches_base_tags_and_direct_predecessors() -> None:
+    class _Session:
+        def __init__(self) -> None:
+            self.compiled_statements: list[str] = []
+
+        async def execute(self, statement: object) -> _Result:
+            compiled = str(statement.compile())
+            self.compiled_statements.append(compiled)
+            if len(self.compiled_statements) == 1:
+                assert "tb_worklog.worklog_id IN" in compiled
+                assert "tb_worklog.is_deleted IS false" in compiled
+                assert "tb_team.deleted_at IS NULL" in compiled
+                return _Result(
+                    [
+                        SimpleNamespace(
+                            worklog_id=101,
+                            title="정산 배치 오류 분석",
+                            request_content="요청",
+                            work_content="수행",
+                            author_id=5,
+                            user_name="김도윤",
+                            team_id=7,
+                            team_name="정산 고도화 TF",
+                        )
+                    ]
+                )
+            if len(self.compiled_statements) == 2:
+                assert "tb_worklog_tag.worklog_id IN" in compiled
+                assert "tb_meta_tag.description" in compiled
+                assert "tb_meta_tag.is_deleted IS false" in compiled
+                return _Result(
+                    [
+                        SimpleNamespace(
+                            worklog_id=101,
+                            tag_id=11,
+                            tag_name="정산",
+                            description="정산 배치와 대사 업무",
+                        )
+                    ]
+                )
+            assert "tb_worklog_dependency.worklog_id IN" in compiled
+            assert "tb_worklog.is_deleted IS false" in compiled
+            return _Result(
+                [SimpleNamespace(worklog_id=101, depends_on_worklog_id=88, title="직접 선행")]
+            )
+
+    session = _Session()
+
+    sources = asyncio.run(
+        LightWorklogSourceStore().fetch_worklog_sources(
+            session=session,
+            worklog_ids=[101, 999, 101],
         )
     )
 
-    assert [predecessor.worklog_id for predecessor in predecessors] == [
-        2,
-        3,
-        4,
-        5,
-        6,
-        7,
-        8,
-        9,
+    assert list(sources) == [101]
+    assert sources[101].author_id == 5
+    assert sources[101].team_id == 7
+    assert sources[101].tags == [
+        LightWorklogTag(tag_id=11, tag_name="정산", description="정산 배치와 대사 업무")
     ]
-    assert [predecessor.title for predecessor in predecessors] == [
-        "직접 선행 2",
-        "직접 선행 3",
-        "직접 선행 4",
-        "직접 선행 5",
-        "2단계 선행 6",
-        "3단계 선행 7",
-        "4단계 선행 8",
-        "5단계 선행 9",
+    assert sources[101].direct_predecessors == [
+        LightWorklogPredecessor(worklog_id=88, title="직접 선행")
     ]
+    assert len(session.compiled_statements) == 3
 
 
-def test_fetch_predecessors_deduplicates_cycles(monkeypatch: pytest.MonkeyPatch) -> None:
-    graph = {
-        1: [LightWorklogPredecessor(worklog_id=2, title="직접 선행 2")],
-        2: [
-            LightWorklogPredecessor(worklog_id=1, title="순환 루트 1"),
-            LightWorklogPredecessor(worklog_id=3, title="2단계 선행 3"),
-        ],
-        3: [LightWorklogPredecessor(worklog_id=2, title="순환 선행 2")],
-    }
-
-    async def fake_fetch_direct_predecessors(
-        self: LightWorklogSourceStore,
-        session: object,
-        worklog_id: int,
-    ) -> list[LightWorklogPredecessor]:
-        return graph.get(worklog_id, [])
-
-    monkeypatch.setattr(
-        LightWorklogSourceStore,
-        "_fetch_direct_predecessors",
-        fake_fetch_direct_predecessors,
-    )
-
-    predecessors = asyncio.run(
-        LightWorklogSourceStore()._fetch_predecessors(
-            session=object(),
-            worklog_id=1,
-        )
-    )
-
-    assert [predecessor.worklog_id for predecessor in predecessors] == [2, 3]
-
-
-def test_fetch_tags_keeps_name_and_description() -> None:
-    class _Result:
-        def all(self) -> list[SimpleNamespace]:
-            return [
-                SimpleNamespace(
-                    tag_name="정산",
-                    description="정산 배치와 대사 업무",
-                ),
-                SimpleNamespace(tag_name="장애분석", description=None),
-            ]
-
+def test_fetch_tags_keeps_id_name_description_and_excludes_deleted() -> None:
     class _Session:
         async def execute(self, statement: object) -> _Result:
             compiled = str(statement.compile())
-            assert "tb_meta_tag.description" not in compiled
-            assert "is_deleted" not in compiled
-            return _Result()
+            assert "tb_meta_tag.tag_id" in compiled
+            assert "tb_meta_tag.description" in compiled
+            assert "tb_meta_tag.is_deleted IS false" in compiled
+            return _Result(
+                [
+                    SimpleNamespace(
+                        worklog_id=101,
+                        tag_id=11,
+                        tag_name="정산",
+                        description="정산 배치와 대사 업무",
+                    ),
+                    SimpleNamespace(
+                        worklog_id=101,
+                        tag_id=12,
+                        tag_name="장애분석",
+                        description=None,
+                    ),
+                ]
+            )
 
     tags = asyncio.run(
         LightWorklogSourceStore()._fetch_tags(
@@ -127,9 +115,26 @@ def test_fetch_tags_keeps_name_and_description() -> None:
     )
 
     assert tags == [
-        LightWorklogTag(
-            tag_name="정산",
-            description="정산 배치와 대사 업무",
-        ),
-        LightWorklogTag(tag_name="장애분석", description=None),
+        LightWorklogTag(tag_id=11, tag_name="정산", description="정산 배치와 대사 업무"),
+        LightWorklogTag(tag_id=12, tag_name="장애분석", description=None),
     ]
+
+
+def test_fetch_direct_predecessors_uses_direct_edge_and_excludes_deleted() -> None:
+    class _Session:
+        async def execute(self, statement: object) -> _Result:
+            compiled = str(statement.compile())
+            assert "tb_worklog_dependency.worklog_id" in compiled
+            assert "tb_worklog.is_deleted IS false" in compiled
+            return _Result(
+                [SimpleNamespace(worklog_id=101, depends_on_worklog_id=88, title="직접 선행")]
+            )
+
+    predecessors = asyncio.run(
+        LightWorklogSourceStore()._fetch_direct_predecessors(
+            session=_Session(),
+            worklog_id=101,
+        )
+    )
+
+    assert predecessors == [LightWorklogPredecessor(worklog_id=88, title="직접 선행")]

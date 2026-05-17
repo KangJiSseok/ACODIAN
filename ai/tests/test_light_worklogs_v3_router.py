@@ -182,3 +182,12 @@ def test_light_worklogs_v3_index_maps_configuration_error_to_500(monkeypatch) ->
 
     assert response.status_code == 500
     assert response.json() == {"detail": "LIGHTRAG_CONFIGURATION_ERROR"}
+
+
+def test_light_worklogs_v3_custom_kg_index_endpoint_removed() -> None:
+    response = client.post(
+        "/ai/light/worklogs-v3/custom-kg/index",
+        json={"worklogIds": [101]},
+    )
+
+    assert response.status_code == 404

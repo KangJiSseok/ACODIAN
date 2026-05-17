@@ -2,11 +2,7 @@
 
 from dataclasses import dataclass
 
-from app.light.v3.service.worklog_source_reader import (
-    LightRagWorklogPredecessor,
-    LightRagWorklogSource,
-    LightRagWorklogTag,
-)
+from app.light.v3.service.worklog_source_reader import LightRagWorklogSource
 
 
 @dataclass(frozen=True)
@@ -15,7 +11,8 @@ class LightRagWorklogDocument:
 
     `document_id`, `file_path`, 본문 marker에 같은 업무일지 ID를 반복해 보존한다.
     후속 search 단계가 LightRAG 결과에서 `worklogId`만 안정적으로 회수할 수 있게 하기
-    위한 최소 contract다.
+    위한 최소 contract다. 확정 관계는 custom KG insert가 전담하므로 이 문서 본문에는
+    작성자/팀/태그/선행업무 관계 문맥을 넣지 않는다.
     """
 
     document_id: str
@@ -35,15 +32,11 @@ def build_worklog_light_document(source: LightRagWorklogSource) -> LightRagWorkl
 
 
 def _build_document_text(source: LightRagWorklogSource) -> str:
-    """LightRAG KG 생성을 위한 업무일지 문서 본문을 만든다."""
+    """LightRAG text insert용 업무일지 본문을 만든다."""
     lines = [
         "source_type: WORKLOG",
         f"worklog_id: {source.worklog_id}",
         f"title: {source.title}",
-        f"author_name: {source.author_name}",
-        f"team_name: {source.team_name}",
-        f"predecessors: {_format_predecessor_list(source.predecessors)}",
-        f"tags: {_format_tag_list(source.tags)}",
         "",
         "request_content:",
         source.request_content or "",
@@ -52,23 +45,3 @@ def _build_document_text(source: LightRagWorklogSource) -> str:
         source.work_content,
     ]
     return "\n".join(lines).strip()
-
-
-def _format_predecessor_list(values: list[LightRagWorklogPredecessor]) -> str:
-    """선행 업무 ID와 제목을 LightRAG 의미 추출에 쓰기 좋은 문자열로 직렬화한다."""
-    return (
-        " | ".join(f"[{predecessor.worklog_id}] {predecessor.title}" for predecessor in values)
-        if values
-        else "-"
-    )
-
-
-def _format_tag_list(values: list[LightRagWorklogTag]) -> str:
-    """태그 ID, 이름, 설명을 LightRAG 의미 추출에 쓰기 좋은 문자열로 직렬화한다."""
-    formatted_tags: list[str] = []
-    for tag in values:
-        if tag.description:
-            formatted_tags.append(f"{tag.tag_name}: {tag.description}")
-        else:
-            formatted_tags.append(tag.tag_name)
-    return " | ".join(formatted_tags) if formatted_tags else "-"
