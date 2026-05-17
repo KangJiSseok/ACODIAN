@@ -656,7 +656,7 @@ def test_lightrag_adapter_query_preserves_configuration_error() -> None:
         asyncio.run(adapter.query_worklogs(make_query_options()))
 
 
-def test_lightrag_adapter_indexes_custom_kg_document_with_document_id() -> None:
+def test_lightrag_adapter_indexes_custom_kg_documents_with_document_id() -> None:
     FakeLightRAG.instances = []
     dependencies, _, _, _ = make_dependencies()
     adapter = LightRagWorklogIndexAdapter(
@@ -670,7 +670,7 @@ def test_lightrag_adapter_indexes_custom_kg_document_with_document_id() -> None:
     )
 
     async def run_case() -> None:
-        await adapter.index_custom_kg_document(document)
+        await adapter.index_custom_kg_documents([document])
         fake_rag = FakeLightRAG.instances[0]
 
         assert fake_rag.calls == [
@@ -696,11 +696,13 @@ def test_lightrag_adapter_maps_custom_kg_insert_timeout() -> None:
 
     with pytest.raises(LightRagInsertTimeoutError):
         asyncio.run(
-            adapter.index_custom_kg_document(
-                LightRagWorklogCustomKgDocument(
-                    document_id="worklog-101",
-                    custom_kg={"chunks": []},
-                )
+            adapter.index_custom_kg_documents(
+                [
+                    LightRagWorklogCustomKgDocument(
+                        document_id="worklog-101",
+                        custom_kg={"chunks": []},
+                    )
+                ]
             )
         )
 
@@ -718,10 +720,12 @@ def test_lightrag_adapter_maps_custom_kg_insert_failure() -> None:
 
     with pytest.raises(LightRagInsertFailedError):
         asyncio.run(
-            adapter.index_custom_kg_document(
-                LightRagWorklogCustomKgDocument(
-                    document_id="worklog-101",
-                    custom_kg={"chunks": []},
-                )
+            adapter.index_custom_kg_documents(
+                [
+                    LightRagWorklogCustomKgDocument(
+                        document_id="worklog-101",
+                        custom_kg={"chunks": []},
+                    )
+                ]
             )
         )

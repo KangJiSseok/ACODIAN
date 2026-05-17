@@ -23,10 +23,8 @@ from app.light.v3.service.worklog_document_builder import (
 from app.light.v3.service.worklog_custom_kg_source_reader import (
     to_light_worklog_custom_kg_source,
 )
-from app.light.v3.service.worklog_source_reader import (
-    WorklogLightSourceReader,
-    to_light_worklog_source,
-)
+from app.light.v3.service.worklog_source_reader import to_light_worklog_source
+from app.light.v3.service.worklog_source_row_reader import WorklogLightSourceRowReader
 
 ERROR_WORKLOG_NOT_FOUND = "WORKLOG_NOT_FOUND"
 ERROR_LIGHTRAG_INSERT_TIMEOUT = "LIGHTRAG_INSERT_TIMEOUT"
@@ -52,7 +50,7 @@ class LightWorklogIndexService:
 
     async def prepare_documents(self, worklog_ids: list[int]) -> PreparedLightWorklogDocuments:
         """업무일지 ID 목록을 LightRAG text/custom KG 문서와 missing ID 목록으로 나눈다."""
-        source_rows_by_id = await WorklogLightSourceReader().fetch_source_rows(worklog_ids)
+        source_rows_by_id = await WorklogLightSourceRowReader().fetch_source_rows(worklog_ids)
         documents: list[LightRagWorklogDocument] = []
         custom_kg_documents: list[LightRagWorklogCustomKgDocument] = []
         found_worklog_ids: list[int] = []
@@ -120,21 +118,21 @@ class LightWorklogIndexService:
                 for worklog_id in prepared.found_worklog_ids
             }
 
-        failed_found_ids: dict[int, str] = {}
-        for worklog_id, document in zip(
-            prepared.found_worklog_ids,
-            prepared.custom_kg_documents,
-            strict=True,
-        ):
-            try:
-                await adapter.index_custom_kg_document(document)
-            except LightRagConfigurationError:
-                raise
-            except LightRagInsertTimeoutError:
-                failed_found_ids[worklog_id] = ERROR_LIGHTRAG_INSERT_TIMEOUT
-            except LightRagInsertFailedError:
-                failed_found_ids[worklog_id] = ERROR_LIGHTRAG_INSERT_FAILED
-        return failed_found_ids
+        try:
+            await adapter.index_custom_kg_documents(prepared.custom_kg_documents)
+        except LightRagConfigurationError:
+            raise
+        except LightRagInsertTimeoutError:
+            return {
+                worklog_id: ERROR_LIGHTRAG_INSERT_TIMEOUT
+                for worklog_id in prepared.found_worklog_ids
+            }
+        except LightRagInsertFailedError:
+            return {
+                worklog_id: ERROR_LIGHTRAG_INSERT_FAILED
+                for worklog_id in prepared.found_worklog_ids
+            }
+        return {}
 
     def _build_response_item(
         self,

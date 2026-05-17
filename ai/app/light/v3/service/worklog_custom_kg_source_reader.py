@@ -1,12 +1,8 @@
-"""LightRAG custom KG 확정 관계 source reader."""
+"""LightRAG custom KG 확정 관계 source contract와 변환기."""
 
 from dataclasses import dataclass
 
-from app.light.v3.store.worklog_source_store import (
-    LightWorklogSourceRow,
-    LightWorklogSourceStore,
-)
-from app.store.session import get_session_factory
+from app.light.v3.store.worklog_source_store import LightWorklogSourceRow
 
 
 @dataclass(frozen=True)
@@ -38,20 +34,6 @@ class LightRagCustomKgSource:
     team_name: str
     tags: list[LightRagCustomKgTag]
     direct_predecessors: list[LightRagCustomKgPredecessor]
-
-
-class WorklogCustomKgSourceReader:
-    """업무일지 ID 목록을 LightRAG custom KG source contract로 조회한다."""
-
-    async def fetch_sources(self, worklog_ids: list[int]) -> dict[int, LightRagCustomKgSource]:
-        """존재하는 업무일지만 LightRAG custom KG source로 batch 반환한다."""
-        source_store = LightWorklogSourceStore()
-        async with get_session_factory()() as session:
-            source_rows = await source_store.fetch_worklog_sources(session, worklog_ids)
-            return {
-                worklog_id: to_light_worklog_custom_kg_source(source_row)
-                for worklog_id, source_row in source_rows.items()
-            }
 
 
 def to_light_worklog_custom_kg_source(source: LightWorklogSourceRow) -> LightRagCustomKgSource:
