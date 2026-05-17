@@ -16,6 +16,7 @@ from typing import Any, Protocol
 
 from app.config.settings import Settings, settings
 from app.light.v3.service.worklog_document_builder import LightRagWorklogDocument
+from app.light.v3.service.worklog_custom_kg_builder import LightRagWorklogCustomKgDocument
 
 _QDRANT_VECTOR_STORAGE = "QdrantVectorDBStorage"
 
@@ -45,6 +46,12 @@ class WorklogLightIndexAdapter(Protocol):
 
     async def index_documents(self, documents: list[LightRagWorklogDocument]) -> None:
         """업무일지 문서 목록을 LightRAG에 insert한다."""
+
+    async def index_custom_kg_document(
+        self,
+        document: LightRagWorklogCustomKgDocument,
+    ) -> None:
+        """확정 관계 custom KG document를 LightRAG에 insert한다."""
 
 
 @dataclass(frozen=True)
@@ -121,6 +128,28 @@ class LightRagWorklogIndexAdapter:
             raise LightRagInsertTimeoutError("LightRAG insert timed out") from exc
         except Exception as exc:
             raise LightRagInsertFailedError("LightRAG insert failed") from exc
+
+    async def index_custom_kg_document(
+        self,
+        document: LightRagWorklogCustomKgDocument,
+    ) -> None:
+        """확정 관계 custom KG document를 LightRAG에 insert한다.
+
+        `document_id`는 LightRAG `full_doc_id`로 전달해 chunk provenance를 문서 단위로
+        묶는다. payload 내부 `source_id`는 LightRAG가 chunk id로 재매핑한다.
+        """
+        try:
+            rag = await self._get_initialized_rag()
+            await asyncio.wait_for(
+                rag.ainsert_custom_kg(document.custom_kg, full_doc_id=document.document_id),
+                timeout=self._settings.lightrag_insert_timeout_seconds,
+            )
+        except LightRagConfigurationError:
+            raise
+        except TimeoutError as exc:
+            raise LightRagInsertTimeoutError("LightRAG custom KG insert timed out") from exc
+        except Exception as exc:
+            raise LightRagInsertFailedError("LightRAG custom KG insert failed") from exc
 
     async def query_worklogs(self, options: LightRagQueryOptions) -> LightRagQueryResult:
         """LightRAG `mode="mix"` query를 실행하고 raw 결과를 반환한다."""

@@ -81,8 +81,10 @@ def test_build_worklog_light_document_preserves_worklog_id_in_three_places() -> 
     assert "worklog_id: 101" in document.text
     assert "title: 정산 배치 오류 분석" in document.text
     assert "author_id:" not in document.text
+    assert "author_name:" not in document.text
     assert "author_role:" not in document.text
     assert "team_id:" not in document.text
-    assert "predecessors: [88] 배치 모니터링 개선" in document.text
-    assert "tags: 정산: 정산 배치와 대사 업무 | 장애분석" in document.text
+    assert "team_name:" not in document.text
+    assert "predecessors:" not in document.text
+    assert "tags:" not in document.text
     assert "work_content:\n로그 기준으로 API timeout과 재시도 누락을 확인했습니다." in document.text

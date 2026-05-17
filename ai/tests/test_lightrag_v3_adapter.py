@@ -19,6 +19,7 @@ from app.light.v3.service.lightrag_adapter import (
     get_lightrag_worklog_index_adapter,
 )
 from app.light.v3.service.worklog_document_builder import LightRagWorklogDocument
+from app.light.v3.service.worklog_custom_kg_builder import LightRagWorklogCustomKgDocument
 
 
 
@@ -91,6 +92,9 @@ class FakeLightRAG:
         file_paths: list[str],
     ) -> None:
         self.calls.append(("ainsert", texts, ids, file_paths))
+
+    async def ainsert_custom_kg(self, custom_kg: dict[str, Any], *, full_doc_id: str) -> None:
+        self.calls.append(("ainsert_custom_kg", custom_kg, full_doc_id))
 
     async def finalize_storages(self) -> None:
         self.calls.append("finalize_storages")
@@ -650,3 +654,74 @@ def test_lightrag_adapter_query_preserves_configuration_error() -> None:
 
     with pytest.raises(LightRagConfigurationError):
         asyncio.run(adapter.query_worklogs(make_query_options()))
+
+
+def test_lightrag_adapter_indexes_custom_kg_document_with_document_id() -> None:
+    FakeLightRAG.instances = []
+    dependencies, _, _, _ = make_dependencies()
+    adapter = LightRagWorklogIndexAdapter(
+        settings_obj=make_settings(),
+        dependencies=dependencies,
+    )
+    custom_kg = {"chunks": [{"content": "c", "source_id": "pg:tb_worklog:101"}]}
+    document = LightRagWorklogCustomKgDocument(
+        document_id="worklog-101",
+        custom_kg=custom_kg,
+    )
+
+    async def run_case() -> None:
+        await adapter.index_custom_kg_document(document)
+        fake_rag = FakeLightRAG.instances[0]
+
+        assert fake_rag.calls == [
+            "initialize_storages",
+            ("ainsert_custom_kg", custom_kg, "worklog-101"),
+        ]
+
+    asyncio.run(run_case())
+
+
+def test_lightrag_adapter_maps_custom_kg_insert_timeout() -> None:
+    class TimeoutCustomKgLightRAG(FakeLightRAG):
+        async def ainsert_custom_kg(self, custom_kg: dict[str, Any], *, full_doc_id: str) -> None:
+            await asyncio.sleep(1)
+
+    dependencies, _, _, _ = make_dependencies(TimeoutCustomKgLightRAG)
+    settings = make_settings()
+    settings.lightrag_insert_timeout_seconds = 0.001
+    adapter = LightRagWorklogIndexAdapter(
+        settings_obj=settings,
+        dependencies=dependencies,
+    )
+
+    with pytest.raises(LightRagInsertTimeoutError):
+        asyncio.run(
+            adapter.index_custom_kg_document(
+                LightRagWorklogCustomKgDocument(
+                    document_id="worklog-101",
+                    custom_kg={"chunks": []},
+                )
+            )
+        )
+
+
+def test_lightrag_adapter_maps_custom_kg_insert_failure() -> None:
+    class FailingCustomKgLightRAG(FakeLightRAG):
+        async def ainsert_custom_kg(self, custom_kg: dict[str, Any], *, full_doc_id: str) -> None:
+            raise ValueError("boom")
+
+    dependencies, _, _, _ = make_dependencies(FailingCustomKgLightRAG)
+    adapter = LightRagWorklogIndexAdapter(
+        settings_obj=make_settings(),
+        dependencies=dependencies,
+    )
+
+    with pytest.raises(LightRagInsertFailedError):
+        asyncio.run(
+            adapter.index_custom_kg_document(
+                LightRagWorklogCustomKgDocument(
+                    document_id="worklog-101",
+                    custom_kg={"chunks": []},
+                )
+            )
+        )
