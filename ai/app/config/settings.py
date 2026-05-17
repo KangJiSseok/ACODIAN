@@ -55,9 +55,14 @@ class Settings(BaseSettings):
     lightrag_index_max_batch_size: int = 10
     lightrag_insert_timeout_seconds: int = 120
     lightrag_kg_language: str = "Korean"
+    lightrag_workspace: str = ""
     lightrag_vector_storage: str = "QdrantVectorDBStorage"
     lightrag_qdrant_url: str = "http://localhost:6333"
     lightrag_qdrant_api_key: str = ""
+    lightrag_query_timeout_seconds: int = 120
+    lightrag_query_top_k: int = 40
+    lightrag_query_chunk_top_k: int = 20
+    lightrag_query_response_type: str = "Multiple Paragraphs"
 
     model_config = SettingsConfigDict(
         # ai/.env 를 자동 로드한다 (없으면 위 기본값을 사용).
