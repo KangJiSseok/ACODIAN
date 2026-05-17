@@ -1,5 +1,6 @@
 import asyncio
 import os
+from dataclasses import dataclass
 from typing import Any
 
 import pytest
@@ -10,6 +11,9 @@ from app.light.v3.service.lightrag_adapter import (
     LightRagDependencies,
     LightRagInsertFailedError,
     LightRagInsertTimeoutError,
+    LightRagQueryFailedError,
+    LightRagQueryOptions,
+    LightRagQueryTimeoutError,
     LightRagWorklogIndexAdapter,
     close_lightrag_worklog_index_adapter,
     get_lightrag_worklog_index_adapter,
@@ -32,6 +36,22 @@ def make_document(worklog_id: int = 101) -> LightRagWorklogDocument:
         document_id=f"worklog-{worklog_id}",
         file_path=f"worklog://{worklog_id}",
         text=f"source_type: WORKLOG\nworklog_id: {worklog_id}",
+    )
+
+
+def make_query_options(
+    *,
+    query: str = "요약",
+    top_k: int = 40,
+    chunk_top_k: int = 20,
+    response_type: str = "Multiple Paragraphs",
+) -> LightRagQueryOptions:
+    """LightRAG query adapter 테스트용 기본 options를 만든다."""
+    return LightRagQueryOptions(
+        query=query,
+        top_k=top_k,
+        chunk_top_k=chunk_top_k,
+        response_type=response_type,
     )
 
 
@@ -76,6 +96,18 @@ class FakeLightRAG:
         self.calls.append("finalize_storages")
 
 
+@dataclass(frozen=True)
+class FakeQueryParam:
+    """LightRAG QueryParam 주입값을 검증하기 위한 테스트 fake."""
+
+    mode: str
+    stream: bool
+    include_references: bool
+    top_k: int
+    chunk_top_k: int
+    response_type: str
+
+
 def make_dependencies(
     lightrag_class: type[Any] = FakeLightRAG,
 ) -> tuple[LightRagDependencies, FakeGeminiEmbed, list[dict[str, Any]], list[dict[str, Any]]]:
@@ -101,6 +133,7 @@ def make_dependencies(
             gemini_model_complete=fake_complete,
             gemini_embed=embed,
             embedding_wrapper=fake_embedding_wrapper,
+            query_param_class=FakeQueryParam,
         ),
         embed,
         wrapper_calls,
@@ -205,6 +238,21 @@ def test_lightrag_adapter_configures_qdrant_vector_kwargs() -> None:
         assert fake_rag.kwargs["vector_db_storage_cls_kwargs"] == {}
 
     asyncio.run(run_case())
+
+
+def test_lightrag_adapter_passes_configured_workspace() -> None:
+    FakeLightRAG.instances = []
+    dependencies, _, _, _ = make_dependencies()
+    settings = make_settings()
+    settings.lightrag_workspace = "axwms-http-smoke"
+    adapter = LightRagWorklogIndexAdapter(
+        settings_obj=settings,
+        dependencies=dependencies,
+    )
+
+    asyncio.run(adapter.index_documents([make_document()]))
+
+    assert FakeLightRAG.instances[0].kwargs["workspace"] == "axwms-http-smoke"
 
 
 def test_lightrag_adapter_applies_qdrant_url_and_removes_empty_api_key(monkeypatch) -> None:
@@ -464,6 +512,25 @@ def test_lightrag_adapter_bridges_qdrant_url_and_api_key() -> None:
     assert "workspace" not in FakeLightRAG.instances[0].kwargs
 
 
+def test_lightrag_adapter_removes_stale_qdrant_workspace_env(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    FakeLightRAG.instances = []
+    dependencies, _, _, _ = make_dependencies()
+    monkeypatch.setenv("QDRANT_WORKSPACE", "stale-workspace")
+    settings = make_settings()
+    settings.lightrag_workspace = "settings-workspace"
+    adapter = LightRagWorklogIndexAdapter(
+        settings_obj=settings,
+        dependencies=dependencies,
+    )
+
+    asyncio.run(adapter.index_documents([make_document()]))
+
+    assert "QDRANT_WORKSPACE" not in os.environ
+    assert FakeLightRAG.instances[0].kwargs["workspace"] == "settings-workspace"
+
+
 def test_lightrag_adapter_removes_existing_qdrant_api_key_when_settings_key_is_empty(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -490,3 +557,96 @@ def test_lightrag_adapter_singleton_close_boundary_resets_instance() -> None:
 
     assert second_adapter is not first_adapter
     asyncio.run(close_lightrag_worklog_index_adapter())
+
+
+class FakeQueryLightRAG(FakeLightRAG):
+    async def aquery_llm(self, query: str, *, param: Any) -> dict[str, Any]:
+        self.calls.append(("aquery_llm", query, param))
+        return {
+            "llm_response": {"content": "native answer"},
+            "data": {"references": [{"file_path": "worklog://101"}]},
+        }
+
+
+def test_lightrag_adapter_query_uses_mix_non_streaming_with_references() -> None:
+    FakeLightRAG.instances = []
+    dependencies, _, _, _ = make_dependencies(FakeQueryLightRAG)
+    settings = make_settings()
+    adapter = LightRagWorklogIndexAdapter(settings_obj=settings, dependencies=dependencies)
+
+    async def run_case() -> None:
+        result = await adapter.query_worklogs(
+            make_query_options(
+                query="업무일지 요약",
+                top_k=7,
+                chunk_top_k=3,
+                response_type="Single Paragraph",
+            )
+        )
+        fake_rag = FakeLightRAG.instances[0]
+        _, query, param = fake_rag.calls[-1]
+
+        assert result.raw["llm_response"]["content"] == "native answer"
+        assert query == "업무일지 요약"
+        assert param.mode == "mix"
+        assert param.stream is False
+        assert param.include_references is True
+        assert param.top_k == 7
+        assert param.chunk_top_k == 3
+        assert param.response_type == "Single Paragraph"
+
+    asyncio.run(run_case())
+
+
+def test_lightrag_adapter_query_reuses_initialized_rag() -> None:
+    FakeLightRAG.instances = []
+    dependencies, _, _, _ = make_dependencies(FakeQueryLightRAG)
+    adapter = LightRagWorklogIndexAdapter(settings_obj=make_settings(), dependencies=dependencies)
+
+    async def run_case() -> None:
+        options = make_query_options()
+        await adapter.query_worklogs(options)
+        await adapter.query_worklogs(options)
+
+    asyncio.run(run_case())
+
+    assert len(FakeLightRAG.instances) == 1
+    assert FakeLightRAG.instances[0].calls.count("initialize_storages") == 1
+
+
+def test_lightrag_adapter_query_maps_timeout() -> None:
+    class TimeoutQueryLightRAG(FakeLightRAG):
+        async def aquery_llm(self, query: str, *, param: Any) -> dict[str, Any]:
+            await asyncio.sleep(1)
+            return {"answer": "late"}
+
+    dependencies, _, _, _ = make_dependencies(TimeoutQueryLightRAG)
+    settings = make_settings()
+    settings.lightrag_query_timeout_seconds = 0.001
+    adapter = LightRagWorklogIndexAdapter(settings_obj=settings, dependencies=dependencies)
+
+    with pytest.raises(LightRagQueryTimeoutError):
+        asyncio.run(adapter.query_worklogs(make_query_options()))
+
+
+def test_lightrag_adapter_query_maps_general_failure() -> None:
+    class FailingQueryLightRAG(FakeLightRAG):
+        async def aquery_llm(self, query: str, *, param: Any) -> dict[str, Any]:
+            raise ValueError("boom")
+
+    dependencies, _, _, _ = make_dependencies(FailingQueryLightRAG)
+    adapter = LightRagWorklogIndexAdapter(settings_obj=make_settings(), dependencies=dependencies)
+
+    with pytest.raises(LightRagQueryFailedError):
+        asyncio.run(adapter.query_worklogs(make_query_options()))
+
+
+def test_lightrag_adapter_query_preserves_configuration_error() -> None:
+    dependencies, _, _, _ = make_dependencies(FakeQueryLightRAG)
+    adapter = LightRagWorklogIndexAdapter(
+        settings_obj=Settings(_env_file=None, gemini_api_key=""),
+        dependencies=dependencies,
+    )
+
+    with pytest.raises(LightRagConfigurationError):
+        asyncio.run(adapter.query_worklogs(make_query_options()))
