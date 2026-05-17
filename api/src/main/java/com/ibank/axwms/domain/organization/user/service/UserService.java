@@ -49,8 +49,8 @@ public class UserService {
     private final ApplicationEventPublisher eventPublisher;
 
     /**
-     * access token principal 에 해당하는 현재 로그인 사용자의 프로필/소속 팀 문맥을 조회한다.
-     * 프론트엔드가 앱 초기화 시 한 번의 호출로 사용자 기본 정보와 팀 컨텍스트를 확보할 수 있도록 필요한 필드를 조립해 반환한다.
+     * access token principal 에 해당하는 현재 로그인 사용자의 프로필/활성 팀 문맥을 조회한다.
+     * 프론트엔드가 앱 초기화 시 한 번의 호출로 사용자 기본 정보와 운영 중인 팀 컨텍스트를 확보할 수 있도록 필요한 필드를 조립해 반환한다.
      */
     public GetMyProfileApiDto.Response getMyProfile(CustomUserPrincipal principal) {
         User user = getUserOrThrow(principal.userId());
@@ -340,11 +340,11 @@ public class UserService {
     }
 
     /**
-     * 사용자-팀 관계 순서를 유지한 채 ACTIVE membership 기준 팀 요약 목록을 만든다.
-     * soft-delete 된 팀이나 LEFT membership 은 현재 사용자 문맥에서 노출하지 않는다.
+     * 현재 사용자 프로필에는 ACTIVE membership 이면서 ACTIVE 상태인 팀 요약만 노출한다.
+     * soft-delete 된 팀, INACTIVE 팀, LEFT membership 은 현재 사용자 문맥에서 제외한다.
      */
     private List<GetMyProfileApiDto.Response.TeamSummary> getTeamSummaries(Long userId) {
-        return fetchUserTeamSummaries(userId).stream()
+        return fetchActiveUserTeamSummaries(userId).stream()
                 .map(p -> new GetMyProfileApiDto.Response.TeamSummary(
                         p.isPrimary(),
                         p.teamId(),
@@ -375,5 +375,10 @@ public class UserService {
     /** 사용자의 ACTIVE membership 중 soft-delete 되지 않은 팀을 주 소속·리더 순으로 조회한다. */
     private List<UserTeamSummaryProjection> fetchUserTeamSummaries(Long userId) {
         return userTeamRepository.findUserTeamSummaries(userId);
+    }
+
+    /** 현재 사용자 프로필용으로 ACTIVE membership 과 ACTIVE 팀 상태를 모두 만족하는 팀만 조회한다. */
+    private List<UserTeamSummaryProjection> fetchActiveUserTeamSummaries(Long userId) {
+        return userTeamRepository.findActiveUserTeamSummaries(userId);
     }
 }

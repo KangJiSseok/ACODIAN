@@ -97,7 +97,7 @@ class UserServiceTest {
 
         given(userRepository.findById(101L)).willReturn(Optional.of(user));
         given(departmentRepository.findById(10L)).willReturn(Optional.of(department));
-        given(userTeamRepository.findUserTeamSummaries(101L))
+        given(userTeamRepository.findActiveUserTeamSummaries(101L))
                 .willReturn(List.of(
                         new UserTeamSummaryProjection(true, 21L, "물류혁신TF", true, "플랫폼 총괄", "주담당"),
                         new UserTeamSummaryProjection(false, 22L, "SCM분석팀", false, "SCM 분석", "겸임")
@@ -127,7 +127,7 @@ class UserServiceTest {
 
         given(userRepository.findById(101L)).willReturn(Optional.of(user));
         given(departmentRepository.findById(10L)).willReturn(Optional.of(department));
-        given(userTeamRepository.findUserTeamSummaries(101L)).willReturn(List.of());
+        given(userTeamRepository.findActiveUserTeamSummaries(101L)).willReturn(List.of());
 
         GetMyProfileApiDto.Response result = userService.getMyProfile(principal);
 
@@ -147,7 +147,7 @@ class UserServiceTest {
 
         given(userRepository.findById(101L)).willReturn(Optional.of(user));
         given(departmentRepository.findById(10L)).willReturn(Optional.of(department));
-        given(userTeamRepository.findUserTeamSummaries(101L))
+        given(userTeamRepository.findActiveUserTeamSummaries(101L))
                 .willReturn(List.of(
                         new UserTeamSummaryProjection(true, 21L, "물류혁신TF", true, "플랫폼 총괄", "주담당")
                 ));
@@ -169,11 +169,30 @@ class UserServiceTest {
         given(userRepository.findById(101L)).willReturn(Optional.of(user));
         given(departmentRepository.findById(10L)).willReturn(Optional.of(department));
         // soft-delete 된 팀은 jOOQ 쿼리에서 이미 제외되어 빈 목록이 반환된다
-        given(userTeamRepository.findUserTeamSummaries(101L)).willReturn(List.of());
+        given(userTeamRepository.findActiveUserTeamSummaries(101L)).willReturn(List.of());
 
         GetMyProfileApiDto.Response result = userService.getMyProfile(principal);
 
         assertThat(result.teams()).isEmpty();
+    }
+
+    @Test
+    @DisplayName("INACTIVE 팀은 현재 사용자 프로필 팀 목록에서 제외한다")
+    void INACTIVE_팀은_현재_사용자_프로필_팀_목록에서_제외한다() {
+        CustomUserPrincipal principal = new CustomUserPrincipal(101L, "user@ibank.com", "MEMBER");
+        User user = createUser(101L, 10L, "홍길동", "과장", "팀장", null, null, LocalDate.of(2025, 1, 1));
+        Department department = createDepartment(10L, "물류본부");
+
+        given(userRepository.findById(101L)).willReturn(Optional.of(user));
+        given(departmentRepository.findById(10L)).willReturn(Optional.of(department));
+        // INACTIVE 팀은 현재 사용자 프로필 전용 jOOQ 쿼리에서 이미 제외되어 빈 목록이 반환된다
+        given(userTeamRepository.findActiveUserTeamSummaries(101L)).willReturn(List.of());
+
+        GetMyProfileApiDto.Response result = userService.getMyProfile(principal);
+
+        assertThat(result.teams()).isEmpty();
+        then(userTeamRepository).should().findActiveUserTeamSummaries(101L);
+        then(userTeamRepository).should(never()).findUserTeamSummaries(101L);
     }
 
     @Test
