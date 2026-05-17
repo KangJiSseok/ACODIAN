@@ -26,6 +26,7 @@ public final class GetMyProfileApiDto {
             LocalDate joinDate,
             EmploymentStatus employmentStatus,
             String profileImageUrl,
+            @Schema(description = "현재 사용자 프로필에서 노출할 활성 팀 요약 목록")
             List<TeamSummary> teams
     ) {
         public static Response of(User user, Department department, List<TeamSummary> teams) {
@@ -45,7 +46,7 @@ public final class GetMyProfileApiDto {
             );
         }
 
-        @Schema(description = "사용자 소속 팀 요약")
+        @Schema(description = "현재 사용자 프로필에 노출되는 활성 소속 팀 요약")
         @JsonPropertyOrder({"isPrimary", "teamId", "teamName", "isLeader", "teamRole", "allocation"})
         public record TeamSummary(
                 boolean isPrimary,
