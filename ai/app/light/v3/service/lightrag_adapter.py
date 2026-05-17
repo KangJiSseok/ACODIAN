@@ -32,6 +32,14 @@ class LightRagInsertFailedError(RuntimeError):
     """LightRAG document insert 또는 storage 초기화가 실패했음을 나타내는 예외."""
 
 
+class LightRagQueryTimeoutError(RuntimeError):
+    """LightRAG query가 설정된 제한 시간을 초과했음을 나타내는 예외."""
+
+
+class LightRagQueryFailedError(RuntimeError):
+    """LightRAG query 실행 또는 응답 해석이 실패했음을 나타내는 예외."""
+
+
 class WorklogLightIndexAdapter(Protocol):
     """업무일지 문서를 LightRAG에 index하는 adapter interface."""
 
@@ -51,6 +59,24 @@ class LightRagDependencies:
     gemini_model_complete: Callable[..., Awaitable[str]]
     gemini_embed: Any
     embedding_wrapper: Callable[..., Callable[[Callable[..., Awaitable[Any]]], Callable[..., Awaitable[Any]]]]
+    query_param_class: type[Any]
+
+
+@dataclass(frozen=True)
+class LightRagQueryOptions:
+    """LightRAG 업무일지 query 실행 옵션."""
+
+    query: str
+    top_k: int
+    chunk_top_k: int
+    response_type: str
+
+
+@dataclass(frozen=True)
+class LightRagQueryResult:
+    """LightRAG query raw 결과 wrapper."""
+
+    raw: Any
 
 
 class LightRagWorklogIndexAdapter:
@@ -96,6 +122,23 @@ class LightRagWorklogIndexAdapter:
         except Exception as exc:
             raise LightRagInsertFailedError("LightRAG insert failed") from exc
 
+    async def query_worklogs(self, options: LightRagQueryOptions) -> LightRagQueryResult:
+        """LightRAG `mode="mix"` query를 실행하고 raw 결과를 반환한다."""
+        try:
+            rag = await self._get_initialized_rag()
+            param = self._build_query_param(options)
+            raw = await asyncio.wait_for(
+                rag.aquery_llm(options.query, param=param),
+                timeout=self._settings.lightrag_query_timeout_seconds,
+            )
+            return LightRagQueryResult(raw=raw)
+        except LightRagConfigurationError:
+            raise
+        except TimeoutError as exc:
+            raise LightRagQueryTimeoutError("LightRAG query timed out") from exc
+        except Exception as exc:
+            raise LightRagQueryFailedError("LightRAG query failed") from exc
+
     async def close(self) -> None:
         """초기화된 LightRAG storage를 finalize하고 singleton 재사용 상태를 초기화한다."""
         rag = self._rag
@@ -132,14 +175,30 @@ class LightRagWorklogIndexAdapter:
             settings_obj=self._settings,
             dependencies=dependencies,
         )
-        return dependencies.lightrag_class(
-            working_dir=self._settings.lightrag_working_dir,
-            llm_model_func=llm_model_func,
-            llm_model_name=self._settings.lightrag_llm_model,
-            embedding_func=embedding_func,
-            vector_storage=self._settings.lightrag_vector_storage.strip(),
-            vector_db_storage_cls_kwargs={},
-            addon_params={"language": self._settings.lightrag_kg_language},
+        lightrag_kwargs = {
+            "working_dir": self._settings.lightrag_working_dir,
+            "llm_model_func": llm_model_func,
+            "llm_model_name": self._settings.lightrag_llm_model,
+            "embedding_func": embedding_func,
+            "vector_storage": self._settings.lightrag_vector_storage.strip(),
+            "vector_db_storage_cls_kwargs": {},
+            "addon_params": {"language": self._settings.lightrag_kg_language},
+        }
+        workspace = self._settings.lightrag_workspace.strip()
+        if workspace:
+            lightrag_kwargs["workspace"] = workspace
+        return dependencies.lightrag_class(**lightrag_kwargs)
+
+    def _build_query_param(self, options: LightRagQueryOptions) -> Any:
+        """LightRAG QueryParam을 내부 정책값으로 구성한다."""
+        dependencies = self._dependencies or _load_lightrag_dependencies()
+        return dependencies.query_param_class(
+            mode="mix",
+            stream=False,
+            include_references=True,
+            top_k=options.top_k,
+            chunk_top_k=options.chunk_top_k,
+            response_type=options.response_type,
         )
 
     """방어로직"""
@@ -160,6 +219,7 @@ def _load_lightrag_dependencies() -> LightRagDependencies:
     """LightRAG package와 Gemini wrapper를 지연 import한다."""
     try:
         from lightrag import LightRAG
+        from lightrag.base import QueryParam
         from lightrag.llm.gemini import gemini_embed, gemini_model_complete
         from lightrag.utils import wrap_embedding_func_with_attrs
     except Exception as exc:  # pragma: no cover - 환경별 import 실패는 config error로만 노출한다.
@@ -170,6 +230,7 @@ def _load_lightrag_dependencies() -> LightRagDependencies:
         gemini_model_complete=gemini_model_complete,
         gemini_embed=gemini_embed,
         embedding_wrapper=wrap_embedding_func_with_attrs,
+        query_param_class=QueryParam,
     )
 
 
@@ -248,6 +309,7 @@ async def close_lightrag_worklog_index_adapter() -> None:
 def _configure_qdrant_environment(settings_obj: Settings) -> None:
     """Bridge Settings values into LightRAG v1.4.10's Qdrant env contract."""
     os.environ["QDRANT_URL"] = settings_obj.lightrag_qdrant_url.strip()
+    os.environ.pop("QDRANT_WORKSPACE", None)
     qdrant_api_key = settings_obj.lightrag_qdrant_api_key.strip()
     if qdrant_api_key:
         os.environ["QDRANT_API_KEY"] = qdrant_api_key

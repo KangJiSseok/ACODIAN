@@ -95,3 +95,37 @@ def test_settings_accepts_lightrag_qdrant_env_override(monkeypatch) -> None:
     assert settings.lightrag_vector_storage == "QdrantVectorDBStorage"
     assert settings.lightrag_qdrant_url == "https://qdrant.example.com:6333"
     assert settings.lightrag_qdrant_api_key == "secret"
+
+
+def test_settings_has_lightrag_query_defaults(monkeypatch) -> None:
+    """LightRAG query API 기본 운영값을 제공해야 한다."""
+    monkeypatch.delenv("LIGHTRAG_QUERY_TIMEOUT_SECONDS", raising=False)
+    monkeypatch.delenv("LIGHTRAG_QUERY_TOP_K", raising=False)
+    monkeypatch.delenv("LIGHTRAG_QUERY_CHUNK_TOP_K", raising=False)
+    monkeypatch.delenv("LIGHTRAG_QUERY_RESPONSE_TYPE", raising=False)
+    monkeypatch.delenv("LIGHTRAG_WORKSPACE", raising=False)
+
+    settings = Settings(_env_file=None)
+
+    assert settings.lightrag_workspace == ""
+    assert settings.lightrag_query_timeout_seconds == 120
+    assert settings.lightrag_query_top_k == 40
+    assert settings.lightrag_query_chunk_top_k == 20
+    assert settings.lightrag_query_response_type == "Multiple Paragraphs"
+
+
+def test_settings_accepts_lightrag_query_env_override(monkeypatch) -> None:
+    """LightRAG query API 운영값을 env로 override할 수 있어야 한다."""
+    monkeypatch.setenv("LIGHTRAG_QUERY_TIMEOUT_SECONDS", "15")
+    monkeypatch.setenv("LIGHTRAG_QUERY_TOP_K", "7")
+    monkeypatch.setenv("LIGHTRAG_QUERY_CHUNK_TOP_K", "3")
+    monkeypatch.setenv("LIGHTRAG_QUERY_RESPONSE_TYPE", "Single Paragraph")
+    monkeypatch.setenv("LIGHTRAG_WORKSPACE", "axwms-smoke")
+
+    settings = Settings(_env_file=None)
+
+    assert settings.lightrag_workspace == "axwms-smoke"
+    assert settings.lightrag_query_timeout_seconds == 15
+    assert settings.lightrag_query_top_k == 7
+    assert settings.lightrag_query_chunk_top_k == 3
+    assert settings.lightrag_query_response_type == "Single Paragraph"
