@@ -12,9 +12,9 @@ import java.util.List;
 public interface MetaTagJooqRepository {
 
     /**
-     * AI가 새로 제안한 태그만 생성 출처를 AI로 기록하고 이미 존재하는 태그는 그대로 둔다.
+     * AI가 새로 제안한 태그와 설명을 함께 생성하고 이미 존재하는 태그명은 그대로 둔다.
      */
-    void insertAiGeneratedTagNamesIgnoreDuplicates(Collection<String> tagNames);
+    void insertAiGeneratedTagsIgnoreDuplicates(Collection<AiGeneratedTagCommand> tags);
 
     /**
      * 필터 옵션 등에 노출할 모든 태그를 (id, name) 형태로 조회한다.
@@ -22,7 +22,7 @@ public interface MetaTagJooqRepository {
     List<TagSummaryProjection> findAllTagSummaries();
 
     /**
-     * 태그의 사용 횟수를 포함하여 모든 태그를 (id, name, usageCount) 형태로 조회한다.
+     * 태그의 설명과 사용 횟수를 포함하여 모든 태그를 FastAPI 내부 콜백용으로 조회한다.
      */
     List<TagInfoProjection> findAllTagInfo();
 
@@ -31,4 +31,10 @@ public interface MetaTagJooqRepository {
      * query 가 null/blank 면 전체 조회와 동일하며, 정렬은 usage_count desc + tag_name asc 로 고정한다.
      */
     Page<SearchTagProjection> searchTagPage(SearchTagQuery query);
+
+    record AiGeneratedTagCommand(
+            String tagName,
+            String description
+    ) {
+    }
 }

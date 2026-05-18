@@ -12,13 +12,14 @@ public final class GetTagsAiApiDto {
     public record TagInfo(
             Long id,
             String tagName,
-            Integer usageCount
+            Integer usageCount,
+            String description
     ) {
         /**
          * Repository projection 을 FastAPI 내부 응답 계약으로 변환한다.
          */
         public static TagInfo from(TagInfoProjection tagInfo) {
-            return new TagInfo(tagInfo.tagId(), tagInfo.tagName(), tagInfo.usageCount());
+            return new TagInfo(tagInfo.tagId(), tagInfo.tagName(), tagInfo.usageCount(), tagInfo.description());
         }
     }
 
