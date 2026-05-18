@@ -1,0 +1,133 @@
+package com.ibank.axwms.domain.tag.service;
+
+import com.ibank.axwms.domain.tag.TagMergeCandidateStatus;
+import com.ibank.axwms.domain.tag.dto.TagMergeCandidateApiDto;
+import com.ibank.axwms.domain.tag.entity.MetaTag;
+import com.ibank.axwms.domain.tag.entity.TagMergeCandidate;
+import com.ibank.axwms.domain.tag.entity.TagMergeCandidateItem;
+import com.ibank.axwms.domain.tag.external.TagMergeAiClient;
+import com.ibank.axwms.domain.tag.repository.TagMergeCandidateItemRepository;
+import com.ibank.axwms.domain.tag.repository.TagMergeCandidateRepository;
+import com.ibank.axwms.domain.tag.repository.TagRepository;
+import org.junit.jupiter.api.DisplayName;
+import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.ArgumentCaptor;
+import org.mockito.InjectMocks;
+import org.mockito.Mock;
+import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.test.util.ReflectionTestUtils;
+
+import java.util.List;
+
+import static org.assertj.core.api.Assertions.assertThat;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyCollection;
+import static org.mockito.BDDMockito.given;
+import static org.mockito.Mockito.verify;
+
+@ExtendWith(MockitoExtension.class)
+class TagMergeCandidateServiceTest {
+
+    private static final Long MERGE_CANDIDATE_ID = 10L;
+    private static final Long TARGET_TAG_ID = 1L;
+    private static final Long SOURCE_TAG_ID = 2L;
+
+    @Mock
+    private TagMergeCandidateRepository tagMergeCandidateRepository;
+
+    @Mock
+    private TagMergeCandidateItemRepository tagMergeCandidateItemRepository;
+
+    @Mock
+    private TagRepository tagRepository;
+
+    @Mock
+    private TagMergeAiClient tagMergeAiClient;
+
+    @InjectMocks
+    private TagMergeCandidateService tagMergeCandidateService;
+
+    @Test
+    @SuppressWarnings("unchecked")
+    @DisplayName("AI 병합 후보 저장 시 활성 태그만 snapshot 으로 저장한다")
+    void AI_병합_후보_저장_시_활성_태그만_snapshot_으로_저장한다() {
+        TagMergeCandidateApiDto.Request request = new TagMergeCandidateApiDto.Request(List.of(
+                new TagMergeCandidateApiDto.CandidateItem(
+                        new TagMergeCandidateApiDto.TagItem(TARGET_TAG_ID, " 기준정보 ", 10),
+                        "기준 관련 태그 설명",
+                        List.of(
+                                new TagMergeCandidateApiDto.TagItem(SOURCE_TAG_ID, "기준 보정", 4),
+                                new TagMergeCandidateApiDto.TagItem(SOURCE_TAG_ID, "기준 보정 중복", 4),
+                                new TagMergeCandidateApiDto.TagItem(TARGET_TAG_ID, "기준정보", 10)
+                        )
+                )
+        ));
+        given(tagRepository.findAllById(anyCollection()))
+                .willReturn(List.of(
+                        metaTag(TARGET_TAG_ID, "기준정보", 10, false),
+                        metaTag(SOURCE_TAG_ID, "기준 보정", 4, false)
+                ));
+        given(tagMergeCandidateRepository.save(any(TagMergeCandidate.class)))
+                .willAnswer(invocation -> {
+                    TagMergeCandidate candidate = invocation.getArgument(0);
+                    ReflectionTestUtils.setField(candidate, "id", MERGE_CANDIDATE_ID);
+                    return candidate;
+                });
+        given(tagMergeCandidateItemRepository.findByMergeCandidateIdIn(List.of(MERGE_CANDIDATE_ID)))
+                .willReturn(List.of(TagMergeCandidateItem.create(MERGE_CANDIDATE_ID, SOURCE_TAG_ID, "기준 보정")));
+        ArgumentCaptor<Iterable<TagMergeCandidateItem>> itemCaptor = ArgumentCaptor.forClass(Iterable.class);
+
+        TagMergeCandidateApiDto.Response response = tagMergeCandidateService.createCandidates(request);
+
+        verify(tagMergeCandidateItemRepository).saveAll(itemCaptor.capture());
+        assertThat(itemCaptor.getValue())
+                .extracting("sourceTagId")
+                .containsExactly(SOURCE_TAG_ID);
+        assertThat(response.items()).hasSize(1);
+        assertThat(response.items().getFirst().mergeTargetTag().tagName()).isEqualTo("기준정보");
+        assertThat(response.items().getFirst().resultDescription()).isEqualTo("기준 관련 태그 설명");
+    }
+
+    @Test
+    @DisplayName("AI 서버에서 생성한 후보를 동일한 저장 정책으로 저장한다")
+    void AI_서버에서_생성한_후보를_동일한_저장_정책으로_저장한다() {
+        TagMergeCandidateApiDto.GenerateRequest generateRequest =
+                new TagMergeCandidateApiDto.GenerateRequest(5, 20, 0, 200);
+        TagMergeCandidateApiDto.Request generatedRequest = new TagMergeCandidateApiDto.Request(List.of(
+                new TagMergeCandidateApiDto.CandidateItem(
+                        new TagMergeCandidateApiDto.TagItem(TARGET_TAG_ID, "기준정보", 10),
+                        "기준 관련 태그 설명",
+                        List.of(new TagMergeCandidateApiDto.TagItem(SOURCE_TAG_ID, "기준 보정", 4))
+                )
+        ));
+        given(tagMergeAiClient.generateCandidates(generateRequest)).willReturn(generatedRequest);
+        given(tagRepository.findAllById(anyCollection()))
+                .willReturn(List.of(
+                        metaTag(TARGET_TAG_ID, "기준정보", 10, false),
+                        metaTag(SOURCE_TAG_ID, "기준 보정", 4, false)
+                ));
+        given(tagMergeCandidateRepository.save(any(TagMergeCandidate.class)))
+                .willAnswer(invocation -> {
+                    TagMergeCandidate candidate = invocation.getArgument(0);
+                    ReflectionTestUtils.setField(candidate, "id", MERGE_CANDIDATE_ID);
+                    return candidate;
+                });
+        given(tagMergeCandidateItemRepository.findByMergeCandidateIdIn(List.of(MERGE_CANDIDATE_ID)))
+                .willReturn(List.of(TagMergeCandidateItem.create(MERGE_CANDIDATE_ID, SOURCE_TAG_ID, "기준 보정")));
+
+        TagMergeCandidateApiDto.Response response = tagMergeCandidateService.generateCandidates(generateRequest);
+
+        assertThat(response.items()).hasSize(1);
+        verify(tagMergeAiClient).generateCandidates(generateRequest);
+        verify(tagMergeCandidateRepository).save(any(TagMergeCandidate.class));
+    }
+
+    private MetaTag metaTag(Long id, String tagName, Integer usageCount, boolean isDeleted) {
+        MetaTag tag = MetaTag.create(tagName);
+        ReflectionTestUtils.setField(tag, "id", id);
+        ReflectionTestUtils.setField(tag, "usageCount", usageCount);
+        ReflectionTestUtils.setField(tag, "isDeleted", isDeleted);
+        return tag;
+    }
+}
