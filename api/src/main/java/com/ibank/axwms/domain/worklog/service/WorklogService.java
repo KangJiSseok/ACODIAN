@@ -2,6 +2,7 @@ package com.ibank.axwms.domain.worklog.service;
 
 import com.ibank.axwms.domain.file.repository.FileRepository;
 import com.ibank.axwms.domain.file.service.FileService;
+import com.ibank.axwms.domain.organization.team.entity.Team;
 import com.ibank.axwms.domain.organization.team.service.TeamService;
 import com.ibank.axwms.domain.tag.service.TagService;
 import com.ibank.axwms.domain.worklog.WorklogStatus;
@@ -14,6 +15,7 @@ import com.ibank.axwms.domain.worklog.dto.UpdateWorklogStatusApiDto;
 import com.ibank.axwms.domain.worklog.entity.Worklog;
 import com.ibank.axwms.domain.worklog.entity.WorklogTag;
 import com.ibank.axwms.domain.worklog.event.WorklogCompletedEvent;
+import com.ibank.axwms.domain.worklog.event.WorklogAiPipelineRequestedEvent;
 import com.ibank.axwms.domain.worklog.policy.WorklogStatusPolicy;
 import com.ibank.axwms.domain.worklog.repository.WorklogDependencyRepository;
 import com.ibank.axwms.domain.worklog.repository.WorklogRepository;
@@ -61,11 +63,12 @@ public class WorklogService {
     private final WorklogDependencyService worklogDependencyService;
     private final WorklogStatusPolicy worklogStatusPolicy;
     private final TagService tagService;
-    private final ApplicationEventPublisher applicationEventPublisher;
+    private final ApplicationEventPublisher eventPublisher;
 
     /**
      * 로그인 사용자의 권한으로 업무를 등록한다.
      * 팀 존재 여부와 사용자의 해당 팀 소속 여부를 확인한 뒤 신규 Worklog 엔티티를 저장한다.
+     * 등록 트랜잭션 커밋 후에는 AI 서버의 본문 요약/태그 생성 파이프라인을 시작한다.
      *
      * @param principal 현재 로그인 사용자
      * @param request   업무 등록 요청 DTO
@@ -80,7 +83,7 @@ public class WorklogService {
             CreateWorklogApiDto.Request request,
             List<MultipartFile> files
     ) {
-        teamService.getTeamOrThrow(request.teamId());
+        Team team = teamService.getTeamOrThrow(request.teamId());
         if (!teamService.isMember(principal.userId(), request.teamId())) {
             throw new BusinessException(ErrorCode.WORKLOG_TEAM_FORBIDDEN);
         }
@@ -113,8 +116,23 @@ public class WorklogService {
                 savedWorklog.getTeamId(),
                 request.predecessorWorklogIds()
         );
+        publishWorklogAiPipelineRequest(savedWorklog, team);
 
         return CreateWorklogApiDto.Response.of(savedWorklog.getId());
+    }
+
+    /**
+     * 등록 트랜잭션이 성공한 업무만 AI 서버에 넘기도록 AFTER_COMMIT 이벤트로 파이프라인 시작 요청을 분리한다.
+     */
+    private void publishWorklogAiPipelineRequest(Worklog worklog, Team team) {
+        eventPublisher.publishEvent(new WorklogAiPipelineRequestedEvent(
+                worklog.getId(),
+                worklog.getRequestContent(),
+                worklog.getWorkContent(),
+                worklog.getAuthorId(),
+                worklog.getTeamId(),
+                team.getDepartmentId()
+        ));
     }
 
     /**
@@ -376,7 +394,7 @@ public class WorklogService {
         if (!(statusChanged && nextStatusCode == WorklogStatus.COMPLETED)) {
             return;
         }
-        applicationEventPublisher.publishEvent(new WorklogCompletedEvent(worklogId));
+        eventPublisher.publishEvent(new WorklogCompletedEvent(worklogId));
     }
 
 
