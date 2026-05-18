@@ -45,7 +45,7 @@ public class WorklogController implements WorklogControllerDocs {
     @ResponseStatus(HttpStatus.CREATED)
     public CreateWorklogApiDto.Response createWorklog(
             @Valid @RequestPart CreateWorklogApiDto.Request request,
-            @RequestPart List<MultipartFile> files,
+            @RequestPart(value = "files", required = false) List<MultipartFile> files,
             @AuthenticationPrincipal CustomUserPrincipal principal
     ) {
         return worklogService.createWorklog(principal, request, files);

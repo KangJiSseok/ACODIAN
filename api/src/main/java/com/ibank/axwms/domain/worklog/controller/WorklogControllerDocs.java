@@ -26,7 +26,9 @@ import java.util.List;
 @Tag(name = "Worklog", description = "업무일지 API")
 public interface WorklogControllerDocs {
 
-    @Operation(summary = "업무 등록", description = "로그인 사용자의 권한으로 업무를 등록한다.")
+    @Operation(summary = "업무 등록",
+            description = "로그인 사용자의 권한으로 업무를 등록한다. "
+                    + "files part 는 첨부 파일이 있을 때만 전달한다.")
     @SecurityRequirement(name = "bearerAuth")
     @ApiResponses({
             @ApiResponse(responseCode = "201", description = "업무 등록에 성공한다."),
