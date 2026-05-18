@@ -76,6 +76,7 @@ class LightRagQueryOptions:
     top_k: int
     chunk_top_k: int
     response_type: str
+    system_prompt: str | None = None
 
 
 @dataclass(frozen=True)
@@ -159,7 +160,7 @@ class LightRagWorklogIndexAdapter:
             rag = await self._get_initialized_rag()
             param = self._build_query_param(options)
             raw = await asyncio.wait_for(
-                rag.aquery_llm(options.query, param=param),
+                rag.aquery_llm(options.query, param=param, system_prompt=options.system_prompt),
                 timeout=self._settings.lightrag_query_timeout_seconds,
             )
             return LightRagQueryResult(raw=raw)

@@ -13,6 +13,7 @@ class WorklogLightQueryRequest(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     query: str = Field(min_length=1)
+    allowed_team_ids: list[int] | None = Field(default=None, alias="allowedTeamIds")
 
 
 class WorklogLightReferenceItem(BaseModel):
