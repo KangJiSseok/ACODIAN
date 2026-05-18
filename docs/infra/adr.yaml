@@ -700,3 +700,24 @@
       - 정상 사용자 429 발생률 > 0.1% → 값 완화 또는 인증 사용자 한정 화이트리스트.
       - 앱 레벨 throttle 도입 → nginx 값과 책임 분담 재정렬.
       - SSAFY 가 보안그룹 IP 화이트리스트를 허용해 DB 외부 개방 완화책이 추가되는 시점 → ADR-011 / 본 ADR 의 분담 재검토.
+- id: ADR-019
+  title: AI LightRAG 저장소 의존성으로 Qdrant와 Neo4j compose 서비스 편입
+  status: adopted
+  date: 2026-05-18
+  stacks: [docker, compose, ai, qdrant, neo4j, ec2]
+  context: |
+    LightRAG v3 업무일지 검색은 vector storage 로 Qdrant 를 사용하고, graph backing store 로 Neo4j 를 사용할 수 있다.
+    로컬 compose 에는 이미 Qdrant 가 있었지만 EC2 배포 compose 에는 Qdrant 와 Neo4j 가 없어 운영 배포 시 AI 컨테이너가 같은 compose network 안의 저장소에 붙을 수 없었다.
+    두 서비스는 애플리케이션 이미지가 아니라 상태를 보존해야 하는 저장소 의존성이므로 api/web/ai 이미지 교체 흐름이 아니라 postgres/redis 와 같은 상태 저장형 서비스 모델을 따라야 한다.
+  decision: |
+    `infra/compose.deploy.yml` 에 qdrant 와 neo4j 서비스를 추가하고 named volume, healthcheck, restart policy 를 둔다.
+    개발 편의를 위해 Qdrant 와 Neo4j 는 DB 계열 서비스처럼 호스트 포트로 외부 개방한다.
+    로컬 LightRAG smoke 테스트도 같은 저장소 구성을 쓸 수 있도록 `infra/compose.local.yml` 에도 Neo4j 를 추가한다.
+    `ai` 와 `ai_worker` 에 `LIGHTRAG_QDRANT_URL=http://qdrant:6333`, `NEO4J_URI=bolt://neo4j:7687`, `NEO4J_USER`, `NEO4J_PASSWORD` 를 주입한다.
+    qdrant 와 neo4j 는 `remote-deploy.sh` 의 `pull` / `rm -sf` 대상에 넣지 않고, `up -d --remove-orphans` 대상에만 포함한다.
+    환경별 host port 는 Qdrant 8500/8501, Neo4j Bolt 8600/8601, Neo4j HTTP Browser 8602/8603 으로 예약한다.
+  consequence: |
+    AI 컨테이너는 Qdrant 와 Neo4j healthcheck 통과 이후 기동되며, graph/vector 데이터는 애플리케이션 재배포 후에도 유지된다.
+    EC2 `.env` 는 신규 host port 와 환경별 강한 `NEO4J_PASSWORD` 를 반드시 정의해야 한다.
+    자체 운영 Qdrant 는 기본적으로 API key 없이 사용하므로, EC2 보안그룹 또는 방화벽에서 접근 가능한 IP 를 제한해야 한다.
+    이후 Qdrant 인증을 켜면 `LIGHTRAG_QDRANT_API_KEY` 를 EC2 `.env` 또는 GitLab CI/CD Variables 로만 주입한다.
