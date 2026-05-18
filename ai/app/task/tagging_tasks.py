@@ -2,7 +2,7 @@ import asyncio
 import logging
 
 from app.client.tagging_client import TaggingClient
-from app.model.tagging_model import MetaTag
+from app.model.tagging_model import MetaTag, NewTag
 from app.service.tagging_service import TaggingService
 from app.task.celery_app import celery_app
 
@@ -13,7 +13,7 @@ logger = logging.getLogger(__name__)
 def generate_worklog_tags(
     worklog_id: int,
     work_content: str,
-) -> dict[str, int | list[str]]:
+) -> dict[str, int | list[str] | list[dict[str, str]]]:
     return asyncio.run(
         _generate_worklog_tags(
             worklog_id=worklog_id,
@@ -40,7 +40,7 @@ async def _generate_worklog_tags(
         await tagging_client.apply_worklog_ai_tags(
             worklog_id=worklog_id,
             existing_tag_ids=existing_tag_ids,
-            new_tag_names=tagging_result.new_tags,
+            new_tags=tagging_result.new_tags,
         )
     logger.info(
         "태그 생성 완료: worklog_id=%s, existing_tags=%s, new_tags=%s",
@@ -52,7 +52,7 @@ async def _generate_worklog_tags(
     return {
         "worklog_id": worklog_id,
         "existing_tags": tagging_result.existing_tags,
-        "new_tags": tagging_result.new_tags,
+        "new_tags": _dump_new_tags(tagging_result.new_tags),
     }
 
 
@@ -65,4 +65,11 @@ def _find_existing_tag_ids(
         tag_id_by_name[tag_name]
         for tag_name in tag_names
         if tag_name in tag_id_by_name
+    ]
+
+
+def _dump_new_tags(new_tags: list[NewTag]) -> list[dict[str, str]]:
+    return [
+        tag.model_dump(by_alias=True)
+        for tag in new_tags
     ]

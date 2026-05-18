@@ -1,5 +1,5 @@
 from app.client.base_api_client import BaseApiClient
-from app.model.tagging_model import MetaTag
+from app.model.tagging_model import MetaTag, NewTag
 
 
 class TaggingClient(BaseApiClient):
@@ -17,6 +17,8 @@ class TaggingClient(BaseApiClient):
                 {
                     "tagId": item.get("tagId", item.get("id")),
                     "tagName": item.get("tagName"),
+                    "description": item.get("description"),
+                    "usageCount": item.get("usageCount", item.get("usage_count", 0)),
                 }
             )
             for item in items
@@ -26,13 +28,20 @@ class TaggingClient(BaseApiClient):
         self,
         worklog_id: int,
         existing_tag_ids: list[int],
-        new_tag_names: list[str],
+        new_tags: list[NewTag],
     ) -> None:
         response = await self.client.post(
             self.api_path(f"/api/internal/worklogs/{worklog_id}/ai-tags"),
             json={
                 "existingTagIds": existing_tag_ids,
-                "newTagNames": new_tag_names,
+                "newTagNames": [
+                    tag.tag_name
+                    for tag in new_tags
+                ],
+                "newTags": [
+                    tag.model_dump(by_alias=True)
+                    for tag in new_tags
+                ],
             },
         )
         response.raise_for_status()
