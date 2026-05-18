@@ -38,9 +38,10 @@ public class WorklogAiPostProcessService {
     private final AiWorklogPipelineProperties worklogPipelineProperties;
     private final AiWorklogLightIndexProperties worklogLightIndexProperties;
     private final NotificationService notificationService;
+    private final WorklogAiProcessingStatusService worklogAiProcessingStatusService;
 
     /**
-     * 커밋된 업무 snapshot 으로 세 AI 요청을 모두 시도하고, 실패 단계 집계 결과를 작성자 알림으로 남긴다.
+     * 커밋된 업무 snapshot 으로 세 AI 요청을 모두 시도하고, dispatch 성공은 콜백 대기 상태로 남긴다.
      *
      * @param event 업무 생성 트랜잭션 안에서 확정된 AI 후처리 입력 snapshot
      */
@@ -52,6 +53,7 @@ public class WorklogAiPostProcessService {
         requestLightIndex(event, failedStages);
 
         if (failedStages.isEmpty()) {
+            worklogAiProcessingStatusService.startAiProcessing(event.worklogId());
             notificationService.createWorklogAiPostProcessResultNotification(
                     event.authorId(),
                     event.departmentId(),
@@ -63,6 +65,7 @@ public class WorklogAiPostProcessService {
             return;
         }
 
+        worklogAiProcessingStatusService.failAiProcessing(event.worklogId());
         notificationService.createWorklogAiPostProcessResultNotification(
                 event.authorId(),
                 event.departmentId(),

@@ -27,9 +27,9 @@ public class InternalWorklogAiCallbackService {
 
         if (request.aiProcessingStatus() == AiProcessingStatus.COMPLETED) {
             worklog.changeAiSummary(request.aiSummary());
-            worklog.completeAiSummaryProcessing();
+            worklog.completeAiProcessing();
         } else if (request.aiProcessingStatus() == AiProcessingStatus.FAILED) {
-            worklog.failAiSummaryProcessing();
+            worklog.failAiProcessing();
         }
 
     }
