@@ -62,7 +62,7 @@ services:
       test:
         [
           "CMD-SHELL",
-          "cypher-shell -u neo4j -p neo4j-local-password 'RETURN 1' >/dev/null",
+          "NEO4J_USERNAME=\"$${NEO4J_AUTH%%/*}\" NEO4J_PASSWORD=\"$${NEO4J_AUTH#*/}\" cypher-shell 'RETURN 1' >/dev/null",
         ]
       interval: 10s
       timeout: 5s
