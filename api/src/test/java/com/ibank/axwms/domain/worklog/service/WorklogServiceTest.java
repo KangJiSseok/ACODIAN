@@ -11,12 +11,15 @@ import com.ibank.axwms.domain.worklog.WorklogStatus;
 import com.ibank.axwms.domain.worklog.dto.CreateWorklogApiDto;
 import com.ibank.axwms.domain.worklog.dto.GetWorklogDetailApiDto;
 import com.ibank.axwms.domain.worklog.dto.GetWorklogsApiDto;
-import com.ibank.axwms.domain.worklog.dto.UpdateWorklogStatusApiDto;
+import com.ibank.axwms.domain.worklog.dto.InternalWorklogPolishApiDto;
+import com.ibank.axwms.domain.worklog.dto.PolishWorklogApiDto;
 import com.ibank.axwms.domain.worklog.dto.UpdateWorklogApiDto;
+import com.ibank.axwms.domain.worklog.dto.UpdateWorklogStatusApiDto;
 import com.ibank.axwms.domain.worklog.entity.Worklog;
 import com.ibank.axwms.domain.worklog.entity.WorklogTag;
 import com.ibank.axwms.domain.worklog.event.WorklogAiPipelineRequestedEvent;
 import com.ibank.axwms.domain.worklog.event.WorklogCompletedEvent;
+import com.ibank.axwms.domain.worklog.external.WorklogPolishClient;
 import com.ibank.axwms.domain.worklog.policy.WorklogStatusPolicy;
 import com.ibank.axwms.domain.worklog.repository.WorklogDependencyRepository;
 import com.ibank.axwms.domain.worklog.repository.WorklogRepository;
@@ -60,6 +63,7 @@ import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.BDDMockito.given;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.verifyNoInteractions;
 
 @ExtendWith(MockitoExtension.class)
 class WorklogServiceTest {
@@ -75,6 +79,7 @@ class WorklogServiceTest {
     @Mock private WorklogStatusPolicy worklogStatusPolicy;
     @Mock private TagService tagService;
     @Mock private ApplicationEventPublisher eventPublisher;
+    @Mock private WorklogPolishClient worklogPolishClient;
 
     @InjectMocks private WorklogService worklogService;
 
@@ -85,6 +90,43 @@ class WorklogServiceTest {
     private static final List<Long> TAG_IDS = List.of(1L, 2L);
     private static final LocalDate INSTRUCTION_DATE = LocalDate.of(2026, 4, 22);
     private static final LocalDate DUE_DATE = LocalDate.of(2026, 4, 25);
+
+    @Test
+    @DisplayName("작성 보조는 요청 본문을 AI 클라이언트에 전달하고 응답으로 매핑한다")
+    void 작성_보조는_요청_본문을_ai_클라이언트에_전달하고_응답으로_매핑한다() {
+        PolishWorklogApiDto.Request request = new PolishWorklogApiDto.Request(
+                "재고 동기화 지연 원인을 정리해 주세요.",
+                "배치 로그를 비교하고 병목 구간을 확인했습니다."
+        );
+        InternalWorklogPolishApiDto.Request internalRequest = InternalWorklogPolishApiDto.Request.from(request);
+        given(worklogPolishClient.polishWorklog(internalRequest)).willReturn(
+                InternalWorklogPolishApiDto.Response.of(
+                        "배치 로그를 비교하고 병목 구간을 확인했습니다."
+                )
+        );
+
+        PolishWorklogApiDto.Response response = worklogService.polishWorklog(request);
+
+        assertThat(response).isEqualTo(PolishWorklogApiDto.Response.of(
+                "배치 로그를 비교하고 병목 구간을 확인했습니다."
+        ));
+        verify(worklogPolishClient).polishWorklog(internalRequest);
+        verifyNoInteractions(worklogRepository);
+    }
+
+    @Test
+    @DisplayName("AI 클라이언트 실패는 작성 보조 실패 코드로 드러난다")
+    void ai_클라이언트_실패는_작성_보조_실패_코드로_드러난다() {
+        PolishWorklogApiDto.Request request = new PolishWorklogApiDto.Request("요청", "수행 내용");
+        BusinessException failure = new BusinessException(ErrorCode.WORKLOG_AI_POLISH_FAILED);
+        given(worklogPolishClient.polishWorklog(InternalWorklogPolishApiDto.Request.from(request)))
+                .willThrow(failure);
+
+        assertThatThrownBy(() -> worklogService.polishWorklog(request))
+                .isSameAs(failure)
+                .extracting("errorCode")
+                .isEqualTo(ErrorCode.WORKLOG_AI_POLISH_FAILED);
+    }
 
     @Test
     @SuppressWarnings("unchecked")

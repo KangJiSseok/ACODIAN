@@ -1,14 +1,17 @@
 package com.ibank.axwms.domain.worklog.controller;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.mockito.BDDMockito.given;
 import static org.mockito.BDDMockito.then;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.patch;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.SerializationFeature;
 import com.ibank.axwms.domain.worklog.WorklogStatus;
+import com.ibank.axwms.domain.worklog.dto.PolishWorklogApiDto;
 import com.ibank.axwms.domain.worklog.dto.UpdateWorklogStatusApiDto;
 import com.ibank.axwms.domain.worklog.service.WorklogService;
 import com.ibank.axwms.global.response.EmptyResponse;
@@ -29,6 +32,7 @@ import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.MvcResult;
 import org.springframework.test.web.servlet.setup.MockMvcBuilders;
 import org.springframework.web.bind.annotation.PatchMapping;
+import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 
@@ -64,6 +68,84 @@ class WorklogControllerTest {
 
         assertThat(requestMapping).isNotNull();
         assertThat(requestMapping.value()).containsExactly("/worklogs");
+    }
+
+
+    @Test
+    @DisplayName("업무일지 작성 보조 메서드는 polish POST 경로와 MEMBER 이상 role gate 를 사용한다")
+    void 업무일지_작성_보조_메서드는_polish_post_경로와_role_gate를_사용한다() throws NoSuchMethodException {
+        Method method = WorklogController.class.getMethod(
+                "polishWorklog",
+                PolishWorklogApiDto.Request.class
+        );
+        PostMapping postMapping = method.getAnnotation(PostMapping.class);
+        PreAuthorize preAuthorize = method.getAnnotation(PreAuthorize.class);
+
+        assertThat(postMapping).isNotNull();
+        assertThat(postMapping.value()).containsExactly("/polish");
+        assertThat(preAuthorize).isNotNull();
+        assertThat(preAuthorize.value()).isEqualTo("hasAnyRole('DIRECTOR','DEPT_HEAD','TEAM_LEAD','MEMBER')");
+        assertThat(method.getParameters()[0].getAnnotation(RequestBody.class)).isNotNull();
+    }
+
+    @Test
+    @DisplayName("업무일지 작성 보조 메서드는 업무일지 서비스로 위임한다")
+    void 업무일지_작성_보조_메서드는_업무일지_서비스로_위임한다() {
+        PolishWorklogApiDto.Request request = new PolishWorklogApiDto.Request(
+                "장애 분석 요청",
+                "로그를 확인하고 장애 구간을 분리했습니다."
+        );
+        PolishWorklogApiDto.Response expected = PolishWorklogApiDto.Response.of(
+                "로그를 확인하고 장애 구간을 분리했습니다."
+        );
+        given(worklogService.polishWorklog(request)).willReturn(expected);
+
+        PolishWorklogApiDto.Response response = worklogController.polishWorklog(request);
+
+        assertThat(response).isEqualTo(expected);
+        then(worklogService).should().polishWorklog(request);
+    }
+
+    @Test
+    @DisplayName("업무일지 작성 보조 HTTP 응답은 workContent 만 data 로 반환한다")
+    void 업무일지_작성_보조_http_응답은_work_content만_data로_반환한다() throws Exception {
+        given(worklogService.polishWorklog(new PolishWorklogApiDto.Request(
+                "장애 분석 요청",
+                "로그를 확인하고 장애 구간을 분리했습니다."
+        ))).willReturn(PolishWorklogApiDto.Response.of(
+                "로그를 확인하고 장애 구간을 분리했습니다."
+        ));
+
+        MvcResult result = mockMvc.perform(post("/worklogs/polish")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {
+                                  "requestContent": "장애 분석 요청",
+                                  "workContent": "로그를 확인하고 장애 구간을 분리했습니다."
+                                }
+                                """.getBytes(StandardCharsets.UTF_8)))
+                .andExpect(status().isOk())
+                .andReturn();
+
+        JsonNode data = objectMapper.readTree(result.getResponse().getContentAsString()).get("data");
+
+        assertThat(data.has("title")).isFalse();
+        assertThat(data.get("workContent").asText()).isEqualTo("로그를 확인하고 장애 구간을 분리했습니다.");
+        assertThat(data.size()).isEqualTo(1);
+    }
+
+    @Test
+    @DisplayName("업무일지 작성 보조 요청에서 workContent 가 비어 있으면 400을 반환한다")
+    void 업무일지_작성_보조_요청에서_work_content가_비어_있으면_400을_반환한다() throws Exception {
+        mockMvc.perform(post("/worklogs/polish")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {
+                                  "requestContent": "장애 분석 요청",
+                                  "workContent": ""
+                                }
+                                """.getBytes(StandardCharsets.UTF_8)))
+                .andExpect(status().isBadRequest());
     }
 
     @Test
