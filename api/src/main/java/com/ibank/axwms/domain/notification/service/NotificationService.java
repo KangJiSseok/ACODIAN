@@ -35,6 +35,7 @@ public class NotificationService {
     private static final String WORKLOG_DUE_TODAY_TITLE = "업무 마감 오늘까지 알림";
     private static final String WORKLOG_OVERDUE_TITLE = "업무 마감일 초과 알림";
     private static final String WORKLOG_DEPENDENCY_READY_TITLE = "선행 업무 완료 알림";
+    private static final int READ_NOTIFICATION_RETENTION_DAYS = 3;
     private static final List<String> WORKLOG_REMINDER_NOTIFICATION_TYPES = List.of(
             NotificationType.WORKLOG_DUE_SOON.name(),
             NotificationType.WORKLOG_DUE_TODAY.name(),
@@ -74,6 +75,15 @@ public class NotificationService {
     public void markNotificationAsRead(CustomUserPrincipal principal, Long notificationId) {
         Notification notification = getNotificationOrThrow(notificationId, principal.userId());
         notification.markAsRead(LocalDateTime.now());
+    }
+
+    /**
+     * 읽은 알림은 최초 readAt 기준 3일 후 삭제하고, 안읽은 알림은 보관 대상에서 제외한다.
+     */
+    @Transactional
+    public int deleteExpiredReadNotifications(LocalDateTime now) {
+        LocalDateTime expiredAt = now.minusDays(READ_NOTIFICATION_RETENTION_DAYS);
+        return notificationRepository.deleteReadNotificationsReadAtBeforeOrEqual(expiredAt);
     }
 
     /**
