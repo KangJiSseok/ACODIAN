@@ -94,7 +94,7 @@ ai:
     enabled: ${AI_WORKLOG_LIGHT_INDEX_ENABLED:true}
     base-url: ${AI_WORKLOG_LIGHT_INDEX_BASE_URL:http://localhost:8000/ai}
     connect-timeout: ${AI_WORKLOG_LIGHT_INDEX_CONNECT_TIMEOUT:2s}
-    read-timeout: ${AI_WORKLOG_LIGHT_INDEX_READ_TIMEOUT:3s}
+    read-timeout: ${AI_WORKLOG_LIGHT_INDEX_READ_TIMEOUT:300s}
 
 notification:
   worklog-overdue-reminder:
