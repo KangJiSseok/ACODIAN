@@ -50,6 +50,9 @@ class WorklogAiPostProcessServiceTest {
     @Mock
     private NotificationService notificationService;
 
+    @Mock
+    private WorklogAiProcessingStatusService worklogAiProcessingStatusService;
+
     private final AiWorklogPipelineProperties worklogPipelineProperties =
             new AiWorklogPipelineProperties(true, "http://ai.test/ai", Duration.ofSeconds(1), Duration.ofSeconds(2));
 
@@ -68,12 +71,13 @@ class WorklogAiPostProcessServiceTest {
                 worklogLightIndexClient,
                 worklogPipelineProperties,
                 worklogLightIndexProperties,
-                notificationService
+                notificationService,
+                worklogAiProcessingStatusService
         );
     }
 
     @Test
-    @DisplayName("세 AI 요청이 모두 성공하면 성공 알림을 생성한다")
+    @DisplayName("세 AI 요청이 모두 dispatch 되면 처리중 상태와 성공 알림을 생성한다")
     void process_creates_success_notification_when_all_requests_succeed() {
         WorklogAiPostProcessRequestedEvent event = eventWithFiles();
 
@@ -94,6 +98,8 @@ class WorklogAiPostProcessServiceTest {
         verify(worklogLightIndexClient).requestIndex(indexCaptor.capture());
         assertThat(indexCaptor.getValue().worklogIds()).containsExactly(501L);
 
+        verify(worklogAiProcessingStatusService).startAiProcessing(501L);
+        verify(worklogAiProcessingStatusService, never()).failAiProcessing(any());
         verify(notificationService).createWorklogAiPostProcessResultNotification(
                 101L,
                 9L,
@@ -114,6 +120,8 @@ class WorklogAiPostProcessServiceTest {
 
         @SuppressWarnings("unchecked")
         ArgumentCaptor<List<String>> failedStagesCaptor = ArgumentCaptor.forClass(List.class);
+        verify(worklogAiProcessingStatusService).failAiProcessing(501L);
+        verify(worklogAiProcessingStatusService, never()).startAiProcessing(any());
         verify(notificationService).createWorklogAiPostProcessResultNotification(
                 eq(101L),
                 eq(9L),
@@ -127,7 +135,7 @@ class WorklogAiPostProcessServiceTest {
     }
 
     @Test
-    @DisplayName("파일이 없으면 파일 요약 호출 없이 성공으로 처리한다")
+    @DisplayName("파일이 없으면 파일 요약 호출 없이 처리중 상태와 성공 알림을 생성한다")
     void process_skips_file_summary_when_no_files() {
         WorklogAiPostProcessRequestedEvent event = eventWithoutFiles();
 
@@ -136,6 +144,8 @@ class WorklogAiPostProcessServiceTest {
         verify(fileSummaryClient, never()).requestSummary(any());
         verify(worklogPipelineClient).requestPipeline(any());
         verify(worklogLightIndexClient).requestIndex(any());
+        verify(worklogAiProcessingStatusService).startAiProcessing(501L);
+        verify(worklogAiProcessingStatusService, never()).failAiProcessing(any());
         verify(notificationService).createWorklogAiPostProcessResultNotification(
                 101L,
                 9L,
@@ -148,7 +158,7 @@ class WorklogAiPostProcessServiceTest {
 
 
     @Test
-    @DisplayName("파일 요약이 비활성화되어 있으면 파일 요약 호출과 상태 전이를 건너뛴다")
+    @DisplayName("파일 요약이 비활성화되어 있으면 파일 요약 호출만 건너뛰고 처리중 상태로 처리한다")
     void process_skips_file_summary_when_file_summary_disabled() {
         WorklogAiPostProcessService disabledService = new WorklogAiPostProcessService(
                 fileSummaryClient,
@@ -158,13 +168,16 @@ class WorklogAiPostProcessServiceTest {
                 worklogLightIndexClient,
                 worklogPipelineProperties,
                 worklogLightIndexProperties,
-                notificationService
+                notificationService,
+                worklogAiProcessingStatusService
         );
 
         disabledService.process(eventWithFiles());
 
         verify(fileService, never()).startWorklogFileAiSummaryProcessing(any());
         verify(fileSummaryClient, never()).requestSummary(any());
+        verify(worklogAiProcessingStatusService).startAiProcessing(501L);
+        verify(worklogAiProcessingStatusService, never()).failAiProcessing(any());
         verify(notificationService).createWorklogAiPostProcessResultNotification(
                 101L,
                 9L,
