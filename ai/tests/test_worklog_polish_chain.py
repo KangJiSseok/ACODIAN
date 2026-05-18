@@ -1,11 +1,14 @@
 import asyncio
 
-from app.chain.worklog_polish_chain import polish_worklog_with_ai
+from app.chain.worklog_polish_chain import polish_worklog_with_ai, recommend_worklog_titles_with_ai
 from app.model.worklog_polish import WorklogPolishRequest
 from app.model.worklog_polish import WorklogPolishResponse
+from app.model.worklog_polish import WorklogTitleRecommendationResponse
 from app.prompt.worklog_polish_prompt import (
     WORKLOG_POLISH_SYSTEM_PROMPT,
     WORKLOG_POLISH_USER_TEMPLATE,
+    WORKLOG_TITLE_RECOMMENDATION_SYSTEM_PROMPT,
+    WORKLOG_TITLE_RECOMMENDATION_USER_TEMPLATE,
 )
 
 
@@ -51,4 +54,47 @@ def test_polish_worklog_with_gemini_uses_expected_prompt(monkeypatch) -> None:
 
     assert result.work_content == "다듬은 본문"
     assert set(result.model_dump(by_alias=True)) == {"workContent"}
+    assert len(fake_client.calls) == 1
+
+
+def test_recommend_worklog_titles_with_gemini_uses_expected_prompt(monkeypatch) -> None:
+    from app.chain import worklog_polish_chain
+
+    class FakeTitleClient:
+        def __init__(self) -> None:
+            self.calls = []
+
+        async def generate_structured(self, *, contents, schema, instruction, model=None):
+            self.calls.append(
+                {
+                    "contents": contents,
+                    "schema": schema,
+                    "instruction": instruction,
+                    "model": model,
+                }
+            )
+            assert contents == [
+                WORKLOG_TITLE_RECOMMENDATION_USER_TEMPLATE.format(
+                    request_content="성과 문구는 보수적으로 작성",
+                    work_content="장애 원인을 로그에서 확인하고 재시작 절차를 공유했습니다.",
+                )
+            ]
+            assert schema is WorklogTitleRecommendationResponse
+            assert instruction == WORKLOG_TITLE_RECOMMENDATION_SYSTEM_PROMPT
+            return WorklogTitleRecommendationResponse(titles=["장애 원인 확인 및 재시작 절차 공유"])
+
+    fake_client = FakeTitleClient()
+    monkeypatch.setattr(worklog_polish_chain, "get_gemini_client", lambda: fake_client)
+
+    result = asyncio.run(
+        recommend_worklog_titles_with_ai(
+            WorklogPolishRequest(
+                requestContent="성과 문구는 보수적으로 작성",
+                workContent="장애 원인을 로그에서 확인하고 재시작 절차를 공유했습니다.",
+            )
+        )
+    )
+
+    assert result.titles == ["장애 원인 확인 및 재시작 절차 공유"]
+    assert set(result.model_dump(by_alias=True)) == {"titles"}
     assert len(fake_client.calls) == 1

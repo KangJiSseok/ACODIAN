@@ -4,7 +4,11 @@ from fastapi.testclient import TestClient
 from app.main import app
 from app.model.worklog_polish import WorklogPolishRequest
 from app.model.worklog_polish import WorklogPolishResponse
-from app.prompt.worklog_polish_prompt import WORKLOG_POLISH_SYSTEM_PROMPT
+from app.model.worklog_polish import WorklogTitleRecommendationResponse
+from app.prompt.worklog_polish_prompt import (
+    WORKLOG_POLISH_SYSTEM_PROMPT,
+    WORKLOG_TITLE_RECOMMENDATION_SYSTEM_PROMPT,
+)
 
 client = TestClient(app)
 
@@ -110,3 +114,55 @@ def test_worklog_polish_service_returns_work_content_only(monkeypatch) -> None:
 
     assert response.work_content == "수행 내용을 정리했습니다."
     assert set(response.model_dump(by_alias=True)) == {"workContent"}
+
+
+def test_worklog_title_recommendation_contract(monkeypatch) -> None:
+    from app.chain import worklog_polish_chain
+
+    captured: dict[str, object] = {}
+
+    class FakeGeminiClient:
+        async def generate_structured(self, *, contents, schema, instruction):
+            captured["contents"] = contents
+            captured["schema"] = schema
+            captured["instruction"] = instruction
+            return WorklogTitleRecommendationResponse(
+                titles=[
+                    "배치 로그 비교 및 병목 구간 확인",
+                    "재고 동기화 지연 원인 분석",
+                ],
+            )
+
+    monkeypatch.setattr(
+        worklog_polish_chain,
+        "get_gemini_client",
+        lambda: FakeGeminiClient(),
+    )
+
+    response = client.post(
+        "/ai/worklogs/title-recommendations",
+        json={
+            "requestContent": "고객사 재고 동기화 지연 원인을 정리해 주세요.",
+            "workContent": "배치 로그를 비교하고 병목 구간을 확인했습니다.",
+        },
+    )
+
+    assert response.status_code == 200
+    assert response.json() == {
+        "titles": [
+            "배치 로그 비교 및 병목 구간 확인",
+            "재고 동기화 지연 원인 분석",
+        ],
+    }
+    assert set(response.json()) == {"titles"}
+    assert captured["schema"] is WorklogTitleRecommendationResponse
+    assert captured["instruction"] == WORKLOG_TITLE_RECOMMENDATION_SYSTEM_PROMPT
+
+
+def test_worklog_title_recommendation_response_normalizes_titles() -> None:
+    response = WorklogTitleRecommendationResponse(
+        titles=["  첫 번째 제목  ", "", "두 번째 제목", "세 번째 제목", "네 번째 제목"],
+    )
+
+    assert response.titles == ["첫 번째 제목", "두 번째 제목", "세 번째 제목"]
+    assert set(response.model_dump(by_alias=True)) == {"titles"}
