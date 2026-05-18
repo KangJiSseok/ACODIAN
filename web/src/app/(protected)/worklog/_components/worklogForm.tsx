@@ -2,10 +2,14 @@
 
 import { useMemo, useState, type ReactNode } from "react"
 import {
+  Check,
   ChevronRight,
   FileText,
+  Loader2,
   Settings2,
+  Sparkles,
   Tag,
+  Wand2,
 } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { CardSpotlight } from "@/components/ui/card-spotlight"
@@ -13,6 +17,7 @@ import { Input } from "@/components/ui/input"
 import { Textarea } from "@/components/ui/textarea"
 import { getApiErrorMessage } from "@/app/_common/service/api-client"
 import { cn } from "@/lib/utils"
+import { worklogService } from "../_service/worklog.service"
 import type {
   WorklogFormDependencyOption,
   WorklogFormTagOption,
@@ -74,6 +79,15 @@ function getSettingsValidationErrors(
 
 function hasSettingsValidationErrors(errors: SettingsValidationErrors) {
   return Boolean(errors.actualHours)
+}
+
+function getTodayDateString() {
+  const today = new Date()
+  const year = today.getFullYear()
+  const month = String(today.getMonth() + 1).padStart(2, "0")
+  const date = String(today.getDate()).padStart(2, "0")
+
+  return `${year}-${month}-${date}`
 }
 
 function hasCircularDependency(
@@ -138,6 +152,7 @@ export function WorklogForm({
   const textareaClassName =
     "dashboard-scrollbar resize-none rounded-[1.25rem] px-4 py-3 text-base overflow-y-auto [scrollbar-gutter:stable]"
   const isEditMode = currentWorklogId !== undefined
+  const fallbackDate = getTodayDateString()
   const resolvedInitialValues = initialValues ?? {
     title: "",
     requestContent: "",
@@ -145,8 +160,8 @@ export function WorklogForm({
     status: "PENDING" as const,
     importance: "NORMAL" as const,
     actualHours: 0,
-    instructionDate: "2026-04-13",
-    dueDate: "2026-04-16",
+    instructionDate: fallbackDate,
+    dueDate: fallbackDate,
     teamId: teamOptionsSource?.[0]?.id ?? 0,
     dependencyIds: [],
     attachmentNames: [],
@@ -163,6 +178,12 @@ export function WorklogForm({
     String(resolvedInitialValues.actualHours),
   )
   const [submitError, setSubmitError] = useState("")
+  const [titleAssistError, setTitleAssistError] = useState("")
+  const [polishAssistError, setPolishAssistError] = useState("")
+  const [titleRecommendations, setTitleRecommendations] = useState<string[]>([])
+  const [polishedWorkContent, setPolishedWorkContent] = useState("")
+  const [isRecommendingTitles, setIsRecommendingTitles] = useState(false)
+  const [isPolishingWorkContent, setIsPolishingWorkContent] = useState(false)
   const [showSettingsValidationErrors, setShowSettingsValidationErrors] =
     useState(false)
   const [dependencyKeywordInput, setDependencyKeywordInput] = useState("")
@@ -184,6 +205,7 @@ export function WorklogForm({
   )
   const initialStatus = initialValues?.status ?? resolvedInitialValues.status
   const statusChangeReasonVisible = isEditMode && values.status !== initialStatus
+  const canRequestWritingAssist = values.workContent.trim().length > 0
 
   const teamSource = useMemo<WorklogFormTeamOption[]>(
     () => teamOptionsSource ?? [],
@@ -439,6 +461,58 @@ export function WorklogForm({
     }
   }
 
+  const buildWritingAssistRequest = () => ({
+    requestContent: values.requestContent.trim() || null,
+    workContent: values.workContent.trim(),
+  })
+
+  const recommendTitles = async () => {
+    if (!canRequestWritingAssist) {
+      setTitleAssistError("업무 내용을 먼저 입력해주세요.")
+      return
+    }
+
+    setIsRecommendingTitles(true)
+    setTitleAssistError("")
+    try {
+      const response = await worklogService.recommendTitles(
+        buildWritingAssistRequest()
+      )
+      setTitleRecommendations(response.titles)
+      if (response.titles.length === 0) {
+        setTitleAssistError("추천할 수 있는 제목 후보가 없습니다.")
+      }
+    } catch (error) {
+      setTitleAssistError(
+        getApiErrorMessage(error, "AI 제목 추천을 처리하지 못했습니다.")
+      )
+    } finally {
+      setIsRecommendingTitles(false)
+    }
+  }
+
+  const polishWorkContent = async () => {
+    if (!canRequestWritingAssist) {
+      setPolishAssistError("업무 내용을 먼저 입력해주세요.")
+      return
+    }
+
+    setIsPolishingWorkContent(true)
+    setPolishAssistError("")
+    try {
+      const response = await worklogService.polishDraft(
+        buildWritingAssistRequest()
+      )
+      setPolishedWorkContent(response.workContent)
+    } catch (error) {
+      setPolishAssistError(
+        getApiErrorMessage(error, "AI 내용 작성을 처리하지 못했습니다.")
+      )
+    } finally {
+      setIsPolishingWorkContent(false)
+    }
+  }
+
   const updateActualHoursInput = (nextInput: string) => {
     setActualHoursInput(nextInput)
 
@@ -513,16 +587,61 @@ export function WorklogForm({
             <p className="text-xs uppercase tracking-[0.2em] text-muted-foreground">
               핵심 정보
             </p>
-            <Field label="제목">
-              <Input
-                className={controlClassName}
-                value={values.title}
-                maxLength={TITLE_MAX_LENGTH}
-                onChange={(event) =>
-                  setValues({ ...values, title: event.target.value })
-                }
-                placeholder="업무의 제목을 간결하게 작성하세요."
-              />
+            <Field
+              label="제목"
+              actions={
+                <Button
+                  type="button"
+                  variant="secondary"
+                  size="lg"
+                  className="font-semibold"
+                  disabled={!canRequestWritingAssist || isRecommendingTitles}
+                  onClick={recommendTitles}
+                  title={
+                    canRequestWritingAssist
+                      ? "업무 내용을 바탕으로 제목 후보를 추천합니다."
+                      : "업무 내용을 먼저 입력해주세요."
+                  }
+                >
+                  {isRecommendingTitles ? (
+                    <Loader2 className="size-4 animate-spin" />
+                  ) : (
+                    <Sparkles className="size-4" />
+                  )}
+                  AI 제목 추천
+                </Button>
+              }
+            >
+              <div className="space-y-3">
+                <Input
+                  className={controlClassName}
+                  value={values.title}
+                  maxLength={TITLE_MAX_LENGTH}
+                  onChange={(event) =>
+                    setValues({ ...values, title: event.target.value })
+                  }
+                  placeholder="업무의 제목을 간결하게 작성하세요."
+                />
+                {titleRecommendations.length > 0 ? (
+                  <div className="flex flex-wrap gap-2">
+                    {titleRecommendations.map((title) => (
+                      <button
+                        key={title}
+                        type="button"
+                        className="rounded-full border border-primary/20 bg-primary/10 px-3 py-1.5 text-xs font-semibold text-primary transition-colors hover:border-primary/40 hover:bg-primary/15"
+                        onClick={() =>
+                          setValues((previous) => ({ ...previous, title }))
+                        }
+                      >
+                        {title}
+                      </button>
+                    ))}
+                  </div>
+                ) : null}
+                {titleAssistError ? (
+                  <p className="text-xs text-destructive">{titleAssistError}</p>
+                ) : null}
+              </div>
               <p className="mt-1 text-right text-xs text-muted-foreground">
                 {values.title.length}/{TITLE_MAX_LENGTH}
               </p>
@@ -550,9 +669,12 @@ export function WorklogForm({
               <Textarea
                 value={values.requestContent}
                 maxLength={CONTENT_MAX_LENGTH}
-                onChange={(event) =>
+                onChange={(event) => {
                   setValues({ ...values, requestContent: event.target.value })
-                }
+                  setTitleRecommendations([])
+                  setTitleAssistError("")
+                  setPolishAssistError("")
+                }}
                 className={`h-[220px] ${textareaClassName}`}
                 placeholder="이 업무를 수행해야 하는 목적과 배경을 작성합니다."
               />
@@ -562,15 +684,84 @@ export function WorklogForm({
             </Field>
 
             <Field label="업무 내용">
-              <Textarea
-                value={values.workContent}
-                maxLength={CONTENT_MAX_LENGTH}
-                onChange={(event) =>
-                  setValues({ ...values, workContent: event.target.value })
-                }
-                className={`h-[300px] ${textareaClassName}`}
-                placeholder="실제로 수행할 업무의 상세 내용을 작성합니다."
-              />
+              <div className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_32px_minmax(0,1fr)]">
+                <div className="space-y-2">
+                  <div className="flex min-h-9 flex-wrap items-center justify-between gap-3">
+                    <p className="text-xs font-semibold uppercase tracking-[0.16em] text-muted-foreground">
+                      원문
+                    </p>
+                    <Button
+                      type="button"
+                      variant="secondary"
+                      size="lg"
+                      className="font-semibold"
+                      disabled={!canRequestWritingAssist || isPolishingWorkContent}
+                      onClick={polishWorkContent}
+                      title={
+                        canRequestWritingAssist
+                          ? "업무 내용을 더 명확한 문장으로 정리합니다."
+                          : "업무 내용을 먼저 입력해주세요."
+                      }
+                    >
+                      {isPolishingWorkContent ? (
+                        <Loader2 className="size-4 animate-spin" />
+                      ) : (
+                        <Wand2 className="size-4" />
+                      )}
+                      AI 내용 작성
+                    </Button>
+                  </div>
+                  <Textarea
+                    value={values.workContent}
+                    maxLength={CONTENT_MAX_LENGTH}
+                    onChange={(event) => {
+                      setValues({ ...values, workContent: event.target.value })
+                      setTitleRecommendations([])
+                      setTitleAssistError("")
+                      setPolishAssistError("")
+                    }}
+                    className={`h-[300px] ${textareaClassName}`}
+                    placeholder="실제로 수행할 업무의 상세 내용을 작성합니다."
+                  />
+                </div>
+                <div className="hidden items-center justify-center pt-12 text-muted-foreground xl:flex">
+                  <ChevronRight className="size-5" />
+                </div>
+                <div className="space-y-2">
+                  <div className="flex min-h-9 flex-wrap items-center justify-between gap-2">
+                    <p className="text-xs font-semibold uppercase tracking-[0.16em] text-muted-foreground">
+                      정리된 업무 내용
+                    </p>
+                    <Button
+                      type="button"
+                      variant="outline"
+                      className="h-9 rounded-lg px-3.5 text-xs font-semibold"
+                      disabled={!polishedWorkContent.trim()}
+                      onClick={() =>
+                        setValues((previous) => ({
+                          ...previous,
+                          workContent: polishedWorkContent,
+                        }))
+                      }
+                    >
+                      <Check className="size-3.5" />
+                      본문에 반영
+                    </Button>
+                  </div>
+                  <Textarea
+                    value={polishedWorkContent}
+                    maxLength={CONTENT_MAX_LENGTH}
+                    onChange={(event) => setPolishedWorkContent(event.target.value)}
+                    className={`h-[300px] ${textareaClassName}`}
+                    placeholder="AI 내용 작성 결과가 여기에 표시됩니다."
+                  />
+                </div>
+              </div>
+              {polishAssistError ? (
+                <p className="mt-2 text-xs text-destructive">
+                  {polishAssistError}
+                </p>
+              ) : null}
               <p className="mt-1 text-right text-xs text-muted-foreground">
                 {values.workContent.length}/{CONTENT_MAX_LENGTH}
               </p>
