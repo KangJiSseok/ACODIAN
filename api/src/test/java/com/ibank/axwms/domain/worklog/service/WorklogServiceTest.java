@@ -12,7 +12,9 @@ import com.ibank.axwms.domain.worklog.dto.CreateWorklogApiDto;
 import com.ibank.axwms.domain.worklog.dto.GetWorklogDetailApiDto;
 import com.ibank.axwms.domain.worklog.dto.GetWorklogsApiDto;
 import com.ibank.axwms.domain.worklog.dto.InternalWorklogPolishApiDto;
+import com.ibank.axwms.domain.worklog.dto.InternalWorklogTitleRecommendationApiDto;
 import com.ibank.axwms.domain.worklog.dto.PolishWorklogApiDto;
+import com.ibank.axwms.domain.worklog.dto.RecommendWorklogTitleApiDto;
 import com.ibank.axwms.domain.worklog.dto.UpdateWorklogApiDto;
 import com.ibank.axwms.domain.worklog.dto.UpdateWorklogStatusApiDto;
 import com.ibank.axwms.domain.worklog.entity.Worklog;
@@ -123,6 +125,44 @@ class WorklogServiceTest {
                 .willThrow(failure);
 
         assertThatThrownBy(() -> worklogService.polishWorklog(request))
+                .isSameAs(failure)
+                .extracting("errorCode")
+                .isEqualTo(ErrorCode.WORKLOG_AI_POLISH_FAILED);
+    }
+
+    @Test
+    @DisplayName("제목 추천은 요청 본문을 AI 클라이언트에 전달하고 후보 제목으로 매핑한다")
+    void 제목_추천은_요청_본문을_ai_클라이언트에_전달하고_후보_제목으로_매핑한다() {
+        RecommendWorklogTitleApiDto.Request request = new RecommendWorklogTitleApiDto.Request(
+                "재고 동기화 지연 원인을 정리해 주세요.",
+                "배치 로그를 비교하고 병목 구간을 확인했습니다."
+        );
+        InternalWorklogTitleRecommendationApiDto.Request internalRequest =
+                InternalWorklogTitleRecommendationApiDto.Request.from(request);
+        given(worklogPolishClient.recommendWorklogTitles(internalRequest)).willReturn(
+                InternalWorklogTitleRecommendationApiDto.Response.of(
+                        List.of("배치 로그 병목 구간 확인", "", "재고 동기화 지연 분석", "병목 구간 조치", "초과 후보")
+                )
+        );
+
+        RecommendWorklogTitleApiDto.Response response = worklogService.recommendWorklogTitles(request);
+
+        assertThat(response).isEqualTo(RecommendWorklogTitleApiDto.Response.of(
+                List.of("배치 로그 병목 구간 확인", "재고 동기화 지연 분석", "병목 구간 조치")
+        ));
+        verify(worklogPolishClient).recommendWorklogTitles(internalRequest);
+        verifyNoInteractions(worklogRepository);
+    }
+
+    @Test
+    @DisplayName("AI 클라이언트 실패는 제목 추천에서도 작성 보조 실패 코드로 드러난다")
+    void ai_클라이언트_실패는_제목_추천에서도_작성_보조_실패_코드로_드러난다() {
+        RecommendWorklogTitleApiDto.Request request = new RecommendWorklogTitleApiDto.Request("요청", "수행 내용");
+        BusinessException failure = new BusinessException(ErrorCode.WORKLOG_AI_POLISH_FAILED);
+        given(worklogPolishClient.recommendWorklogTitles(InternalWorklogTitleRecommendationApiDto.Request.from(request)))
+                .willThrow(failure);
+
+        assertThatThrownBy(() -> worklogService.recommendWorklogTitles(request))
                 .isSameAs(failure)
                 .extracting("errorCode")
                 .isEqualTo(ErrorCode.WORKLOG_AI_POLISH_FAILED);

@@ -8,6 +8,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 import com.ibank.axwms.domain.worklog.dto.PolishWorklogApiDto;
+import com.ibank.axwms.domain.worklog.dto.RecommendWorklogTitleApiDto;
 import com.ibank.axwms.domain.worklog.service.WorklogService;
 import com.ibank.axwms.global.security.CustomUserPrincipal;
 import com.ibank.axwms.testsupport.E2eTestSupport;
@@ -72,6 +73,28 @@ class WorklogControllerSecurityE2eTest extends E2eTestSupport {
                 .andExpect(jsonPath("$.success", is(true)))
                 .andExpect(jsonPath("$.data.title").doesNotExist())
                 .andExpect(jsonPath("$.data.workContent", is("로그를 확인했습니다.")));
+    }
+
+    @Test
+    @DisplayName("허용 role 은 업무일지 제목 추천을 호출할 수 있다")
+    void 허용_role은_업무일지_제목_추천을_호출할_수_있다() throws Exception {
+        given(worklogService.recommendWorklogTitles(any())).willReturn(
+                RecommendWorklogTitleApiDto.Response.of(List.of("로그 확인 결과 정리"))
+        );
+
+        mockMvc.perform(apiPost("/worklogs/title-recommendations")
+                        .with(principal(101L, "member@ibank.com", "MEMBER"))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {
+                                  "requestContent": "장애 분석 요청",
+                                  "workContent": "로그를 확인했습니다."
+                                }
+                                """))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.success", is(true)))
+                .andExpect(jsonPath("$.data.workContent").doesNotExist())
+                .andExpect(jsonPath("$.data.titles[0]", is("로그 확인 결과 정리")));
     }
 
     /** @AuthenticationPrincipal 과 role gate 를 동시에 통과할 수 있는 테스트 인증 주체를 구성한다. */

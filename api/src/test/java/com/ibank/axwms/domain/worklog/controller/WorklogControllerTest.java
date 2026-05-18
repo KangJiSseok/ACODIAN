@@ -12,6 +12,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.SerializationFeature;
 import com.ibank.axwms.domain.worklog.WorklogStatus;
 import com.ibank.axwms.domain.worklog.dto.PolishWorklogApiDto;
+import com.ibank.axwms.domain.worklog.dto.RecommendWorklogTitleApiDto;
 import com.ibank.axwms.domain.worklog.dto.UpdateWorklogStatusApiDto;
 import com.ibank.axwms.domain.worklog.service.WorklogService;
 import com.ibank.axwms.global.response.EmptyResponse;
@@ -19,6 +20,7 @@ import com.ibank.axwms.global.response.GlobalResponseAdvice;
 import com.ibank.axwms.global.security.CustomUserPrincipal;
 import java.lang.reflect.Method;
 import java.nio.charset.StandardCharsets;
+import java.util.List;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -146,6 +148,70 @@ class WorklogControllerTest {
                                 }
                                 """.getBytes(StandardCharsets.UTF_8)))
                 .andExpect(status().isBadRequest());
+    }
+
+    @Test
+    @DisplayName("업무일지 제목 추천 메서드는 title-recommendations POST 경로와 MEMBER 이상 role gate 를 사용한다")
+    void 업무일지_제목_추천_메서드는_title_recommendations_post_경로와_role_gate를_사용한다() throws NoSuchMethodException {
+        Method method = WorklogController.class.getMethod(
+                "recommendWorklogTitles",
+                RecommendWorklogTitleApiDto.Request.class
+        );
+        PostMapping postMapping = method.getAnnotation(PostMapping.class);
+        PreAuthorize preAuthorize = method.getAnnotation(PreAuthorize.class);
+
+        assertThat(postMapping).isNotNull();
+        assertThat(postMapping.value()).containsExactly("/title-recommendations");
+        assertThat(preAuthorize).isNotNull();
+        assertThat(preAuthorize.value()).isEqualTo("hasAnyRole('DIRECTOR','DEPT_HEAD','TEAM_LEAD','MEMBER')");
+        assertThat(method.getParameters()[0].getAnnotation(RequestBody.class)).isNotNull();
+    }
+
+    @Test
+    @DisplayName("업무일지 제목 추천 메서드는 업무일지 서비스로 위임한다")
+    void 업무일지_제목_추천_메서드는_업무일지_서비스로_위임한다() {
+        RecommendWorklogTitleApiDto.Request request = new RecommendWorklogTitleApiDto.Request(
+                "장애 분석 요청",
+                "로그를 확인하고 장애 구간을 분리했습니다."
+        );
+        RecommendWorklogTitleApiDto.Response expected = RecommendWorklogTitleApiDto.Response.of(
+                List.of("장애 구간 로그 확인")
+        );
+        given(worklogService.recommendWorklogTitles(request)).willReturn(expected);
+
+        RecommendWorklogTitleApiDto.Response response = worklogController.recommendWorklogTitles(request);
+
+        assertThat(response).isEqualTo(expected);
+        then(worklogService).should().recommendWorklogTitles(request);
+    }
+
+    @Test
+    @DisplayName("업무일지 제목 추천 HTTP 응답은 titles 만 data 로 반환한다")
+    void 업무일지_제목_추천_http_응답은_titles만_data로_반환한다() throws Exception {
+        given(worklogService.recommendWorklogTitles(new RecommendWorklogTitleApiDto.Request(
+                "장애 분석 요청",
+                "로그를 확인하고 장애 구간을 분리했습니다."
+        ))).willReturn(RecommendWorklogTitleApiDto.Response.of(
+                List.of("장애 구간 로그 확인", "장애 원인 분석")
+        ));
+
+        MvcResult result = mockMvc.perform(post("/worklogs/title-recommendations")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {
+                                  "requestContent": "장애 분석 요청",
+                                  "workContent": "로그를 확인하고 장애 구간을 분리했습니다."
+                                }
+                                """.getBytes(StandardCharsets.UTF_8)))
+                .andExpect(status().isOk())
+                .andReturn();
+
+        JsonNode data = objectMapper.readTree(result.getResponse().getContentAsString()).get("data");
+
+        assertThat(data.has("workContent")).isFalse();
+        assertThat(data.get("titles")).hasSize(2);
+        assertThat(data.get("titles").get(0).asText()).isEqualTo("장애 구간 로그 확인");
+        assertThat(data.size()).isEqualTo(1);
     }
 
     @Test
