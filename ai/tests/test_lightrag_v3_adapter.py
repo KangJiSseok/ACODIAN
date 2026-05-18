@@ -29,6 +29,11 @@ def make_settings() -> Settings:
         gemini_api_key="fake-gemini-api-key",
         lightrag_vector_storage="QdrantVectorDBStorage",
         lightrag_qdrant_url="http://localhost:6333",
+        lightrag_graph_storage="Neo4JStorage",
+        lightrag_neo4j_database="neo4j",
+        neo4j_uri="bolt://localhost:7687",
+        neo4j_user="neo4j",
+        neo4j_password="fake-neo4j-password",
     )
 
 
@@ -58,10 +63,14 @@ def make_query_options(
 
 @pytest.fixture(autouse=True)
 def clear_qdrant_env(monkeypatch: pytest.MonkeyPatch) -> None:
-    """Qdrant env bridge 테스트가 process env를 오염시키지 않게 격리한다."""
+    """LightRAG storage env bridge 테스트가 process env를 오염시키지 않게 격리한다."""
     monkeypatch.delenv("QDRANT_URL", raising=False)
     monkeypatch.delenv("QDRANT_API_KEY", raising=False)
     monkeypatch.delenv("QDRANT_WORKSPACE", raising=False)
+    monkeypatch.delenv("NEO4J_URI", raising=False)
+    monkeypatch.delenv("NEO4J_USERNAME", raising=False)
+    monkeypatch.delenv("NEO4J_PASSWORD", raising=False)
+    monkeypatch.delenv("NEO4J_DATABASE", raising=False)
 
 
 class FakeGeminiEmbed:
@@ -171,11 +180,16 @@ def test_lightrag_adapter_initializes_inserts_ids_and_finalizes(monkeypatch) -> 
         assert fake_rag.kwargs["working_dir"] == "./data/lightrag-v3"
         assert fake_rag.kwargs["llm_model_name"] == "gemini-2.5-flash"
         assert fake_rag.kwargs["vector_storage"] == "QdrantVectorDBStorage"
+        assert fake_rag.kwargs["graph_storage"] == "Neo4JStorage"
         assert "workspace" not in fake_rag.kwargs
         assert fake_rag.kwargs["vector_db_storage_cls_kwargs"] == {}
         assert fake_rag.kwargs["addon_params"] == {"language": "Korean"}
         assert os.environ["QDRANT_URL"] == "http://localhost:6333"
         assert "QDRANT_API_KEY" not in os.environ
+        assert os.environ["NEO4J_URI"] == "bolt://localhost:7687"
+        assert os.environ["NEO4J_USERNAME"] == "neo4j"
+        assert os.environ["NEO4J_PASSWORD"] == "fake-neo4j-password"
+        assert os.environ["NEO4J_DATABASE"] == "neo4j"
 
         await fake_rag.kwargs["llm_model_func"]("prompt", keyword_extraction=True)
         await fake_rag.kwargs["embedding_func"](["text"])
@@ -242,6 +256,48 @@ def test_lightrag_adapter_configures_qdrant_vector_kwargs() -> None:
         assert fake_rag.kwargs["vector_db_storage_cls_kwargs"] == {}
 
     asyncio.run(run_case())
+
+
+def test_lightrag_adapter_configures_neo4j_graph_storage() -> None:
+    FakeLightRAG.instances = []
+    dependencies, _, _, _ = make_dependencies()
+    settings = make_settings()
+    settings.neo4j_uri = "bolt://neo4j:7687"
+    settings.neo4j_user = "axwms-ai"
+    settings.neo4j_password = "neo4j-secret"
+    settings.lightrag_neo4j_database = "neo4j"
+    adapter = LightRagWorklogIndexAdapter(
+        settings_obj=settings,
+        dependencies=dependencies,
+    )
+
+    async def run_case() -> None:
+        await adapter.index_documents([make_document()])
+        fake_rag = FakeLightRAG.instances[0]
+
+        assert fake_rag.kwargs["graph_storage"] == "Neo4JStorage"
+        assert os.environ["NEO4J_URI"] == "bolt://neo4j:7687"
+        assert os.environ["NEO4J_USERNAME"] == "axwms-ai"
+        assert os.environ["NEO4J_PASSWORD"] == "neo4j-secret"
+        assert os.environ["NEO4J_DATABASE"] == "neo4j"
+
+    asyncio.run(run_case())
+
+
+def test_lightrag_adapter_overwrites_stale_neo4j_username(monkeypatch) -> None:
+    monkeypatch.setenv("NEO4J_USERNAME", "stale-user")
+    FakeLightRAG.instances = []
+    dependencies, _, _, _ = make_dependencies()
+    settings = make_settings()
+    settings.neo4j_user = "settings-user"
+    adapter = LightRagWorklogIndexAdapter(
+        settings_obj=settings,
+        dependencies=dependencies,
+    )
+
+    asyncio.run(adapter.index_documents([make_document()]))
+
+    assert os.environ["NEO4J_USERNAME"] == "settings-user"
 
 
 def test_lightrag_adapter_passes_configured_workspace() -> None:
@@ -324,6 +380,34 @@ def test_lightrag_adapter_rejects_blank_qdrant_url() -> None:
     )
 
     with pytest.raises(LightRagConfigurationError, match="LIGHTRAG_QDRANT_URL"):
+        asyncio.run(adapter.index_documents([make_document()]))
+
+
+def test_lightrag_adapter_rejects_non_neo4j_graph_storage() -> None:
+    FakeLightRAG.instances = []
+    dependencies, _, _, _ = make_dependencies()
+    settings = make_settings()
+    settings.lightrag_graph_storage = "NetworkXStorage"
+    adapter = LightRagWorklogIndexAdapter(
+        settings_obj=settings,
+        dependencies=dependencies,
+    )
+
+    with pytest.raises(LightRagConfigurationError, match="Neo4JStorage"):
+        asyncio.run(adapter.index_documents([make_document()]))
+
+
+def test_lightrag_adapter_rejects_blank_neo4j_user() -> None:
+    FakeLightRAG.instances = []
+    dependencies, _, _, _ = make_dependencies()
+    settings = make_settings()
+    settings.neo4j_user = "   "
+    adapter = LightRagWorklogIndexAdapter(
+        settings_obj=settings,
+        dependencies=dependencies,
+    )
+
+    with pytest.raises(LightRagConfigurationError, match="NEO4J_USER"):
         asyncio.run(adapter.index_documents([make_document()]))
 
 
