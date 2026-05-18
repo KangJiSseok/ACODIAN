@@ -78,25 +78,16 @@ export function WorklogFileUpload({
       </div>
 
       <div
-        role="button"
-        tabIndex={0}
         className={cn(
           "rounded-2xl border border-dashed border-border/70 bg-input/95 p-5 shadow-sm transition-colors",
           isDragging && "border-primary/60 bg-primary/10"
         )}
-        onClick={openFilePicker}
-        onKeyDown={(event) => {
-          if (event.key === "Enter" || event.key === " ") {
-            event.preventDefault()
-            openFilePicker()
-          }
-        }}
       >
         <div className="flex flex-wrap items-center justify-between gap-3">
           <div>
             <p className="text-sm font-semibold text-foreground">파일 업로드</p>
             <p className="mt-1 text-xs text-muted-foreground">
-              파일을 이 영역에 끌어다 놓거나 클릭해서 첨부합니다.
+              파일을 이 영역에 끌어다 놓거나 파일 선택 버튼으로 첨부합니다.
             </p>
             {hasFiles ? (
               <p className="mt-1 text-xs font-medium text-primary">
@@ -108,10 +99,7 @@ export function WorklogFileUpload({
             type="button"
             variant="secondary"
             className="h-10 rounded-lg px-4 text-sm"
-            onClick={(event) => {
-              event.stopPropagation()
-              openFilePicker()
-            }}
+            onClick={openFilePicker}
           >
             <Upload className="size-4" />
             파일 선택

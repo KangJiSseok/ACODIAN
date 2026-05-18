@@ -4,6 +4,7 @@ import Link from "next/link"
 import { useMemo, useState } from "react"
 import {
   ChevronDown,
+  Plus,
   RefreshCw,
   Search,
   SlidersHorizontal,
@@ -212,7 +213,7 @@ export default function WorklogPage() {
             업무 탐색
           </h2>
           <p className="mt-2 text-sm leading-6 text-muted-foreground">
-            업무 제목과 내용을 검색하고 팀, 상태, 중요도 등 조건을 조합해 필요한
+            업무 제목을 검색하고 팀, 상태, 중요도 등 조건을 조합해 필요한
             업무일지를 빠르게 찾아보세요.
           </p>
         </div>
@@ -266,7 +267,7 @@ export default function WorklogPage() {
                 placeholder={
                   aiMode
                     ? "어떤 업무를 찾고 싶으신가요?"
-                    : "업무 제목 또는 내용으로 검색하세요"
+                    : "업무 제목으로 검색하세요"
                 }
               />
               {!aiMode ? (
@@ -545,7 +546,10 @@ export default function WorklogPage() {
                 variant="default"
                 className="h-10 min-w-32 px-6 text-sm font-semibold"
               >
-                <Link href="/worklog/create">업무 등록</Link>
+                <Link href="/worklog/create">
+                  <Plus className="size-4" />
+                  업무 등록
+                </Link>
               </Button>
             ) : null}
           </div>
