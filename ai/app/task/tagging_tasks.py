@@ -5,21 +5,28 @@ from app.client.tagging_client import TaggingClient
 from app.model.tagging_model import MetaTag, NewTag
 from app.service.tagging_service import TaggingService
 from app.task.celery_app import celery_app
+from app.task.retry_policy import retry_ai_task
 
 logger = logging.getLogger(__name__)
 
 
-@celery_app.task(name="worklog.tagging")
+@celery_app.task(name="worklog.tagging", bind=True)
 def generate_worklog_tags(
+    self,
     worklog_id: int,
     work_content: str,
 ) -> dict[str, int | list[str] | list[dict[str, str]]]:
-    return asyncio.run(
-        _generate_worklog_tags(
-            worklog_id=worklog_id,
-            work_content=work_content,
+    try:
+        return asyncio.run(
+            _generate_worklog_tags(
+                worklog_id=worklog_id,
+                work_content=work_content,
+            )
         )
-    )
+    except Exception as exc:
+        retry_ai_task(self, exc, task_name="worklog.tagging", target_id=worklog_id)
+        logger.exception("태그 생성 실패: worklog_id=%s", worklog_id)
+        raise
 
 
 async def _generate_worklog_tags(
