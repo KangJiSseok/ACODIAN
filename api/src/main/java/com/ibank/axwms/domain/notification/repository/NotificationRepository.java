@@ -104,4 +104,16 @@ public interface NotificationRepository extends JpaRepository<Notification, Long
                and notification.isRead = false
             """)
     int markUnreadAsReadByUserId(@Param("userId") Long userId, @Param("readAt") LocalDateTime readAt);
+
+    /**
+     * 읽은 시점으로부터 보관 기간이 지난 알림만 제거해 안읽은 알림과 readAt 없는 비정상 row 를 보존한다.
+     */
+    @Modifying(flushAutomatically = true, clearAutomatically = true)
+    @Query("""
+            delete from Notification notification
+             where notification.isRead = true
+               and notification.readAt is not null
+               and notification.readAt <= :expiredAt
+            """)
+    int deleteReadNotificationsReadAtBeforeOrEqual(@Param("expiredAt") LocalDateTime expiredAt);
 }

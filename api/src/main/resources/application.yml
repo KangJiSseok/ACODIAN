@@ -87,6 +87,8 @@ notification:
     cron: ${NOTIFICATION_WORKLOG_OVERDUE_REMINDER_CRON:0 10 9 * * *}
   worklog-due-soon-reminder:
     cron: ${NOTIFICATION_WORKLOG_DUE_SOON_REMINDER_CRON:0 0 9 * * *}
+  read-cleanup:
+    cron: ${NOTIFICATION_READ_CLEANUP_CRON:0 40 22 * * *}
   stream:
     key: ${NOTIFICATION_STREAM_KEY:notifications:stream}
     poll-timeout-millis: ${NOTIFICATION_STREAM_POLL_TIMEOUT_MILLIS:2000}

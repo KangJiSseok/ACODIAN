@@ -160,6 +160,49 @@ class NotificationRepositoryIntegrationTest extends IntegrationTestSupport {
                 );
     }
 
+    @Test
+    @Transactional
+    @DisplayName("읽은 알림 정리는 만료선 이전 readAt 만 삭제하고 안읽은 알림은 유지한다")
+    void 읽은_알림_정리는_만료선_이전_readAt만_삭제하고_안읽은_알림은_유지한다() {
+        Department department = departmentRepository.save(createDepartment("정리검증본부"));
+        User caller = userRepository.save(createUser(department.getId(), "정리호출자", UserRole.MEMBER));
+        Team team = teamRepository.save(createTeam(department.getId(), "정리검증팀"));
+        notificationRepository.save(notification(
+                caller.getId(),
+                department.getId(),
+                team.getId(),
+                "삭제 대상 읽은 알림",
+                true,
+                LocalDateTime.of(2026, 5, 15, 9, 30)
+        ));
+        notificationRepository.save(notification(
+                caller.getId(),
+                department.getId(),
+                team.getId(),
+                "유지 대상 읽은 알림",
+                true,
+                LocalDateTime.of(2026, 5, 15, 9, 31)
+        ));
+        notificationRepository.save(notification(
+                caller.getId(),
+                department.getId(),
+                team.getId(),
+                "유지 대상 안읽은 알림",
+                false,
+                null
+        ));
+        notificationRepository.flush();
+
+        int deletedCount = notificationRepository.deleteReadNotificationsReadAtBeforeOrEqual(
+                LocalDateTime.of(2026, 5, 15, 9, 30)
+        );
+
+        assertThat(deletedCount).isEqualTo(1);
+        assertThat(notificationRepository.findAll())
+                .extracting(Notification::getTitle)
+                .containsExactlyInAnyOrder("유지 대상 읽은 알림", "유지 대상 안읽은 알림");
+    }
+
     private void clearDatabase() {
         notificationRepository.deleteAll();
         teamRepository.deleteAll();
@@ -236,6 +279,25 @@ class NotificationRepositoryIntegrationTest extends IntegrationTestSupport {
     }
 
     private Notification notification(Long userId, Long departmentId, Long teamId, String title, boolean isRead) {
+        return notification(
+                userId,
+                departmentId,
+                teamId,
+                title,
+                isRead,
+                isRead ? LocalDateTime.of(2026, 5, 11, 10, 0) : null
+        );
+    }
+
+    /**
+     * 읽음 정리 경계값을 고정하기 위해 fixture 마다 readAt 을 명시적으로 주입한다.
+     */
+    private Notification notification(Long userId,
+                                      Long departmentId,
+                                      Long teamId,
+                                      String title,
+                                      boolean isRead,
+                                      LocalDateTime readAt) {
         return Notification.create(
                 userId,
                 departmentId,
@@ -246,7 +308,7 @@ class NotificationRepositoryIntegrationTest extends IntegrationTestSupport {
                 "WORKLOG",
                 501L,
                 isRead,
-                isRead ? LocalDateTime.of(2026, 5, 11, 10, 0) : null
+                readAt
         );
     }
 
