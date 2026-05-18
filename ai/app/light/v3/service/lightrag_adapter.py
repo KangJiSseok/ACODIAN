@@ -19,6 +19,7 @@ from app.light.v3.service.worklog_document_builder import LightRagWorklogDocumen
 from app.light.v3.service.worklog_custom_kg_builder import LightRagWorklogCustomKgDocument
 
 _QDRANT_VECTOR_STORAGE = "QdrantVectorDBStorage"
+_NEO4J_GRAPH_STORAGE = "Neo4JStorage"
 
 
 class LightRagConfigurationError(RuntimeError):
@@ -198,6 +199,7 @@ class LightRagWorklogIndexAdapter:
         """현재 settings로 LightRAG instance를 생성한다."""
         self._ensure_required_config()
         _configure_qdrant_environment(self._settings)
+        _configure_neo4j_environment(self._settings)
         dependencies = self._dependencies or _load_lightrag_dependencies()
         embedding_func = _build_gemini_embedding_func(
             settings_obj=self._settings,
@@ -213,6 +215,7 @@ class LightRagWorklogIndexAdapter:
             "llm_model_name": self._settings.lightrag_llm_model,
             "embedding_func": embedding_func,
             "vector_storage": self._settings.lightrag_vector_storage.strip(),
+            "graph_storage": self._settings.lightrag_graph_storage.strip(),
             "vector_db_storage_cls_kwargs": {},
             "addon_params": {"language": self._settings.lightrag_kg_language},
         }
@@ -244,6 +247,18 @@ class LightRagWorklogIndexAdapter:
             )
         if not self._settings.lightrag_qdrant_url.strip():
             raise LightRagConfigurationError("LIGHTRAG_QDRANT_URL is required for Qdrant")
+        if self._settings.lightrag_graph_storage.strip() != _NEO4J_GRAPH_STORAGE:
+            raise LightRagConfigurationError(
+                "LightRAG v3 requires Neo4JStorage for graph storage"
+            )
+        if not self._settings.neo4j_uri.strip():
+            raise LightRagConfigurationError("NEO4J_URI is required for Neo4j")
+        if not self._settings.neo4j_user.strip():
+            raise LightRagConfigurationError("NEO4J_USER is required for Neo4j")
+        if not self._settings.neo4j_password.strip():
+            raise LightRagConfigurationError("NEO4J_PASSWORD is required for Neo4j")
+        if not self._settings.lightrag_neo4j_database.strip():
+            raise LightRagConfigurationError("LIGHTRAG_NEO4J_DATABASE is required for Neo4j")
 
 
 
@@ -347,3 +362,11 @@ def _configure_qdrant_environment(settings_obj: Settings) -> None:
         os.environ["QDRANT_API_KEY"] = qdrant_api_key
     else:
         os.environ.pop("QDRANT_API_KEY", None)
+
+
+def _configure_neo4j_environment(settings_obj: Settings) -> None:
+    """Bridge project NEO4J_USER settings into LightRAG's NEO4J_USERNAME contract."""
+    os.environ["NEO4J_URI"] = settings_obj.neo4j_uri.strip()
+    os.environ["NEO4J_USERNAME"] = settings_obj.neo4j_user.strip()
+    os.environ["NEO4J_PASSWORD"] = settings_obj.neo4j_password
+    os.environ["NEO4J_DATABASE"] = settings_obj.lightrag_neo4j_database.strip()

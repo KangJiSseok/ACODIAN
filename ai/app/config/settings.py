@@ -43,9 +43,9 @@ class Settings(BaseSettings):
     celery_broker_url: str | None = None                  # 미지정 시 redis_url 사용
     celery_result_backend: str | None = None              # 미지정 시 redis_url 사용
     celery_task_always_eager: bool = False                # 테스트용 동기 실행 플래그
-    neo4j_uri: str = "bolt://localhost:7687"              # 선택적 그래프 확장 (현재 미사용)
+    neo4j_uri: str = "bolt://localhost:7687"              # LightRAG Neo4j graph storage
     neo4j_user: str = "neo4j"
-    neo4j_password: str = "neo4j"
+    neo4j_password: str = "neo4j-local-password"
 
     # ---- LightRAG v3 업무일지 index ----
     lightrag_working_dir: str = "./data/lightrag-v3"
@@ -64,6 +64,8 @@ class Settings(BaseSettings):
     lightrag_query_chunk_top_k: int = 20
     lightrag_query_response_type: str = "Multiple Paragraphs"
     worklog_detail_base_url: str = "https://k14s209.p.ssafy.io:8443/worklog/detail"
+    lightrag_graph_storage: str = "Neo4JStorage"
+    lightrag_neo4j_database: str = "neo4j"
 
     model_config = SettingsConfigDict(
         # ai/.env 를 자동 로드한다 (없으면 위 기본값을 사용).
