@@ -98,6 +98,8 @@ public enum ErrorCode {
     WORKLOG_FILE_NOT_FOUND(HttpStatus.NOT_FOUND, "삭제 대상 첨부 파일을 찾을 수 없습니다."),
     /** 외부 스토리지 업로드 실패로 업무 첨부 파일을 보관할 수 없어 업무 등록을 완료할 수 없을 때 사용한다. */
     WORKLOG_FILE_UPLOAD_FAILED(HttpStatus.SERVICE_UNAVAILABLE, "업무 등록에 실패했습니다. 잠시 후 다시 시도해 주세요."),
+    /** AI 작성 보조 upstream 이 실패해 저장 전 초안 추천을 완료할 수 없을 때 사용한다. */
+    WORKLOG_AI_POLISH_FAILED(HttpStatus.BAD_GATEWAY, "업무일지 작성 보조를 처리할 수 없습니다. 잠시 후 다시 시도해 주세요."),
     /** AI 콜백 등 fileId 단건 조회에서 대상 파일이 존재하지 않을 때 사용한다. */
     FILE_NOT_FOUND(HttpStatus.NOT_FOUND, "대상 파일을 찾을 수 없습니다."),
     /** 대시보드 scope 와 함께 들어온 파라미터가 누락되었거나 형식이 올바르지 않을 때 사용한다. */
