@@ -31,6 +31,7 @@ description: Generate versioned iBank tb_worklog seed SQL from team MDs and pers
    - `python3 .codex/scripts/generate_ibank_ai_summary_update_sql.py --worklog-sql .codex/sql/ibank-worklog-seed-v7.sql --out .codex/sql/ibank-worklog-ai-summary-update.sql --summary-out .codex/sql/ibank-worklog-ai-summary-update-summary.md`
    - For split seed files, pass multiple `--worklog-sql` arguments.
    - Preserve `request_content`, `work_content`, status, dates, and IDs; only set `ai_summary` and keep `ai_processing_status = 'COMPLETED'`.
+   - `ai_summary` text must follow the current dev-seed shape: `<title> - <work-content summary>`. Do not prefix summaries with `[status_code/importance_code]`; those codes remain in their own columns and should not be duplicated into semantic-search text.
 7. If requested, hand off to `ibank-worklog-review-loop` or `ibank-worklog-history-sync`.
 
 ## Output
