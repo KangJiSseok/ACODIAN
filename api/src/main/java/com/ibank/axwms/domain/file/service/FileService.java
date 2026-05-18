@@ -6,6 +6,7 @@ import com.ibank.axwms.domain.file.dto.GetFilesApiDto;
 import com.ibank.axwms.domain.file.entity.File;
 import com.ibank.axwms.domain.file.event.WorklogFileAiSummaryRequestedEvent;
 import com.ibank.axwms.domain.file.event.WorklogFileUploadedEvent;
+import com.ibank.axwms.domain.file.external.AiFileSummaryProperties;
 import com.ibank.axwms.domain.file.external.FilePathGenerator;
 import com.ibank.axwms.domain.file.external.ObjectStoragePort;
 import com.ibank.axwms.domain.file.repository.FileRepository;
@@ -21,6 +22,7 @@ import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.data.domain.Page;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.multipart.MultipartFile;
 
@@ -41,6 +43,7 @@ public class FileService {
     private final ObjectStoragePort objectStoragePort;
     private final FileRepository fileRepository;
     private final FilePathGenerator filePathGenerator;
+    private final AiFileSummaryProperties aiFileSummaryProperties;
     private final ApplicationEventPublisher eventPublisher;
     private final WorklogFileProperties worklogFileProperties;
 
@@ -48,12 +51,14 @@ public class FileService {
             @Qualifier("s3ObjectStorageAdapter") ObjectStoragePort objectStoragePort,
             FileRepository fileRepository,
             FilePathGenerator filePathGenerator,
+            AiFileSummaryProperties aiFileSummaryProperties,
             ApplicationEventPublisher eventPublisher,
             WorklogFileProperties worklogFileProperties
     ) {
         this.objectStoragePort = objectStoragePort;
         this.fileRepository = fileRepository;
         this.filePathGenerator = filePathGenerator;
+        this.aiFileSummaryProperties = aiFileSummaryProperties;
         this.eventPublisher = eventPublisher;
         this.worklogFileProperties = worklogFileProperties;
     }
@@ -66,6 +71,7 @@ public class FileService {
             Long fileId,
             String storageKey,
             String originalName,
+            String fileExtension,
             long sizeBytes
     ) {}
 
@@ -84,6 +90,26 @@ public class FileService {
      */
     @Transactional
     public List<UploadedFile> uploadWorklogFiles(Long worklogId, Long uploaderId, List<MultipartFile> files) {
+        return uploadWorklogFiles(worklogId, uploaderId, files, true);
+    }
+
+    /**
+     * 업무 생성 통합 AI 후처리가 파일 요약 요청을 소유할 수 있도록 파일 저장까지만 수행하고 파일별 snapshot 을 반환한다.
+     *
+     * @param worklogId  첨부 대상 업무 ID
+     * @param uploaderId 업로드 수행자 사용자 ID
+     * @param files      요청으로 수신한 MultipartFile 목록. null 또는 빈 리스트 허용.
+     * @return 저장된 파일들의 내부 표현 목록
+     */
+    @Transactional
+    public List<UploadedFile> uploadWorklogFilesWithoutAiSummaryRequest(Long worklogId, Long uploaderId, List<MultipartFile> files) {
+        return uploadWorklogFiles(worklogId, uploaderId, files, false);
+    }
+
+    /**
+     * 파일 저장 공통 흐름에서 호출 경로별 AI 요약 이벤트 소유권만 분리한다.
+     */
+    private List<UploadedFile> uploadWorklogFiles(Long worklogId, Long uploaderId, List<MultipartFile> files, boolean publishAiSummaryRequest) {
         if (files == null || files.isEmpty()) {
             return List.of();
         }
@@ -102,19 +128,36 @@ public class FileService {
             eventPublisher.publishEvent(new WorklogFileUploadedEvent(key));
 
             File saved = fileRepository.save(File.create(worklogId, uploaderId, key, file));
-            // 같은 트랜잭션 안에서 PROCESSING 으로 전이 → 커밋 시점에 이미 처리중 상태.
-            // 트랜잭션 롤백 시 PROCESSING 전이도 함께 무효화돼 트리거 발화와 상태가 항상 일치한다.
-            saved.startAiSummaryProcessing();
-            eventPublisher.publishEvent(new WorklogFileAiSummaryRequestedEvent(
-                    saved.getId(),
-                    worklogId,
-                    key,
-                    saved.getOriginalName(),
-                    saved.getFileExtension()
-            ));
-            results.add(new UploadedFile(saved.getId(), key, file.getOriginalFilename(), file.getSize()));
+            boolean shouldPublishAiSummaryRequest = publishAiSummaryRequest && aiFileSummaryProperties.enabled();
+            if (shouldPublishAiSummaryRequest) {
+                // 같은 트랜잭션 안에서 PROCESSING 으로 전이 → 커밋 시점에 이미 처리중 상태.
+                // 트랜잭션 롤백 시 PROCESSING 전이도 함께 무효화돼 트리거 발화와 상태가 항상 일치한다.
+                saved.startAiSummaryProcessing();
+                eventPublisher.publishEvent(new WorklogFileAiSummaryRequestedEvent(
+                        saved.getId(),
+                        worklogId,
+                        key,
+                        saved.getOriginalName(),
+                        saved.getFileExtension()
+                ));
+            }
+            results.add(new UploadedFile(saved.getId(), key, saved.getOriginalName(), saved.getFileExtension(), saved.getFileSizeBytes()));
         }
         return results;
+    }
+
+
+    /**
+     * 통합 AI 후처리가 실제 파일 요약 요청을 보내기 직전에 파일 상태를 처리중으로 전이한다.
+     *
+     * @param fileId 처리중으로 표시할 파일 ID
+     * @throws BusinessException FILE_NOT_FOUND 파일이 없을 때
+     */
+    @Transactional(propagation = Propagation.REQUIRES_NEW)
+    public void startWorklogFileAiSummaryProcessing(Long fileId) {
+        File file = fileRepository.findById(fileId)
+                .orElseThrow(() -> new BusinessException(ErrorCode.FILE_NOT_FOUND));
+        file.startAiSummaryProcessing();
     }
 
     /**

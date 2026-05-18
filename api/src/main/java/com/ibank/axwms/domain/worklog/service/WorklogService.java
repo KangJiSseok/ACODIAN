@@ -16,9 +16,8 @@ import com.ibank.axwms.domain.worklog.dto.UpdateWorklogApiDto;
 import com.ibank.axwms.domain.worklog.dto.UpdateWorklogStatusApiDto;
 import com.ibank.axwms.domain.worklog.entity.Worklog;
 import com.ibank.axwms.domain.worklog.entity.WorklogTag;
-import com.ibank.axwms.domain.worklog.event.WorklogAiPipelineRequestedEvent;
+import com.ibank.axwms.domain.worklog.event.WorklogAiPostProcessRequestedEvent;
 import com.ibank.axwms.domain.worklog.event.WorklogCompletedEvent;
-import com.ibank.axwms.domain.worklog.event.WorklogLightIndexRequestedEvent;
 import com.ibank.axwms.domain.worklog.external.WorklogPolishClient;
 import com.ibank.axwms.domain.worklog.policy.WorklogStatusPolicy;
 import com.ibank.axwms.domain.worklog.repository.WorklogDependencyRepository;
@@ -89,7 +88,7 @@ public class WorklogService {
     /**
      * 로그인 사용자의 권한으로 업무를 등록한다.
      * 팀 존재 여부와 사용자의 해당 팀 소속 여부를 확인한 뒤 신규 Worklog 엔티티를 저장한다.
-     * 등록 트랜잭션 커밋 후에는 AI 서버의 본문 요약/태그 생성 파이프라인과 Light v3 index 반영을 요청한다.
+     * 등록 트랜잭션 커밋 후에는 파일 요약, 본문 요약/태그 생성 파이프라인, Light v3 index 를 통합 후처리로 요청한다.
      *
      * @param principal 현재 로그인 사용자
      * @param request   업무 등록 요청 DTO
@@ -124,7 +123,11 @@ public class WorklogService {
                 request.dueDate()
         ));
 
-        fileService.uploadWorklogFiles(savedWorklog.getId(), principal.userId(), files);
+        List<FileService.UploadedFile> uploadedFiles = fileService.uploadWorklogFilesWithoutAiSummaryRequest(
+                savedWorklog.getId(),
+                principal.userId(),
+                files
+        );
         worklogStatusHistoryService.createStatusHistory(
                 savedWorklog.getId(),
                 request.statusCode(),
@@ -136,32 +139,43 @@ public class WorklogService {
                 savedWorklog.getTeamId(),
                 request.predecessorWorklogIds()
         );
-        publishWorklogAiPipelineRequest(savedWorklog, team);
-        publishWorklogLightIndexRequest(savedWorklog);
+        publishWorklogAiPostProcessRequest(savedWorklog, team, uploadedFiles);
 
         return CreateWorklogApiDto.Response.of(savedWorklog.getId());
     }
 
     /**
-     * 등록 트랜잭션이 성공한 업무만 AI 서버에 넘기도록 AFTER_COMMIT 이벤트로 파이프라인 시작 요청을 분리한다.
+     * 등록 트랜잭션이 성공한 업무만 세 AI 요청 통합 후처리에 넘기도록 AFTER_COMMIT 이벤트로 snapshot 을 분리한다.
      */
-    private void publishWorklogAiPipelineRequest(Worklog worklog, Team team) {
-        eventPublisher.publishEvent(new WorklogAiPipelineRequestedEvent(
+    private void publishWorklogAiPostProcessRequest(Worklog worklog, Team team, List<FileService.UploadedFile> uploadedFiles) {
+        eventPublisher.publishEvent(new WorklogAiPostProcessRequestedEvent(
                 worklog.getId(),
                 worklog.getRequestContent(),
                 worklog.getWorkContent(),
                 worklog.getAuthorId(),
                 worklog.getTeamId(),
-                team.getDepartmentId()
+                team.getDepartmentId(),
+                toFileSummaryTargets(uploadedFiles)
         ));
     }
 
     /**
-     * 등록 트랜잭션이 성공한 업무만 Light v3 index 에 들어가도록 AFTER_COMMIT 이벤트로 색인 요청을 분리한다.
+     * file 모듈의 업로드 결과를 worklog 통합 후처리 이벤트가 소유하는 불변 snapshot 으로 변환한다.
      */
-    private void publishWorklogLightIndexRequest(Worklog worklog) {
-        eventPublisher.publishEvent(new WorklogLightIndexRequestedEvent(worklog.getId()));
+    private List<WorklogAiPostProcessRequestedEvent.FileSummaryTarget> toFileSummaryTargets(List<FileService.UploadedFile> uploadedFiles) {
+        if (uploadedFiles == null || uploadedFiles.isEmpty()) {
+            return List.of();
+        }
+        return uploadedFiles.stream()
+                .map(file -> new WorklogAiPostProcessRequestedEvent.FileSummaryTarget(
+                        file.fileId(),
+                        file.storageKey(),
+                        file.originalName(),
+                        file.fileExtension()
+                ))
+                .toList();
     }
+
 
     /**
      * 등록 화면에서 직접 선택한 태그만 수동 태그로 연결하고 사용 횟수 캐시를 증가시킨다.
