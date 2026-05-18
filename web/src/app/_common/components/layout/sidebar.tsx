@@ -2,14 +2,7 @@
 
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
-import {
-  type CSSProperties,
-  useCallback,
-  useEffect,
-  useMemo,
-  useRef,
-  useState,
-} from "react";
+import { useMemo } from "react";
 
 import { ChevronDown, LogOut, PanelLeftClose } from "lucide-react";
 import { cn } from "@/lib/utils";
@@ -33,83 +26,11 @@ export default function Sidebar() {
   const toggleSidebarCollapsed = useUiStore(
     (state) => state.toggleSidebarCollapsed,
   );
-  const navListRef = useRef<HTMLDivElement>(null);
-  const activeItemRefs = useRef(new Map<string, HTMLElement>());
-  const [activePillStyle, setActivePillStyle] = useState<CSSProperties>({
-    opacity: 0,
-  });
 
   const displayName = user?.userName ?? "사용자";
   const displayTitle = user?.titleName ?? user?.positionName ?? "프로필";
   const profileImageUrl = user?.profileImageUrl;
   const profileInitial = displayName.slice(0, 1);
-  const activeNavKey = useMemo(() => {
-    for (const item of visibleNavItems) {
-      if (
-        item.submenus?.some(
-          (sub) =>
-            pathname === sub.href || pathname.startsWith(`${sub.href}/`),
-        )
-      ) {
-        return item.label;
-      }
-
-      if (!item.href) {
-        continue;
-      }
-
-      const isActive = item.exact
-        ? pathname === item.href
-        : pathname === item.href || pathname.startsWith(`${item.href}/`);
-
-      if (isActive) {
-        return item.href;
-      }
-    }
-
-    return null;
-  }, [pathname, visibleNavItems]);
-
-  const setActiveItemRef = useCallback(
-    (key: string, element: HTMLElement | null) => {
-      if (element) {
-        activeItemRefs.current.set(key, element);
-      } else {
-        activeItemRefs.current.delete(key);
-      }
-    },
-    [],
-  );
-
-  useEffect(() => {
-    const navList = navListRef.current;
-    const activeItem = activeNavKey
-      ? activeItemRefs.current.get(activeNavKey)
-      : null;
-
-    if (!navList || !activeItem) {
-      setActivePillStyle((currentStyle) => ({
-        ...currentStyle,
-        opacity: 0,
-      }));
-      return;
-    }
-
-    const frameId = window.requestAnimationFrame(() => {
-      const navRect = navList.getBoundingClientRect();
-      const activeRect = activeItem.getBoundingClientRect();
-      const offsetTop = activeRect.top - navRect.top;
-
-      setActivePillStyle({
-        height: activeRect.height,
-        opacity: 1,
-        transform: `translate3d(0, ${offsetTop}px, 0)`,
-        width: activeRect.width,
-      });
-    });
-
-    return () => window.cancelAnimationFrame(frameId);
-  }, [activeGroupLabel, activeNavKey, sidebarCollapsed, visibleNavItems]);
 
   async function handleLogout() {
     await logout();
@@ -178,17 +99,11 @@ export default function Sidebar() {
         </div>
 
         <div
-          ref={navListRef}
           className={cn(
-            "relative flex flex-col gap-2",
+            "flex flex-col gap-2",
             sidebarCollapsed ? "w-[3.75rem]" : "w-full",
           )}
         >
-          <div
-            aria-hidden="true"
-            className="pointer-events-none absolute left-0 top-0 z-0 rounded-xl bg-primary/10 transition-[transform,width,height,opacity] duration-300 ease-out dark:bg-white/10 motion-reduce:transition-none"
-            style={activePillStyle}
-          />
           {visibleNavItems.map((item) => {
             if (item.submenus) {
               const shouldOpen = activeGroupLabel === item.label;
@@ -199,7 +114,6 @@ export default function Sidebar() {
                   isOpen={shouldOpen}
                   isCollapsed={sidebarCollapsed}
                   currentPath={pathname}
-                  itemRef={(element) => setActiveItemRef(item.label, element)}
                   onToggle={() => {
                     if ((sidebarCollapsed || !shouldOpen) && item.submenus?.[0]) {
                       router.push(item.submenus[0].href);
@@ -217,16 +131,15 @@ export default function Sidebar() {
               <Link
                 key={item.href}
                 href={item.href!}
-                ref={(element) => setActiveItemRef(item.href!, element)}
                 title={sidebarCollapsed ? item.label : undefined}
                 aria-label={sidebarCollapsed ? item.label : undefined}
                 className={cn(
-                  "group relative z-10 grid h-12 items-center overflow-hidden rounded-xl transition-[background-color,color] duration-200",
+                  "group relative grid h-12 items-center overflow-hidden rounded-xl transition-[background-color,color] duration-200",
                   sidebarCollapsed
                     ? "w-[3.75rem] grid-cols-[3.75rem]"
                     : "w-full grid-cols-[3.75rem_minmax(0,1fr)] text-left",
                   isActive
-                    ? "text-primary dark:text-white"
+                    ? "bg-primary/10 text-primary dark:bg-white/10 dark:text-white"
                     : "text-slate-700 hover:bg-slate-200/70 hover:text-slate-950 dark:text-white dark:hover:bg-white/8 dark:hover:text-white",
                 )}
               >
@@ -313,14 +226,12 @@ function CollapsibleSidebarItem({
   isOpen,
   isCollapsed,
   currentPath,
-  itemRef,
   onToggle,
 }: {
   item: NavItem;
   isOpen: boolean;
   isCollapsed: boolean;
   currentPath: string;
-  itemRef: (element: HTMLButtonElement | null) => void;
   onToggle: () => void;
 }) {
   const matchingSubmenus =
@@ -338,20 +249,19 @@ function CollapsibleSidebarItem({
   return (
     <div className="flex flex-col">
       <button
-        ref={itemRef}
         type="button"
         onClick={onToggle}
         title={isCollapsed ? item.label : undefined}
         aria-label={isCollapsed ? item.label : undefined}
         className={cn(
-          "group relative z-10 grid h-12 items-center overflow-hidden rounded-xl transition-[background-color,color] duration-200",
+          "group relative grid h-12 items-center overflow-hidden rounded-xl transition-[background-color,color] duration-200",
           isCollapsed
             ? "w-[3.75rem] grid-cols-[3.75rem]"
             : "w-full grid-cols-[3.75rem_minmax(0,1fr)_2.25rem] text-left",
           isActiveGroup
-            ? "text-primary dark:text-white"
+            ? "bg-primary/10 text-primary dark:bg-white/10 dark:text-white"
             : isOpen
-              ? "text-slate-900 dark:text-white"
+              ? "bg-primary/5 text-slate-900 dark:bg-white/8 dark:text-white"
               : "text-slate-700 hover:bg-slate-200/70 hover:text-slate-950 dark:text-white dark:hover:bg-white/8 dark:hover:text-white",
         )}
       >
