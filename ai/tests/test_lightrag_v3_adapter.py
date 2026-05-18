@@ -564,8 +564,14 @@ def test_lightrag_adapter_singleton_close_boundary_resets_instance() -> None:
 
 
 class FakeQueryLightRAG(FakeLightRAG):
-    async def aquery_llm(self, query: str, *, param: Any) -> dict[str, Any]:
-        self.calls.append(("aquery_llm", query, param))
+    async def aquery_llm(
+        self,
+        query: str,
+        *,
+        param: Any,
+        system_prompt: str | None = None,
+    ) -> dict[str, Any]:
+        self.calls.append(("aquery_llm", query, param, system_prompt))
         return {
             "llm_response": {"content": "native answer"},
             "data": {"references": [{"file_path": "worklog://101"}]},
@@ -588,10 +594,11 @@ def test_lightrag_adapter_query_uses_mix_non_streaming_with_references() -> None
             )
         )
         fake_rag = FakeLightRAG.instances[0]
-        _, query, param = fake_rag.calls[-1]
+        _, query, param, system_prompt = fake_rag.calls[-1]
 
         assert result.raw["llm_response"]["content"] == "native answer"
         assert query == "업무일지 요약"
+        assert system_prompt is None
         assert param.mode == "mix"
         assert param.stream is False
         assert param.include_references is True
@@ -618,9 +625,36 @@ def test_lightrag_adapter_query_reuses_initialized_rag() -> None:
     assert FakeLightRAG.instances[0].calls.count("initialize_storages") == 1
 
 
+def test_lightrag_adapter_query_passes_system_prompt() -> None:
+    FakeLightRAG.instances = []
+    dependencies, _, _, _ = make_dependencies(FakeQueryLightRAG)
+    adapter = LightRagWorklogIndexAdapter(settings_obj=make_settings(), dependencies=dependencies)
+
+    async def run_case() -> None:
+        await adapter.query_worklogs(
+            LightRagQueryOptions(
+                query="allowed query",
+                top_k=40,
+                chunk_top_k=20,
+                response_type="Multiple Paragraphs",
+                system_prompt="allowed team prompt",
+            )
+        )
+
+    asyncio.run(run_case())
+
+    assert FakeLightRAG.instances[0].calls[-1][3] == "allowed team prompt"
+
+
 def test_lightrag_adapter_query_maps_timeout() -> None:
     class TimeoutQueryLightRAG(FakeLightRAG):
-        async def aquery_llm(self, query: str, *, param: Any) -> dict[str, Any]:
+        async def aquery_llm(
+            self,
+            query: str,
+            *,
+            param: Any,
+            system_prompt: str | None = None,
+        ) -> dict[str, Any]:
             await asyncio.sleep(1)
             return {"answer": "late"}
 
@@ -635,7 +669,13 @@ def test_lightrag_adapter_query_maps_timeout() -> None:
 
 def test_lightrag_adapter_query_maps_general_failure() -> None:
     class FailingQueryLightRAG(FakeLightRAG):
-        async def aquery_llm(self, query: str, *, param: Any) -> dict[str, Any]:
+        async def aquery_llm(
+            self,
+            query: str,
+            *,
+            param: Any,
+            system_prompt: str | None = None,
+        ) -> dict[str, Any]:
             raise ValueError("boom")
 
     dependencies, _, _, _ = make_dependencies(FailingQueryLightRAG)
