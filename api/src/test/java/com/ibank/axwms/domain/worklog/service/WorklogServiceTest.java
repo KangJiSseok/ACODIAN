@@ -15,6 +15,7 @@ import com.ibank.axwms.domain.worklog.dto.UpdateWorklogStatusApiDto;
 import com.ibank.axwms.domain.worklog.dto.UpdateWorklogApiDto;
 import com.ibank.axwms.domain.worklog.entity.Worklog;
 import com.ibank.axwms.domain.worklog.entity.WorklogTag;
+import com.ibank.axwms.domain.worklog.event.WorklogAiPipelineRequestedEvent;
 import com.ibank.axwms.domain.worklog.event.WorklogCompletedEvent;
 import com.ibank.axwms.domain.worklog.policy.WorklogStatusPolicy;
 import com.ibank.axwms.domain.worklog.repository.WorklogDependencyRepository;
@@ -73,12 +74,13 @@ class WorklogServiceTest {
     @Mock private WorklogDependencyService worklogDependencyService;
     @Mock private WorklogStatusPolicy worklogStatusPolicy;
     @Mock private TagService tagService;
-    @Mock private ApplicationEventPublisher applicationEventPublisher;
+    @Mock private ApplicationEventPublisher eventPublisher;
 
     @InjectMocks private WorklogService worklogService;
 
     private static final Long USER_ID = 101L;
     private static final Long TEAM_ID = 21L;
+    private static final Long DEPARTMENT_ID = 9L;
     private static final Long WORKLOG_ID = 501L;
     private static final List<Long> TAG_IDS = List.of(1L, 2L);
     private static final LocalDate INSTRUCTION_DATE = LocalDate.of(2026, 4, 22);
@@ -124,7 +126,14 @@ class WorklogServiceTest {
                 .containsExactly(1L, 2L);
         verify(tagService).incrementUsageCountByIds(TAG_IDS);
         verify(worklogDependencyService).registerPredecessor(eq(WORKLOG_ID), eq(TEAM_ID), eq(request.predecessorWorklogIds()));
-        verify(applicationEventPublisher, never()).publishEvent(any(Object.class));
+        ArgumentCaptor<WorklogAiPipelineRequestedEvent> eventCaptor = ArgumentCaptor.forClass(WorklogAiPipelineRequestedEvent.class);
+        verify(eventPublisher).publishEvent(eventCaptor.capture());
+        assertThat(eventCaptor.getValue().worklogId()).isEqualTo(WORKLOG_ID);
+        assertThat(eventCaptor.getValue().requestContent()).isEqualTo(request.requestContent());
+        assertThat(eventCaptor.getValue().workContent()).isEqualTo(request.workContent());
+        assertThat(eventCaptor.getValue().authorId()).isEqualTo(USER_ID);
+        assertThat(eventCaptor.getValue().teamId()).isEqualTo(TEAM_ID);
+        assertThat(eventCaptor.getValue().departmentId()).isEqualTo(DEPARTMENT_ID);
     }
 
     @Test
@@ -151,7 +160,15 @@ class WorklogServiceTest {
                 eq(WorklogStatus.COMPLETED),
                 eq(USER_ID)
         );
-        verify(applicationEventPublisher, never()).publishEvent(any(Object.class));
+        verify(eventPublisher, never()).publishEvent(any(WorklogCompletedEvent.class));
+        ArgumentCaptor<WorklogAiPipelineRequestedEvent> eventCaptor = ArgumentCaptor.forClass(WorklogAiPipelineRequestedEvent.class);
+        verify(eventPublisher).publishEvent(eventCaptor.capture());
+        assertThat(eventCaptor.getValue().worklogId()).isEqualTo(WORKLOG_ID);
+        assertThat(eventCaptor.getValue().requestContent()).isEqualTo(request.requestContent());
+        assertThat(eventCaptor.getValue().workContent()).isEqualTo(request.workContent());
+        assertThat(eventCaptor.getValue().authorId()).isEqualTo(USER_ID);
+        assertThat(eventCaptor.getValue().teamId()).isEqualTo(TEAM_ID);
+        assertThat(eventCaptor.getValue().departmentId()).isEqualTo(DEPARTMENT_ID);
     }
 
     @Test
@@ -310,7 +327,7 @@ class WorklogServiceTest {
                 eq(USER_ID),
                 eq("완료 처리")
         );
-        verify(applicationEventPublisher).publishEvent(new WorklogCompletedEvent(WORKLOG_ID));
+        verify(eventPublisher).publishEvent(new WorklogCompletedEvent(WORKLOG_ID));
     }
 
     @Test
@@ -340,7 +357,7 @@ class WorklogServiceTest {
                 eq(USER_ID),
                 eq("완료 처리")
         );
-        verify(applicationEventPublisher).publishEvent(new WorklogCompletedEvent(WORKLOG_ID));
+        verify(eventPublisher).publishEvent(new WorklogCompletedEvent(WORKLOG_ID));
     }
 
     @Test
@@ -365,7 +382,7 @@ class WorklogServiceTest {
         assertThat(worklog.getStatusCode()).isEqualTo(WorklogStatus.IN_PROGRESS);
         verify(worklogStatusPolicy, never()).canTransition(any(), any());
         verify(worklogStatusHistoryService, never()).createStatusHistory(any(), any(), any(), any(), any());
-        verify(applicationEventPublisher, never()).publishEvent(any(Object.class));
+        verify(eventPublisher, never()).publishEvent(any(Object.class));
     }
 
     @Test
@@ -389,7 +406,7 @@ class WorklogServiceTest {
         assertThat(worklog.getCompletionDate()).isNull();
         verify(worklogStatusPolicy, never()).canTransition(any(), any());
         verify(worklogStatusHistoryService, never()).createStatusHistory(any(), any(), any(), any(), any());
-        verify(applicationEventPublisher, never()).publishEvent(any(Object.class));
+        verify(eventPublisher, never()).publishEvent(any(Object.class));
     }
 
     @Test
@@ -413,7 +430,7 @@ class WorklogServiceTest {
         assertThat(worklog.getCompletionDate()).isNull();
         verify(fileService, never()).uploadWorklogFiles(any(), any(), any());
         verify(worklogStatusHistoryService, never()).createStatusHistory(any(), any(), any(), any(), any());
-        verify(applicationEventPublisher, never()).publishEvent(any(Object.class));
+        verify(eventPublisher, never()).publishEvent(any(Object.class));
     }
 
     @Test
@@ -574,6 +591,7 @@ class WorklogServiceTest {
 
     private Team sampleTeam() {
         Team team = Team.create(
+                DEPARTMENT_ID,
                 "물류혁신TF",
                 TeamStatus.ACTIVE,
                 "테스트 팀",
