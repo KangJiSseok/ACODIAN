@@ -83,6 +83,7 @@ class MetaTag(Base):
 
     tag_id: Mapped[int] = mapped_column(BigInteger, primary_key=True)
     tag_name: Mapped[str] = mapped_column(Text, nullable=False)
+    usage_count: Mapped[int] = mapped_column(BigInteger, nullable=False)
     description: Mapped[str | None] = mapped_column(Text)
     is_deleted: Mapped[bool] = mapped_column(Boolean, nullable=False)
 
