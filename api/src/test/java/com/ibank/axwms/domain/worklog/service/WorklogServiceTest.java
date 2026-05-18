@@ -18,6 +18,7 @@ import com.ibank.axwms.domain.worklog.dto.UpdateWorklogStatusApiDto;
 import com.ibank.axwms.domain.worklog.entity.Worklog;
 import com.ibank.axwms.domain.worklog.entity.WorklogTag;
 import com.ibank.axwms.domain.worklog.event.WorklogAiPipelineRequestedEvent;
+import com.ibank.axwms.domain.worklog.event.WorklogAiPostProcessRequestedEvent;
 import com.ibank.axwms.domain.worklog.event.WorklogCompletedEvent;
 import com.ibank.axwms.domain.worklog.event.WorklogLightIndexRequestedEvent;
 import com.ibank.axwms.domain.worklog.external.WorklogPolishClient;
@@ -146,6 +147,8 @@ class WorklogServiceTest {
             return toSave;
         });
         given(tagService.normalizeExistingTagIds(TAG_IDS)).willReturn(TAG_IDS);
+        given(fileService.uploadWorklogFilesWithoutAiSummaryRequest(WORKLOG_ID, USER_ID, files))
+                .willReturn(List.of(new FileService.UploadedFile(9001L, "worklog/501/report.txt", "report.txt", "txt", 7L)));
 
         // when
         CreateWorklogApiDto.Response response = worklogService.createWorklog(principal, request, files);
@@ -156,7 +159,8 @@ class WorklogServiceTest {
         verify(worklogRepository).save(worklogCaptor.capture());
         assertThat(worklogCaptor.getValue().getStatusCode()).isEqualTo(WorklogStatus.IN_PROGRESS);
         assertThat(worklogCaptor.getValue().getActualHours()).isEqualByComparingTo("3.10");
-        verify(fileService).uploadWorklogFiles(eq(WORKLOG_ID), eq(USER_ID), eq(files));
+        verify(fileService).uploadWorklogFilesWithoutAiSummaryRequest(eq(WORKLOG_ID), eq(USER_ID), eq(files));
+        verify(fileService, never()).uploadWorklogFiles(eq(WORKLOG_ID), eq(USER_ID), eq(files));
         verify(worklogStatusHistoryService).createStatusHistory(
                 eq(WORKLOG_ID),
                 eq(WorklogStatus.IN_PROGRESS),
@@ -169,7 +173,7 @@ class WorklogServiceTest {
                 .containsExactly(1L, 2L);
         verify(tagService).incrementUsageCountByIds(TAG_IDS);
         verify(worklogDependencyService).registerPredecessor(eq(WORKLOG_ID), eq(TEAM_ID), eq(request.predecessorWorklogIds()));
-        ArgumentCaptor<WorklogAiPipelineRequestedEvent> eventCaptor = ArgumentCaptor.forClass(WorklogAiPipelineRequestedEvent.class);
+        ArgumentCaptor<WorklogAiPostProcessRequestedEvent> eventCaptor = ArgumentCaptor.forClass(WorklogAiPostProcessRequestedEvent.class);
         verify(eventPublisher).publishEvent(eventCaptor.capture());
         assertThat(eventCaptor.getValue().worklogId()).isEqualTo(WORKLOG_ID);
         assertThat(eventCaptor.getValue().requestContent()).isEqualTo(request.requestContent());
@@ -177,10 +181,17 @@ class WorklogServiceTest {
         assertThat(eventCaptor.getValue().authorId()).isEqualTo(USER_ID);
         assertThat(eventCaptor.getValue().teamId()).isEqualTo(TEAM_ID);
         assertThat(eventCaptor.getValue().departmentId()).isEqualTo(DEPARTMENT_ID);
-        ArgumentCaptor<WorklogLightIndexRequestedEvent> indexEventCaptor =
-                ArgumentCaptor.forClass(WorklogLightIndexRequestedEvent.class);
-        verify(eventPublisher).publishEvent(indexEventCaptor.capture());
-        assertThat(indexEventCaptor.getValue().worklogId()).isEqualTo(WORKLOG_ID);
+        assertThat(eventCaptor.getValue().files())
+                .singleElement()
+                .extracting(
+                        WorklogAiPostProcessRequestedEvent.FileSummaryTarget::fileId,
+                        WorklogAiPostProcessRequestedEvent.FileSummaryTarget::storageKey,
+                        WorklogAiPostProcessRequestedEvent.FileSummaryTarget::originalName,
+                        WorklogAiPostProcessRequestedEvent.FileSummaryTarget::fileExtension
+                )
+                .containsExactly(9001L, "worklog/501/report.txt", "report.txt", "txt");
+        verify(eventPublisher, never()).publishEvent(any(WorklogAiPipelineRequestedEvent.class));
+        verify(eventPublisher, never()).publishEvent(any(WorklogLightIndexRequestedEvent.class));
     }
 
     @Test
@@ -208,7 +219,7 @@ class WorklogServiceTest {
                 eq(USER_ID)
         );
         verify(eventPublisher, never()).publishEvent(any(WorklogCompletedEvent.class));
-        ArgumentCaptor<WorklogAiPipelineRequestedEvent> eventCaptor = ArgumentCaptor.forClass(WorklogAiPipelineRequestedEvent.class);
+        ArgumentCaptor<WorklogAiPostProcessRequestedEvent> eventCaptor = ArgumentCaptor.forClass(WorklogAiPostProcessRequestedEvent.class);
         verify(eventPublisher).publishEvent(eventCaptor.capture());
         assertThat(eventCaptor.getValue().worklogId()).isEqualTo(WORKLOG_ID);
         assertThat(eventCaptor.getValue().requestContent()).isEqualTo(request.requestContent());
@@ -216,10 +227,7 @@ class WorklogServiceTest {
         assertThat(eventCaptor.getValue().authorId()).isEqualTo(USER_ID);
         assertThat(eventCaptor.getValue().teamId()).isEqualTo(TEAM_ID);
         assertThat(eventCaptor.getValue().departmentId()).isEqualTo(DEPARTMENT_ID);
-        ArgumentCaptor<WorklogLightIndexRequestedEvent> indexEventCaptor =
-                ArgumentCaptor.forClass(WorklogLightIndexRequestedEvent.class);
-        verify(eventPublisher).publishEvent(indexEventCaptor.capture());
-        assertThat(indexEventCaptor.getValue().worklogId()).isEqualTo(WORKLOG_ID);
+        assertThat(eventCaptor.getValue().files()).isEmpty();
     }
 
     @Test
@@ -308,7 +316,7 @@ class WorklogServiceTest {
 
         // then
         assertThat(response.worklogId()).isEqualTo(WORKLOG_ID);
-        verify(fileService).uploadWorklogFiles(eq(WORKLOG_ID), eq(USER_ID), eq(files));
+        verify(fileService).uploadWorklogFilesWithoutAiSummaryRequest(eq(WORKLOG_ID), eq(USER_ID), eq(files));
         verify(worklogStatusHistoryService).createStatusHistory(
                 eq(WORKLOG_ID),
                 eq(WorklogStatus.IN_PROGRESS),
@@ -482,6 +490,26 @@ class WorklogServiceTest {
         verify(fileService, never()).uploadWorklogFiles(any(), any(), any());
         verify(worklogStatusHistoryService, never()).createStatusHistory(any(), any(), any(), any(), any());
         verify(eventPublisher, never()).publishEvent(any(Object.class));
+    }
+
+
+    @Test
+    @DisplayName("업무 수정으로 신규 파일을 추가하면 기존 파일 AI 요약 요청 업로드 경로를 유지한다")
+    void updateWorklog_keeps_existing_file_summary_request_for_new_files() {
+        // given
+        CustomUserPrincipal principal = principal();
+        Worklog worklog = savedWorklog(WorklogStatus.IN_PROGRESS);
+        UpdateWorklogApiDto.Request request = updateRequest(WorklogStatus.IN_PROGRESS);
+        List<MultipartFile> newFiles = sampleFiles();
+
+        given(worklogRepository.findById(WORKLOG_ID)).willReturn(Optional.of(worklog));
+
+        // when
+        worklogService.updateWorklog(principal, WORKLOG_ID, request, newFiles);
+
+        // then
+        verify(fileService).uploadWorklogFiles(eq(WORKLOG_ID), eq(USER_ID), eq(newFiles));
+        verify(fileService, never()).uploadWorklogFilesWithoutAiSummaryRequest(any(), any(), any());
     }
 
     @Test
