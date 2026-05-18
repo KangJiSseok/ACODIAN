@@ -96,14 +96,19 @@ ai/
 | `app/router/embedding.py` | 임베딩·검색 |
 | `app/router/search.py` | 임베딩·검색 |
 | `app/router/tagging.py` | 태그 |
+| `app/router/tag_merge.py` | 태그 병합 후보 |
 | `app/model/embedding.py` | 임베딩·검색 |
 | `app/model/search.py` | 임베딩·검색 |
 | `app/model/tagging.py` | 태그 |
+| `app/model/tag_merge_model.py` | 태그 병합 후보 |
 | `app/task/embedding_tasks.py` | 임베딩·검색 |
 | `app/task/tagging_tasks.py` | 태그 |
 | `app/store/models.py` (Worklog/File Embedding) | 임베딩·검색 |
 | `app/store/embedding_store.py` | 임베딩·검색 |
 | `app/store/tag_store.py` (필요 시) | 태그 |
+| `app/prompt/tag_merge_prompt.py` | 태그 병합 후보 |
+| `app/chain/tag_merge_chain.py` | 태그 병합 후보 |
+| `app/service/tag_merge_service.py` | 태그 병합 후보 |
 | `app/light/v3/**` | LightRAG v3 업무일지 index/search |
 
 ## 공유 파일과 수정 규칙
