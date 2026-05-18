@@ -14,7 +14,7 @@ import java.util.List;
 
 public final class CreateWorklogApiDto {
 
-    private static final int CONTENT_MAX_LENGTH = 10_000;
+    private static final int CONTENT_MAX_LENGTH = 2_000;
 
     private CreateWorklogApiDto() {
     }
@@ -27,16 +27,16 @@ public final class CreateWorklogApiDto {
 
             @Schema(description = "업무 제목", example = "4월 결산 보고서 작성")
             @NotBlank(message = "title 은 비어 있을 수 없습니다.")
-            @Size(max = 50, message = "title 은 50자를 초과할 수 없습니다.")
+            @Size(max = 100, message = "title 은 100자를 초과할 수 없습니다.")
             String title,
 
             @Schema(description = "업무 요청/지시 내용", example = "재무팀 요청사항을 반영해 결산 보고서를 작성합니다.")
-            @Size(max = CONTENT_MAX_LENGTH, message = "requestContent 는 10000자를 초과할 수 없습니다.")
+            @Size(max = CONTENT_MAX_LENGTH, message = "requestContent 는 2000자를 초과할 수 없습니다.")
             String requestContent,
 
             @Schema(description = "실제 수행 업무 내용", example = "매출 및 비용 데이터를 집계하고 보고서 초안을 작성합니다.")
             @NotBlank(message = "workContent 는 비어 있을 수 없습니다.")
-            @Size(max = CONTENT_MAX_LENGTH, message = "workContent 는 10000자를 초과할 수 없습니다.")
+            @Size(max = CONTENT_MAX_LENGTH, message = "workContent 는 2000자를 초과할 수 없습니다.")
             String workContent,
 
             @Schema(description = "업무 상태 코드", example = "PENDING")

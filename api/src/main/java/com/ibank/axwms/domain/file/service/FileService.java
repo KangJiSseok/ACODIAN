@@ -11,6 +11,7 @@ import com.ibank.axwms.domain.file.external.ObjectStoragePort;
 import com.ibank.axwms.domain.file.repository.FileRepository;
 import com.ibank.axwms.domain.file.repository.jooq.projection.FileSummaryProjection;
 import com.ibank.axwms.domain.file.repository.jooq.query.FilePageQuery;
+import com.ibank.axwms.domain.worklog.config.WorklogFileProperties;
 import com.ibank.axwms.global.error.BusinessException;
 import com.ibank.axwms.global.error.ErrorCode;
 import com.ibank.axwms.global.response.PageResponse;
@@ -41,17 +42,20 @@ public class FileService {
     private final FileRepository fileRepository;
     private final FilePathGenerator filePathGenerator;
     private final ApplicationEventPublisher eventPublisher;
+    private final WorklogFileProperties worklogFileProperties;
 
     public FileService(
             @Qualifier("s3ObjectStorageAdapter") ObjectStoragePort objectStoragePort,
             FileRepository fileRepository,
             FilePathGenerator filePathGenerator,
-            ApplicationEventPublisher eventPublisher
+            ApplicationEventPublisher eventPublisher,
+            WorklogFileProperties worklogFileProperties
     ) {
         this.objectStoragePort = objectStoragePort;
         this.fileRepository = fileRepository;
         this.filePathGenerator = filePathGenerator;
         this.eventPublisher = eventPublisher;
+        this.worklogFileProperties = worklogFileProperties;
     }
 
     /**
@@ -89,6 +93,7 @@ public class FileService {
         if (present.isEmpty()) {
             return List.of();
         }
+        validateWorklogFiles(present);
 
         List<UploadedFile> results = new ArrayList<>(present.size());
         for (MultipartFile file : present) {
@@ -110,6 +115,28 @@ public class FileService {
             results.add(new UploadedFile(saved.getId(), key, file.getOriginalFilename(), file.getSize()));
         }
         return results;
+    }
+
+    /**
+     * 업무일지 첨부 파일 수, 개별 용량, 총 용량을 정책 값으로 검증한다.
+     * 스프링 multipart 하드 리밋과 별도로 업무일지 도메인에서 허용하는 상한을 일관되게 적용한다.
+     */
+    private void validateWorklogFiles(List<MultipartFile> files) {
+        if (files.size() > worklogFileProperties.maxCount()) {
+            throw new BusinessException(ErrorCode.COMMON_VALIDATION_ERROR);
+        }
+
+        long totalSizeBytes = 0L;
+        for (MultipartFile file : files) {
+            if (file.getSize() > worklogFileProperties.maxFileSizeBytes()) {
+                throw new BusinessException(ErrorCode.COMMON_FILE_TOO_LARGE);
+            }
+            totalSizeBytes += file.getSize();
+        }
+
+        if (totalSizeBytes > worklogFileProperties.maxTotalSizeBytes()) {
+            throw new BusinessException(ErrorCode.COMMON_FILE_TOO_LARGE);
+        }
     }
 
     /**
