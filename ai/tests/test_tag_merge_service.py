@@ -32,6 +32,11 @@ class FakeChain:
         return {
             "groups": [
                 {
+                    "targetTagId": 7,
+                    "resultDescription": "후보가 부족한 설명",
+                    "candidateTagIds": [6],
+                },
+                {
                     "targetTagId": 2,
                     "resultDescription": "기준 태그로 병합할 설명",
                     "candidateTagIds": [1, 3, 4, 5, 6, 7, 999, 1],

@@ -6,6 +6,7 @@ from app.chain.tag_merge_chain import create_tag_merge_chain
 from app.model.tag_merge_model import (
     GenerateTagMergeCandidatesRequest,
     GenerateTagMergeCandidatesResponse,
+    MIN_MERGE_CANDIDATE_TAG_COUNT,
     TagMergeCandidateGroup,
     TagMergeCandidateTag,
     TagMergeChainResult,
@@ -74,7 +75,7 @@ class TagMergeService:
                 if tag_id in tag_by_id
             ]
             unique_ids = list(dict.fromkeys(source_ids))
-            if len(unique_ids) < 2:
+            if len(unique_ids) < MIN_MERGE_CANDIDATE_TAG_COUNT + 1:
                 continue
 
             target = self._select_target([tag_by_id[tag_id] for tag_id in unique_ids])
@@ -87,7 +88,7 @@ class TagMergeService:
                 (tag_by_id[tag_id] for tag_id in candidate_ids),
                 key=lambda tag: (-tag.usage_count, tag.tag_name, tag.tag_id),
             )[:max_candidate_count]
-            if not candidates:
+            if len(candidates) < MIN_MERGE_CANDIDATE_TAG_COUNT:
                 continue
 
             used_candidate_ids.update(tag.tag_id for tag in candidates)
