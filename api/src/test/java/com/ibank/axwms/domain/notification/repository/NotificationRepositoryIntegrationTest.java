@@ -161,6 +161,7 @@ class NotificationRepositoryIntegrationTest extends IntegrationTestSupport {
     }
 
     @Test
+    @Transactional
     @DisplayName("읽은 알림 정리는 만료선 이전 readAt 만 삭제하고 안읽은 알림은 유지한다")
     void 읽은_알림_정리는_만료선_이전_readAt만_삭제하고_안읽은_알림은_유지한다() {
         Department department = departmentRepository.save(createDepartment("정리검증본부"));
