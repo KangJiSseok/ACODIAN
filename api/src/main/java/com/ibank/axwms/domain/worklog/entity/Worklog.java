@@ -165,11 +165,24 @@ public class Worklog {
         }
     }
 
-    public void completeAiSummaryProcessing() {
+    /**
+     * 업무 단위 AI 요청이 외부 AI 시스템으로 전달되어 콜백 대기 중임을 표시한다.
+     */
+    public void startAiProcessing() {
+        this.aiProcessingStatus = AiProcessingStatus.PROCESSING;
+    }
+
+    /**
+     * 업무 단위 AI 처리 상태를 성공으로 표시한다.
+     */
+    public void completeAiProcessing() {
         this.aiProcessingStatus = AiProcessingStatus.COMPLETED;
     }
 
-    public void failAiSummaryProcessing() {
+    /**
+     * 업무 단위 AI 처리 상태를 실패로 표시한다.
+     */
+    public void failAiProcessing() {
         this.aiProcessingStatus = AiProcessingStatus.FAILED;
     }
 

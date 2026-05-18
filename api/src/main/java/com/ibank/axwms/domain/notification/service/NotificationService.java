@@ -35,6 +35,8 @@ public class NotificationService {
     private static final String WORKLOG_DUE_TODAY_TITLE = "업무 마감 오늘까지 알림";
     private static final String WORKLOG_OVERDUE_TITLE = "업무 마감일 초과 알림";
     private static final String WORKLOG_DEPENDENCY_READY_TITLE = "선행 업무 완료 알림";
+    private static final String WORKLOG_AI_POST_PROCESS_SUCCESS_TITLE = "업무 AI 후처리 요청 완료";
+    private static final String WORKLOG_AI_POST_PROCESS_FAILURE_TITLE = "업무 AI 후처리 요청 실패";
     private static final int READ_NOTIFICATION_RETENTION_DAYS = 3;
     private static final List<String> WORKLOG_REMINDER_NOTIFICATION_TYPES = List.of(
             NotificationType.WORKLOG_DUE_SOON.name(),
@@ -207,6 +209,91 @@ public class NotificationService {
                 );
         savedNotification.ifPresent(saved -> publishNotificationCreatedEvents(List.of(saved)));
         return savedNotification;
+    }
+
+
+    /**
+     * 업무 생성 후 통합 AI 요청 결과를 업무 기준 1회 알림으로 저장하고 SSE 전파 이벤트를 발행한다.
+     *
+     * @param recipientUserId 작성자 사용자 ID
+     * @param departmentId    업무 소속 부서 ID
+     * @param teamId          업무 소속 팀 ID
+     * @param worklogId       생성된 업무 ID
+     * @param success         세 AI 요청이 모두 예외 없이 종료되었는지 여부
+     * @param failedStages    실패한 단계 식별자 목록. 성공이면 비어 있어야 한다.
+     * @return 신규 저장된 알림. 이미 같은 업무의 통합 결과 알림이 있으면 빈 Optional
+     */
+    @Transactional(propagation = Propagation.REQUIRES_NEW)
+    public Optional<Notification> createWorklogAiPostProcessResultNotification(Long recipientUserId,
+                                                                               Long departmentId,
+                                                                               Long teamId,
+                                                                               Long worklogId,
+                                                                               boolean success,
+                                                                               List<String> failedStages) {
+        String referenceType = NotificationReferenceType.WORKLOG.name();
+        String notificationType = NotificationType.WORKLOG_AI_POST_PROCESS_RESULT.name();
+        if (notificationRepository.existsByUserIdAndReferenceTypeAndReferenceIdAndNotificationType(
+                recipientUserId,
+                referenceType,
+                worklogId,
+                notificationType
+        )) {
+            return Optional.empty();
+        }
+
+        Notification notification = Notification.create(
+                recipientUserId,
+                departmentId,
+                teamId,
+                notificationType,
+                createWorklogAiPostProcessTitle(success),
+                createWorklogAiPostProcessContent(worklogId, success, failedStages),
+                referenceType,
+                worklogId,
+                false,
+                null
+        );
+        Notification saved = notificationRepository.saveAndFlush(notification);
+        publishNotificationCreatedEvents(List.of(saved));
+        return Optional.of(saved);
+    }
+
+    /**
+     * 성공/실패 결과를 같은 notification type 안에서 구분할 수 있도록 사용자-facing 제목만 분리한다.
+     */
+    private String createWorklogAiPostProcessTitle(boolean success) {
+        if (success) {
+            return WORKLOG_AI_POST_PROCESS_SUCCESS_TITLE;
+        }
+        return WORKLOG_AI_POST_PROCESS_FAILURE_TITLE;
+    }
+
+    /**
+     * 실패 알림에는 운영자가 어느 AI 요청 단계가 실패했는지 바로 식별할 수 있는 단계명을 포함한다.
+     */
+    private String createWorklogAiPostProcessContent(Long worklogId, boolean success, List<String> failedStages) {
+        if (success) {
+            return "업무 ID " + worklogId + "의 AI 후처리 요청이 모두 정상 접수되었습니다.";
+        }
+        return "업무 ID " + worklogId + "의 AI 후처리 요청 중 실패 단계가 있습니다. 실패 단계: "
+                + String.join(", ", normalizeFailedStages(failedStages));
+    }
+
+    /**
+     * 실패 단계가 비어 들어온 방어 케이스에서도 알림 본문이 원인 미상임을 명확히 드러내게 한다.
+     */
+    private List<String> normalizeFailedStages(List<String> failedStages) {
+        if (failedStages == null || failedStages.isEmpty()) {
+            return List.of("UNKNOWN");
+        }
+        List<String> normalized = failedStages.stream()
+                .filter(stage -> stage != null && !stage.isBlank())
+                .map(String::trim)
+                .toList();
+        if (normalized.isEmpty()) {
+            return List.of("UNKNOWN");
+        }
+        return normalized;
     }
 
     /**

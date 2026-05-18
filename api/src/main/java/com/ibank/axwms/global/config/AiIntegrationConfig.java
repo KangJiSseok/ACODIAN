@@ -2,6 +2,7 @@ package com.ibank.axwms.global.config;
 
 import com.ibank.axwms.domain.file.external.AiFileSummaryProperties;
 import com.ibank.axwms.domain.tag.external.AiTagMergeProperties;
+import com.ibank.axwms.domain.worklog.external.AiWorklogLightIndexProperties;
 import com.ibank.axwms.domain.worklog.external.AiWorklogPipelineProperties;
 import com.ibank.axwms.domain.worklog.external.AiWorklogPolishProperties;
 import com.ibank.axwms.domain.worklog.external.AiWorklogSearchProperties;
@@ -17,6 +18,7 @@ import org.springframework.context.annotation.Configuration;
         AiFileSummaryProperties.class,
         AiWorklogPipelineProperties.class,
         AiWorklogPolishProperties.class,
+        AiWorklogLightIndexProperties.class,
         AiTagMergeProperties.class,
 })
 public class AiIntegrationConfig {

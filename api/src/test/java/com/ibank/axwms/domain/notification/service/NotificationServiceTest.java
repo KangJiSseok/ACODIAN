@@ -7,9 +7,11 @@ import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.BDDMockito.given;
 import static org.mockito.BDDMockito.then;
 
+import com.ibank.axwms.domain.notification.NotificationType;
 import com.ibank.axwms.domain.notification.dto.MarkAllNotificationsReadApiDto;
 import com.ibank.axwms.domain.notification.dto.SearchNotificationsApiDto;
 import com.ibank.axwms.domain.notification.entity.Notification;
+import com.ibank.axwms.domain.notification.event.NotificationCreatedEvent;
 import com.ibank.axwms.domain.notification.repository.NotificationRepository;
 import com.ibank.axwms.domain.notification.repository.jooq.projection.NotificationSearchProjection;
 import com.ibank.axwms.domain.notification.repository.jooq.query.NotificationSearchQuery;
@@ -30,6 +32,7 @@ import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.data.domain.PageImpl;
 import org.springframework.data.domain.PageRequest;
+import org.springframework.test.util.ReflectionTestUtils;
 
 @ExtendWith(MockitoExtension.class)
 class NotificationServiceTest {
@@ -159,6 +162,54 @@ class NotificationServiceTest {
         assertThat(deletedCount).isEqualTo(2);
         then(notificationRepository).should()
                 .deleteReadNotificationsReadAtBeforeOrEqual(LocalDateTime.of(2026, 5, 15, 9, 30));
+    }
+
+    @Test
+    @DisplayName("업무 AI 통합 후처리 성공 알림을 저장하고 생성 이벤트를 발행한다")
+    void createWorklogAiPostProcessResultNotification_saves_success_notification_and_publishes_event() {
+        given(notificationRepository.existsByUserIdAndReferenceTypeAndReferenceIdAndNotificationType(
+                101L, "WORKLOG", 501L, NotificationType.WORKLOG_AI_POST_PROCESS_RESULT.name()
+        )).willReturn(false);
+        given(notificationRepository.saveAndFlush(any(Notification.class))).willAnswer(invocation -> {
+            Notification notification = invocation.getArgument(0);
+            ReflectionTestUtils.setField(notification, "id", 1001L);
+            ReflectionTestUtils.setField(notification, "createdAt", LocalDateTime.of(2026, 5, 18, 15, 0));
+            return notification;
+        });
+
+        Optional<Notification> result = notificationService.createWorklogAiPostProcessResultNotification(
+                101L, 9L, 21L, 501L, true, List.of()
+        );
+
+        assertThat(result).isPresent();
+        assertThat(result.get().getNotificationType()).isEqualTo(NotificationType.WORKLOG_AI_POST_PROCESS_RESULT.name());
+        assertThat(result.get().getTitle()).isEqualTo("업무 AI 후처리 요청 완료");
+        assertThat(result.get().getContent()).contains("모두 정상 접수");
+        ArgumentCaptor<NotificationCreatedEvent> eventCaptor = ArgumentCaptor.forClass(NotificationCreatedEvent.class);
+        then(applicationEventPublisher).should().publishEvent(eventCaptor.capture());
+        assertThat(eventCaptor.getValue().notificationId()).isEqualTo(1001L);
+        assertThat(eventCaptor.getValue().userId()).isEqualTo(101L);
+        assertThat(eventCaptor.getValue().type()).isEqualTo(NotificationType.WORKLOG_AI_POST_PROCESS_RESULT.name());
+    }
+
+    @Test
+    @DisplayName("업무 AI 통합 후처리 실패 알림 본문에는 실패 단계가 포함된다")
+    void createWorklogAiPostProcessResultNotification_includes_failed_stages() {
+        given(notificationRepository.existsByUserIdAndReferenceTypeAndReferenceIdAndNotificationType(
+                101L, "WORKLOG", 501L, NotificationType.WORKLOG_AI_POST_PROCESS_RESULT.name()
+        )).willReturn(false);
+        given(notificationRepository.saveAndFlush(any(Notification.class))).willAnswer(invocation -> invocation.getArgument(0));
+
+        Optional<Notification> result = notificationService.createWorklogAiPostProcessResultNotification(
+                101L, 9L, 21L, 501L, false, List.of("WORKLOG_PIPELINE", "LIGHT_INDEX")
+        );
+
+        assertThat(result).isPresent();
+        assertThat(result.get().getTitle()).isEqualTo("업무 AI 후처리 요청 실패");
+        assertThat(result.get().getContent())
+                .contains("실패 단계")
+                .contains("WORKLOG_PIPELINE")
+                .contains("LIGHT_INDEX");
     }
 
     private CustomUserPrincipal principal() {

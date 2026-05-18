@@ -5,17 +5,21 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.BDDMockito.given;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 
-import com.ibank.axwms.domain.file.entity.File;
 import com.ibank.axwms.domain.file.FileType;
 import com.ibank.axwms.domain.file.dto.GetFilesApiDto;
+import com.ibank.axwms.domain.file.entity.File;
+import com.ibank.axwms.domain.file.event.WorklogFileAiSummaryRequestedEvent;
+import com.ibank.axwms.domain.file.external.AiFileSummaryProperties;
 import com.ibank.axwms.domain.file.external.FilePathGenerator;
 import com.ibank.axwms.domain.file.external.ObjectStoragePort;
 import com.ibank.axwms.domain.file.repository.FileRepository;
 import com.ibank.axwms.domain.file.repository.jooq.projection.FileSummaryProjection;
 import com.ibank.axwms.domain.file.repository.jooq.query.FilePageQuery;
 import com.ibank.axwms.domain.worklog.config.WorklogFileProperties;
+import com.ibank.axwms.global.enums.AiProcessingStatus;
 import com.ibank.axwms.global.error.BusinessException;
 import com.ibank.axwms.global.error.ErrorCode;
 import com.ibank.axwms.global.security.CustomUserPrincipal;
@@ -48,6 +52,9 @@ class FileServiceTest {
 
     @Mock
     private FilePathGenerator filePathGenerator;
+
+    @Mock
+    private AiFileSummaryProperties aiFileSummaryProperties;
 
     @Mock
     private ApplicationEventPublisher eventPublisher;
@@ -173,6 +180,99 @@ class FileServiceTest {
         assertThat(result)
                 .extracting(item -> item.extension())
                 .containsExactly("docx", "hwp", "md", "pdf", "png", "pptx", "xlsx");
+    }
+
+
+    @Test
+    @DisplayName("기존 업무 파일 업로드는 파일 요약 AI 이벤트를 발행한다")
+    void uploadWorklogFiles_publishes_file_summary_event() {
+        // given
+        MultipartFile file = new MockMultipartFile("files", "report.txt", "text/plain", "content".getBytes());
+        givenWorklogFilePolicyAllowsUploads();
+        given(filePathGenerator.generate(501L, "report.txt")).willReturn("worklog/501/report.txt");
+        given(aiFileSummaryProperties.enabled()).willReturn(true);
+        given(fileRepository.save(any(File.class))).willAnswer(invocation -> {
+            File saved = invocation.getArgument(0);
+            ReflectionTestUtils.setField(saved, "id", 9001L);
+            return saved;
+        });
+
+        // when
+        List<FileService.UploadedFile> uploadedFiles = fileService.uploadWorklogFiles(501L, USER_ID, List.of(file));
+
+        // then
+        assertThat(uploadedFiles)
+                .singleElement()
+                .extracting(
+                        FileService.UploadedFile::fileId,
+                        FileService.UploadedFile::storageKey,
+                        FileService.UploadedFile::originalName,
+                        FileService.UploadedFile::fileExtension,
+                        FileService.UploadedFile::sizeBytes
+                )
+                .containsExactly(9001L, "worklog/501/report.txt", "report.txt", "txt", 7L);
+        verify(eventPublisher).publishEvent(any(WorklogFileAiSummaryRequestedEvent.class));
+        ArgumentCaptor<File> fileCaptor = ArgumentCaptor.forClass(File.class);
+        verify(fileRepository).save(fileCaptor.capture());
+        assertThat(fileCaptor.getValue().getAiProcessingStatus()).isEqualTo(AiProcessingStatus.PROCESSING);
+    }
+
+
+    @Test
+    @DisplayName("파일 요약이 비활성화되어 있으면 기존 업로드 경로도 요약 이벤트 없이 PENDING 상태를 유지한다")
+    void uploadWorklogFiles_keeps_pending_when_file_summary_disabled() {
+        // given
+        MultipartFile file = new MockMultipartFile("files", "report.txt", "text/plain", "content".getBytes());
+        givenWorklogFilePolicyAllowsUploads();
+        given(filePathGenerator.generate(501L, "report.txt")).willReturn("worklog/501/report.txt");
+        given(aiFileSummaryProperties.enabled()).willReturn(false);
+        given(fileRepository.save(any(File.class))).willAnswer(invocation -> {
+            File saved = invocation.getArgument(0);
+            ReflectionTestUtils.setField(saved, "id", 9001L);
+            return saved;
+        });
+
+        // when
+        fileService.uploadWorklogFiles(501L, USER_ID, List.of(file));
+
+        // then
+        verify(eventPublisher, never()).publishEvent(any(WorklogFileAiSummaryRequestedEvent.class));
+        ArgumentCaptor<File> fileCaptor = ArgumentCaptor.forClass(File.class);
+        verify(fileRepository).save(fileCaptor.capture());
+        assertThat(fileCaptor.getValue().getAiProcessingStatus()).isEqualTo(AiProcessingStatus.PENDING);
+    }
+
+    @Test
+    @DisplayName("업무 생성 전용 파일 업로드는 파일 요약 AI 이벤트를 발행하지 않는다")
+    void uploadWorklogFilesWithoutAiSummaryRequest_does_not_publish_file_summary_event() {
+        // given
+        MultipartFile file = new MockMultipartFile("files", "report.txt", "text/plain", "content".getBytes());
+        givenWorklogFilePolicyAllowsUploads();
+        given(filePathGenerator.generate(501L, "report.txt")).willReturn("worklog/501/report.txt");
+        given(fileRepository.save(any(File.class))).willAnswer(invocation -> {
+            File saved = invocation.getArgument(0);
+            ReflectionTestUtils.setField(saved, "id", 9001L);
+            return saved;
+        });
+
+        // when
+        List<FileService.UploadedFile> uploadedFiles = fileService.uploadWorklogFilesWithoutAiSummaryRequest(501L, USER_ID, List.of(file));
+
+        // then
+        assertThat(uploadedFiles).singleElement()
+                .extracting(FileService.UploadedFile::fileId)
+                .isEqualTo(9001L);
+        verify(eventPublisher, never()).publishEvent(any(WorklogFileAiSummaryRequestedEvent.class));
+        ArgumentCaptor<File> fileCaptor = ArgumentCaptor.forClass(File.class);
+        verify(fileRepository).save(fileCaptor.capture());
+        assertThat(fileCaptor.getValue().getAiProcessingStatus()).isEqualTo(AiProcessingStatus.PENDING);
+    }
+
+    /** 파일 요약 경로 테스트가 첨부 정책 차단이 아니라 AI 이벤트 분기만 검증하도록 허용 정책을 고정한다. */
+    private void givenWorklogFilePolicyAllowsUploads() {
+        given(worklogFileProperties.maxCount()).willReturn(10);
+        given(worklogFileProperties.maxFileSizeBytes()).willReturn(10L * 1024 * 1024);
+        given(worklogFileProperties.maxTotalSizeBytes()).willReturn(100L * 1024 * 1024);
     }
 
     /** protected Controller 경유 호출과 같은 최소 인증 문맥만 service 에 전달한다. */
