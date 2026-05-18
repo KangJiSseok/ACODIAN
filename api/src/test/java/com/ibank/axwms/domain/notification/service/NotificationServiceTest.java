@@ -146,6 +146,21 @@ class NotificationServiceTest {
         assertThat(readAtCaptor.getValue()).isNotNull();
     }
 
+    @Test
+    @DisplayName("deleteExpiredReadNotifications 는 기준 시각 3일 전까지 읽은 알림 삭제를 위임한다")
+    void deleteExpiredReadNotifications_는_기준_시각_3일_전까지_읽은_알림_삭제를_위임한다() {
+        LocalDateTime now = LocalDateTime.of(2026, 5, 18, 9, 30);
+        given(notificationRepository.deleteReadNotificationsReadAtBeforeOrEqual(
+                LocalDateTime.of(2026, 5, 15, 9, 30)
+        )).willReturn(2);
+
+        int deletedCount = notificationService.deleteExpiredReadNotifications(now);
+
+        assertThat(deletedCount).isEqualTo(2);
+        then(notificationRepository).should()
+                .deleteReadNotificationsReadAtBeforeOrEqual(LocalDateTime.of(2026, 5, 15, 9, 30));
+    }
+
     private CustomUserPrincipal principal() {
         return new CustomUserPrincipal(101L, "user@ibank.com", "MEMBER");
     }
