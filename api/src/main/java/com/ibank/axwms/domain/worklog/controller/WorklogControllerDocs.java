@@ -5,6 +5,7 @@ import com.ibank.axwms.domain.worklog.dto.GetWorklogDetailApiDto;
 import com.ibank.axwms.domain.worklog.dto.GetWorklogFilterOptionsApiDto;
 import com.ibank.axwms.domain.worklog.dto.GetWorklogsApiDto;
 import com.ibank.axwms.domain.worklog.dto.PolishWorklogApiDto;
+import com.ibank.axwms.domain.worklog.dto.RecommendWorklogTitleApiDto;
 import com.ibank.axwms.domain.worklog.dto.SearchPredecessorApiDto;
 import com.ibank.axwms.domain.worklog.dto.SearchWorklogsApiDto;
 import com.ibank.axwms.domain.worklog.dto.UpdateWorklogApiDto;
@@ -57,6 +58,20 @@ public interface WorklogControllerDocs {
             @ApiResponse(responseCode = "502", description = "AI 작성 보조 서버 호출에 실패했다.", content = @Content)
     })
     PolishWorklogApiDto.Response polishWorklog(PolishWorklogApiDto.Request request);
+
+    @Operation(summary = "업무일지 제목 추천",
+            description = "사용자가 저장 전 작성한 requestContent 와 workContent 를 AI 서버에 동기 전달해 "
+                    + "workContent 의 수행 사실을 근거로 최대 3개의 한국어 제목 후보를 반환한다. "
+                    + "저장/수정, 기존 작성 보조 polish 응답, 비동기 callback 파이프라인과 결합하지 않는다.")
+    @SecurityRequirement(name = "bearerAuth")
+    @ApiResponses({
+            @ApiResponse(responseCode = "200", description = "제목 추천 결과를 반환한다."),
+            @ApiResponse(responseCode = "400", description = "요청 값이 올바르지 않다.", content = @Content),
+            @ApiResponse(responseCode = "401", description = "인증이 필요하다.", content = @Content),
+            @ApiResponse(responseCode = "403", description = "업무일지 작성 권한이 없다.", content = @Content),
+            @ApiResponse(responseCode = "502", description = "AI 작성 보조 서버 호출에 실패했다.", content = @Content)
+    })
+    RecommendWorklogTitleApiDto.Response recommendWorklogTitles(RecommendWorklogTitleApiDto.Request request);
 
     @Operation(summary = "업무 목록 조회",
             description = "로그인 사용자의 역할에 따라 가시 범위가 달라진다. "

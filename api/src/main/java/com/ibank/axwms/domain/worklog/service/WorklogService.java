@@ -10,7 +10,9 @@ import com.ibank.axwms.domain.worklog.dto.CreateWorklogApiDto;
 import com.ibank.axwms.domain.worklog.dto.GetWorklogDetailApiDto;
 import com.ibank.axwms.domain.worklog.dto.GetWorklogsApiDto;
 import com.ibank.axwms.domain.worklog.dto.InternalWorklogPolishApiDto;
+import com.ibank.axwms.domain.worklog.dto.InternalWorklogTitleRecommendationApiDto;
 import com.ibank.axwms.domain.worklog.dto.PolishWorklogApiDto;
+import com.ibank.axwms.domain.worklog.dto.RecommendWorklogTitleApiDto;
 import com.ibank.axwms.domain.worklog.dto.SearchPredecessorApiDto;
 import com.ibank.axwms.domain.worklog.dto.UpdateWorklogApiDto;
 import com.ibank.axwms.domain.worklog.dto.UpdateWorklogStatusApiDto;
@@ -83,6 +85,23 @@ public class WorklogService {
                 InternalWorklogPolishApiDto.Request.from(request)
         );
         return PolishWorklogApiDto.Response.of(response.workContent());
+    }
+
+    /**
+     * 인증된 제목 추천 요청의 초안을 AI 서버에 전달하고 저장 없이 후보 제목만 반환한다.
+     * 기존 작성 보조와 같은 동기 호출 경계이므로 별도 DB 트랜잭션을 열지 않는다.
+     *
+     * @param request 제목 추천 요청 DTO
+     * @return 최대 3개의 제목 후보
+     */
+    @Transactional(propagation = Propagation.NOT_SUPPORTED)
+    public RecommendWorklogTitleApiDto.Response recommendWorklogTitles(
+            RecommendWorklogTitleApiDto.Request request
+    ) {
+        InternalWorklogTitleRecommendationApiDto.Response response = worklogPolishClient.recommendWorklogTitles(
+                InternalWorklogTitleRecommendationApiDto.Request.from(request)
+        );
+        return RecommendWorklogTitleApiDto.Response.of(response.titles());
     }
 
     /**

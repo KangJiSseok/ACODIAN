@@ -5,6 +5,7 @@ import com.ibank.axwms.domain.worklog.dto.GetWorklogDetailApiDto;
 import com.ibank.axwms.domain.worklog.dto.GetWorklogFilterOptionsApiDto;
 import com.ibank.axwms.domain.worklog.dto.GetWorklogsApiDto;
 import com.ibank.axwms.domain.worklog.dto.PolishWorklogApiDto;
+import com.ibank.axwms.domain.worklog.dto.RecommendWorklogTitleApiDto;
 import com.ibank.axwms.domain.worklog.dto.SearchPredecessorApiDto;
 import com.ibank.axwms.domain.worklog.dto.SearchWorklogsApiDto;
 import com.ibank.axwms.domain.worklog.dto.UpdateWorklogApiDto;
@@ -60,6 +61,15 @@ public class WorklogController implements WorklogControllerDocs {
             @Valid @RequestBody PolishWorklogApiDto.Request request
     ) {
         return worklogService.polishWorklog(request);
+    }
+
+    @Override
+    @PostMapping("/title-recommendations")
+    @PreAuthorize("hasAnyRole('DIRECTOR','DEPT_HEAD','TEAM_LEAD','MEMBER')")
+    public RecommendWorklogTitleApiDto.Response recommendWorklogTitles(
+            @Valid @RequestBody RecommendWorklogTitleApiDto.Request request
+    ) {
+        return worklogService.recommendWorklogTitles(request);
     }
 
     @Override
