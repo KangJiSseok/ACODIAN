@@ -387,7 +387,7 @@ public class WorklogJooqRepositoryImpl implements WorklogJooqRepository {
         return switch (scope) {
             case WorklogVisibilityScope.All ignored -> DSL.noCondition();
             case WorklogVisibilityScope.Department department ->
-                    TB_WORKLOG.TEAM_ID.in(visibleNonDeletedTeamIds(department.userId()));
+                    TB_WORKLOG.TEAM_ID.in(nonDeletedDepartmentTeamIds(department.departmentId()));
             case WorklogVisibilityScope.MyTeams myTeams ->
                     TB_WORKLOG.TEAM_ID.in(visibleNonDeletedTeamIds(myTeams.userId()));
         };
@@ -763,9 +763,20 @@ public class WorklogJooqRepositoryImpl implements WorklogJooqRepository {
         return switch (scope) {
             case WorklogVisibilityScope.All ignored -> DSL.noCondition();
             case WorklogVisibilityScope.Department department ->
-                    TB_TEAM.TEAM_ID.in(visibleTeamIds(department.userId()));
+                    TB_TEAM.DEPARTMENT_ID.eq(department.departmentId());
             case WorklogVisibilityScope.MyTeams myTeams -> TB_TEAM.TEAM_ID.in(visibleTeamIds(myTeams.userId()));
         };
+    }
+
+    /**
+     * DEPT_HEAD 검색 범위는 사용자 멤버십이 아니라 부서 소유 팀 기준으로 해석한다.
+     * keyword 검색 조건과 semantic 검색의 AI allowedTeamIds 산출이 같은 부서 팀 집합을 보도록 한다.
+     */
+    private Select<Record1<Long>> nonDeletedDepartmentTeamIds(Long departmentId) {
+        return DSL.select(TB_TEAM.TEAM_ID)
+                .from(TB_TEAM)
+                .where(TB_TEAM.DELETED_AT.isNull())
+                .and(TB_TEAM.DEPARTMENT_ID.eq(departmentId));
     }
 
     /**
