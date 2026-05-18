@@ -25,6 +25,10 @@ export function WorklogDetail({
   transitionNotice,
   transitionErrorMessage,
   transitionDisabledMessage,
+  canRetryAiSummary = false,
+  isRetryingAiSummary = false,
+  aiSummaryRetryErrorMessage,
+  onRetryAiSummary,
 }: {
   worklog: Worklog | null
   canTransition?: boolean
@@ -33,6 +37,10 @@ export function WorklogDetail({
   transitionNotice?: string
   transitionErrorMessage?: string
   transitionDisabledMessage?: string
+  canRetryAiSummary?: boolean
+  isRetryingAiSummary?: boolean
+  aiSummaryRetryErrorMessage?: string
+  onRetryAiSummary?: () => void
 }) {
   const [isStatusTransitionOpen, setIsStatusTransitionOpen] = useState(false)
   const [isStatusHistoryOpen, setIsStatusHistoryOpen] = useState(false)
@@ -92,7 +100,13 @@ export function WorklogDetail({
           </CardContent>
         </Card>
 
-        <AiSummaryCard worklog={worklog} />
+        <AiSummaryCard
+          worklog={worklog}
+          canRetry={canRetryAiSummary}
+          isRetrying={isRetryingAiSummary}
+          retryErrorMessage={aiSummaryRetryErrorMessage}
+          onRetry={onRetryAiSummary}
+        />
 
         <Card>
           <CardHeader>

@@ -23,9 +23,13 @@ export default function WorklogDetailPage() {
   const { data: worklog, isError, isLoading } = useWorklogDetail(worklogId)
   const [transitionNotice, setTransitionNotice] = useState<string>()
   const [transitionErrorMessage, setTransitionErrorMessage] = useState<string>()
+  const [aiSummaryRetryErrorMessage, setAiSummaryRetryErrorMessage] = useState<string>()
   const transitionMutation = useMutation({
     mutationFn: ({ nextStatus, reason }: { nextStatus: WorklogStatus; reason: string }) =>
       worklogService.transitionStatus(worklogId, nextStatus, reason),
+  })
+  const aiSummaryRetryMutation = useMutation({
+    mutationFn: () => worklogService.retryAiSummary(worklogId),
   })
 
   const handleTransition = async (nextStatus: WorklogStatus, reason: string) => {
@@ -48,6 +52,25 @@ export default function WorklogDetailPage() {
         getApiErrorMessage(error, "업무 상태를 변경하지 못했습니다.")
       )
       throw error
+    }
+  }
+
+  const handleRetryAiSummary = async () => {
+    setAiSummaryRetryErrorMessage(undefined)
+
+    try {
+      await aiSummaryRetryMutation.mutateAsync()
+      await Promise.all([
+        queryClient.invalidateQueries({
+          queryKey: worklogKeys.detail(worklogId),
+        }),
+        queryClient.invalidateQueries({ queryKey: worklogKeys.lists() }),
+        queryClient.invalidateQueries({ queryKey: worklogKeys.searches() }),
+      ])
+    } catch (error) {
+      setAiSummaryRetryErrorMessage(
+        getApiErrorMessage(error, "AI 요약을 다시 요청하지 못했습니다.")
+      )
     }
   }
 
@@ -83,6 +106,10 @@ export default function WorklogDetailPage() {
         transitionNotice={transitionNotice}
         transitionErrorMessage={transitionErrorMessage}
         transitionDisabledMessage="업무 상태는 작성자 본인만 변경할 수 있습니다."
+        canRetryAiSummary={canEditSelectedWorklog(user?.userId, selectedWorklog)}
+        isRetryingAiSummary={aiSummaryRetryMutation.isPending}
+        aiSummaryRetryErrorMessage={aiSummaryRetryErrorMessage}
+        onRetryAiSummary={handleRetryAiSummary}
       />
     </div>
   )
