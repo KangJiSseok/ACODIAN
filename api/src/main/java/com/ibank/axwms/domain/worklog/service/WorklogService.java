@@ -9,13 +9,16 @@ import com.ibank.axwms.domain.worklog.WorklogStatus;
 import com.ibank.axwms.domain.worklog.dto.CreateWorklogApiDto;
 import com.ibank.axwms.domain.worklog.dto.GetWorklogDetailApiDto;
 import com.ibank.axwms.domain.worklog.dto.GetWorklogsApiDto;
+import com.ibank.axwms.domain.worklog.dto.InternalWorklogPolishApiDto;
+import com.ibank.axwms.domain.worklog.dto.PolishWorklogApiDto;
 import com.ibank.axwms.domain.worklog.dto.SearchPredecessorApiDto;
 import com.ibank.axwms.domain.worklog.dto.UpdateWorklogApiDto;
 import com.ibank.axwms.domain.worklog.dto.UpdateWorklogStatusApiDto;
 import com.ibank.axwms.domain.worklog.entity.Worklog;
 import com.ibank.axwms.domain.worklog.entity.WorklogTag;
-import com.ibank.axwms.domain.worklog.event.WorklogCompletedEvent;
 import com.ibank.axwms.domain.worklog.event.WorklogAiPipelineRequestedEvent;
+import com.ibank.axwms.domain.worklog.event.WorklogCompletedEvent;
+import com.ibank.axwms.domain.worklog.external.WorklogPolishClient;
 import com.ibank.axwms.domain.worklog.policy.WorklogStatusPolicy;
 import com.ibank.axwms.domain.worklog.repository.WorklogDependencyRepository;
 import com.ibank.axwms.domain.worklog.repository.WorklogRepository;
@@ -37,6 +40,7 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.data.domain.Page;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.multipart.MultipartFile;
 
@@ -64,6 +68,22 @@ public class WorklogService {
     private final WorklogStatusPolicy worklogStatusPolicy;
     private final TagService tagService;
     private final ApplicationEventPublisher eventPublisher;
+    private final WorklogPolishClient worklogPolishClient;
+
+    /**
+     * 인증된 작성 보조 요청의 초안을 AI 서버에 전달하고 저장 없이 다듬어진 본문만 반환한다.
+     * Controller 의 role gate 이후에는 사용자 식별자가 필요 없고, 원격 호출만 수행하므로 DB 트랜잭션을 열지 않는다.
+     *
+     * @param request 작성 보조 요청 DTO
+     * @return 다듬어진 본문
+     */
+    @Transactional(propagation = Propagation.NOT_SUPPORTED)
+    public PolishWorklogApiDto.Response polishWorklog(PolishWorklogApiDto.Request request) {
+        InternalWorklogPolishApiDto.Response response = worklogPolishClient.polishWorklog(
+                InternalWorklogPolishApiDto.Request.from(request)
+        );
+        return PolishWorklogApiDto.Response.of(response.workContent());
+    }
 
     /**
      * 로그인 사용자의 권한으로 업무를 등록한다.

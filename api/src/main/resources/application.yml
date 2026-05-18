@@ -86,6 +86,10 @@ ai:
     base-url: ${AI_WORKLOG_PIPELINE_BASE_URL:http://localhost:8000/ai}
     connect-timeout: ${AI_WORKLOG_PIPELINE_CONNECT_TIMEOUT:2s}
     read-timeout: ${AI_WORKLOG_PIPELINE_READ_TIMEOUT:3s}
+  worklog-polish:
+    base-url: ${AI_WORKLOG_POLISH_BASE_URL:http://localhost:8000/ai}
+    connect-timeout: ${AI_WORKLOG_POLISH_CONNECT_TIMEOUT:2s}
+    read-timeout: ${AI_WORKLOG_POLISH_READ_TIMEOUT:10s}
 
 notification:
   worklog-overdue-reminder:

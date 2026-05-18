@@ -4,6 +4,7 @@ import com.ibank.axwms.domain.worklog.dto.CreateWorklogApiDto;
 import com.ibank.axwms.domain.worklog.dto.GetWorklogDetailApiDto;
 import com.ibank.axwms.domain.worklog.dto.GetWorklogFilterOptionsApiDto;
 import com.ibank.axwms.domain.worklog.dto.GetWorklogsApiDto;
+import com.ibank.axwms.domain.worklog.dto.PolishWorklogApiDto;
 import com.ibank.axwms.domain.worklog.dto.SearchPredecessorApiDto;
 import com.ibank.axwms.domain.worklog.dto.SearchWorklogsApiDto;
 import com.ibank.axwms.domain.worklog.dto.UpdateWorklogApiDto;
@@ -49,6 +50,16 @@ public class WorklogController implements WorklogControllerDocs {
             @AuthenticationPrincipal CustomUserPrincipal principal
     ) {
         return worklogService.createWorklog(principal, request, files);
+    }
+
+
+    @Override
+    @PostMapping("/polish")
+    @PreAuthorize("hasAnyRole('DIRECTOR','DEPT_HEAD','TEAM_LEAD','MEMBER')")
+    public PolishWorklogApiDto.Response polishWorklog(
+            @Valid @RequestBody PolishWorklogApiDto.Request request
+    ) {
+        return worklogService.polishWorklog(request);
     }
 
     @Override
