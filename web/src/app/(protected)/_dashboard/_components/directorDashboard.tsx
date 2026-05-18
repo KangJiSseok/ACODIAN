@@ -338,14 +338,14 @@ export function DirectorDashboardLoading() {
     <div className="space-y-6">
       <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
         {Array.from({ length: 4 }, (_, index) => (
-          <div
+          <CardSpotlight
             key={index}
-            className="workspace-panel-soft h-32 animate-pulse rounded-2xl"
+            className="h-32 animate-pulse rounded-[24px]"
           />
         ))}
       </div>
-      <div className="workspace-panel-soft h-80 animate-pulse rounded-2xl" />
-      <div className="workspace-panel-soft h-80 animate-pulse rounded-2xl" />
+      <CardSpotlight className="h-80 animate-pulse rounded-[24px]" />
+      <CardSpotlight className="h-80 animate-pulse rounded-[24px]" />
     </div>
   );
 }
@@ -460,7 +460,7 @@ function WorkloadPanel({
               gridTemplateColumns: `repeat(${items.length}, minmax(7rem, 1fr))`,
             }}
           >
-            {items.map((item) => {
+            {items.map((item, index) => {
               const rate = item.activeWorklogCount / maxCount;
               const barHeight = `${Math.max(clampRate(rate) * 100, 3)}%`;
 
@@ -468,23 +468,26 @@ function WorkloadPanel({
                 <Link
                   key={item.id}
                   href={item.href}
-                  className="group flex min-h-72 flex-col justify-end rounded-2xl border border-border/60 bg-background/35 px-4 py-4 transition hover:border-primary/30 hover:bg-background/55 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                  className="group flex min-h-72 flex-col justify-end rounded-2xl border border-border/60 bg-background/35 px-4 py-4 transition-colors group-hover/card-spotlight:border-primary/20 group-hover/card-spotlight:bg-background/50 hover:border-primary/30 hover:bg-background/55 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
                 >
                   <div className="mb-3 text-center">
-                    <p className="text-sm font-semibold text-primary">
+                    <p className="text-sm font-semibold text-primary transition-colors group-hover/card-spotlight:text-primary">
                       {formatCount(item.activeWorklogCount)}건
                     </p>
                     <p className="mt-1 truncate text-xs text-muted-foreground">
                       미완료 업무
                     </p>
                   </div>
-                  <div className="flex h-44 items-end rounded-2xl bg-muted/40 px-3 pt-3">
+                  <div className="flex h-44 items-end rounded-2xl bg-muted/40 px-3 pt-3 transition-colors group-hover/card-spotlight:bg-primary/8">
                     <div
-                      className="w-full rounded-t-2xl bg-primary transition-all"
-                      style={{ height: barHeight }}
+                      className="dashboard-workload-bar w-full rounded-t-2xl bg-primary transition-colors group-hover/card-spotlight:bg-primary/90"
+                      style={{
+                        height: barHeight,
+                        animationDelay: `${index * 75}ms`,
+                      }}
                     />
                   </div>
-                  <p className="mt-3 truncate text-center text-sm font-semibold text-foreground">
+                  <p className="mt-3 truncate text-center text-sm font-semibold text-foreground transition-colors group-hover/card-spotlight:text-primary">
                     {item.label}
                   </p>
                 </Link>
@@ -611,7 +614,7 @@ function WorklogBriefLink({
   return (
     <Link
       href={`/worklog/detail/${item.worklogId}`}
-      className="rounded-2xl border border-border/70 bg-muted/30 px-4 py-4 transition hover:border-primary/30 hover:bg-muted/45 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+      className="rounded-2xl border border-border/70 bg-muted/30 px-4 py-4 transition-colors group-hover/card-spotlight:border-primary/20 group-hover/card-spotlight:bg-muted/45 hover:border-primary/30 hover:bg-muted/45 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
     >
       <div
         className={cn(
@@ -620,7 +623,7 @@ function WorklogBriefLink({
         )}
       >
         <div className="min-w-0">
-          <p className="line-clamp-2 text-sm font-semibold leading-6 text-foreground">
+          <p className="line-clamp-2 text-sm font-semibold leading-6 text-foreground transition-colors group-hover/card-spotlight:text-primary">
             {item.title}
           </p>
           {hasContext ? (
@@ -663,9 +666,9 @@ function BlockedWorklogPanel({ items }: { items: DashboardBlockedWorklog[] }) {
             <Link
               key={item.worklogId}
               href={`/worklog/detail/${item.worklogId}`}
-              className="rounded-2xl border border-border/70 bg-muted/30 px-4 py-4 transition hover:border-primary/30 hover:bg-muted/45 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+              className="rounded-2xl border border-border/70 bg-muted/30 px-4 py-4 transition-colors group-hover/card-spotlight:border-primary/20 group-hover/card-spotlight:bg-muted/45 hover:border-primary/30 hover:bg-muted/45 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
             >
-              <p className="line-clamp-2 text-sm font-semibold leading-6 text-foreground">
+              <p className="line-clamp-2 text-sm font-semibold leading-6 text-foreground transition-colors group-hover/card-spotlight:text-primary">
                 {item.title}
               </p>
               <p className="mt-2 text-xs text-muted-foreground">
@@ -693,14 +696,16 @@ function DashboardPanel({
   children: ReactNode;
 }) {
   return (
-    <section className="workspace-panel-soft rounded-2xl p-5">
+    <CardSpotlight className="rounded-[24px] p-5">
       <div className="mb-5 flex flex-col gap-3 border-b border-border/70 pb-4 sm:flex-row sm:items-start sm:justify-between">
         <div className="flex min-w-0 items-start gap-3">
-          <div className="flex size-10 shrink-0 items-center justify-center rounded-2xl border border-border/70 bg-background/60 text-primary">
+          <div className="flex size-10 shrink-0 items-center justify-center rounded-2xl border border-border/70 bg-background/60 text-primary transition-colors group-hover/card-spotlight:border-primary/30 group-hover/card-spotlight:bg-primary/8 group-hover/card-spotlight:text-primary">
             <Icon className="size-5" />
           </div>
           <div className="min-w-0">
-            <h2 className="text-base font-semibold text-foreground">{title}</h2>
+            <h2 className="text-base font-semibold text-foreground transition-colors group-hover/card-spotlight:text-primary">
+              {title}
+            </h2>
             {description ? (
               <p className="mt-1 text-sm leading-6 text-muted-foreground">
                 {description}
@@ -715,7 +720,7 @@ function DashboardPanel({
         ) : null}
       </div>
       {children}
-    </section>
+    </CardSpotlight>
   );
 }
 
@@ -735,11 +740,11 @@ function RateRow({
   return (
     <Link
       href={href}
-      className="block rounded-2xl border border-border/70 bg-background/45 px-4 py-3 transition hover:border-primary/30 hover:bg-background/70 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+      className="block rounded-2xl border border-border/70 bg-background/45 px-4 py-3 transition-colors group-hover/card-spotlight:border-primary/20 group-hover/card-spotlight:bg-background/60 hover:border-primary/30 hover:bg-background/70 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
     >
       <div className="flex items-start justify-between gap-3">
         <div className="min-w-0">
-          <p className="truncate text-sm font-semibold text-foreground">
+          <p className="truncate text-sm font-semibold text-foreground transition-colors group-hover/card-spotlight:text-primary">
             {label}
           </p>
           <p className="mt-1 text-xs text-muted-foreground">{detail}</p>
@@ -748,7 +753,7 @@ function RateRow({
       </div>
       <div className="mt-3 h-2 overflow-hidden rounded-full bg-muted">
         <div
-          className="h-full rounded-full bg-primary"
+          className="h-full rounded-full bg-primary transition-colors group-hover/card-spotlight:bg-primary/90"
           style={{ width: `${clampRate(rate) * 100}%` }}
         />
       </div>

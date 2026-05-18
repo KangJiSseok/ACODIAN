@@ -153,6 +153,17 @@ test("workspace shell uses light gray navigation colors outside dark mode", () =
   assert.match(gnb, /dark:border-white\/10/);
 });
 
+test("sidebar moves a shared active pill between navigation tabs", () => {
+  assert.match(sidebar, /const navListRef = useRef<HTMLDivElement>\(null\)/);
+  assert.match(sidebar, /const activeItemRefs = useRef\(new Map<string, HTMLElement>\(\)\)/);
+  assert.match(sidebar, /const activeNavKey = useMemo/);
+  assert.match(sidebar, /setActivePillStyle/);
+  assert.match(sidebar, /translate3d\(0, \$\{offsetTop\}px, 0\)/);
+  assert.match(sidebar, /aria-hidden="true"/);
+  assert.match(sidebar, /motion-reduce:transition-none/);
+  assert.doesNotMatch(sidebar, /isActive\s*\?\s*"bg-primary\/10 text-primary/);
+});
+
 test("my profile lets users change the primary team through users me", () => {
   assert.match(authService, /primaryTeamId: number \| null/);
   assert.match(authService, /primary_team_id: payload\.primaryTeamId/);
