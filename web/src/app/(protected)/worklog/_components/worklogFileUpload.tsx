@@ -7,12 +7,18 @@ import { cn } from "@/lib/utils"
 
 interface WorklogFileUploadProps {
   attachmentNames: string[]
+  maxFileCount: number
+  maxFileSizeMb: number
+  maxTotalSizeMb: number
   onAddAttachmentFiles: (files: File[]) => void
   onRemoveAttachmentName: (name: string) => void
 }
 
 export function WorklogFileUpload({
   attachmentNames,
+  maxFileCount,
+  maxFileSizeMb,
+  maxTotalSizeMb,
   onAddAttachmentFiles,
   onRemoveAttachmentName,
 }: WorklogFileUploadProps) {
@@ -89,9 +95,14 @@ export function WorklogFileUpload({
             <p className="mt-1 text-xs text-muted-foreground">
               파일을 이 영역에 끌어다 놓거나 파일 선택 버튼으로 첨부합니다.
             </p>
+            <p className="mt-1 text-xs text-muted-foreground">
+              최대 {maxFileCount}개, 개당 {maxFileSizeMb}MB, 전체{" "}
+              {maxTotalSizeMb}MB까지 업로드할 수 있습니다.
+            </p>
             {hasFiles ? (
               <p className="mt-1 text-xs font-medium text-primary">
-                현재 {attachmentNames.length}개 파일이 선택되었습니다.
+                현재 {attachmentNames.length}/{maxFileCount}개 파일이
+                선택되었습니다.
               </p>
             ) : null}
           </div>
