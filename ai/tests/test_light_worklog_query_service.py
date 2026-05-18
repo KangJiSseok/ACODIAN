@@ -88,6 +88,26 @@ def test_query_service_passes_allowed_team_ids_into_system_prompt() -> None:
     )
 
 
+def test_query_service_passes_empty_allowed_team_ids_into_system_prompt() -> None:
+    adapter = FakeAdapter(
+        {
+            "llm_response": {"content": "answer"},
+            "data": {"references": []},
+        }
+    )
+    service = LightWorklogQueryService(
+        settings_obj=Settings(_env_file=None),
+        adapter_factory=lambda: adapter,
+    )
+
+    asyncio.run(service.query_worklogs(make_request(allowedTeamIds=[])))
+
+    assert len(adapter.calls) == 1
+    assert adapter.calls[0].system_prompt is not None
+    assert "allowedTeamIds = []" in adapter.calls[0].system_prompt
+    assert "no teams are permitted" in adapter.calls[0].system_prompt
+
+
 def test_query_service_treats_null_allowed_team_ids_as_all_scope() -> None:
     adapter = FakeAdapter(
         {
