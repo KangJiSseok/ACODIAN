@@ -485,6 +485,49 @@ class WorklogServiceTest {
     }
 
     @Test
+    @DisplayName("실패한 AI 요약은 작성자 본인이 다시 후처리 요청할 수 있다")
+    void retryAiSummary_republishes_post_process_event_when_failed() {
+        // given
+        CustomUserPrincipal principal = principal();
+        Worklog worklog = savedWorklog(WorklogStatus.IN_PROGRESS);
+        worklog.failAiProcessing();
+        given(worklogRepository.findById(WORKLOG_ID)).willReturn(Optional.of(worklog));
+        given(teamService.getTeamOrThrow(TEAM_ID)).willReturn(sampleTeam());
+
+        // when
+        worklogService.retryAiSummary(principal, WORKLOG_ID);
+
+        // then
+        assertThat(worklog.getAiProcessingStatus()).isEqualTo(AiProcessingStatus.PROCESSING);
+        ArgumentCaptor<WorklogAiPostProcessRequestedEvent> eventCaptor =
+                ArgumentCaptor.forClass(WorklogAiPostProcessRequestedEvent.class);
+        verify(eventPublisher).publishEvent(eventCaptor.capture());
+        assertThat(eventCaptor.getValue().worklogId()).isEqualTo(WORKLOG_ID);
+        assertThat(eventCaptor.getValue().authorId()).isEqualTo(USER_ID);
+        assertThat(eventCaptor.getValue().teamId()).isEqualTo(TEAM_ID);
+        assertThat(eventCaptor.getValue().departmentId()).isEqualTo(DEPARTMENT_ID);
+        assertThat(eventCaptor.getValue().files()).isEmpty();
+    }
+
+    @Test
+    @DisplayName("AI 요약 실패 상태가 아니면 재요청을 차단한다")
+    void retryAiSummary_rejects_non_failed_status() {
+        // given
+        CustomUserPrincipal principal = principal();
+        Worklog worklog = savedWorklog(WorklogStatus.IN_PROGRESS);
+        given(worklogRepository.findById(WORKLOG_ID)).willReturn(Optional.of(worklog));
+
+        // when & then
+        assertThatThrownBy(() -> worklogService.retryAiSummary(principal, WORKLOG_ID))
+                .isInstanceOf(BusinessException.class)
+                .extracting(e -> ((BusinessException) e).getErrorCode())
+                .isEqualTo(ErrorCode.WORKLOG_AI_RETRY_STATUS_INVALID);
+
+        verify(teamService, never()).getTeamOrThrow(any());
+        verify(eventPublisher, never()).publishEvent(any(Object.class));
+    }
+
+    @Test
     @DisplayName("상태가 실제로 바뀌지 않으면 상태 변경 전용 API 는 이력을 남기지 않는다")
     void updateWorklogStatus_skips_history_when_status_is_unchanged() {
         // given
