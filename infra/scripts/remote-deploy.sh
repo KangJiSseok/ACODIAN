@@ -64,7 +64,7 @@ docker compose \
   --env-file "$ENV_FILE" \
   -f "$COMPOSE_FILE" \
   -p "$PROJECT_NAME" \
-  up -d --remove-orphans postgres redis api web ai ai_worker
+  up -d --remove-orphans postgres redis qdrant neo4j api web ai ai_worker
 
 echo "[remote-deploy] post-deploy state"
 docker compose \
