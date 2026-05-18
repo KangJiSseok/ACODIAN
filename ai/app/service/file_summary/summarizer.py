@@ -22,7 +22,7 @@ logger = logging.getLogger(__name__)
 
 
 class SummaryPayload(BaseModel):
-    summary: str = Field(description="3 to 5 sentence summary in Korean.")
+    summary: str = Field(description="1 to 2 sentence summary in Korean.")
 
 
 class ImagePayload(BaseModel):
@@ -40,7 +40,7 @@ a faithful summary.
 
 Rules:
 - The summary MUST be written in Korean (한국어), regardless of the source language.
-- Length: 3 to 5 sentences.
+- Length: 1 to 2 sentences.
 - Capture the core topic, key facts, and any conclusions.
 - Do not add information that is not present in the source.
 - Keep proper nouns, technical terms, and acronyms in their original form.
@@ -54,7 +54,7 @@ the images together to produce one combined summary.
 
 Rules:
 - The summary MUST be written in Korean (한국어), regardless of the source language.
-- Length: 3 to 5 sentences.
+- Length: 1 to 2 sentences.
 - Integrate information from embedded images (charts, screenshots, diagrams,
   pictures) when relevant. If an image is decorative, you may ignore it.
 - Do not list the images separately; weave their content into the summary.
@@ -68,7 +68,7 @@ You are an image analyst. Look at the supplied image and produce two outputs:
 
 1. ocr_text: Any text visible in the image, transcribed verbatim in its
    original language. If there is no readable text, return an empty string.
-2. description: A short Korean (한국어) description (1-3 sentences) of what
+2. description: A short Korean (한국어) description (1-2 sentences) of what
    the image depicts. The description MUST be in Korean even if the source
    image is in another language. Keep proper nouns and technical terms in
    their original form.
@@ -78,7 +78,7 @@ Do not invent content that is not visible.
 
 SVG_INSTRUCTION = """\
 You are an SVG analyst. The user will paste the raw SVG XML source.
-Analyze the structure and produce a 2-4 sentence Korean (한국어) description
+Analyze the structure and produce a 1-2 sentence Korean (한국어) description
 of what the graphic depicts (shapes, layout, likely subject). The summary
 MUST be written in Korean. If the source is too abstract or unreadable, say
 so briefly in Korean. Do not invent content.
