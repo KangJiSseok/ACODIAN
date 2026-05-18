@@ -126,6 +126,26 @@ public class Notification {
     }
 
     /**
+     * 선행 업무 완료 알림은 부모 업무 기준으로 한 번만 재발행되도록 WORKLOG 참조 identity 를 부모 ID 로 고정한다.
+     */
+    public static Notification createWorklogDependencyReady(Long userId,
+                                                            Long departmentId,
+                                                            Long teamId,
+                                                            Long parentWorklogId,
+                                                            String title,
+                                                            String content) {
+        return createWorklogReminder(
+                userId,
+                departmentId,
+                teamId,
+                parentWorklogId,
+                NotificationType.WORKLOG_DEPENDENCY_READY,
+                title,
+                content
+        );
+    }
+
+    /**
      * 업무 reminder 계열이 같은 중복 방지 identity 와 WORKLOG 참조 계약을 공유하게 한다.
      */
     private static Notification createWorklogReminder(Long userId,

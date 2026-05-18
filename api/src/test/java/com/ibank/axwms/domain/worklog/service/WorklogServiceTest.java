@@ -15,6 +15,7 @@ import com.ibank.axwms.domain.worklog.dto.UpdateWorklogStatusApiDto;
 import com.ibank.axwms.domain.worklog.dto.UpdateWorklogApiDto;
 import com.ibank.axwms.domain.worklog.entity.Worklog;
 import com.ibank.axwms.domain.worklog.entity.WorklogTag;
+import com.ibank.axwms.domain.worklog.event.WorklogCompletedEvent;
 import com.ibank.axwms.domain.worklog.policy.WorklogStatusPolicy;
 import com.ibank.axwms.domain.worklog.repository.WorklogDependencyRepository;
 import com.ibank.axwms.domain.worklog.repository.WorklogRepository;
@@ -36,6 +37,7 @@ import org.mockito.ArgumentCaptor;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageImpl;
 import org.springframework.data.domain.PageRequest;
@@ -71,6 +73,7 @@ class WorklogServiceTest {
     @Mock private WorklogDependencyService worklogDependencyService;
     @Mock private WorklogStatusPolicy worklogStatusPolicy;
     @Mock private TagService tagService;
+    @Mock private ApplicationEventPublisher applicationEventPublisher;
 
     @InjectMocks private WorklogService worklogService;
 
@@ -121,6 +124,34 @@ class WorklogServiceTest {
                 .containsExactly(1L, 2L);
         verify(tagService).incrementUsageCountByIds(TAG_IDS);
         verify(worklogDependencyService).registerPredecessor(eq(WORKLOG_ID), eq(TEAM_ID), eq(request.predecessorWorklogIds()));
+        verify(applicationEventPublisher, never()).publishEvent(any(Object.class));
+    }
+
+    @Test
+    @DisplayName("최초 상태가 COMPLETED 인 업무 생성은 완료 전환 이벤트를 발행하지 않는다.")
+    void 최초_상태가_COMPLETED인_업무_생성은_완료_전환_이벤트를_발행하지_않는다() {
+        // given
+        CustomUserPrincipal principal = principal();
+        CreateWorklogApiDto.Request request = request(INSTRUCTION_DATE, DUE_DATE, WorklogStatus.COMPLETED);
+        given(teamService.getTeamOrThrow(TEAM_ID)).willReturn(sampleTeam());
+        given(teamService.isMember(USER_ID, TEAM_ID)).willReturn(true);
+        given(worklogRepository.save(any(Worklog.class))).willAnswer(invocation -> {
+            Worklog toSave = invocation.getArgument(0);
+            ReflectionTestUtils.setField(toSave, "id", WORKLOG_ID);
+            return toSave;
+        });
+        given(tagService.normalizeExistingTagIds(TAG_IDS)).willReturn(TAG_IDS);
+
+        // when
+        worklogService.createWorklog(principal, request, List.of());
+
+        // then
+        verify(worklogStatusHistoryService).createStatusHistory(
+                eq(WORKLOG_ID),
+                eq(WorklogStatus.COMPLETED),
+                eq(USER_ID)
+        );
+        verify(applicationEventPublisher, never()).publishEvent(any(Object.class));
     }
 
     @Test
@@ -279,6 +310,7 @@ class WorklogServiceTest {
                 eq(USER_ID),
                 eq("완료 처리")
         );
+        verify(applicationEventPublisher).publishEvent(new WorklogCompletedEvent(WORKLOG_ID));
     }
 
     @Test
@@ -308,6 +340,7 @@ class WorklogServiceTest {
                 eq(USER_ID),
                 eq("완료 처리")
         );
+        verify(applicationEventPublisher).publishEvent(new WorklogCompletedEvent(WORKLOG_ID));
     }
 
     @Test
@@ -332,6 +365,7 @@ class WorklogServiceTest {
         assertThat(worklog.getStatusCode()).isEqualTo(WorklogStatus.IN_PROGRESS);
         verify(worklogStatusPolicy, never()).canTransition(any(), any());
         verify(worklogStatusHistoryService, never()).createStatusHistory(any(), any(), any(), any(), any());
+        verify(applicationEventPublisher, never()).publishEvent(any(Object.class));
     }
 
     @Test
@@ -355,6 +389,7 @@ class WorklogServiceTest {
         assertThat(worklog.getCompletionDate()).isNull();
         verify(worklogStatusPolicy, never()).canTransition(any(), any());
         verify(worklogStatusHistoryService, never()).createStatusHistory(any(), any(), any(), any(), any());
+        verify(applicationEventPublisher, never()).publishEvent(any(Object.class));
     }
 
     @Test
@@ -378,6 +413,7 @@ class WorklogServiceTest {
         assertThat(worklog.getCompletionDate()).isNull();
         verify(fileService, never()).uploadWorklogFiles(any(), any(), any());
         verify(worklogStatusHistoryService, never()).createStatusHistory(any(), any(), any(), any(), any());
+        verify(applicationEventPublisher, never()).publishEvent(any(Object.class));
     }
 
     @Test
@@ -467,12 +503,17 @@ class WorklogServiceTest {
     }
 
     private static CreateWorklogApiDto.Request request(LocalDate instructionDate, LocalDate dueDate) {
+        return request(instructionDate, dueDate, WorklogStatus.IN_PROGRESS);
+    }
+
+    /** 생성 시 최초 상태별 이벤트 scope 를 분리해 검증할 수 있도록 상태만 바꾸는 fixture 를 제공한다. */
+    private static CreateWorklogApiDto.Request request(LocalDate instructionDate, LocalDate dueDate, WorklogStatus statusCode) {
         return new CreateWorklogApiDto.Request(
                 TEAM_ID,
                 "test",
                 "test",
                 "test",
-                WorklogStatus.IN_PROGRESS,
+                statusCode,
                 WorklogImportance.HIGH,
                 new BigDecimal("3.10"),
                 instructionDate,

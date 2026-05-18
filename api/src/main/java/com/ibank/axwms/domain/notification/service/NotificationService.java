@@ -16,14 +16,14 @@ import com.ibank.axwms.global.response.PageResponse;
 import com.ibank.axwms.global.security.CustomUserPrincipal;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
+import java.time.temporal.ChronoUnit;
 import java.util.List;
+import java.util.Optional;
 import lombok.RequiredArgsConstructor;
 import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
-
-import java.time.temporal.ChronoUnit;
-import java.util.Optional;
 
 @Service
 @RequiredArgsConstructor
@@ -34,6 +34,7 @@ public class NotificationService {
     private static final String WORKLOG_DUE_SOON_TITLE = "업무 마감 3일 전 알림";
     private static final String WORKLOG_DUE_TODAY_TITLE = "업무 마감 오늘까지 알림";
     private static final String WORKLOG_OVERDUE_TITLE = "업무 마감일 초과 알림";
+    private static final String WORKLOG_DEPENDENCY_READY_TITLE = "선행 업무 완료 알림";
     private static final List<String> WORKLOG_REMINDER_NOTIFICATION_TYPES = List.of(
             NotificationType.WORKLOG_DUE_SOON.name(),
             NotificationType.WORKLOG_DUE_TODAY.name(),
@@ -142,6 +143,78 @@ public class NotificationService {
         });
         notificationRepository.flush();
         return candidates.size();
+    }
+
+    /**
+     * 부모 업무 기준 1회 알림 계약을 DB upsert no-op 과 이벤트 발행 조건으로 함께 고정한다.
+     */
+    @Transactional(propagation = Propagation.REQUIRES_NEW)
+    public Optional<Notification> createWorklogDependencyReadyNotification(Long recipientUserId,
+                                                                           Long departmentId,
+                                                                           Long teamId,
+                                                                           Long parentWorklogId,
+                                                                           String teamName,
+                                                                           String parentTitle) {
+        String referenceType = NotificationReferenceType.WORKLOG.name();
+        String notificationType = NotificationType.WORKLOG_DEPENDENCY_READY.name();
+        if (notificationRepository.existsByUserIdAndReferenceTypeAndReferenceIdAndNotificationType(
+                recipientUserId,
+                referenceType,
+                parentWorklogId,
+                notificationType
+        )) {
+            return Optional.empty();
+        }
+
+        Notification notification = Notification.createWorklogDependencyReady(
+                recipientUserId,
+                departmentId,
+                teamId,
+                parentWorklogId,
+                WORKLOG_DEPENDENCY_READY_TITLE,
+                createWorklogDependencyReadyContent(teamName, parentTitle)
+        );
+        int insertedCount = notificationRepository.insertWorklogDependencyReadyNotificationIfAbsent(
+                notification.getUserId(),
+                notification.getDepartmentId(),
+                notification.getTeamId(),
+                notification.getNotificationType(),
+                notification.getTitle(),
+                notification.getContent(),
+                notification.getReferenceType(),
+                notification.getReferenceId()
+        );
+        if (insertedCount == 0) {
+            return Optional.empty();
+        }
+
+        Optional<Notification> savedNotification = notificationRepository
+                .findFirstByUserIdAndReferenceTypeAndReferenceIdAndNotificationTypeOrderByIdAsc(
+                        recipientUserId,
+                        referenceType,
+                        parentWorklogId,
+                        notificationType
+                );
+        savedNotification.ifPresent(saved -> publishNotificationCreatedEvents(List.of(saved)));
+        return savedNotification;
+    }
+
+    /**
+     * 팀명/부모 제목이 누락되어도 알림 본문이 빈 값으로 깨지지 않도록 운영 메시지의 최소 문맥을 보존한다.
+     */
+    private String createWorklogDependencyReadyContent(String teamName, String parentTitle) {
+        return defaultIfBlank(teamName, "소속 팀") + "의 " + defaultIfBlank(parentTitle, "대상 업무")
+                + " 선행 업무가 모두 완료되었습니다. 업무를 진행해 주세요.";
+    }
+
+    /**
+     * 커밋 후 snapshot 이벤트의 선택 필드가 null 이어도 사용자 메시지 조립 책임을 listener 로 새지 않게 한다.
+     */
+    private String defaultIfBlank(String value, String defaultValue) {
+        if (value == null || value.isBlank()) {
+            return defaultValue;
+        }
+        return value;
     }
 
     /**

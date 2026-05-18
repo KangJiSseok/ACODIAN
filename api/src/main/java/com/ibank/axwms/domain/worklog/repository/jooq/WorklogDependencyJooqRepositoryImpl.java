@@ -2,6 +2,7 @@ package com.ibank.axwms.domain.worklog.repository.jooq;
 
 import com.ibank.axwms.domain.worklog.WorklogStatus;
 import com.ibank.axwms.domain.worklog.repository.jooq.projection.BlockedPredecessorRowProjection;
+import com.ibank.axwms.domain.worklog.repository.jooq.projection.WorklogDependencyReadyParentProjection;
 import com.ibank.axwms.domain.worklog.repository.jooq.projection.WorklogDependencyProjection;
 import lombok.RequiredArgsConstructor;
 import org.jooq.CommonTableExpression;
@@ -136,5 +137,55 @@ public class WorklogDependencyJooqRepositoryImpl implements WorklogDependencyJoo
                 .and(pred.STATUS_CODE.ne(WorklogStatus.COMPLETED.name()))
                 .orderBy(my.WORKLOG_ID.asc(), pred.WORKLOG_ID.asc())
                 .fetch(record -> BlockedPredecessorRowProjection.from(record, my, pred));
+    }
+
+    /**
+     * 완료된 선행 업무를 anchor 로 잡고 직접 부모의 다른 미삭제 선행이 모두 완료됐을 때만 후속 알림 후보로 노출한다.
+     */
+    @Override
+    public List<WorklogDependencyReadyParentProjection> findReadyParentsByCompletedPredecessorId(Long completedWorklogId) {
+        if (completedWorklogId == null) {
+            return List.of();
+        }
+
+        var anchorDependency = TB_WORKLOG_DEPENDENCY.as("anchor_dependency");
+        var parent = TB_WORKLOG.as("parent_worklog");
+        var parentTeam = TB_TEAM.as("parent_team");
+        var allDependency = TB_WORKLOG_DEPENDENCY.as("all_dependency");
+        var predecessor = TB_WORKLOG.as("predecessor_worklog");
+
+        return dsl.selectDistinct(
+                        parent.WORKLOG_ID,
+                        parent.AUTHOR_ID,
+                        parent.TEAM_ID,
+                        parentTeam.DEPARTMENT_ID,
+                        parentTeam.TEAM_NAME,
+                        parent.TITLE
+                )
+                .from(anchorDependency)
+                .join(parent).on(parent.WORKLOG_ID.eq(anchorDependency.WORKLOG_ID))
+                .join(parentTeam).on(parentTeam.TEAM_ID.eq(parent.TEAM_ID)
+                        .and(parentTeam.DELETED_AT.isNull()))
+                .where(anchorDependency.DEPENDS_ON_WORKLOG_ID.eq(completedWorklogId))
+                .and(parent.IS_DELETED.isFalse())
+                .and(DSL.notExists(
+                        DSL.selectOne()
+                                .from(allDependency)
+                                .join(predecessor)
+                                .on(predecessor.WORKLOG_ID.eq(allDependency.DEPENDS_ON_WORKLOG_ID))
+                                .where(allDependency.WORKLOG_ID.eq(parent.WORKLOG_ID))
+                                .and(predecessor.IS_DELETED.isFalse())
+                                .and(predecessor.STATUS_CODE.ne(WorklogStatus.COMPLETED.name()))
+                ))
+                .orderBy(parent.WORKLOG_ID.asc())
+                .fetch(record -> WorklogDependencyReadyParentProjection.from(
+                        record,
+                        parent.WORKLOG_ID,
+                        parent.AUTHOR_ID,
+                        parent.TEAM_ID,
+                        parentTeam.DEPARTMENT_ID,
+                        parentTeam.TEAM_NAME,
+                        parent.TITLE
+                ));
     }
 }
