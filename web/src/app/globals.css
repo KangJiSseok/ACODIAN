@@ -231,9 +231,51 @@ pre {
 }
 
 .worklog-root:has(.worklog-ai-mode) {
-  min-height: calc(100svh - 7rem);
+  height: calc(100svh - 10rem);
+  min-height: 0;
   padding-bottom: 0;
   overflow: hidden;
+}
+
+.workspace-main:has(.worklog-ai-mode) {
+  overflow: hidden;
+}
+
+.ai-chat-scroll {
+  scrollbar-width: thin;
+  scrollbar-color: color-mix(in srgb, var(--primary) 42%, transparent)
+    transparent;
+}
+
+.ai-chat-scroll::-webkit-scrollbar {
+  width: 0.5rem;
+}
+
+.ai-chat-scroll::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.ai-chat-scroll::-webkit-scrollbar-thumb {
+  min-height: 3rem;
+  border: 0.18rem solid transparent;
+  border-radius: 999px;
+  background:
+    linear-gradient(
+        180deg,
+        color-mix(in srgb, var(--primary) 58%, transparent),
+        color-mix(in srgb, var(--muted-foreground) 42%, transparent)
+      )
+      padding-box;
+}
+
+.ai-chat-scroll::-webkit-scrollbar-thumb:hover {
+  background:
+    linear-gradient(
+        180deg,
+        color-mix(in srgb, var(--primary) 72%, transparent),
+        color-mix(in srgb, var(--muted-foreground) 54%, transparent)
+      )
+      padding-box;
 }
 
 .worklog-root [data-slot="button"][data-variant="default"] {

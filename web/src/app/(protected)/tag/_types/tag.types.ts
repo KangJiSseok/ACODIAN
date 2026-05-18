@@ -24,6 +24,11 @@ export interface SearchTagsParams {
 
 export interface TagMergeCandidate {
   id: string
+  numericId: number
+  statusCode: string
+  resultDescription?: string | null
+  targetTag: TagItem
+  sourceTags: TagItem[]
   targetTagName: string
   sourceTagNames: string[]
 }
@@ -34,10 +39,16 @@ export interface TagMergeSourceApiItem {
   name?: string | null
   tagName?: string | null
   sourceTagName?: string | null
+  usageCount?: number | string | null
 }
 
 export interface TagMergeCandidateApiItem {
   id?: number | string
+  mergeCandidateId?: number | string
+  statusCode?: string | null
+  resultDescription?: string | null
+  mergeTargetTag?: TagMergeSourceApiItem | null
+  mergeCandidateTags?: TagMergeSourceApiItem[] | null
   targetTagName?: string | null
   mergedTagName?: string | null
   mergeTargetTagName?: string | null
@@ -56,3 +67,9 @@ export type TagMergeCandidatesApiResponse =
       candidates?: TagMergeCandidateApiItem[]
       mergeCandidates?: TagMergeCandidateApiItem[]
     }
+
+export interface UpdateTagMergeCandidateRequest {
+  mergeTargetTagId: number
+  resultDescription?: string | null
+  mergeCandidateTagIds: number[]
+}

@@ -19,7 +19,7 @@ test("tag navigation exposes list and merge pages", () => {
   assert.match(breadcrumbs, /findNavSubItemByHref\(pathname\)/);
 });
 
-test("tag merge page renders one mocked merge candidate", () => {
+test("tag merge page renders API-backed merge candidates", () => {
   const mergePagePath = new URL(
     "../src/app/(protected)/tag/merge/page.tsx",
     import.meta.url,
@@ -41,18 +41,32 @@ test("tag merge page renders one mocked merge candidate", () => {
   assert.doesNotMatch(page, /HelpCircle/);
   assert.doesNotMatch(page, /태그 병합 안내/);
 
-  assert.match(service, /mockTagMergeCandidates/);
-  assert.match(service, /targetTagName:\s*"결산"/);
-  assert.match(service, /sourceTagNames:\s*\["월말결산",\s*"결산업무"\]/);
+  assert.doesNotMatch(service, /mockTagMergeCandidates/);
+  assert.doesNotMatch(service, /targetTagName:\s*"결산"/);
+  assert.doesNotMatch(service, /sourceTagNames:\s*\["월말결산",\s*"결산업무"\]/);
+  assert.match(service, /apiClient\.get<TagMergeCandidatesApiResponse>/);
+  assert.match(service, /"\/tags\/merge-candidates"/);
+  assert.match(service, /statusCode:\s*"PENDING"/);
+  assert.match(service, /apiClient\.patch/);
+  assert.match(service, /apiClient\.post<void>/);
   assert.match(service, /toTagMergeCandidates/);
 
   assert.match(hook, /mergeCandidates/);
   assert.match(hook, /useTagMergeCandidates/);
-  assert.match(hookIndex, /export \{ useTagList, useTagMergeCandidates \}/);
+  assert.match(hook, /useUpdateTagMergeCandidate/);
+  assert.match(hook, /useMergeTagCandidate/);
+  assert.match(hookIndex, /useTagList/);
+  assert.match(hookIndex, /useTagMergeCandidates/);
+  assert.match(hookIndex, /useUpdateTagMergeCandidate/);
+  assert.match(hookIndex, /useMergeTagCandidate/);
 
   assert.match(types, /export interface TagMergeCandidate/);
+  assert.match(types, /numericId: number/);
+  assert.match(types, /targetTag: TagItem/);
+  assert.match(types, /sourceTags: TagItem\[\]/);
   assert.match(types, /targetTagName: string/);
   assert.match(types, /sourceTagNames: string\[\]/);
+  assert.match(types, /UpdateTagMergeCandidateRequest/);
 
   assert.match(component, /병합될 태그명/);
   assert.match(component, /합쳐질 태그들/);
@@ -60,7 +74,7 @@ test("tag merge page renders one mocked merge candidate", () => {
   assert.doesNotMatch(component, /CardSpotlight/);
   assert.match(component, /tags=\{\[candidate\.targetTagName\]\}/);
   assert.match(component, /#\{tag\}/);
-  assert.match(component, /tags=\{sourceTagNames\}/);
+  assert.match(component, /tags=\{candidate\.sourceTagNames\}/);
   assert.match(component, /tags\.map/);
   assert.match(component, /Pencil/);
   assert.match(component, /GitMerge/);
@@ -68,7 +82,7 @@ test("tag merge page renders one mocked merge candidate", () => {
   assert.match(component, /variant="default"[\s\S]*>\s*<GitMerge/);
   assert.match(component, /h-11 px-5 text-sm font-semibold/);
   assert.match(component, />\s*수정\s*</);
-  assert.match(component, />\s*병합\s*</);
+  assert.match(component, /"병합 중"\s*:\s*"병합"/);
   assert.match(component, /Dialog/);
   assert.match(component, /DialogTitle>\s*합쳐질 태그 수정\s*<\/DialogTitle/);
   assert.match(component, /useTagList/);
@@ -78,4 +92,6 @@ test("tag merge page renders one mocked merge candidate", () => {
   assert.match(component, /<X className="size-3\.5" \/>/);
   assert.match(component, /태그 검색/);
   assert.match(component, /변경사항 반영/);
+  assert.match(component, /mergeTagCandidate\.mutate/);
+  assert.match(component, /updateMergeCandidate\.mutate/);
 });

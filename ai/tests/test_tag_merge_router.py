@@ -26,6 +26,11 @@ class FakeTagMergeService:
                             tagId=2,
                             tagName="b",
                             usageCount=3,
+                        ),
+                        TagMergeCandidateTag(
+                            tagId=3,
+                            tagName="c",
+                            usageCount=2,
                         )
                     ],
                 )

@@ -8,7 +8,8 @@ TAG_MERGE_SYSTEM = """
 4. description이 비어 있으면 tagName만 보고 판단하되 보수적으로 판단합니다.
 5. 각 그룹의 targetTagId는 그룹 안에서 usageCount가 가장 큰 태그여야 합니다.
 6. candidateTagIds에는 targetTagId를 포함하지 않습니다.
-7. 확신이 낮은 후보는 반환하지 않습니다.
+7. 각 그룹은 targetTagId와 candidateTagIds를 합쳐 최소 3개 이상의 태그를 병합해야 하며, candidateTagIds는 최소 2개 이상이어야 합니다.
+8. 확신이 낮은 후보는 반환하지 않습니다.
 
 응답 형식은 아래 JSON 객체만 허용합니다.
 resultDescription은 병합 후 대표 태그에 반영할 설명이며, 가능한 한 100자 미만의 한국어 1문장으로 작성하고 150자를 넘기지 않습니다.

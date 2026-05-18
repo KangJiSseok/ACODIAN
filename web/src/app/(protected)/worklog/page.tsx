@@ -3,6 +3,8 @@
 import Link from "next/link"
 import { useMemo, useState } from "react"
 import {
+  ArrowLeft,
+  ArrowUp,
   ChevronDown,
   Plus,
   RefreshCw,
@@ -32,14 +34,12 @@ import { Input } from "@/components/ui/input"
 import { Select } from "@/components/ui/select"
 import { cn } from "@/lib/utils"
 import {
-  formatDate,
   getImportanceLabel,
   getWorklogStatusLabel,
 } from "./_utils/worklogFormat"
 import type {
   ImportanceLevel,
   SearchWorklogsParams,
-  WorklogListItem,
   WorklogStatus,
 } from "./_types/worklog.types"
 
@@ -140,7 +140,6 @@ export default function WorklogPage() {
   const activeQuery = hasSearchCondition ? searchQuery : listQuery
   const worklogPage = activeQuery.data
   const isLoading = activeQuery.isLoading
-  const isFetching = activeQuery.isFetching
   const isError = activeQuery.isError
   const worklogs = worklogPage?.items ?? []
   const hasAiConversation = aiMessages.length > 0
@@ -187,19 +186,39 @@ export default function WorklogPage() {
     setShowFilters(false)
   }
 
+  function returnToWorklogList() {
+    setAiMode(false)
+    setAiDraftQuery("")
+    setAiMessages([])
+    setShowFilters(false)
+  }
+
   return (
     <div
       className={cn(
         "flex flex-col gap-6",
-        aiMode && "worklog-ai-mode min-h-0 flex-1 overflow-hidden"
+        aiMode && "worklog-ai-mode h-full min-h-0 overflow-hidden"
       )}
     >
       <PageHeader title="업무 검색" />
+      {aiMode ? (
+        <div className="flex justify-start">
+          <Button
+            type="button"
+            variant="secondary"
+            className="h-10 rounded-xl px-4 text-sm font-semibold"
+            onClick={returnToWorklogList}
+          >
+            <ArrowLeft className="size-4" />
+            업무일지 조회로 돌아가기
+          </Button>
+        </div>
+      ) : null}
       <div
         className={cn(
           "space-y-4",
-          aiMode && "min-h-0 flex-1 overflow-hidden",
-          aiMode && !hasAiConversation && "min-h-[calc(100vh-12rem)]"
+          aiMode && "flex min-h-0 flex-1 flex-col overflow-hidden",
+          aiMode && !hasAiConversation && "justify-center"
         )}
       >
         <div
@@ -274,7 +293,7 @@ export default function WorklogPage() {
                 <Button
                   type="button"
                   variant="secondary"
-                  className="ai-mode-trigger absolute right-2 top-1/2 h-9 -translate-y-1/2 rounded-xl px-3 text-sm font-semibold"
+                  className="ai-mode-trigger absolute right-2 top-1/2 h-9 -translate-y-1/2 rounded-xl px-3 text-sm font-semibold active:not-aria-[haspopup]:-translate-y-1/2"
                   onClick={() => {
                     setAiMode(true)
                     setShowFilters(false)
@@ -494,9 +513,6 @@ export default function WorklogPage() {
         {aiMode ? (
           <AiConversationWorkspace
             messages={aiMessages}
-            resultWorklogs={worklogs}
-            isResultLoading={isLoading || isFetching}
-            isResultError={isError}
             composerValue={aiDraftQuery}
             onComposerChange={setAiDraftQuery}
             onComposerSubmit={() => submitAiQuestion(aiDraftQuery)}
@@ -582,17 +598,11 @@ export default function WorklogPage() {
 
 function AiConversationWorkspace({
   messages,
-  resultWorklogs,
-  isResultLoading,
-  isResultError,
   composerValue,
   onComposerChange,
   onComposerSubmit,
 }: {
   messages: AiMessage[]
-  resultWorklogs: WorklogListItem[]
-  isResultLoading: boolean
-  isResultError: boolean
   composerValue: string
   onComposerChange: (value: string) => void
   onComposerSubmit: () => void
@@ -602,9 +612,9 @@ function AiConversationWorkspace({
   }
 
   return (
-    <section className="mx-auto grid h-[calc(100svh-11rem)] max-h-[calc(100svh-11rem)] w-full max-w-[86rem] min-h-0 gap-3 overflow-hidden pt-0 xl:grid-cols-[minmax(0,1fr)_minmax(280px,350px)] xl:items-stretch">
-      <div className="flex min-h-0 min-w-0 flex-col">
-        <div className="flex min-h-0 flex-1 flex-col gap-3 overflow-y-auto px-1 pb-2 pr-2">
+    <section className="mx-auto flex min-h-0 w-full max-w-5xl flex-1 flex-col overflow-hidden pt-0">
+      <div className="flex min-h-0 min-w-0 flex-1 flex-col">
+        <div className="ai-chat-scroll flex min-h-0 flex-1 flex-col gap-3 overflow-y-auto px-1 pb-6 pr-4">
           {messages.map((message) => (
             <div
               key={message.id}
@@ -635,42 +645,6 @@ function AiConversationWorkspace({
           onSubmit={onComposerSubmit}
         />
       </div>
-
-      <aside className="mb-3 flex h-[calc(100%-0.75rem)] min-h-0 flex-col rounded-[20px] border border-border/70 bg-card/72 p-3 backdrop-blur">
-        <div className="mb-2 flex shrink-0 items-center justify-between gap-3 px-1">
-          <div>
-            <p className="text-sm font-semibold text-foreground">
-              AI 추천 업무일지
-            </p>
-            <p className="mt-0.5 text-xs text-muted-foreground">
-              현재 질문과 화면 필터를 함께 반영한 결과입니다.
-            </p>
-          </div>
-          <span className="rounded-full bg-primary/10 px-2.5 py-0.5 text-xs font-semibold text-primary">
-            {resultWorklogs.length}건
-          </span>
-        </div>
-
-        <div className="min-h-0 flex-1 space-y-2 overflow-y-auto pr-1">
-          {isResultLoading ? (
-            <div className="rounded-2xl border border-dashed border-border/80 px-4 py-8 text-center text-sm text-muted-foreground">
-              AI 검색 결과를 불러오는 중입니다.
-            </div>
-          ) : isResultError ? (
-            <div className="rounded-2xl border border-dashed border-border/80 px-4 py-8 text-center text-sm text-muted-foreground">
-              AI 검색 결과를 불러오지 못했습니다.
-            </div>
-          ) : resultWorklogs.length > 0 ? (
-            resultWorklogs.map((worklog) => (
-              <AiResultCard key={worklog.id} worklog={worklog} />
-            ))
-          ) : (
-            <div className="rounded-2xl border border-dashed border-border/80 px-4 py-8 text-center text-sm text-muted-foreground">
-              조건에 맞는 업무 카드가 없습니다.
-            </div>
-          )}
-        </div>
-      </aside>
     </section>
   )
 }
@@ -684,9 +658,11 @@ function AiBottomComposer({
   onChange: (value: string) => void
   onSubmit: () => void
 }) {
+  const canSubmit = value.trim().length > 0
+
   return (
-    <div className="z-10 mb-3 w-full shrink-0">
-      <div className="ai-bottom-composer w-full rounded-[18px] border border-border/80 bg-card/95 px-3 py-2.5 backdrop-blur-xl">
+    <div className="z-10 mx-auto mb-3 w-full max-w-5xl shrink-0 px-1 pr-2">
+      <div className="ai-bottom-composer w-full rounded-[20px] border border-border/80 bg-card/95 px-4 py-3 backdrop-blur-xl">
         <div className="relative min-w-0">
           <textarea
             value={value}
@@ -696,39 +672,23 @@ function AiBottomComposer({
               event.preventDefault()
               onSubmit()
             }}
-            className="min-h-[2.75rem] w-full resize-none rounded-[14px] border border-transparent bg-transparent px-1 py-0.5 text-[15px] leading-6 text-foreground outline-none placeholder:text-muted-foreground"
+            className="min-h-[4.5rem] w-full resize-none rounded-[16px] border border-transparent bg-transparent py-0.5 pl-1 pr-14 text-[15px] leading-6 text-foreground outline-none placeholder:text-muted-foreground"
             placeholder="업무일지에 대해 이어서 물어보세요"
           />
+          <button
+            type="button"
+            className="absolute right-1 top-1 flex size-10 items-center justify-center rounded-full bg-foreground text-background shadow-sm transition hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-35"
+            aria-label="AI 검색 질문 전송"
+            disabled={!canSubmit}
+            onClick={onSubmit}
+          >
+            <ArrowUp className="size-5" />
+          </button>
           <div className="mt-1 flex items-center gap-2 text-muted-foreground">
             <p className="text-xs">Enter로 전송 · Shift+Enter로 줄바꿈</p>
           </div>
         </div>
       </div>
     </div>
-  )
-}
-
-function AiResultCard({ worklog }: { worklog: WorklogListItem }) {
-  return (
-    <Link
-      href={`/worklog/detail/${worklog.id}`}
-      className="block rounded-2xl border border-border/70 bg-muted/25 p-3 transition-all duration-200 hover:border-primary/35 hover:bg-primary/8"
-    >
-      <div className="flex flex-wrap items-center gap-2">
-        <StatusBadge status={worklog.status} />
-        <ImportanceBadge importance={worklog.importance} />
-      </div>
-      <p className="mt-2 line-clamp-2 text-sm font-semibold leading-5 text-foreground">
-        {worklog.title}
-      </p>
-      <p className="mt-1.5 line-clamp-2 text-xs leading-5 text-muted-foreground">
-        {worklog.aiSummary}
-      </p>
-      <div className="mt-3 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-muted-foreground">
-        <span>{worklog.teamName ?? "팀 미지정"}</span>
-        <span>{worklog.authorName ?? "작성자 미지정"}</span>
-        <span>마감 {formatDate(worklog.dueDate)}</span>
-      </div>
-    </Link>
   )
 }

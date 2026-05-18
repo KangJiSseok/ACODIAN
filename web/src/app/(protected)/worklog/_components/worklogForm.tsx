@@ -38,8 +38,12 @@ const editableStatusTransitionMap: Record<WorklogStatus, WorklogStatus[]> = {
 }
 
 const creatableStatusOptions = worklogStatusLegendOrder
-const TITLE_MAX_LENGTH = 50
-const CONTENT_MAX_LENGTH = 10000
+const TITLE_MAX_LENGTH = 100
+const CONTENT_MAX_LENGTH = 2000
+const FILE_SIZE_UNIT = 1024 * 1024
+const MAX_ATTACHMENT_COUNT = 10
+const MAX_ATTACHMENT_FILE_SIZE_BYTES = 20 * FILE_SIZE_UNIT
+const MAX_ATTACHMENT_TOTAL_SIZE_BYTES = 200 * FILE_SIZE_UNIT
 
 type SettingsValidationErrors = {
   actualHours?: string
@@ -296,20 +300,46 @@ export function WorklogForm({
   const addAttachmentFiles = (files: File[]) => {
     const seenNames = new Set(values.attachmentNames)
     const duplicateNames: string[] = []
+    const tooLargeNames: string[] = []
+    const limitExceededNames: string[] = []
+    let currentTotalSize = getCurrentAttachmentSizeBytes(values)
     const nextFiles = files.filter((file) => {
       if (seenNames.has(file.name)) {
         duplicateNames.push(file.name)
         return false
       }
+      if (file.size > MAX_ATTACHMENT_FILE_SIZE_BYTES) {
+        tooLargeNames.push(file.name)
+        return false
+      }
+      if (seenNames.size >= MAX_ATTACHMENT_COUNT) {
+        limitExceededNames.push(file.name)
+        return false
+      }
+      if (currentTotalSize + file.size > MAX_ATTACHMENT_TOTAL_SIZE_BYTES) {
+        limitExceededNames.push(file.name)
+        return false
+      }
       seenNames.add(file.name)
+      currentTotalSize += file.size
       return true
     })
 
-    if (duplicateNames.length > 0) {
-      setSubmitError(
-        `이미 같은 이름의 첨부 파일이 있습니다: ${Array.from(new Set(duplicateNames)).join(", ")}`,
-      )
-    } else {
+    const errors = [
+      duplicateNames.length > 0
+        ? `이미 같은 이름의 첨부 파일이 있습니다: ${formatUniqueNames(duplicateNames)}`
+        : "",
+      tooLargeNames.length > 0
+        ? `개당 최대 20MB를 초과한 파일은 제외했습니다: ${formatUniqueNames(tooLargeNames)}`
+        : "",
+      limitExceededNames.length > 0
+        ? `첨부 파일은 최대 10개, 전체 200MB까지 업로드할 수 있습니다: ${formatUniqueNames(limitExceededNames)}`
+        : "",
+    ].filter(Boolean)
+
+    if (errors.length > 0) {
+      setSubmitError(errors.join(" "))
+    } else if (submitError) {
       setSubmitError("")
     }
 
@@ -562,6 +592,9 @@ export function WorklogForm({
             <div className="border-t border-border/70 pt-6">
               <WorklogFileUpload
                 attachmentNames={values.attachmentNames}
+                maxFileCount={MAX_ATTACHMENT_COUNT}
+                maxFileSizeMb={MAX_ATTACHMENT_FILE_SIZE_BYTES / FILE_SIZE_UNIT}
+                maxTotalSizeMb={MAX_ATTACHMENT_TOTAL_SIZE_BYTES / FILE_SIZE_UNIT}
                 onAddAttachmentFiles={addAttachmentFiles}
                 onRemoveAttachmentName={removeAttachmentName}
               />
@@ -633,6 +666,23 @@ function appendRemovedFileId(values: WorklogFormValues, filename: string) {
 
   if (!removedFileId) return values.removeFileIds ?? []
   return Array.from(new Set([...(values.removeFileIds ?? []), removedFileId]))
+}
+
+function getCurrentAttachmentSizeBytes(values: WorklogFormValues) {
+  const removedFileIds = new Set(values.removeFileIds ?? [])
+  const existingFileSizeBytes =
+    values.attachmentFileItems
+      ?.filter((file) => !removedFileIds.has(file.fileId))
+      .reduce((sum, file) => sum + file.fileSizeBytes, 0) ?? 0
+
+  return values.attachmentFiles.reduce(
+    (sum, file) => sum + file.size,
+    existingFileSizeBytes,
+  )
+}
+
+function formatUniqueNames(names: string[]) {
+  return Array.from(new Set(names)).join(", ")
 }
 
 function mergeTagOptions(tags: WorklogFormTagOption[]) {

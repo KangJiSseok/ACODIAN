@@ -2,6 +2,8 @@ from pydantic import BaseModel, ConfigDict, Field
 
 from app.model.tagging_model import TAG_DESCRIPTION_MAX_LENGTH
 
+MIN_MERGE_CANDIDATE_TAG_COUNT = 2
+
 
 class GenerateTagMergeCandidatesRequest(BaseModel):
     max_candidate_count: int = Field(default=5, alias="maxCandidateCount", ge=1, le=5)
@@ -27,7 +29,10 @@ class TagMergeCandidateGroup(BaseModel):
         alias="resultDescription",
         max_length=TAG_DESCRIPTION_MAX_LENGTH,
     )
-    merge_candidate_tags: list[TagMergeCandidateTag] = Field(alias="mergeCandidateTags")
+    merge_candidate_tags: list[TagMergeCandidateTag] = Field(
+        alias="mergeCandidateTags",
+        min_length=MIN_MERGE_CANDIDATE_TAG_COUNT,
+    )
 
 
 class GenerateTagMergeCandidatesResponse(BaseModel):

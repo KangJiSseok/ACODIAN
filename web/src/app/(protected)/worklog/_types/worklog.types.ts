@@ -281,6 +281,7 @@ export interface WorklogFileItem {
   storedPath: string
   fileExtension: string
   fileSizeBytes: number
+  aiProcessingStatus?: string | null
 }
 
 export interface WorklogDependencyItem {

@@ -9,6 +9,7 @@ import {
   Search,
   X,
 } from "lucide-react"
+import { getApiErrorMessage } from "@/app/_common/service/api-client"
 import { Button } from "@/components/ui/button"
 import {
   Dialog,
@@ -19,7 +20,15 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog"
 import { Input } from "@/components/ui/input"
-import { useTagList, useTagMergeCandidates } from "../_hooks"
+import {
+  useMergeTagCandidate,
+  useTagList,
+  useTagMergeCandidates,
+  useUpdateTagMergeCandidate,
+} from "../_hooks"
+import type { TagItem, TagMergeCandidate } from "../_types/tag.types"
+
+const MIN_SOURCE_TAG_COUNT = 2
 
 export function TagMergeList() {
   const {
@@ -31,11 +40,10 @@ export function TagMergeList() {
   const [editingCandidateId, setEditingCandidateId] = useState<string | null>(
     null
   )
-  const [draftSourceTagNames, setDraftSourceTagNames] = useState<string[]>([])
+  const [draftSourceTags, setDraftSourceTags] = useState<TagItem[]>([])
   const [tagSearchQuery, setTagSearchQuery] = useState("")
-  const [editedSourceTagNamesById, setEditedSourceTagNamesById] = useState<
-    Record<string, string[]>
-  >({})
+  const updateMergeCandidate = useUpdateTagMergeCandidate()
+  const mergeTagCandidate = useMergeTagCandidate()
   const { data: tagPage, isLoading: isTagSearchLoading } = useTagList({
     query: tagSearchQuery,
     page: 1,
@@ -45,54 +53,75 @@ export function TagMergeList() {
   const editingCandidate = candidates.find(
     (candidate) => candidate.id === editingCandidateId
   )
-  const normalizedDraftSourceTagNames = useMemo(
-    () => new Set(draftSourceTagNames.map((tagName) => tagName.trim())),
-    [draftSourceTagNames]
+  const normalizedDraftSourceTagIds = useMemo(
+    () => new Set(draftSourceTags.map((tag) => tag.id)),
+    [draftSourceTags]
   )
 
-  function getSourceTagNames(candidateId: string, fallback: string[]) {
-    return editedSourceTagNamesById[candidateId] ?? fallback
-  }
-
-  function openEditDialog(candidateId: string, sourceTagNames: string[]) {
-    setEditingCandidateId(candidateId)
-    setDraftSourceTagNames(sourceTagNames)
+  function openEditDialog(candidate: TagMergeCandidate) {
+    setEditingCandidateId(candidate.id)
+    setDraftSourceTags(candidate.sourceTags)
     setTagSearchQuery("")
   }
 
   function closeEditDialog() {
     setEditingCandidateId(null)
-    setDraftSourceTagNames([])
+    setDraftSourceTags([])
     setTagSearchQuery("")
   }
 
-  function onAddTag(tagName: string) {
-    const normalizedTagName = tagName.trim()
-
-    if (!normalizedTagName || normalizedDraftSourceTagNames.has(normalizedTagName)) {
+  function onAddTag(tag: TagItem) {
+    if (
+      normalizedDraftSourceTagIds.has(tag.id) ||
+      tag.id === editingCandidate?.targetTag.id
+    ) {
       return
     }
 
-    setDraftSourceTagNames((current) => [...current, normalizedTagName])
+    setDraftSourceTags((current) => [...current, tag])
     setTagSearchQuery("")
   }
 
-  function onRemoveTag(tagName: string) {
-    setDraftSourceTagNames((current) =>
-      current.filter((currentTagName) => currentTagName !== tagName)
+  function onRemoveTag(tagId: number) {
+    setDraftSourceTags((current) =>
+      current.filter((currentTag) => currentTag.id !== tagId)
     )
   }
 
   function applyDraftSourceTags() {
-    if (!editingCandidateId) {
+    if (!editingCandidate || draftSourceTags.length < MIN_SOURCE_TAG_COUNT) {
       return
     }
 
-    setEditedSourceTagNamesById((current) => ({
-      ...current,
-      [editingCandidateId]: draftSourceTagNames,
-    }))
-    closeEditDialog()
+    updateMergeCandidate.mutate(
+      {
+        mergeCandidateId: editingCandidate.numericId,
+        request: {
+          mergeTargetTagId: editingCandidate.targetTag.id,
+          resultDescription: editingCandidate.resultDescription ?? null,
+          mergeCandidateTagIds: draftSourceTags.map((tag) => tag.id),
+        },
+      },
+      {
+        onSuccess: closeEditDialog,
+        onError: (error) => {
+          alert(
+            getApiErrorMessage(
+              error,
+              "태그 병합 후보 변경사항을 반영하지 못했습니다."
+            )
+          )
+        },
+      }
+    )
+  }
+
+  function mergeCandidate(candidate: TagMergeCandidate) {
+    mergeTagCandidate.mutate(candidate, {
+      onError: (error) => {
+        alert(getApiErrorMessage(error, "태그 병합을 처리하지 못했습니다."))
+      },
+    })
   }
 
   if (isLoading) {
@@ -132,11 +161,6 @@ export function TagMergeList() {
     <>
       <div className="space-y-3">
         {candidates.map((candidate) => {
-          const sourceTagNames = getSourceTagNames(
-            candidate.id,
-            candidate.sourceTagNames
-          )
-
           return (
             <div
               key={candidate.id}
@@ -155,7 +179,7 @@ export function TagMergeList() {
 
                 <TagChipGroup
                   label="합쳐질 태그들"
-                  tags={sourceTagNames}
+                  tags={candidate.sourceTagNames}
                   tone="source"
                 />
 
@@ -164,7 +188,7 @@ export function TagMergeList() {
                     type="button"
                     variant="secondary"
                     className="h-11 px-5 text-sm font-semibold sm:min-w-24"
-                    onClick={() => openEditDialog(candidate.id, sourceTagNames)}
+                    onClick={() => openEditDialog(candidate)}
                   >
                     <Pencil className="size-4" />
                     수정
@@ -173,9 +197,11 @@ export function TagMergeList() {
                     type="button"
                     variant="default"
                     className="h-11 px-5 text-sm font-semibold sm:min-w-24"
+                    disabled={mergeTagCandidate.isPending}
+                    onClick={() => mergeCandidate(candidate)}
                   >
                     <GitMerge className="size-4" />
-                    병합
+                    {mergeTagCandidate.isPending ? "병합 중" : "병합"}
                   </Button>
                 </div>
               </div>
@@ -196,8 +222,8 @@ export function TagMergeList() {
           <DialogHeader className="px-6 pb-4 pt-6">
             <DialogTitle>합쳐질 태그 수정</DialogTitle>
             <DialogDescription>
-              {editingCandidate?.targetTagName
-                ? `#${editingCandidate.targetTagName}으로 합쳐질 태그를 조정합니다.`
+              {editingCandidate?.targetTag.name
+                ? `#${editingCandidate.targetTag.name}으로 합쳐질 태그를 조정합니다.`
                 : "합쳐질 태그를 조정합니다."}
             </DialogDescription>
           </DialogHeader>
@@ -229,17 +255,16 @@ export function TagMergeList() {
                     </p>
                   ) : (
                     tagSearchResults.map((tag) => {
-                      const isSelected = normalizedDraftSourceTagNames.has(
-                        tag.name
-                      )
+                      const isSelected = normalizedDraftSourceTagIds.has(tag.id)
+                      const isTarget = tag.id === editingCandidate?.targetTag.id
 
                       return (
                         <button
                           key={tag.id}
                           type="button"
                           className="flex w-full items-center justify-between gap-3 rounded-xl px-3 py-2.5 text-left hover:bg-muted"
-                          disabled={isSelected}
-                          onClick={() => onAddTag(tag.name)}
+                          disabled={isSelected || isTarget}
+                          onClick={() => onAddTag(tag)}
                         >
                           <span>
                             <span className="block text-sm font-semibold text-popover-foreground">
@@ -249,9 +274,9 @@ export function TagMergeList() {
                               사용 횟수 {tag.usageCount}회
                             </span>
                           </span>
-                          {isSelected ? (
+                          {isSelected || isTarget ? (
                             <span className="text-xs font-semibold text-primary">
-                              추가됨
+                              {isTarget ? "결과 태그" : "추가됨"}
                             </span>
                           ) : null}
                         </button>
@@ -267,23 +292,28 @@ export function TagMergeList() {
                 선택된 태그
               </p>
               <div className="min-h-24 rounded-2xl border border-border/70 bg-muted/25 p-3">
-                {draftSourceTagNames.length === 0 ? (
+                {draftSourceTags.length === 0 ? (
                   <p className="flex min-h-16 items-center text-sm text-muted-foreground">
                     합쳐질 태그가 없습니다.
                   </p>
                 ) : (
                   <div className="flex flex-wrap gap-2">
-                    {draftSourceTagNames.map((tagName) => (
+                    {draftSourceTags.map((tag) => (
                       <span
-                        key={tagName}
+                        key={tag.id}
                         className="inline-flex max-w-full items-center gap-2 rounded-full border border-border bg-background px-3 py-2 text-sm font-semibold text-foreground"
                       >
-                        <span className="max-w-[13rem] truncate">#{tagName}</span>
+                        <span className="max-w-[13rem] truncate">
+                          #{tag.name}
+                        </span>
+                        <span className="text-xs text-muted-foreground">
+                          {tag.usageCount}회
+                        </span>
                         <button
                           type="button"
                           className="-mr-1 flex size-6 shrink-0 items-center justify-center rounded-full text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
-                          aria-label={`${tagName} 태그 제거`}
-                          onClick={() => onRemoveTag(tagName)}
+                          aria-label={`${tag.name} 태그 제거`}
+                          onClick={() => onRemoveTag(tag.id)}
                         >
                           <X className="size-3.5" />
                         </button>
@@ -292,6 +322,9 @@ export function TagMergeList() {
                   </div>
                 )}
               </div>
+              <p className="text-xs text-muted-foreground">
+                합쳐질 태그는 최소 {MIN_SOURCE_TAG_COUNT}개 이상 선택해야 합니다.
+              </p>
             </section>
           </div>
 
@@ -308,9 +341,13 @@ export function TagMergeList() {
               type="button"
               variant="default"
               className="h-11 px-5 text-sm font-semibold sm:min-w-32"
+              disabled={
+                draftSourceTags.length < MIN_SOURCE_TAG_COUNT ||
+                updateMergeCandidate.isPending
+              }
               onClick={applyDraftSourceTags}
             >
-              변경사항 반영
+              {updateMergeCandidate.isPending ? "반영 중" : "변경사항 반영"}
             </Button>
           </DialogFooter>
         </DialogContent>

@@ -62,4 +62,13 @@ public class TagMergeCandidate {
     public void markMerged() {
         this.statusCode = TagMergeCandidateStatus.APPLIED;
     }
+
+    /**
+     * 운영자가 수정한 병합 방향과 결과 설명을 적용 전 snapshot 에 반영한다.
+     */
+    public void updateSnapshot(Long targetTagId, String targetTagName, String resultDescription) {
+        this.targetTagId = targetTagId;
+        this.targetTagName = targetTagName;
+        this.resultDescription = resultDescription;
+    }
 }
