@@ -152,6 +152,18 @@ public class WorklogController implements WorklogControllerDocs {
     }
 
     @Override
+    @PostMapping("/{worklogId}/ai-summary/retry")
+    @ResponseStatus(HttpStatus.OK)
+    @PreAuthorize("hasAnyRole('DIRECTOR','DEPT_HEAD','TEAM_LEAD','MEMBER')")
+    public EmptyResponse retryAiSummary(
+            @AuthenticationPrincipal CustomUserPrincipal principal,
+            @PathVariable Long worklogId
+    ) {
+        worklogService.retryAiSummary(principal, worklogId);
+        return EmptyResponse.INSTANCE;
+    }
+
+    @Override
     @GetMapping("/predecessor-candidates/search")
     @PreAuthorize("hasAnyRole('DIRECTOR','DEPT_HEAD','TEAM_LEAD','MEMBER')")
     public PageResponse<SearchPredecessorApiDto.Response.Item> searchPredecessor(

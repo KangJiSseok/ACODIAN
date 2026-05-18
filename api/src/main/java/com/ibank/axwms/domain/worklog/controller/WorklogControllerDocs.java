@@ -189,6 +189,22 @@ public interface WorklogControllerDocs {
             UpdateWorklogStatusApiDto.Request request
     );
 
+    @Operation(summary = "AI 업무 요약 재요청",
+            description = "AI 요약 생성이 실패한 업무에 대해 작성자 본인이 요약/태그 후처리 파이프라인을 다시 요청한다. "
+                    + "첨부 파일 요약은 재요청하지 않는다.")
+    @SecurityRequirement(name = "bearerAuth")
+    @ApiResponses({
+            @ApiResponse(responseCode = "200", description = "AI 요약 재요청에 성공한다."),
+            @ApiResponse(responseCode = "401", description = "인증이 필요하다.", content = @Content),
+            @ApiResponse(responseCode = "403", description = "작성자가 아니다.", content = @Content),
+            @ApiResponse(responseCode = "404", description = "업무가 없거나 소프트 삭제됨", content = @Content),
+            @ApiResponse(responseCode = "409", description = "AI 요약 실패 상태가 아니어서 재요청할 수 없다.", content = @Content)
+    })
+    EmptyResponse retryAiSummary(
+            @Parameter(hidden = true) CustomUserPrincipal principal,
+            @Parameter(description = "AI 요약 재요청 대상 업무 ID", example = "501") Long worklogId
+    );
+
     @Operation(summary = "선행 업무 후보 검색",
             description = "업무 등록/수정 화면에서 선행으로 지정할 worklog 후보를 검색한다. "
                     + "의존성은 같은 팀 한정이라 요청 teamId 의 ACTIVE 멤버여야 하며, "

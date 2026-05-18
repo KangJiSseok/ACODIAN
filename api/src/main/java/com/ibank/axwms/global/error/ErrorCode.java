@@ -102,6 +102,8 @@ public enum ErrorCode {
     WORKLOG_STATUS_TRANSITION_INVALID(HttpStatus.BAD_REQUEST, "허용되지 않은 업무 상태 전이입니다."),
     /** AI 작성 보조 upstream 이 실패해 저장 전 초안 추천을 완료할 수 없을 때 사용한다. */
     WORKLOG_AI_POLISH_FAILED(HttpStatus.BAD_GATEWAY, "업무일지 작성 보조를 처리할 수 없습니다. 잠시 후 다시 시도해 주세요."),
+    /** AI 요약 재요청을 수행할 수 없는 현재 처리 상태일 때 사용한다. */
+    WORKLOG_AI_RETRY_STATUS_INVALID(HttpStatus.CONFLICT, "AI 요약 실패 상태에서만 다시 요청할 수 있습니다."),
     /** LightRAG 업무일지 시맨틱 검색 upstream 이 실패해 검색 결과를 만들 수 없을 때 사용한다. */
     WORKLOG_SEMANTIC_SEARCH_FAILED(HttpStatus.BAD_GATEWAY, "업무일지 시맨틱 검색을 처리할 수 없습니다. 잠시 후 다시 시도해 주세요."),
     /** 삭제 요청 대상 파일이 존재하지 않거나 해당 worklog 에 속해 있지 않을 때 사용한다. */
