@@ -7,6 +7,7 @@ import com.ibank.axwms.domain.worklog.dto.GetWorklogsApiDto;
 import com.ibank.axwms.domain.worklog.dto.PolishWorklogApiDto;
 import com.ibank.axwms.domain.worklog.dto.RecommendWorklogTitleApiDto;
 import com.ibank.axwms.domain.worklog.dto.SearchPredecessorApiDto;
+import com.ibank.axwms.domain.worklog.dto.SearchSemanticWorklogsApiDto;
 import com.ibank.axwms.domain.worklog.dto.SearchWorklogsApiDto;
 import com.ibank.axwms.domain.worklog.dto.UpdateWorklogApiDto;
 import com.ibank.axwms.domain.worklog.dto.UpdateWorklogStatusApiDto;
@@ -104,7 +105,7 @@ public interface WorklogControllerDocs {
             @Parameter(description = "업무 ID", example = "501") Long worklogId
     );
 
-    @Operation(summary = "업무일지 검색",
+    @Operation(summary = "업무일지 키워드 검색",
             description = "업무 제목 LIKE 검색과 팀/상태/중요도/작성자/태그/기간 필터를 조합한다. "
                     + "가시 범위는 업무 목록 조회와 동일하며, 정렬은 created_at 내림차순으로 고정된다.")
     @SecurityRequirement(name = "bearerAuth")
@@ -113,9 +114,25 @@ public interface WorklogControllerDocs {
             @ApiResponse(responseCode = "400", description = "요청 값이 올바르지 않다.", content = @Content),
             @ApiResponse(responseCode = "401", description = "인증이 필요하다.", content = @Content)
     })
-    PageResponse<SearchWorklogsApiDto.Response.Item> searchWorklogs(
+    PageResponse<SearchWorklogsApiDto.Response.Item> searchKeywordWorklogs(
             @Parameter(hidden = true) CustomUserPrincipal principal,
             @ParameterObject SearchWorklogsApiDto.Request request
+    );
+
+    @Operation(summary = "업무일지 시맨틱 검색",
+            description = "검색어와 접근 가능한 팀 범위를 LightRAG v3 업무일지 query API에 전달하고, "
+                    + "AI 서버가 반환한 answer와 references를 반환한다. "
+                    + "page/pageSize는 적용하지 않는다.")
+    @SecurityRequirement(name = "bearerAuth")
+    @ApiResponses({
+            @ApiResponse(responseCode = "200", description = "시맨틱 검색 답변과 reference 목록을 반환한다."),
+            @ApiResponse(responseCode = "400", description = "요청 값이 올바르지 않다.", content = @Content),
+            @ApiResponse(responseCode = "401", description = "인증이 필요하다.", content = @Content),
+            @ApiResponse(responseCode = "502", description = "AI 시맨틱 검색 서버 호출에 실패했다.", content = @Content)
+    })
+    SearchSemanticWorklogsApiDto.Response searchSemanticWorklogs(
+            @Parameter(hidden = true) CustomUserPrincipal principal,
+            @ParameterObject SearchSemanticWorklogsApiDto.Request request
     );
 
     @Operation(summary = "업무일지 검색 필터 옵션 조회",

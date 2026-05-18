@@ -6,9 +6,8 @@ import com.ibank.axwms.global.response.PageResponse;
 import com.ibank.axwms.global.security.CustomUserPrincipal;
 
 /**
- * 업무일지 검색 유스케이스 인터페이스.
- * 1단계는 키워드(LIKE)+필터 기반 단일 구현체만 존재하며,
- * 시맨틱 검색/그래프 확장 단계에서 별도 구현체 또는 데코레이터로 진입한다.
+ * 업무일지 키워드 검색 유스케이스 인터페이스.
+ * LightRAG 기반 시맨틱 검색은 별도 서비스와 endpoint 로 분리해 fallback 없이 호출한다.
  */
 public interface WorklogSearchService {
 
