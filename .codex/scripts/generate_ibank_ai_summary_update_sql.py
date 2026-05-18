@@ -143,7 +143,7 @@ def build_ai_summary(title: str, request_content: str, work_content: str, status
     lead = sentences[0] if sentences else request_content
     tail = sentences[-1] if len(sentences) > 1 else ''
     body = compact(f'{lead} {tail}'.strip(), 210)
-    return fix_josa(f'[{status_code}/{importance_code}] {title} - {body}', topic, title)
+    return fix_josa(f'{title} - {body}', topic, title)
 
 
 def parse_worklogs(paths: list[Path]):
