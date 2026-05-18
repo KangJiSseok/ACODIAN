@@ -45,4 +45,16 @@ public interface TagMergeCandidateControllerDocs {
             @Parameter(description = "후보 상태 필터") TagMergeCandidateStatus statusCode
     );
 
+    @Operation(summary = "태그 병합",
+            description = "저장된 병합 후보를 승인해 source 태그의 업무일지 연결을 target 태그로 병합하고 source 태그를 soft-delete 처리한다.")
+    @SecurityRequirement(name = "bearerAuth")
+    @ApiResponses({
+            @ApiResponse(responseCode = "200", description = "태그 병합을 완료한다."),
+            @ApiResponse(responseCode = "401", description = "인증이 필요하다.", content = @Content),
+            @ApiResponse(responseCode = "404", description = "병합 후보 또는 태그를 찾을 수 없다.", content = @Content),
+            @ApiResponse(responseCode = "409", description = "이미 처리된 병합 후보다.", content = @Content)
+    })
+    void mergeCandidate(
+            @Parameter(description = "태그 병합 후보 ID") Long mergeCandidateId
+    );
 }

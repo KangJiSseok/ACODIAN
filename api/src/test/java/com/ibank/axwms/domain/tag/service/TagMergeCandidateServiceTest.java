@@ -9,6 +9,9 @@ import com.ibank.axwms.domain.tag.external.TagMergeAiClient;
 import com.ibank.axwms.domain.tag.repository.TagMergeCandidateItemRepository;
 import com.ibank.axwms.domain.tag.repository.TagMergeCandidateRepository;
 import com.ibank.axwms.domain.tag.repository.TagRepository;
+import com.ibank.axwms.domain.worklog.repository.WorklogTagRepository;
+import com.ibank.axwms.global.error.BusinessException;
+import com.ibank.axwms.global.error.ErrorCode;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -19,11 +22,14 @@ import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.test.util.ReflectionTestUtils;
 
 import java.util.List;
+import java.util.Optional;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyCollection;
 import static org.mockito.BDDMockito.given;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 
 @ExtendWith(MockitoExtension.class)
@@ -32,6 +38,7 @@ class TagMergeCandidateServiceTest {
     private static final Long MERGE_CANDIDATE_ID = 10L;
     private static final Long TARGET_TAG_ID = 1L;
     private static final Long SOURCE_TAG_ID = 2L;
+    private static final Long OTHER_SOURCE_TAG_ID = 3L;
 
     @Mock
     private TagMergeCandidateRepository tagMergeCandidateRepository;
@@ -41,6 +48,9 @@ class TagMergeCandidateServiceTest {
 
     @Mock
     private TagRepository tagRepository;
+
+    @Mock
+    private WorklogTagRepository worklogTagRepository;
 
     @Mock
     private TagMergeAiClient tagMergeAiClient;
@@ -121,6 +131,58 @@ class TagMergeCandidateServiceTest {
         assertThat(response.items()).hasSize(1);
         verify(tagMergeAiClient).generateCandidates(generateRequest);
         verify(tagMergeCandidateRepository).save(any(TagMergeCandidate.class));
+    }
+
+    @Test
+    @DisplayName("태그 병합 시 업무일지 연결을 결과 태그로 치환하고 source 태그를 숨긴다")
+    void 태그_병합_시_업무일지_연결을_결과_태그로_치환하고_source_태그를_숨긴다() {
+        TagMergeCandidate candidate = candidate(TagMergeCandidateStatus.PENDING);
+        List<TagMergeCandidateItem> items = List.of(
+                TagMergeCandidateItem.create(MERGE_CANDIDATE_ID, SOURCE_TAG_ID, "기준 보정"),
+                TagMergeCandidateItem.create(MERGE_CANDIDATE_ID, OTHER_SOURCE_TAG_ID, "운영 기준 보강")
+        );
+        given(tagMergeCandidateRepository.findById(MERGE_CANDIDATE_ID)).willReturn(Optional.of(candidate));
+        given(tagMergeCandidateItemRepository.findByMergeCandidateId(MERGE_CANDIDATE_ID)).willReturn(items);
+        given(tagMergeCandidateRepository.markAppliedIfPending(MERGE_CANDIDATE_ID)).willReturn(1);
+        given(tagRepository.findAllById(List.of(TARGET_TAG_ID, SOURCE_TAG_ID, OTHER_SOURCE_TAG_ID)))
+                .willReturn(List.of(
+                        metaTag(TARGET_TAG_ID, "기준정보", 7, false),
+                        metaTag(SOURCE_TAG_ID, "기준 보정", 4, false),
+                        metaTag(OTHER_SOURCE_TAG_ID, "운영 기준 보강", 3, false)
+                ));
+        given(worklogTagRepository.countDistinctWorklogsByTagId(TARGET_TAG_ID)).willReturn(9);
+
+        tagMergeCandidateService.mergeCandidate(MERGE_CANDIDATE_ID);
+
+        verify(worklogTagRepository).replaceSourceTagsWithTarget(TARGET_TAG_ID, List.of(SOURCE_TAG_ID, OTHER_SOURCE_TAG_ID));
+        verify(tagRepository).softDeleteByIds(List.of(SOURCE_TAG_ID, OTHER_SOURCE_TAG_ID));
+        verify(tagRepository).updateDescriptionAndUsageCount(TARGET_TAG_ID, "기준 관련 태그 설명", 9);
+        verify(tagMergeCandidateRepository).markAppliedIfPending(MERGE_CANDIDATE_ID);
+    }
+
+    @Test
+    @DisplayName("이미 처리된 병합 후보이면 적용을 차단한다")
+    void 이미_처리된_병합_후보이면_적용을_차단한다() {
+        given(tagMergeCandidateRepository.findById(MERGE_CANDIDATE_ID))
+                .willReturn(Optional.of(candidate(TagMergeCandidateStatus.APPLIED)));
+
+        assertThatThrownBy(() -> tagMergeCandidateService.mergeCandidate(MERGE_CANDIDATE_ID))
+                .isInstanceOf(BusinessException.class)
+                .extracting(error -> ((BusinessException) error).getErrorCode())
+                .isEqualTo(ErrorCode.TAG_MERGE_CANDIDATE_STATUS_INVALID);
+
+        verify(worklogTagRepository, never()).replaceSourceTagsWithTarget(any(), any());
+    }
+
+    private TagMergeCandidate candidate(TagMergeCandidateStatus statusCode) {
+        TagMergeCandidate candidate = TagMergeCandidate.create(
+                TARGET_TAG_ID,
+                "기준정보",
+                "기준 관련 태그 설명"
+        );
+        ReflectionTestUtils.setField(candidate, "id", MERGE_CANDIDATE_ID);
+        ReflectionTestUtils.setField(candidate, "statusCode", statusCode);
+        return candidate;
     }
 
     private MetaTag metaTag(Long id, String tagName, Integer usageCount, boolean isDeleted) {

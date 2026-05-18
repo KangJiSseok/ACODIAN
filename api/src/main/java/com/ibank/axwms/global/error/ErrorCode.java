@@ -78,6 +78,10 @@ public enum ErrorCode {
     EVALUATION_SELF_WRITE_FORBIDDEN(HttpStatus.FORBIDDEN, "자기 자신에게 평가는 작성할 수 없습니다."),
     /** 업무일지에 연결하려는 태그 ID 가 메타 태그 풀에 없을 때 사용한다. */
     TAG_NOT_FOUND(HttpStatus.NOT_FOUND, "태그를 찾을 수 없습니다."),
+    /** 저장된 태그 병합 후보를 찾을 수 없을 때 사용한다. */
+    TAG_MERGE_CANDIDATE_NOT_FOUND(HttpStatus.NOT_FOUND, "태그 병합 후보를 찾을 수 없습니다."),
+    /** 태그 병합 후보가 현재 요청에서 처리할 수 없는 상태일 때 사용한다. */
+    TAG_MERGE_CANDIDATE_STATUS_INVALID(HttpStatus.CONFLICT, "처리할 수 없는 태그 병합 후보 상태입니다."),
     /** AI 서버에서 태그 병합 후보를 생성하지 못했을 때 사용한다. */
     TAG_MERGE_CANDIDATE_GENERATION_FAILED(HttpStatus.SERVICE_UNAVAILABLE, "태그 병합 후보 생성에 실패했습니다. 잠시 후 다시 시도해 주세요."),
     /** 업무 지시 일자와 마감 일자 범위가 올바르지 않은 경우 사용한다. */

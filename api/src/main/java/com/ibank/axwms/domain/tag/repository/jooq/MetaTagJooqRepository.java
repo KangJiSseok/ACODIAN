@@ -17,12 +17,12 @@ public interface MetaTagJooqRepository {
     void insertAiGeneratedTagsIgnoreDuplicates(Collection<AiGeneratedTagCommand> tags);
 
     /**
-     * 필터 옵션 등에 노출할 모든 태그를 (id, name) 형태로 조회한다.
+     * 필터 옵션 등에 노출할 활성 태그를 (id, name) 형태로 조회한다.
      */
     List<TagSummaryProjection> findAllTagSummaries();
 
     /**
-     * 태그의 설명과 사용 횟수를 포함하여 모든 태그를 FastAPI 내부 콜백용으로 조회한다.
+     * 태그의 설명과 사용 횟수를 포함하여 활성 태그를 FastAPI 내부 콜백용으로 조회한다.
      */
     List<TagInfoProjection> findAllTagInfo();
 
@@ -31,6 +31,16 @@ public interface MetaTagJooqRepository {
      * query 가 null/blank 면 전체 조회와 동일하며, 정렬은 usage_count desc + tag_name asc 로 고정한다.
      */
     Page<SearchTagProjection> searchTagPage(SearchTagQuery query);
+
+    /**
+     * 병합된 source 태그를 목록/검색에서 제외하기 위해 soft-delete 처리한다.
+     */
+    void softDeleteByIds(Collection<Long> tagIds);
+
+    /**
+     * 병합 target 태그의 설명과 현재 연결 업무 수 기반 사용 횟수를 함께 갱신한다.
+     */
+    void updateDescriptionAndUsageCount(Long tagId, String description, int usageCount);
 
     record AiGeneratedTagCommand(
             String tagName,
