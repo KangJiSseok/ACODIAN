@@ -63,6 +63,7 @@ class Settings(BaseSettings):
     lightrag_query_top_k: int = 40
     lightrag_query_chunk_top_k: int = 20
     lightrag_query_response_type: str = "Multiple Paragraphs"
+    worklog_detail_base_url: str = "https://k14s209.p.ssafy.io:8443/worklog/detail"
 
     model_config = SettingsConfigDict(
         # ai/.env 를 자동 로드한다 (없으면 위 기본값을 사용).

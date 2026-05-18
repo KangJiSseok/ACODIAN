@@ -50,17 +50,78 @@ def test_query_service_applies_settings_defaults_and_normalizes_reference() -> N
 
     response = asyncio.run(service.query_worklogs(make_request()))
 
-    assert adapter.calls == [
-        LightRagQueryOptions(
-            query="업무일지 요약",
-            top_k=11,
-            chunk_top_k=5,
-            response_type="Multiple Paragraphs",
-        )
-    ]
+    assert len(adapter.calls) == 1
+    call = adapter.calls[0]
+    assert call.query == "업무일지 요약"
+    assert call.top_k == 11
+    assert call.chunk_top_k == 5
+    assert call.response_type == "Multiple Paragraphs"
+    assert call.system_prompt is not None
+    assert "allowedTeamIds = ALL" in call.system_prompt
     assert response.answer == "native answer"
     assert response.references[0].reference_id == "1"
     assert response.references[0].file_path == "worklog://1"
     assert response.references[1].reference_id == "2"
     assert response.references[1].file_path == "worklog://2"
     assert response.internal_only is True
+
+
+def test_query_service_passes_allowed_team_ids_into_system_prompt() -> None:
+    adapter = FakeAdapter(
+        {
+            "llm_response": {"content": "answer"},
+            "data": {"references": []},
+        }
+    )
+    service = LightWorklogQueryService(
+        settings_obj=Settings(_env_file=None),
+        adapter_factory=lambda: adapter,
+    )
+
+    asyncio.run(service.query_worklogs(make_request(allowedTeamIds=[106])))
+
+    assert len(adapter.calls) == 1
+    assert adapter.calls[0].system_prompt is not None
+    assert "allowedTeamIds = [106]" in adapter.calls[0].system_prompt
+    assert "https://k14s209.p.ssafy.io:8443/worklog/detail/<worklog_id>" in (
+        adapter.calls[0].system_prompt
+    )
+
+
+def test_query_service_passes_empty_allowed_team_ids_into_system_prompt() -> None:
+    adapter = FakeAdapter(
+        {
+            "llm_response": {"content": "answer"},
+            "data": {"references": []},
+        }
+    )
+    service = LightWorklogQueryService(
+        settings_obj=Settings(_env_file=None),
+        adapter_factory=lambda: adapter,
+    )
+
+    asyncio.run(service.query_worklogs(make_request(allowedTeamIds=[])))
+
+    assert len(adapter.calls) == 1
+    assert adapter.calls[0].system_prompt is not None
+    assert "allowedTeamIds = []" in adapter.calls[0].system_prompt
+    assert "no teams are permitted" in adapter.calls[0].system_prompt
+
+
+def test_query_service_treats_null_allowed_team_ids_as_all_scope() -> None:
+    adapter = FakeAdapter(
+        {
+            "llm_response": {"content": "answer"},
+            "data": {"references": []},
+        }
+    )
+    service = LightWorklogQueryService(
+        settings_obj=Settings(_env_file=None),
+        adapter_factory=lambda: adapter,
+    )
+
+    asyncio.run(service.query_worklogs(make_request(allowedTeamIds=None)))
+
+    assert len(adapter.calls) == 1
+    assert adapter.calls[0].system_prompt is not None
+    assert "allowedTeamIds = ALL" in adapter.calls[0].system_prompt

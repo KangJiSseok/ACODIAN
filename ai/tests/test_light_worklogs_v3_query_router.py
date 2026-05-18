@@ -76,6 +76,28 @@ def test_light_worklogs_v3_query_contract(monkeypatch) -> None:
     assert service.calls[0].query == "최근 재고 예측 모델 관련 진행상황 요약해줘"
 
 
+def test_light_worklogs_v3_query_accepts_allowed_team_ids(monkeypatch) -> None:
+    service = FakeQueryService()
+    install_fake_service(monkeypatch, service)
+
+    response = post_query(payload={"query": "ok", "allowedTeamIds": [106]})
+
+    assert response.status_code == 200
+    assert len(service.calls) == 1
+    assert service.calls[0].allowed_team_ids == [106]
+
+
+def test_light_worklogs_v3_query_accepts_null_allowed_team_ids(monkeypatch) -> None:
+    service = FakeQueryService()
+    install_fake_service(monkeypatch, service)
+
+    response = post_query(payload={"query": "ok", "allowedTeamIds": None})
+
+    assert response.status_code == 200
+    assert len(service.calls) == 1
+    assert service.calls[0].allowed_team_ids is None
+
+
 def test_light_worklogs_v3_query_rejects_option_override(monkeypatch) -> None:
     service = FakeQueryService()
     install_fake_service(monkeypatch, service)

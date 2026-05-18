@@ -15,6 +15,7 @@ from app.light.v3.service.lightrag_adapter import (
     LightRagQueryOptions,
     get_lightrag_worklog_index_adapter,
 )
+from app.light.v3.prompt.worklog_query_prompt import build_worklog_query_system_prompt
 
 
 class LightWorklogQueryService:
@@ -40,6 +41,10 @@ class LightWorklogQueryService:
             top_k=self._settings.lightrag_query_top_k,
             chunk_top_k=self._settings.lightrag_query_chunk_top_k,
             response_type=self._settings.lightrag_query_response_type,
+            system_prompt=build_worklog_query_system_prompt(
+                allowed_team_ids=request.allowed_team_ids,
+                worklog_detail_base_url=self._settings.worklog_detail_base_url,
+            ),
         )
         result = await self._adapter_factory().query_worklogs(options)
         raw = result.raw
