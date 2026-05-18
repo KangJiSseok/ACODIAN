@@ -11,7 +11,7 @@ class WorklogPipelineRequest(BaseModel):
     work_content: str = Field(alias="workContent", min_length=1)
     author_id: int = Field(alias="authorId", ge=1)
     team_id: int = Field(alias="teamId", ge=1)
-    department_id: int = Field(alias="departmentId", ge=1)
+    department_id: int | None = Field(default=None, alias="departmentId", ge=1)
 
 
 class PipelineAcceptedResponse(BaseModel):
