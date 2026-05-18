@@ -18,6 +18,7 @@ import com.ibank.axwms.domain.worklog.entity.Worklog;
 import com.ibank.axwms.domain.worklog.entity.WorklogTag;
 import com.ibank.axwms.domain.worklog.event.WorklogAiPipelineRequestedEvent;
 import com.ibank.axwms.domain.worklog.event.WorklogCompletedEvent;
+import com.ibank.axwms.domain.worklog.event.WorklogLightIndexRequestedEvent;
 import com.ibank.axwms.domain.worklog.external.WorklogPolishClient;
 import com.ibank.axwms.domain.worklog.policy.WorklogStatusPolicy;
 import com.ibank.axwms.domain.worklog.repository.WorklogDependencyRepository;
@@ -88,7 +89,7 @@ public class WorklogService {
     /**
      * 로그인 사용자의 권한으로 업무를 등록한다.
      * 팀 존재 여부와 사용자의 해당 팀 소속 여부를 확인한 뒤 신규 Worklog 엔티티를 저장한다.
-     * 등록 트랜잭션 커밋 후에는 AI 서버의 본문 요약/태그 생성 파이프라인을 시작한다.
+     * 등록 트랜잭션 커밋 후에는 AI 서버의 본문 요약/태그 생성 파이프라인과 Light v3 index 반영을 요청한다.
      *
      * @param principal 현재 로그인 사용자
      * @param request   업무 등록 요청 DTO
@@ -123,7 +124,6 @@ public class WorklogService {
                 request.dueDate()
         ));
 
-        log.info("access worklog create service");
         fileService.uploadWorklogFiles(savedWorklog.getId(), principal.userId(), files);
         worklogStatusHistoryService.createStatusHistory(
                 savedWorklog.getId(),
@@ -137,6 +137,7 @@ public class WorklogService {
                 request.predecessorWorklogIds()
         );
         publishWorklogAiPipelineRequest(savedWorklog, team);
+        publishWorklogLightIndexRequest(savedWorklog);
 
         return CreateWorklogApiDto.Response.of(savedWorklog.getId());
     }
@@ -153,6 +154,13 @@ public class WorklogService {
                 worklog.getTeamId(),
                 team.getDepartmentId()
         ));
+    }
+
+    /**
+     * 등록 트랜잭션이 성공한 업무만 Light v3 index 에 들어가도록 AFTER_COMMIT 이벤트로 색인 요청을 분리한다.
+     */
+    private void publishWorklogLightIndexRequest(Worklog worklog) {
+        eventPublisher.publishEvent(new WorklogLightIndexRequestedEvent(worklog.getId()));
     }
 
     /**
