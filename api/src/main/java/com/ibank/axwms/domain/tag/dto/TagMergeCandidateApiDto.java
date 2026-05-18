@@ -17,11 +17,13 @@ import lombok.NoArgsConstructor;
 
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 
 @NoArgsConstructor(access = AccessLevel.PRIVATE)
 public final class TagMergeCandidateApiDto {
 
     public static final int MAX_MERGE_CANDIDATE_TAG_COUNT = 5;
+    public static final int MIN_MERGE_CANDIDATE_TAG_COUNT = 2;
     public static final int DESCRIPTION_MAX_LENGTH = 150;
     public static final int DEFAULT_MAX_GROUP_COUNT = 20;
     public static final int DEFAULT_MIN_USAGE_COUNT = 0;
@@ -90,7 +92,7 @@ public final class TagMergeCandidateApiDto {
             String resultDescription,
 
             @NotEmpty
-            @Size(max = MAX_MERGE_CANDIDATE_TAG_COUNT)
+            @Size(min = MIN_MERGE_CANDIDATE_TAG_COUNT, max = MAX_MERGE_CANDIDATE_TAG_COUNT)
             List<@NotNull @Valid TagItem> mergeCandidateTags
     ) {
         /**
@@ -103,6 +105,46 @@ public final class TagMergeCandidateApiDto {
             }
             return mergeCandidateTags.stream()
                     .noneMatch(candidate -> candidate != null && candidate.tagId().equals(mergeTargetTag.tagId()));
+        }
+    }
+
+    @Schema(description = "태그 병합 후보 수정 요청")
+    public record UpdateRequest(
+            @NotNull
+            @Positive
+            Long mergeTargetTagId,
+
+            @Size(max = DESCRIPTION_MAX_LENGTH)
+            String resultDescription,
+
+            @NotEmpty
+            @Size(min = MIN_MERGE_CANDIDATE_TAG_COUNT, max = MAX_MERGE_CANDIDATE_TAG_COUNT)
+            List<@NotNull @Positive Long> mergeCandidateTagIds
+    ) {
+        /**
+         * 결과 태그가 source 후보에 포함되면 병합 방향이 모호해지므로 요청 단계에서 차단한다.
+         */
+        @AssertTrue(message = "병합 결과 태그는 후보 태그 목록에 포함될 수 없습니다.")
+        public boolean hasNoSelfCandidate() {
+            if (mergeTargetTagId == null || mergeCandidateTagIds == null) {
+                return true;
+            }
+            return mergeCandidateTagIds.stream()
+                    .noneMatch(tagId -> Objects.equals(tagId, mergeTargetTagId));
+        }
+
+        /**
+         * 중복 ID 제거 후에도 최소 source 개수를 만족해야 실제 병합 후보로 의미가 있다.
+         */
+        @AssertTrue(message = "병합 후보 태그는 중복 제거 후 최소 2개 이상 필요합니다.")
+        public boolean hasEnoughDistinctCandidates() {
+            if (mergeCandidateTagIds == null) {
+                return true;
+            }
+            return mergeCandidateTagIds.stream()
+                    .filter(Objects::nonNull)
+                    .distinct()
+                    .count() >= MIN_MERGE_CANDIDATE_TAG_COUNT;
         }
     }
 

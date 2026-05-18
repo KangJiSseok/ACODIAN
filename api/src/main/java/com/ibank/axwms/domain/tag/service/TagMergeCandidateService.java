@@ -30,6 +30,7 @@ import java.util.stream.Stream;
 
 import static com.ibank.axwms.domain.tag.dto.TagMergeCandidateApiDto.DESCRIPTION_MAX_LENGTH;
 import static com.ibank.axwms.domain.tag.dto.TagMergeCandidateApiDto.MAX_MERGE_CANDIDATE_TAG_COUNT;
+import static com.ibank.axwms.domain.tag.dto.TagMergeCandidateApiDto.MIN_MERGE_CANDIDATE_TAG_COUNT;
 
 @Service
 @RequiredArgsConstructor
@@ -79,6 +80,39 @@ public class TagMergeCandidateService {
     }
 
     /**
+     * 운영자가 확정한 병합 방향을 PENDING 후보 snapshot 에 반영한다.
+     */
+    @Transactional
+    public TagMergeCandidateApiDto.Item updateCandidate(Long mergeCandidateId,
+                                                        TagMergeCandidateApiDto.UpdateRequest request) {
+        TagMergeCandidate candidate = getCandidateOrThrow(mergeCandidateId);
+        validatePending(candidate);
+
+        List<Long> sourceTagIds = normalizeSourceTagIds(request.mergeTargetTagId(), request.mergeCandidateTagIds());
+        if (sourceTagIds.size() < MIN_MERGE_CANDIDATE_TAG_COUNT) {
+            throw new BusinessException(ErrorCode.COMMON_VALIDATION_ERROR);
+        }
+
+        Map<Long, MetaTag> tagsById = getActiveTagsByIdOrThrow(request.mergeTargetTagId(), sourceTagIds);
+        MetaTag targetTag = tagsById.get(request.mergeTargetTagId());
+        candidate.updateSnapshot(
+                targetTag.getId(),
+                targetTag.getTagName(),
+                normalizeDescription(request.resultDescription())
+        );
+
+        tagMergeCandidateItemRepository.deleteByMergeCandidateId(mergeCandidateId);
+        tagMergeCandidateItemRepository.saveAll(sourceTagIds.stream()
+                .map(sourceTagId -> {
+                    MetaTag sourceTag = tagsById.get(sourceTagId);
+                    return TagMergeCandidateItem.create(mergeCandidateId, sourceTag.getId(), sourceTag.getTagName());
+                })
+                .toList());
+
+        return toResponse(List.of(candidate)).items().getFirst();
+    }
+
+    /**
      * 저장된 후보를 승인해 source 태그들을 target 태그로 병합하고 source 태그는 soft-delete 처리한다.
      */
     @Transactional
@@ -100,6 +134,11 @@ public class TagMergeCandidateService {
 
         worklogTagRepository.replaceSourceTagsWithTarget(candidate.getTargetTagId(), sourceTagIds);
         tagRepository.softDeleteByIds(sourceTagIds);
+        tagMergeCandidateItemRepository.deleteSourceItemsFromOtherCandidates(
+                candidate.getId(),
+                sourceTagIds,
+                TagMergeCandidateStatus.PENDING
+        );
         int usageCount = worklogTagRepository.countDistinctWorklogsByTagId(candidate.getTargetTagId());
         tagRepository.updateDescriptionAndUsageCount(
                 candidate.getTargetTagId(),
@@ -109,14 +148,14 @@ public class TagMergeCandidateService {
     }
 
     /**
-     * source 후보가 비어 있으면 저장 대상에서 제외해 빈 후보 그룹 노출을 막는다.
+     * source 후보가 최소 병합 단위보다 작으면 저장 대상에서 제외해 작은 후보 그룹 노출을 막는다.
      */
     private Optional<TagMergeCandidate> saveCandidateIfValid(TagMergeCandidateApiDto.CandidateItem item) {
         List<TagMergeCandidateApiDto.TagItem> sourceTags = normalizeSourceTags(
                 item.mergeTargetTag().tagId(),
                 item.mergeCandidateTags()
         );
-        if (sourceTags.isEmpty()) {
+        if (sourceTags.size() < MIN_MERGE_CANDIDATE_TAG_COUNT) {
             return Optional.empty();
         }
         validateActiveTags(
@@ -164,6 +203,17 @@ public class TagMergeCandidateService {
     }
 
     /**
+     * 수정 요청의 source ID 는 중복을 제거하되 입력 순서를 유지해 운영자 선택 순서를 보존한다.
+     */
+    private List<Long> normalizeSourceTagIds(Long targetTagId, List<Long> sourceTagIds) {
+        return sourceTagIds.stream()
+                .filter(sourceTagId -> !sourceTagId.equals(targetTagId))
+                .distinct()
+                .limit(MAX_MERGE_CANDIDATE_TAG_COUNT)
+                .toList();
+    }
+
+    /**
      * description 은 생성 정책상 100자 미만을 지향하되 DB 하드 제한 150자만 강제한다.
      */
     private String normalizeDescription(String description) {
@@ -191,15 +241,18 @@ public class TagMergeCandidateService {
                 .findByMergeCandidateIdIn(candidateIds)
                 .stream()
                 .collect(Collectors.groupingBy(TagMergeCandidateItem::getMergeCandidateId));
-        Map<Long, Integer> usageCountByTagId = getUsageCountByTagId(candidates, itemsByCandidateId);
-        return TagMergeCandidateApiDto.Response.of(candidates, itemsByCandidateId, usageCountByTagId);
+        Map<Long, MetaTag> tagsById = getTagsById(candidates, itemsByCandidateId);
+        Map<Long, List<TagMergeCandidateItem>> activeItemsByCandidateId =
+                filterActiveSourceItems(itemsByCandidateId, tagsById);
+        Map<Long, Integer> usageCountByTagId = getUsageCountByTagId(tagsById);
+        return TagMergeCandidateApiDto.Response.of(candidates, activeItemsByCandidateId, usageCountByTagId);
     }
 
     /**
-     * source 태그가 soft-delete 된 뒤에도 snapshot 조회는 가능해야 하므로 ID 기반으로 현재 usageCount 만 보강한다.
+     * 후보 snapshot 에 포함된 태그들의 현재 상태와 usageCount 를 한 번에 조회한다.
      */
-    private Map<Long, Integer> getUsageCountByTagId(Collection<TagMergeCandidate> candidates,
-                                                    Map<Long, List<TagMergeCandidateItem>> itemsByCandidateId) {
+    private Map<Long, MetaTag> getTagsById(Collection<TagMergeCandidate> candidates,
+                                           Map<Long, List<TagMergeCandidateItem>> itemsByCandidateId) {
         Set<Long> tagIds = Stream.concat(
                         candidates.stream().map(TagMergeCandidate::getTargetTagId),
                         itemsByCandidateId.values().stream()
@@ -209,6 +262,33 @@ public class TagMergeCandidateService {
                 .filter(Objects::nonNull)
                 .collect(Collectors.toSet());
         return tagRepository.findAllById(tagIds).stream()
+                .collect(Collectors.toMap(MetaTag::getId, Function.identity()));
+    }
+
+    /**
+     * 이미 다른 병합에서 삭제된 source 태그는 후속 후보 조회에서 제외해 화면과 새로고침 결과를 맞춘다.
+     */
+    private Map<Long, List<TagMergeCandidateItem>> filterActiveSourceItems(
+            Map<Long, List<TagMergeCandidateItem>> itemsByCandidateId,
+            Map<Long, MetaTag> tagsById
+    ) {
+        return itemsByCandidateId.entrySet().stream()
+                .collect(Collectors.toMap(
+                        Map.Entry::getKey,
+                        entry -> entry.getValue().stream()
+                                .filter(item -> {
+                                    MetaTag tag = tagsById.get(item.getSourceTagId());
+                                    return tag != null && !tag.getIsDeleted();
+                                })
+                                .toList()
+                ));
+    }
+
+    /**
+     * 응답 DTO 는 삭제 필터링 이후에도 target/source 의 최신 사용 횟수를 같은 기준으로 사용한다.
+     */
+    private Map<Long, Integer> getUsageCountByTagId(Map<Long, MetaTag> tagsById) {
+        return tagsById.values().stream()
                 .collect(Collectors.toMap(MetaTag::getId, MetaTag::getUsageCount));
     }
 
@@ -242,6 +322,13 @@ public class TagMergeCandidateService {
      * 후보 생성 이후 삭제된 태그가 있으면 운영자가 본 후보와 적용 결과가 달라지므로 전체 적용을 차단한다.
      */
     private void validateActiveTags(Long targetTagId, List<Long> sourceTagIds) {
+        getActiveTagsByIdOrThrow(targetTagId, sourceTagIds);
+    }
+
+    /**
+     * 후보에 포함된 모든 태그가 병합 적용 가능한 활성 태그인지 확인하고 ID 조회 맵으로 돌려준다.
+     */
+    private Map<Long, MetaTag> getActiveTagsByIdOrThrow(Long targetTagId, List<Long> sourceTagIds) {
         List<Long> tagIds = Stream.concat(Stream.of(targetTagId), sourceTagIds.stream())
                 .distinct()
                 .toList();
@@ -249,5 +336,7 @@ public class TagMergeCandidateService {
         if (tags.size() != tagIds.size() || tags.stream().anyMatch(MetaTag::getIsDeleted)) {
             throw new BusinessException(ErrorCode.TAG_NOT_FOUND);
         }
+        return tags.stream()
+                .collect(Collectors.toMap(MetaTag::getId, Function.identity()));
     }
 }

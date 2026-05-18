@@ -2,6 +2,7 @@ package com.ibank.axwms.domain.tag.controller;
 
 import com.ibank.axwms.domain.tag.TagMergeCandidateStatus;
 import com.ibank.axwms.domain.tag.dto.TagMergeCandidateApiDto;
+import com.ibank.axwms.global.response.EmptyResponse;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.media.Content;
@@ -45,6 +46,21 @@ public interface TagMergeCandidateControllerDocs {
             @Parameter(description = "후보 상태 필터") TagMergeCandidateStatus statusCode
     );
 
+    @Operation(summary = "태그 병합 후보 수정",
+            description = "저장된 PENDING 병합 후보의 결과 태그, 결과 설명, source 태그 목록을 수정한다.")
+    @SecurityRequirement(name = "bearerAuth")
+    @ApiResponses({
+            @ApiResponse(responseCode = "200", description = "수정된 병합 후보를 반환한다."),
+            @ApiResponse(responseCode = "400", description = "요청 값이 올바르지 않다.", content = @Content),
+            @ApiResponse(responseCode = "401", description = "인증이 필요하다.", content = @Content),
+            @ApiResponse(responseCode = "404", description = "병합 후보 또는 태그를 찾을 수 없다.", content = @Content),
+            @ApiResponse(responseCode = "409", description = "이미 처리된 병합 후보다.", content = @Content)
+    })
+    TagMergeCandidateApiDto.Item updateCandidate(
+            @Parameter(description = "태그 병합 후보 ID") Long mergeCandidateId,
+            TagMergeCandidateApiDto.UpdateRequest request
+    );
+
     @Operation(summary = "태그 병합",
             description = "저장된 병합 후보를 승인해 source 태그의 업무일지 연결을 target 태그로 병합하고 source 태그를 soft-delete 처리한다.")
     @SecurityRequirement(name = "bearerAuth")
@@ -54,7 +70,7 @@ public interface TagMergeCandidateControllerDocs {
             @ApiResponse(responseCode = "404", description = "병합 후보 또는 태그를 찾을 수 없다.", content = @Content),
             @ApiResponse(responseCode = "409", description = "이미 처리된 병합 후보다.", content = @Content)
     })
-    void mergeCandidate(
+    EmptyResponse mergeCandidate(
             @Parameter(description = "태그 병합 후보 ID") Long mergeCandidateId
     );
 }
