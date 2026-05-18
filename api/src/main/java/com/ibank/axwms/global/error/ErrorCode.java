@@ -78,6 +78,8 @@ public enum ErrorCode {
     EVALUATION_SELF_WRITE_FORBIDDEN(HttpStatus.FORBIDDEN, "자기 자신에게 평가는 작성할 수 없습니다."),
     /** 업무일지에 연결하려는 태그 ID 가 메타 태그 풀에 없을 때 사용한다. */
     TAG_NOT_FOUND(HttpStatus.NOT_FOUND, "태그를 찾을 수 없습니다."),
+    /** AI 서버에서 태그 병합 후보를 생성하지 못했을 때 사용한다. */
+    TAG_MERGE_CANDIDATE_GENERATION_FAILED(HttpStatus.SERVICE_UNAVAILABLE, "태그 병합 후보 생성에 실패했습니다. 잠시 후 다시 시도해 주세요."),
     /** 업무 지시 일자와 마감 일자 범위가 올바르지 않은 경우 사용한다. */
     WORKLOG_INVALID_DATE_RANGE(HttpStatus.BAD_REQUEST, "업무 날짜 정보가 유효하지 않습니다."),
     /** 로그인 사용자가 대상 팀 소속이 아니어서 업무를 등록/변경할 수 없는 경우 사용한다. */
@@ -94,12 +96,12 @@ public enum ErrorCode {
     WORKLOG_EDIT_FORBIDDEN(HttpStatus.FORBIDDEN, "업무일지 수정 권한이 없습니다."),
     /** 업무일지 수정 요청에서 현재 상태 기준으로 허용되지 않은 다음 상태를 지정할 때 사용한다. */
     WORKLOG_STATUS_TRANSITION_INVALID(HttpStatus.BAD_REQUEST, "허용되지 않은 업무 상태 전이입니다."),
+    /** AI 작성 보조 upstream 이 실패해 저장 전 초안 추천을 완료할 수 없을 때 사용한다. */
+    WORKLOG_AI_POLISH_FAILED(HttpStatus.BAD_GATEWAY, "업무일지 작성 보조를 처리할 수 없습니다. 잠시 후 다시 시도해 주세요."),
     /** 삭제 요청 대상 파일이 존재하지 않거나 해당 worklog 에 속해 있지 않을 때 사용한다. */
     WORKLOG_FILE_NOT_FOUND(HttpStatus.NOT_FOUND, "삭제 대상 첨부 파일을 찾을 수 없습니다."),
     /** 외부 스토리지 업로드 실패로 업무 첨부 파일을 보관할 수 없어 업무 등록을 완료할 수 없을 때 사용한다. */
     WORKLOG_FILE_UPLOAD_FAILED(HttpStatus.SERVICE_UNAVAILABLE, "업무 등록에 실패했습니다. 잠시 후 다시 시도해 주세요."),
-    /** AI 작성 보조 upstream 이 실패해 저장 전 초안 추천을 완료할 수 없을 때 사용한다. */
-    WORKLOG_AI_POLISH_FAILED(HttpStatus.BAD_GATEWAY, "업무일지 작성 보조를 처리할 수 없습니다. 잠시 후 다시 시도해 주세요."),
     /** AI 콜백 등 fileId 단건 조회에서 대상 파일이 존재하지 않을 때 사용한다. */
     FILE_NOT_FOUND(HttpStatus.NOT_FOUND, "대상 파일을 찾을 수 없습니다."),
     /** 대시보드 scope 와 함께 들어온 파라미터가 누락되었거나 형식이 올바르지 않을 때 사용한다. */
