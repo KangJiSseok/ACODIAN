@@ -13,6 +13,7 @@ import com.ibank.axwms.domain.worklog.dto.UpdateWorklogApiDto;
 import com.ibank.axwms.domain.worklog.dto.UpdateWorklogStatusApiDto;
 import com.ibank.axwms.domain.worklog.entity.Worklog;
 import com.ibank.axwms.domain.worklog.entity.WorklogTag;
+import com.ibank.axwms.domain.worklog.event.WorklogCompletedEvent;
 import com.ibank.axwms.domain.worklog.policy.WorklogStatusPolicy;
 import com.ibank.axwms.domain.worklog.repository.WorklogDependencyRepository;
 import com.ibank.axwms.domain.worklog.repository.WorklogRepository;
@@ -31,6 +32,7 @@ import com.ibank.axwms.global.response.PageResponse;
 import com.ibank.axwms.global.security.CustomUserPrincipal;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.data.domain.Page;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -59,6 +61,7 @@ public class WorklogService {
     private final WorklogDependencyService worklogDependencyService;
     private final WorklogStatusPolicy worklogStatusPolicy;
     private final TagService tagService;
+    private final ApplicationEventPublisher applicationEventPublisher;
 
     /**
      * 로그인 사용자의 권한으로 업무를 등록한다.
@@ -249,6 +252,7 @@ public class WorklogService {
                 request.reason(),
                 statusChanged
         );
+        publishWorklogCompletedEventIfNeeded(worklogId, request.statusCode(), statusChanged);
 
         worklogDependencyService.replacePredecessors(
                 worklogId,
@@ -298,6 +302,7 @@ public class WorklogService {
                 request.reason(),
                 true
         );
+        publishWorklogCompletedEventIfNeeded(worklogId, request.statusCode(), true);
     }
 
     /**
@@ -361,6 +366,19 @@ public class WorklogService {
 
         return reason.trim();
     }
+
+    /**
+     * 완료 전환 후속 알림 판정은 커밋 이후 이벤트 흐름에서만 수행해 본문 수정 트랜잭션의 책임을 상태 저장으로 제한한다.
+     */
+    private void publishWorklogCompletedEventIfNeeded(Long worklogId,
+                                                      WorklogStatus nextStatusCode,
+                                                      boolean statusChanged) {
+        if (!(statusChanged && nextStatusCode == WorklogStatus.COMPLETED)) {
+            return;
+        }
+        applicationEventPublisher.publishEvent(new WorklogCompletedEvent(worklogId));
+    }
+
 
     /**
      * 수정 요청에서 삭제를 명시한 태그만 연결 해제한다.
