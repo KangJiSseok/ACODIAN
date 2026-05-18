@@ -53,13 +53,9 @@ public class SecurityExceptionHandler implements AuthenticationEntryPoint, Acces
 
     /**
      * Security 예외를 공통 ApiResponse 에러 봉투로 기록한다.
-     * 이미 커밋된 응답은 컨테이너 에러 dispatch 가 원인을 덮어쓰지 않도록 추가 기록을 건너뛴다.
      * 컨트롤러 advice 를 우회하는 구간이므로 content-type/status/body 를 여기서 모두 완결해야 한다.
      */
     private void writeErrorResponse(HttpServletResponse response, ErrorCode errorCode) throws IOException {
-        if (response.isCommitted()) {
-            return;
-        }
         response.setStatus(errorCode.getStatus().value());
         response.setContentType(MediaType.APPLICATION_JSON_VALUE);
         response.setCharacterEncoding("UTF-8");
