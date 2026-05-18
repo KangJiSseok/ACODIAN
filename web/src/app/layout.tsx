@@ -4,8 +4,8 @@ import { cn } from "@/lib/utils";
 import QueryProvider from "@/app/_common/providers/queryProvider";
 
 export const metadata: Metadata = {
-  title: "AX-WMS",
-  description: "AX-WMS 웹 애플리케이션 스캐폴드",
+  title: "Acodian",
+  description: "Acodian (Ax Coworking ObsiDIAN) 협업 업무 관리 서비스",
 };
 
 export default function RootLayout({

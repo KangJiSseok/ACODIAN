@@ -192,7 +192,7 @@ function getDashboardTitle(role: DashboardRole, hasTeamDashboard: boolean) {
     return "내 업무 대시보드";
   }
 
-  return "AX-WMS 대시보드";
+  return "Acodian 대시보드";
 }
 
 function getCurrentDepartmentOption(user: AuthUser | null | undefined) {
