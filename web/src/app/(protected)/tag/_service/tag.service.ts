@@ -8,6 +8,7 @@ import type {
   TagMergeCandidatesApiResponse,
   TagMergeSourceApiItem,
   TagSearchApiItem,
+  UpdateTagMergeCandidateRequest,
 } from "../_types/tag.types"
 
 function toNumber(value: number | string | null | undefined) {
@@ -53,20 +54,31 @@ function toStringValue(value: unknown) {
   return undefined
 }
 
-function toSourceTagName(source: TagMergeSourceApiItem | string) {
+function toMergeTagItem(source: TagMergeSourceApiItem | string): TagItem | null {
   if (typeof source === "string") {
-    return toStringValue(source)
+    return null
   }
 
-  return (
+  const id = Number(source.tagId ?? source.id)
+  const name =
     toStringValue(source.tagName) ??
     toStringValue(source.name) ??
     toStringValue(source.sourceTagName)
-  )
+
+  if (!Number.isFinite(id) || id <= 0 || !name) {
+    return null
+  }
+
+  return {
+    id,
+    name,
+    usageCount: toNumber(source.usageCount),
+  }
 }
 
-function toSourceTagNames(item: TagMergeCandidateApiItem) {
-  const names =
+function toSourceTags(item: TagMergeCandidateApiItem) {
+  const sources =
+    item.mergeCandidateTags ??
     item.sourceTagNames ??
     item.mergedTagNames ??
     item.mergeSourceTagNames ??
@@ -74,30 +86,47 @@ function toSourceTagNames(item: TagMergeCandidateApiItem) {
     item.tags ??
     []
 
-  return names
-    .map((source) => toSourceTagName(source))
-    .filter((name): name is string => Boolean(name))
+  return sources
+    .map((source) => toMergeTagItem(source))
+    .filter((tag): tag is TagItem => tag !== null)
 }
 
 function toTagMergeCandidate(
   item: TagMergeCandidateApiItem,
   index: number
 ): TagMergeCandidate | null {
-  const targetTagName =
-    toStringValue(item.targetTagName) ??
-    toStringValue(item.mergedTagName) ??
-    toStringValue(item.mergeTargetTagName) ??
-    toStringValue(item.tagName)
-  const sourceTagNames = toSourceTagNames(item)
+  const rawId = item.mergeCandidateId ?? item.id
+  const numericId = Number(rawId)
+  const targetTag =
+    toMergeTagItem(item.mergeTargetTag ?? "") ??
+    toMergeTagItem({
+      id: item.id,
+      tagName:
+        item.targetTagName ??
+        item.mergedTagName ??
+        item.mergeTargetTagName ??
+        item.tagName,
+    })
+  const sourceTags = toSourceTags(item)
 
-  if (!targetTagName || sourceTagNames.length === 0) {
+  if (
+    !Number.isFinite(numericId) ||
+    numericId <= 0 ||
+    !targetTag ||
+    sourceTags.length === 0
+  ) {
     return null
   }
 
   return {
-    id: toStringValue(item.id) ?? `${targetTagName}-${index}`,
-    targetTagName,
-    sourceTagNames,
+    id: toStringValue(rawId) ?? `${targetTag.name}-${index}`,
+    numericId,
+    statusCode: item.statusCode ?? "PENDING",
+    resultDescription: item.resultDescription,
+    targetTag,
+    sourceTags,
+    targetTagName: targetTag.name,
+    sourceTagNames: sourceTags.map((sourceTag) => sourceTag.name),
   }
 }
 
@@ -116,14 +145,6 @@ function toTagMergeCandidates(response: TagMergeCandidatesApiResponse) {
     .map(toTagMergeCandidate)
     .filter((candidate): candidate is TagMergeCandidate => candidate !== null)
 }
-
-const mockTagMergeCandidates: TagMergeCandidatesApiResponse = [
-  {
-    id: "mock-merge-1",
-    targetTagName: "결산",
-    sourceTagNames: ["월말결산", "결산업무"],
-  },
-]
 
 export const tagService = {
   async search(params: SearchTagsParams = {}) {
@@ -144,6 +165,31 @@ export const tagService = {
   },
 
   async getMergeCandidates() {
-    return toTagMergeCandidates(mockTagMergeCandidates)
+    const response = await apiClient.get<TagMergeCandidatesApiResponse>(
+      "/tags/merge-candidates",
+      {
+        params: {
+          statusCode: "PENDING",
+        },
+      }
+    )
+
+    return toTagMergeCandidates(response)
+  },
+
+  async updateMergeCandidate(
+    mergeCandidateId: number,
+    request: UpdateTagMergeCandidateRequest
+  ) {
+    const response = await apiClient.patch<
+      TagMergeCandidateApiItem,
+      UpdateTagMergeCandidateRequest
+    >(`/tags/merge-candidates/${mergeCandidateId}`, request)
+
+    return toTagMergeCandidate(response, 0)
+  },
+
+  async mergeCandidate(mergeCandidateId: number) {
+    await apiClient.post<void>(`/tags/merge-candidates/${mergeCandidateId}/merge`)
   },
 }
