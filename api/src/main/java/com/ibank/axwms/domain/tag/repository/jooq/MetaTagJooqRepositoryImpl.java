@@ -25,17 +25,18 @@ public class MetaTagJooqRepositoryImpl implements MetaTagJooqRepository {
     private final DSLContext dsl;
 
     /**
-     * 태그명 unique 제약 충돌 시 기존 태그 출처를 승격하지 않아 생성 출처 의미를 보존한다.
+     * 태그명 충돌 시 기존 설명을 덮어쓰지 않아 운영자가 관리한 설명을 보존한다.
      */
     @Override
-    public void insertAiGeneratedTagNamesIgnoreDuplicates(Collection<String> tagNames) {
-        if (tagNames == null || tagNames.isEmpty()) {
+    public void insertAiGeneratedTagsIgnoreDuplicates(Collection<AiGeneratedTagCommand> tags) {
+        if (tags == null || tags.isEmpty()) {
             return;
         }
 
-        List<Query> insertQueries = tagNames.stream()
-                .map(tagName -> dsl.insertInto(TB_META_TAG)
-                        .set(TB_META_TAG.TAG_NAME, tagName)
+        List<Query> insertQueries = tags.stream()
+                .map(tag -> dsl.insertInto(TB_META_TAG)
+                        .set(TB_META_TAG.TAG_NAME, tag.tagName())
+                        .set(TB_META_TAG.DESCRIPTION, tag.description())
                         .set(TB_META_TAG.USAGE_COUNT, 0)
                         .set(TB_META_TAG.IS_AI_GENERATED, Boolean.TRUE)
                         .onConflict(TB_META_TAG.TAG_NAME)
@@ -56,7 +57,7 @@ public class MetaTagJooqRepositoryImpl implements MetaTagJooqRepository {
 
     @Override
     public List<TagInfoProjection> findAllTagInfo() {
-        return dsl.select(TB_META_TAG.TAG_ID, TB_META_TAG.TAG_NAME, TB_META_TAG.USAGE_COUNT)
+        return dsl.select(TB_META_TAG.TAG_ID, TB_META_TAG.TAG_NAME, TB_META_TAG.USAGE_COUNT, TB_META_TAG.DESCRIPTION)
                 .from(TB_META_TAG)
                 .orderBy(TB_META_TAG.USAGE_COUNT.asc(), TB_META_TAG.TAG_NAME.asc(), TB_META_TAG.TAG_ID.asc())
                 .fetch(TagInfoProjection::from);

@@ -2,6 +2,7 @@ package com.ibank.axwms.domain.tag.service;
 
 import com.ibank.axwms.domain.tag.entity.MetaTag;
 import com.ibank.axwms.domain.tag.repository.TagRepository;
+import com.ibank.axwms.domain.tag.repository.jooq.MetaTagJooqRepository.AiGeneratedTagCommand;
 import com.ibank.axwms.domain.worklog.WorklogImportance;
 import com.ibank.axwms.domain.worklog.WorklogStatus;
 import com.ibank.axwms.domain.worklog.dto.ApplyWorklogAiTagsApiDto;
@@ -55,7 +56,7 @@ class InternalTagAiCallbackServiceTest {
     void AI_태그_반영_시_신규_태그를_생성하고_새로_연결된_태그만_사용_횟수를_증가시킨다() {
         ApplyWorklogAiTagsApiDto.Request request = new ApplyWorklogAiTagsApiDto.Request(
                 List.of(1L, 2L),
-                List.of(" 재고 ", "재고")
+                List.of(newTag(" 재고 ", "재고 흐름 점검"), newTag("재고", "재고 중복 후보"))
         );
         MetaTag createdTag = createMetaTag(3L, "재고");
         WorklogTag existingLink = createWorklogTag(WORKLOG_ID, 2L);
@@ -71,7 +72,7 @@ class InternalTagAiCallbackServiceTest {
 
         internalTagAiCallbackService.applyAiGeneratedTags(WORKLOG_ID, request);
 
-        verify(tagRepository).insertAiGeneratedTagNamesIgnoreDuplicates(List.of("재고"));
+        verify(tagRepository).insertAiGeneratedTagsIgnoreDuplicates(List.of(new AiGeneratedTagCommand("재고", "재고 흐름 점검")));
         verify(worklogTagRepository).saveAll(org.mockito.ArgumentMatchers.<List<WorklogTag>>any());
         verify(tagService).incrementUsageCountByIds(List.of(1L, 3L));
     }
@@ -82,7 +83,7 @@ class InternalTagAiCallbackServiceTest {
     void 내부_태그_생성_요청이면_신규_태그를_만들고_업무일지에_연결한다() {
         ApplyWorklogAiTagsApiDto.Request request = new ApplyWorklogAiTagsApiDto.Request(
                 List.of(1L),
-                List.of(" 배치자동화 ")
+                List.of(newTag(" 배치자동화 ", "정기 배치 처리와 자동화 작업"))
         );
         MetaTag createdTag = createMetaTag(3L, "배치자동화");
         WorklogTag savedLink1 = createWorklogTag(WORKLOG_ID, 1L);
@@ -98,7 +99,7 @@ class InternalTagAiCallbackServiceTest {
 
         internalTagAiCallbackService.applyAiGeneratedTags(WORKLOG_ID, request);
 
-        verify(tagRepository).insertAiGeneratedTagNamesIgnoreDuplicates(List.of("배치자동화"));
+        verify(tagRepository).insertAiGeneratedTagsIgnoreDuplicates(List.of(new AiGeneratedTagCommand("배치자동화", "정기 배치 처리와 자동화 작업")));
         verify(worklogTagRepository).saveAll(linkCaptor.capture());
         assertThat(linkCaptor.getValue())
                 .extracting(WorklogTag::getTagId)
@@ -111,7 +112,7 @@ class InternalTagAiCallbackServiceTest {
     void AI_태그_반영_대상_업무일지가_없으면_태그_생성과_연결을_수행하지_않는다() {
         ApplyWorklogAiTagsApiDto.Request request = new ApplyWorklogAiTagsApiDto.Request(
                 List.of(1L),
-                List.of("재고")
+                List.of(newTag("재고", "재고 흐름 점검"))
         );
         given(worklogRepository.findById(WORKLOG_ID)).willReturn(Optional.empty());
 
@@ -120,9 +121,34 @@ class InternalTagAiCallbackServiceTest {
                 .extracting(error -> ((BusinessException) error).getErrorCode())
                 .isEqualTo(ErrorCode.WORKLOG_NOT_FOUND);
 
-        verify(tagRepository, never()).insertAiGeneratedTagNamesIgnoreDuplicates(org.mockito.ArgumentMatchers.any());
+        verify(tagRepository, never()).insertAiGeneratedTagsIgnoreDuplicates(org.mockito.ArgumentMatchers.any());
         verify(worklogTagRepository, never()).saveAll(org.mockito.ArgumentMatchers.<List<WorklogTag>>any());
         verify(tagService, never()).incrementUsageCountByIds(org.mockito.ArgumentMatchers.any());
+    }
+
+    @Test
+    @DisplayName("구버전 신규 태그명 요청도 태그 설명 생성 전환 과정에서 처리한다")
+    void 구버전_신규_태그명_요청도_태그_설명_생성_전환_과정에서_처리한다() {
+        ApplyWorklogAiTagsApiDto.Request request = new ApplyWorklogAiTagsApiDto.Request(
+                List.of(1L),
+                List.of(" 레거시 "),
+                null
+        );
+        MetaTag createdTag = createMetaTag(3L, "레거시");
+        WorklogTag savedLink1 = createWorklogTag(WORKLOG_ID, 1L);
+        WorklogTag savedLink3 = createWorklogTag(WORKLOG_ID, 3L);
+        given(worklogRepository.findById(WORKLOG_ID)).willReturn(Optional.of(createWorklog()));
+        given(tagService.normalizeExistingTagIds(List.of(1L))).willReturn(List.of(1L));
+        given(tagRepository.findAllByTagNameIn(List.of("레거시"))).willReturn(List.of(createdTag));
+        given(worklogTagRepository.findByWorklogIdAndTagIdIn(WORKLOG_ID, List.of(1L, 3L)))
+                .willReturn(List.of());
+        given(worklogTagRepository.saveAll(org.mockito.ArgumentMatchers.<List<WorklogTag>>any()))
+                .willReturn(List.of(savedLink1, savedLink3));
+
+        internalTagAiCallbackService.applyAiGeneratedTags(WORKLOG_ID, request);
+
+        verify(tagRepository).insertAiGeneratedTagsIgnoreDuplicates(List.of(new AiGeneratedTagCommand("레거시", "레거시")));
+        verify(tagService).incrementUsageCountByIds(List.of(1L, 3L));
     }
 
     private Worklog createWorklog() {
@@ -148,5 +174,9 @@ class InternalTagAiCallbackServiceTest {
 
     private WorklogTag createWorklogTag(Long worklogId, Long tagId) {
         return WorklogTag.create(worklogId, tagId);
+    }
+
+    private ApplyWorklogAiTagsApiDto.NewTag newTag(String tagName, String description) {
+        return new ApplyWorklogAiTagsApiDto.NewTag(tagName, description);
     }
 }
