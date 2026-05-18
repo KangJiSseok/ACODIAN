@@ -53,8 +53,11 @@ export const navItems: NavItem[] = [
   },
   {
     label: "태그",
-    href: "/tag",
     icon: Tags,
+    submenus: [
+      { label: "태그 목록", href: "/tag", exact: true },
+      { label: "태그 병합", href: "/tag/merge" },
+    ],
   },
   {
     label: "알림",

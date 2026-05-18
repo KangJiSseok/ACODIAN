@@ -38,8 +38,8 @@ const editableStatusTransitionMap: Record<WorklogStatus, WorklogStatus[]> = {
 }
 
 const creatableStatusOptions = worklogStatusLegendOrder
-const TITLE_MAX_LENGTH = 100
-const CONTENT_MAX_LENGTH = 2000
+const TITLE_MAX_LENGTH = 50
+const CONTENT_MAX_LENGTH = 10000
 
 type SettingsValidationErrors = {
   actualHours?: string
