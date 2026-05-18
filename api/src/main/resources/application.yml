@@ -29,7 +29,7 @@ spring:
   servlet:
     multipart:
       max-file-size: 10MB
-      max-request-size: 10MB
+      max-request-size: 110MB
 
 server:
   port: ${SERVER_PORT:8100}
@@ -65,6 +65,11 @@ storage:
       cron: ${PROFILE_IMAGE_CLEANUP_CRON:0 20 22 * * *}
       temp-prefix: ${PROFILE_IMAGE_TEMP_PREFIX:temp/}
       retention-days: ${PROFILE_IMAGE_RETENTION_DAYS:1}
+worklog:
+  files:
+    max-count: ${WORKLOG_FILE_MAX_COUNT:10}
+    max-file-size-bytes: ${WORKLOG_FILE_MAX_SIZE_BYTES:10485760}
+    max-total-size-bytes: ${WORKLOG_FILE_MAX_TOTAL_SIZE_BYTES:104857600}
 ai:
   worklog-search:
     enabled: ${AI_WORKLOG_SEARCH_ENABLED:false}
