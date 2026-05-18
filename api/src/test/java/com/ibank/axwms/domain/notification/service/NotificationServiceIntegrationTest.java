@@ -51,6 +51,7 @@ class NotificationServiceIntegrationTest extends IntegrationTestSupport {
     private static final String WORKLOG_DUE_SOON_NOTIFICATION_TYPE = NotificationType.WORKLOG_DUE_SOON.name();
     private static final String WORKLOG_DUE_TODAY_NOTIFICATION_TYPE = NotificationType.WORKLOG_DUE_TODAY.name();
     private static final String WORKLOG_OVERDUE_NOTIFICATION_TYPE = NotificationType.WORKLOG_OVERDUE.name();
+    private static final String WORKLOG_DEPENDENCY_READY_NOTIFICATION_TYPE = NotificationType.WORKLOG_DEPENDENCY_READY.name();
     private static final String WORKLOG_REFERENCE_TYPE = NotificationReferenceType.WORKLOG.name();
     private static final String NOTIFICATION_STREAM_KEY = "notifications:stream";
 
@@ -249,6 +250,130 @@ class NotificationServiceIntegrationTest extends IntegrationTestSupport {
         assertThat(firstCreatedCount).isOne();
         assertThat(secondCreatedCount).isZero();
         assertThat(notificationRepository.findAll()).hasSize(1);
+    }
+
+    @Test
+    @DisplayName("선행 업무 완료 알림은 부모 업무 identity 로 저장하고 Redis Stream으로 발행한다")
+    void 선행_업무_완료_알림은_부모_업무_identity로_저장하고_Redis_Stream으로_발행한다() {
+        // given
+        ReminderBaseFixture fixture = seedReminderBaseFixture();
+        Worklog parentWorklog = saveWorklog(fixture.author(), fixture.team(), "부모 업무", WorklogStatus.IN_PROGRESS, TARGET_DUE_DATE, false);
+
+        // when
+        notificationService.createWorklogDependencyReadyNotification(
+                fixture.author().getId(),
+                fixture.department().getId(),
+                fixture.team().getId(),
+                parentWorklog.getId(),
+                fixture.team().getTeamName(),
+                parentWorklog.getTitle()
+        );
+
+        // then
+        List<Notification> notifications = notificationRepository.findAll();
+        assertThat(notifications)
+                .extracting(
+                        Notification::getUserId,
+                        Notification::getDepartmentId,
+                        Notification::getTeamId,
+                        Notification::getNotificationType,
+                        Notification::getReferenceType,
+                        Notification::getReferenceId,
+                        Notification::getIsRead
+                )
+                .containsExactly(tuple(
+                        fixture.author().getId(),
+                        fixture.department().getId(),
+                        fixture.team().getId(),
+                        WORKLOG_DEPENDENCY_READY_NOTIFICATION_TYPE,
+                        WORKLOG_REFERENCE_TYPE,
+                        parentWorklog.getId(),
+                        Boolean.FALSE
+                ));
+        Notification notification = notifications.getFirst();
+        assertThat(notification.getTitle()).isEqualTo("선행 업무 완료 알림");
+        assertThat(notification.getContent()).isEqualTo(
+                fixture.team().getTeamName() + "의 부모 업무 선행 업무가 모두 완료되었습니다. 업무를 진행해 주세요."
+        );
+
+        List<MapRecord<String, Object, Object>> streamRecords = streamRecords();
+        assertThat(streamRecords).hasSize(1);
+        Map<Object, Object> streamFields = streamRecords.getFirst().getValue();
+        assertThat(streamFields)
+                .containsEntry("notificationId", String.valueOf(notification.getId()))
+                .containsEntry("userId", String.valueOf(fixture.author().getId()))
+                .containsEntry("type", WORKLOG_DEPENDENCY_READY_NOTIFICATION_TYPE)
+                .containsEntry("title", "선행 업무 완료 알림")
+                .containsEntry("content", fixture.team().getTeamName()
+                        + "의 부모 업무 선행 업무가 모두 완료되었습니다. 업무를 진행해 주세요.")
+                .containsEntry("referenceType", WORKLOG_REFERENCE_TYPE)
+                .containsEntry("referenceId", String.valueOf(parentWorklog.getId()));
+    }
+
+    @Test
+    @DisplayName("선행 업무 완료 알림은 같은 부모 업무에 대해 한 번만 저장하고 재발행하지 않는다")
+    void 선행_업무_완료_알림은_같은_부모_업무에_대해_한_번만_저장하고_재발행하지_않는다() {
+        // given
+        ReminderBaseFixture fixture = seedReminderBaseFixture();
+        Worklog parentWorklog = saveWorklog(fixture.author(), fixture.team(), "중복 부모 업무", WorklogStatus.IN_PROGRESS, TARGET_DUE_DATE, false);
+
+        // when
+        notificationService.createWorklogDependencyReadyNotification(
+                fixture.author().getId(),
+                fixture.department().getId(),
+                fixture.team().getId(),
+                parentWorklog.getId(),
+                fixture.team().getTeamName(),
+                parentWorklog.getTitle()
+        );
+        notificationService.createWorklogDependencyReadyNotification(
+                fixture.author().getId(),
+                fixture.department().getId(),
+                fixture.team().getId(),
+                parentWorklog.getId(),
+                fixture.team().getTeamName(),
+                parentWorklog.getTitle()
+        );
+
+        // then
+        assertThat(notificationRepository.findAll()).hasSize(1);
+        assertThat(streamRecords()).hasSize(1);
+    }
+
+    @Test
+    @DisplayName("선행 업무 완료 알림은 기존 마감 알림과 별도 identity 로 저장한다")
+    void 선행_업무_완료_알림은_기존_마감_알림과_별도_identity로_저장한다() {
+        // given
+        ReminderBaseFixture fixture = seedReminderBaseFixture();
+        Worklog parentWorklog = saveWorklog(fixture.author(), fixture.team(), "마감 알림 보유 부모", WorklogStatus.IN_PROGRESS, TARGET_DUE_DATE, false);
+        notificationRepository.saveAndFlush(Notification.createWorklogDueSoonReminder(
+                fixture.author().getId(),
+                fixture.department().getId(),
+                fixture.team().getId(),
+                parentWorklog.getId(),
+                "기존 마감 알림",
+                "기존 마감 본문"
+        ));
+        stringRedisTemplate.delete(NOTIFICATION_STREAM_KEY);
+
+        // when
+        notificationService.createWorklogDependencyReadyNotification(
+                fixture.author().getId(),
+                fixture.department().getId(),
+                fixture.team().getId(),
+                parentWorklog.getId(),
+                fixture.team().getTeamName(),
+                parentWorklog.getTitle()
+        );
+
+        // then
+        assertThat(notificationRepository.findAll())
+                .extracting(Notification::getNotificationType)
+                .containsExactlyInAnyOrder(
+                        WORKLOG_DUE_SOON_NOTIFICATION_TYPE,
+                        WORKLOG_DEPENDENCY_READY_NOTIFICATION_TYPE
+                );
+        assertThat(streamRecords()).hasSize(1);
     }
 
     @Test
