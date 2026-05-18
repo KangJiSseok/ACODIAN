@@ -32,6 +32,16 @@ public interface MetaTagJooqRepository {
      */
     Page<SearchTagProjection> searchTagPage(SearchTagQuery query);
 
+    /**
+     * 병합된 source 태그를 목록/검색에서 제외하기 위해 soft-delete 처리한다.
+     */
+    void softDeleteByIds(Collection<Long> tagIds);
+
+    /**
+     * 병합 target 태그의 설명과 현재 연결 업무 수 기반 사용 횟수를 함께 갱신한다.
+     */
+    void updateDescriptionAndUsageCount(Long tagId, String description, int usageCount);
+
     record AiGeneratedTagCommand(
             String tagName,
             String description

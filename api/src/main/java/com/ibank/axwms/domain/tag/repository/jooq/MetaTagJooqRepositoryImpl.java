@@ -8,6 +8,7 @@ import lombok.RequiredArgsConstructor;
 import org.jooq.Condition;
 import org.jooq.DSLContext;
 import org.jooq.Query;
+import org.jooq.UpdateSetMoreStep;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageImpl;
 import org.springframework.data.domain.PageRequest;
@@ -96,5 +97,27 @@ public class MetaTagJooqRepositoryImpl implements MetaTagJooqRepository {
                 .fetch(SearchTagProjection::from);
 
         return new PageImpl<>(items, pageRequest, total);
+    }
+
+    @Override
+    public void softDeleteByIds(Collection<Long> tagIds) {
+        if (tagIds == null || tagIds.isEmpty()) {
+            return;
+        }
+
+        dsl.update(TB_META_TAG)
+                .set(TB_META_TAG.IS_DELETED, Boolean.TRUE)
+                .where(TB_META_TAG.TAG_ID.in(tagIds))
+                .execute();
+    }
+
+    @Override
+    public void updateDescriptionAndUsageCount(Long tagId, String description, int usageCount) {
+        UpdateSetMoreStep<?> update = dsl.update(TB_META_TAG)
+                .set(TB_META_TAG.USAGE_COUNT, usageCount);
+        if (description != null && !description.isBlank()) {
+            update = update.set(TB_META_TAG.DESCRIPTION, description);
+        }
+        update.where(TB_META_TAG.TAG_ID.eq(tagId)).execute();
     }
 }

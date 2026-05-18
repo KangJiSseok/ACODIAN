@@ -9,6 +9,7 @@ import com.ibank.axwms.domain.tag.external.TagMergeAiClient;
 import com.ibank.axwms.domain.tag.repository.TagMergeCandidateItemRepository;
 import com.ibank.axwms.domain.tag.repository.TagMergeCandidateRepository;
 import com.ibank.axwms.domain.tag.repository.TagRepository;
+import com.ibank.axwms.domain.worklog.repository.WorklogTagRepository;
 import com.ibank.axwms.global.error.BusinessException;
 import com.ibank.axwms.global.error.ErrorCode;
 import lombok.RequiredArgsConstructor;
@@ -38,6 +39,7 @@ public class TagMergeCandidateService {
     private final TagMergeCandidateRepository tagMergeCandidateRepository;
     private final TagMergeCandidateItemRepository tagMergeCandidateItemRepository;
     private final TagRepository tagRepository;
+    private final WorklogTagRepository worklogTagRepository;
     private final TagMergeAiClient tagMergeAiClient;
 
     /**
@@ -74,6 +76,36 @@ public class TagMergeCandidateService {
                 ? tagMergeCandidateRepository.findAllByOrderByCreatedAtDesc()
                 : tagMergeCandidateRepository.findByStatusCodeOrderByCreatedAtDesc(statusCode);
         return toResponse(candidates);
+    }
+
+    /**
+     * 저장된 후보를 승인해 source 태그들을 target 태그로 병합하고 source 태그는 soft-delete 처리한다.
+     */
+    @Transactional
+    public void mergeCandidate(Long mergeCandidateId) {
+        TagMergeCandidate candidate = getCandidateOrThrow(mergeCandidateId);
+        validatePending(candidate);
+        claimPendingCandidate(mergeCandidateId);
+
+        List<TagMergeCandidateItem> items = tagMergeCandidateItemRepository.findByMergeCandidateId(candidate.getId());
+        if (items.isEmpty()) {
+            throw new BusinessException(ErrorCode.TAG_MERGE_CANDIDATE_NOT_FOUND);
+        }
+
+        List<Long> sourceTagIds = items.stream()
+                .map(TagMergeCandidateItem::getSourceTagId)
+                .distinct()
+                .toList();
+        validateActiveTags(candidate.getTargetTagId(), sourceTagIds);
+
+        worklogTagRepository.replaceSourceTagsWithTarget(candidate.getTargetTagId(), sourceTagIds);
+        tagRepository.softDeleteByIds(sourceTagIds);
+        int usageCount = worklogTagRepository.countDistinctWorklogsByTagId(candidate.getTargetTagId());
+        tagRepository.updateDescriptionAndUsageCount(
+                candidate.getTargetTagId(),
+                candidate.getResultDescription(),
+                usageCount
+        );
     }
 
     /**
@@ -164,7 +196,7 @@ public class TagMergeCandidateService {
     }
 
     /**
-     * 저장된 snapshot 이름은 유지하되 현재 태그 사용 횟수만 ID 기준으로 보강한다.
+     * source 태그가 soft-delete 된 뒤에도 snapshot 조회는 가능해야 하므로 ID 기반으로 현재 usageCount 만 보강한다.
      */
     private Map<Long, Integer> getUsageCountByTagId(Collection<TagMergeCandidate> candidates,
                                                     Map<Long, List<TagMergeCandidateItem>> itemsByCandidateId) {
@@ -178,6 +210,32 @@ public class TagMergeCandidateService {
                 .collect(Collectors.toSet());
         return tagRepository.findAllById(tagIds).stream()
                 .collect(Collectors.toMap(MetaTag::getId, MetaTag::getUsageCount));
+    }
+
+    /**
+     * 병합 적용 요청은 저장된 후보 그룹에만 허용한다.
+     */
+    private TagMergeCandidate getCandidateOrThrow(Long mergeCandidateId) {
+        return tagMergeCandidateRepository.findById(mergeCandidateId)
+                .orElseThrow(() -> new BusinessException(ErrorCode.TAG_MERGE_CANDIDATE_NOT_FOUND));
+    }
+
+    /**
+     * 이미 처리된 후보의 중복 적용은 관계 치환 결과를 예측하기 어렵기 때문에 차단한다.
+     */
+    private void validatePending(TagMergeCandidate candidate) {
+        if (candidate.getStatusCode() != TagMergeCandidateStatus.PENDING) {
+            throw new BusinessException(ErrorCode.TAG_MERGE_CANDIDATE_STATUS_INVALID);
+        }
+    }
+
+    /**
+     * 상태 변경 row lock 을 이용해 같은 후보의 중복 병합 요청 중 하나만 후속 변경을 수행하게 한다.
+     */
+    private void claimPendingCandidate(Long mergeCandidateId) {
+        if (tagMergeCandidateRepository.markAppliedIfPending(mergeCandidateId) != 1) {
+            throw new BusinessException(ErrorCode.TAG_MERGE_CANDIDATE_STATUS_INVALID);
+        }
     }
 
     /**

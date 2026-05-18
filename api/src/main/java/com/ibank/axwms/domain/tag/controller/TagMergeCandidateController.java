@@ -7,6 +7,7 @@ import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
@@ -45,5 +46,12 @@ public class TagMergeCandidateController implements TagMergeCandidateControllerD
             @RequestParam(required = false) TagMergeCandidateStatus statusCode
     ) {
         return tagMergeCandidateService.getCandidates(statusCode);
+    }
+
+    @Override
+    @PostMapping("/{mergeCandidateId}/merge")
+    @PreAuthorize("hasAnyRole('DIRECTOR','DEPT_HEAD')")
+    public void mergeCandidate(@PathVariable Long mergeCandidateId) {
+        tagMergeCandidateService.mergeCandidate(mergeCandidateId);
     }
 }
