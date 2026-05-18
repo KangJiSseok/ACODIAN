@@ -52,6 +52,7 @@ public class MetaTagJooqRepositoryImpl implements MetaTagJooqRepository {
     public List<TagSummaryProjection> findAllTagSummaries() {
         return dsl.select(TB_META_TAG.TAG_ID, TB_META_TAG.TAG_NAME)
                 .from(TB_META_TAG)
+                .where(TB_META_TAG.IS_DELETED.isFalse())
                 .orderBy(TB_META_TAG.TAG_NAME.asc(), TB_META_TAG.TAG_ID.asc())
                 .fetch(TagSummaryProjection::from);
     }
@@ -60,6 +61,7 @@ public class MetaTagJooqRepositoryImpl implements MetaTagJooqRepository {
     public List<TagInfoProjection> findAllTagInfo() {
         return dsl.select(TB_META_TAG.TAG_ID, TB_META_TAG.TAG_NAME, TB_META_TAG.USAGE_COUNT, TB_META_TAG.DESCRIPTION)
                 .from(TB_META_TAG)
+                .where(TB_META_TAG.IS_DELETED.isFalse())
                 .orderBy(TB_META_TAG.USAGE_COUNT.asc(), TB_META_TAG.TAG_NAME.asc(), TB_META_TAG.TAG_ID.asc())
                 .fetch(TagInfoProjection::from);
     }

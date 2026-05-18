@@ -17,12 +17,12 @@ public interface MetaTagJooqRepository {
     void insertAiGeneratedTagsIgnoreDuplicates(Collection<AiGeneratedTagCommand> tags);
 
     /**
-     * 필터 옵션 등에 노출할 모든 태그를 (id, name) 형태로 조회한다.
+     * 필터 옵션 등에 노출할 활성 태그를 (id, name) 형태로 조회한다.
      */
     List<TagSummaryProjection> findAllTagSummaries();
 
     /**
-     * 태그의 설명과 사용 횟수를 포함하여 모든 태그를 FastAPI 내부 콜백용으로 조회한다.
+     * 태그의 설명과 사용 횟수를 포함하여 활성 태그를 FastAPI 내부 콜백용으로 조회한다.
      */
     List<TagInfoProjection> findAllTagInfo();
 
