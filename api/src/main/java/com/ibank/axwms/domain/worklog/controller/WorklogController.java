@@ -7,10 +7,12 @@ import com.ibank.axwms.domain.worklog.dto.GetWorklogsApiDto;
 import com.ibank.axwms.domain.worklog.dto.PolishWorklogApiDto;
 import com.ibank.axwms.domain.worklog.dto.RecommendWorklogTitleApiDto;
 import com.ibank.axwms.domain.worklog.dto.SearchPredecessorApiDto;
+import com.ibank.axwms.domain.worklog.dto.SearchSemanticWorklogsApiDto;
 import com.ibank.axwms.domain.worklog.dto.SearchWorklogsApiDto;
 import com.ibank.axwms.domain.worklog.dto.UpdateWorklogApiDto;
 import com.ibank.axwms.domain.worklog.dto.UpdateWorklogStatusApiDto;
 import com.ibank.axwms.domain.worklog.service.WorklogService;
+import com.ibank.axwms.domain.worklog.service.search.LightRagWorklogSearchService;
 import com.ibank.axwms.domain.worklog.service.search.WorklogSearchService;
 import com.ibank.axwms.global.response.EmptyResponse;
 import com.ibank.axwms.global.response.PageResponse;
@@ -40,7 +42,8 @@ import java.util.List;
 public class WorklogController implements WorklogControllerDocs {
 
     private final WorklogService worklogService;
-    private final WorklogSearchService worklogSearchService;
+    private final WorklogSearchService keywordWorklogSearchService;
+    private final LightRagWorklogSearchService lightRagWorklogSearchService;
 
     @Override
     @PostMapping
@@ -93,13 +96,23 @@ public class WorklogController implements WorklogControllerDocs {
     }
 
     @Override
-    @GetMapping("/search")
+    @GetMapping("/search/keyword")
     @PreAuthorize("hasAnyRole('DIRECTOR','DEPT_HEAD','TEAM_LEAD','MEMBER')")
-    public PageResponse<SearchWorklogsApiDto.Response.Item> searchWorklogs(
+    public PageResponse<SearchWorklogsApiDto.Response.Item> searchKeywordWorklogs(
             @AuthenticationPrincipal CustomUserPrincipal principal,
             @Valid @ModelAttribute SearchWorklogsApiDto.Request request
     ) {
-        return worklogSearchService.searchWorklogs(principal, request);
+        return keywordWorklogSearchService.searchWorklogs(principal, request);
+    }
+
+    @Override
+    @GetMapping("/search/semantic")
+    @PreAuthorize("hasAnyRole('DIRECTOR','DEPT_HEAD','TEAM_LEAD','MEMBER')")
+    public SearchSemanticWorklogsApiDto.Response searchSemanticWorklogs(
+            @AuthenticationPrincipal CustomUserPrincipal principal,
+            @Valid @ModelAttribute SearchSemanticWorklogsApiDto.Request request
+    ) {
+        return lightRagWorklogSearchService.searchWorklogs(principal, request);
     }
 
     @Override
@@ -108,7 +121,7 @@ public class WorklogController implements WorklogControllerDocs {
     public GetWorklogFilterOptionsApiDto.Response getFilterOptions(
             @AuthenticationPrincipal CustomUserPrincipal principal
     ) {
-        return worklogSearchService.getFilterOptions(principal);
+        return keywordWorklogSearchService.getFilterOptions(principal);
     }
 
     @Override

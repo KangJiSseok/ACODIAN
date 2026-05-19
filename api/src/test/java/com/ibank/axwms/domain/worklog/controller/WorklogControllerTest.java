@@ -13,8 +13,12 @@ import com.fasterxml.jackson.databind.SerializationFeature;
 import com.ibank.axwms.domain.worklog.WorklogStatus;
 import com.ibank.axwms.domain.worklog.dto.PolishWorklogApiDto;
 import com.ibank.axwms.domain.worklog.dto.RecommendWorklogTitleApiDto;
+import com.ibank.axwms.domain.worklog.dto.SearchSemanticWorklogsApiDto;
+import com.ibank.axwms.domain.worklog.dto.SearchWorklogsApiDto;
 import com.ibank.axwms.domain.worklog.dto.UpdateWorklogStatusApiDto;
 import com.ibank.axwms.domain.worklog.service.WorklogService;
+import com.ibank.axwms.domain.worklog.service.search.LightRagWorklogSearchService;
+import com.ibank.axwms.domain.worklog.service.search.WorklogSearchService;
 import com.ibank.axwms.global.response.EmptyResponse;
 import com.ibank.axwms.global.response.GlobalResponseAdvice;
 import com.ibank.axwms.global.security.CustomUserPrincipal;
@@ -33,6 +37,7 @@ import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.MvcResult;
 import org.springframework.test.web.servlet.setup.MockMvcBuilders;
+import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PatchMapping;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
@@ -48,7 +53,10 @@ class WorklogControllerTest {
     private WorklogService worklogService;
 
     @Mock
-    private com.ibank.axwms.domain.worklog.service.search.WorklogSearchService worklogSearchService;
+    private WorklogSearchService keywordWorklogSearchService;
+
+    @Mock
+    private LightRagWorklogSearchService lightRagWorklogSearchService;
 
     @InjectMocks
     private WorklogController worklogController;
@@ -212,6 +220,40 @@ class WorklogControllerTest {
         assertThat(data.get("titles")).hasSize(2);
         assertThat(data.get("titles").get(0).asText()).isEqualTo("장애 구간 로그 확인");
         assertThat(data.size()).isEqualTo(1);
+    }
+
+    @Test
+    @DisplayName("키워드 검색 메서드는 search/keyword GET 경로와 MEMBER 이상 role gate 를 사용한다")
+    void 키워드_검색_메서드는_search_keyword_get_경로와_role_gate를_사용한다() throws NoSuchMethodException {
+        Method method = WorklogController.class.getMethod(
+                "searchKeywordWorklogs",
+                CustomUserPrincipal.class,
+                SearchWorklogsApiDto.Request.class
+        );
+        GetMapping getMapping = method.getAnnotation(GetMapping.class);
+        PreAuthorize preAuthorize = method.getAnnotation(PreAuthorize.class);
+
+        assertThat(getMapping).isNotNull();
+        assertThat(getMapping.value()).containsExactly("/search/keyword");
+        assertThat(preAuthorize).isNotNull();
+        assertThat(preAuthorize.value()).isEqualTo("hasAnyRole('DIRECTOR','DEPT_HEAD','TEAM_LEAD','MEMBER')");
+    }
+
+    @Test
+    @DisplayName("시맨틱 검색 메서드는 search/semantic GET 경로와 MEMBER 이상 role gate 를 사용한다")
+    void 시맨틱_검색_메서드는_search_semantic_get_경로와_role_gate를_사용한다() throws NoSuchMethodException {
+        Method method = WorklogController.class.getMethod(
+                "searchSemanticWorklogs",
+                CustomUserPrincipal.class,
+                SearchSemanticWorklogsApiDto.Request.class
+        );
+        GetMapping getMapping = method.getAnnotation(GetMapping.class);
+        PreAuthorize preAuthorize = method.getAnnotation(PreAuthorize.class);
+
+        assertThat(getMapping).isNotNull();
+        assertThat(getMapping.value()).containsExactly("/search/semantic");
+        assertThat(preAuthorize).isNotNull();
+        assertThat(preAuthorize.value()).isEqualTo("hasAnyRole('DIRECTOR','DEPT_HEAD','TEAM_LEAD','MEMBER')");
     }
 
     @Test
