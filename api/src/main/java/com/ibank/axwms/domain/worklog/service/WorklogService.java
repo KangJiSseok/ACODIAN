@@ -169,6 +169,7 @@ public class WorklogService {
     private void publishWorklogAiPostProcessRequest(Worklog worklog, Team team, List<FileService.UploadedFile> uploadedFiles) {
         eventPublisher.publishEvent(new WorklogAiPostProcessRequestedEvent(
                 worklog.getId(),
+                worklog.getTitle(),
                 worklog.getRequestContent(),
                 worklog.getWorkContent(),
                 worklog.getAuthorId(),

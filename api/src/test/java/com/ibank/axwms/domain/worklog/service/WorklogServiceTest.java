@@ -216,6 +216,7 @@ class WorklogServiceTest {
         ArgumentCaptor<WorklogAiPostProcessRequestedEvent> eventCaptor = ArgumentCaptor.forClass(WorklogAiPostProcessRequestedEvent.class);
         verify(eventPublisher).publishEvent(eventCaptor.capture());
         assertThat(eventCaptor.getValue().worklogId()).isEqualTo(WORKLOG_ID);
+        assertThat(eventCaptor.getValue().worklogTitle()).isEqualTo(request.title());
         assertThat(eventCaptor.getValue().requestContent()).isEqualTo(request.requestContent());
         assertThat(eventCaptor.getValue().workContent()).isEqualTo(request.workContent());
         assertThat(eventCaptor.getValue().authorId()).isEqualTo(USER_ID);
@@ -262,6 +263,7 @@ class WorklogServiceTest {
         ArgumentCaptor<WorklogAiPostProcessRequestedEvent> eventCaptor = ArgumentCaptor.forClass(WorklogAiPostProcessRequestedEvent.class);
         verify(eventPublisher).publishEvent(eventCaptor.capture());
         assertThat(eventCaptor.getValue().worklogId()).isEqualTo(WORKLOG_ID);
+        assertThat(eventCaptor.getValue().worklogTitle()).isEqualTo(request.title());
         assertThat(eventCaptor.getValue().requestContent()).isEqualTo(request.requestContent());
         assertThat(eventCaptor.getValue().workContent()).isEqualTo(request.workContent());
         assertThat(eventCaptor.getValue().authorId()).isEqualTo(USER_ID);

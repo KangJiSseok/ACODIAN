@@ -37,6 +37,8 @@ import org.springframework.test.util.ReflectionTestUtils;
 @ExtendWith(MockitoExtension.class)
 class NotificationServiceTest {
 
+    private static final String WORKLOG_TITLE = "월간 리스크 점검 보고";
+
     @Mock
     private NotificationRepository notificationRepository;
 
@@ -178,18 +180,21 @@ class NotificationServiceTest {
         });
 
         Optional<Notification> result = notificationService.createWorklogAiPostProcessResultNotification(
-                101L, 9L, 21L, 501L, true, List.of()
+                101L, 9L, 21L, 501L, WORKLOG_TITLE, true, List.of()
         );
 
         assertThat(result).isPresent();
         assertThat(result.get().getNotificationType()).isEqualTo(NotificationType.WORKLOG_AI_POST_PROCESS_RESULT.name());
         assertThat(result.get().getTitle()).isEqualTo("업무 AI 후처리 요청 완료");
-        assertThat(result.get().getContent()).contains("모두 정상 접수");
+        assertThat(result.get().getContent())
+                .contains(WORKLOG_TITLE)
+                .contains("AI 작업이 완료되었습니다");
         ArgumentCaptor<NotificationCreatedEvent> eventCaptor = ArgumentCaptor.forClass(NotificationCreatedEvent.class);
         then(applicationEventPublisher).should().publishEvent(eventCaptor.capture());
         assertThat(eventCaptor.getValue().notificationId()).isEqualTo(1001L);
         assertThat(eventCaptor.getValue().userId()).isEqualTo(101L);
         assertThat(eventCaptor.getValue().type()).isEqualTo(NotificationType.WORKLOG_AI_POST_PROCESS_RESULT.name());
+        assertThat(eventCaptor.getValue().content()).isEqualTo(result.get().getContent());
     }
 
     @Test
@@ -201,15 +206,33 @@ class NotificationServiceTest {
         given(notificationRepository.saveAndFlush(any(Notification.class))).willAnswer(invocation -> invocation.getArgument(0));
 
         Optional<Notification> result = notificationService.createWorklogAiPostProcessResultNotification(
-                101L, 9L, 21L, 501L, false, List.of("WORKLOG_PIPELINE", "LIGHT_INDEX")
+                101L, 9L, 21L, 501L, WORKLOG_TITLE, false, List.of("WORKLOG_PIPELINE", "LIGHT_INDEX")
         );
 
         assertThat(result).isPresent();
         assertThat(result.get().getTitle()).isEqualTo("업무 AI 후처리 요청 실패");
         assertThat(result.get().getContent())
-                .contains("실패 단계")
+                .contains(WORKLOG_TITLE)
+                .contains("AI 작업 중 실패 단계가 있습니다")
+                .contains("\n실패 단계: WORKLOG_PIPELINE, LIGHT_INDEX")
                 .contains("WORKLOG_PIPELINE")
                 .contains("LIGHT_INDEX");
+    }
+
+    @Test
+    @DisplayName("업무 AI 통합 후처리 알림은 제목 snapshot 이 비어도 기본 업무일지 문맥을 사용한다")
+    void createWorklogAiPostProcessResultNotification_uses_fallback_when_title_is_blank() {
+        given(notificationRepository.existsByUserIdAndReferenceTypeAndReferenceIdAndNotificationType(
+                101L, "WORKLOG", 501L, NotificationType.WORKLOG_AI_POST_PROCESS_RESULT.name()
+        )).willReturn(false);
+        given(notificationRepository.saveAndFlush(any(Notification.class))).willAnswer(invocation -> invocation.getArgument(0));
+
+        Optional<Notification> result = notificationService.createWorklogAiPostProcessResultNotification(
+                101L, 9L, 21L, 501L, " ", true, List.of()
+        );
+
+        assertThat(result).isPresent();
+        assertThat(result.get().getContent()).contains("대상 업무일지");
     }
 
     private CustomUserPrincipal principal() {
