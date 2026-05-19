@@ -12,6 +12,7 @@ from app.light.v3.model.worklog_query import (
 )
 from app.light.v3.service.lightrag_adapter import (
     LightRagConfigurationError,
+    LightRagProviderUnavailableError,
     LightRagQueryFailedError,
     LightRagQueryTimeoutError,
 )
@@ -47,6 +48,11 @@ async def query_worklogs(
         raise HTTPException(
             status_code=status.HTTP_504_GATEWAY_TIMEOUT,
             detail="LIGHTRAG_QUERY_TIMEOUT",
+        ) from exc
+    except LightRagProviderUnavailableError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="LIGHTRAG_PROVIDER_UNAVAILABLE",
         ) from exc
     except LightRagQueryFailedError as exc:
         raise HTTPException(

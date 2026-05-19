@@ -12,6 +12,7 @@ from app.light.v3.model.worklog_query import (
     WorklogLightReferenceItem,
 )
 from app.light.v3.service.lightrag_adapter import (
+    LightRagQueryFailedError,
     LightRagQueryOptions,
     get_lightrag_worklog_index_adapter,
 )
@@ -50,20 +51,54 @@ class LightWorklogQueryService:
         raw = result.raw
 
         return WorklogLightQueryResponse(
-            answer=raw["llm_response"]["content"].strip(),
+            answer=_extract_answer(raw),
             references=_extract_references(raw),
             internalOnly=True,
         )
 
 
-def _extract_references(raw: dict[str, Any]) -> list[WorklogLightReferenceItem]:
+def _extract_answer(raw: Any) -> str:
+    """LightRAG raw payload에서 non-empty LLM answer를 안전하게 추출한다."""
+    if not isinstance(raw, dict):
+        raise LightRagQueryFailedError("LightRAG query returned invalid raw response")
+
+    llm_response = raw.get("llm_response")
+    if not isinstance(llm_response, dict):
+        raise LightRagQueryFailedError("LightRAG query returned invalid LLM response")
+
+    content = llm_response.get("content")
+    if not isinstance(content, str):
+        raise LightRagQueryFailedError("LightRAG query returned empty LLM response")
+
+    answer = content.strip()
+    if not answer:
+        raise LightRagQueryFailedError("LightRAG query returned empty LLM response")
+    return answer
+
+
+def _extract_references(raw: Any) -> list[WorklogLightReferenceItem]:
     """LightRAG raw payload의 data.references를 업무일지 reference로 변환한다."""
-    return [_build_reference_item(reference) for reference in raw["data"]["references"]]
+    if not isinstance(raw, dict):
+        return []
+
+    data = raw.get("data")
+    if not isinstance(data, dict):
+        return []
+
+    references = data.get("references")
+    if not isinstance(references, list):
+        return []
+
+    return [
+        _build_reference_item(reference)
+        for reference in references
+        if isinstance(reference, dict)
+    ]
 
 
 def _build_reference_item(raw_reference: dict[str, Any]) -> WorklogLightReferenceItem:
     """Raw reference 1건을 응답 item으로 변환한다."""
     return WorklogLightReferenceItem(
-        referenceId=raw_reference["reference_id"],
-        filePath=raw_reference["file_path"],
+        referenceId=str(raw_reference.get("reference_id", "")),
+        filePath=str(raw_reference.get("file_path", "")),
     )
