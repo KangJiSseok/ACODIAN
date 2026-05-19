@@ -222,7 +222,7 @@ export default function WorklogPage() {
                     ...message,
                     content:
                       response.answer?.trim() ||
-                      "조건에 맞는 AI 검색 답변이 없습니다.",
+                      "조건에 맞는 AI 모드 답변이 없습니다.",
                     isLoading: false,
                   }
                 : message
@@ -237,7 +237,7 @@ export default function WorklogPage() {
                     ...message,
                     content: getApiErrorMessage(
                       error,
-                      "AI 검색 요청을 처리하지 못했습니다."
+                      "AI 모드 요청을 처리하지 못했습니다."
                     ),
                     isLoading: false,
                   }
@@ -365,7 +365,7 @@ export default function WorklogPage() {
                   }}
                 >
                   <Sparkles className="size-4" />
-                  AI 검색
+                  AI 모드
                 </Button>
               ) : null}
             </div>
@@ -752,7 +752,7 @@ function AiBottomComposer({
           <button
             type="button"
             className="absolute right-1 top-1 flex size-10 items-center justify-center rounded-full bg-foreground text-background shadow-sm transition hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-35"
-            aria-label="AI 검색 질문 전송"
+            aria-label="AI 모드 질문 전송"
             disabled={!canSubmit}
             onClick={onSubmit}
           >
