@@ -35,8 +35,8 @@ public interface WorklogJooqRepository {
      */
     Map<Long, Long> findTeamIdsByWorklogIds(Collection<Long> worklogIds);
 
-    /** 가시 범위와 정규화된 검색 query 로 업무일지 페이지를 조회한다. */
-    Page<WorklogSearchProjection> searchWorklogPage(WorklogVisibilityScope scope, WorklogSearchQuery query);
+    /** 호출자가 admin grant 또는 ACTIVE membership 으로 볼 수 있는 팀의 업무일지 검색 페이지를 조회한다. */
+    Page<WorklogSearchProjection> searchWorklogPage(Long userId, WorklogSearchQuery query);
 
     /**
      * 같은 팀 내 미삭제, 미완료 worklog 를 페이지로 검색해 선행 업무 후보로 노출한다.

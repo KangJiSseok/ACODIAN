@@ -227,13 +227,13 @@ public class WorklogJooqRepositoryImpl implements WorklogJooqRepository {
     }
 
     @Override
-    public Page<WorklogSearchProjection> searchWorklogPage(WorklogVisibilityScope scope, WorklogSearchQuery query) {
+    public Page<WorklogSearchProjection> searchWorklogPage(Long userId, WorklogSearchQuery query) {
         int pageIndex = query.pageIndex();
         int pageSize = query.pageSize();
         PageRequest pageRequest = PageRequest.of(pageIndex, pageSize);
 
         Condition condition = applySearchFilters(
-                TB_WORKLOG.IS_DELETED.isFalse().and(toCondition(scope)),
+                TB_WORKLOG.IS_DELETED.isFalse().and(visibleTeamCondition(userId)),
                 query);
 
         long total = dsl.selectCount()
