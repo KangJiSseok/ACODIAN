@@ -119,5 +119,5 @@ export function resolveBreadcrumbs(pathname: string): BreadcrumbItem[] {
     }
   }
 
-  return [{ label: "Acodian" }];
+  return [{ label: "ACODIAN" }];
 }
