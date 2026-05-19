@@ -280,9 +280,9 @@ function AuthEntry({ redirectPath }: LoginClientProps) {
                 : "text-7xl sm:text-8xl lg:text-9xl",
             )}
           >
-            <span className="block">Acodian</span>
+            <span className="block">ACODIAN</span>
             <span className="mt-4 block text-[11px] font-semibold leading-none tracking-[0.2em] text-white/78 sm:text-sm sm:tracking-[0.34em] lg:text-base lg:tracking-[0.42em]">
-              Ax Coworking ObsiDIAN
+              Ax Coworking Obsidian
             </span>
           </h1>
         </div>

@@ -4,8 +4,8 @@ import { cn } from "@/lib/utils";
 import QueryProvider from "@/app/_common/providers/queryProvider";
 
 export const metadata: Metadata = {
-  title: "Acodian",
-  description: "Acodian (Ax Coworking ObsiDIAN) 협업 업무 관리 서비스",
+  title: "ACODIAN",
+  description: "ACODIAN (Ax Coworking Obsidian) 협업 업무 관리 서비스",
 };
 
 export default function RootLayout({
