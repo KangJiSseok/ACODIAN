@@ -42,6 +42,7 @@ export default function WorklogCreatePage() {
     isLoading: isTeamListLoading,
   } = useTeamList({ pageSize: 100 })
   const canCreate = Boolean(user && !isDirectorProfile(user))
+  const defaultDate = useMemo(() => getTodayDateString(), [])
   const activeTeams = useMemo(
     () => filterActiveTeams(teamPage?.items ?? []),
     [teamPage?.items]
@@ -80,19 +81,17 @@ export default function WorklogCreatePage() {
         activeTeams,
         predecessorCandidates?.items ?? [],
         tagOptions,
-        effectiveTeamId
+        effectiveTeamId,
+        defaultDate
       ),
-    [activeTeams, effectiveTeamId, predecessorCandidates?.items, tagOptions]
+    [activeTeams, defaultDate, effectiveTeamId, predecessorCandidates?.items, tagOptions]
   )
 
   if (!canCreate) {
     return <div>업무 등록 권한이 없습니다.</div>
   }
 
-  if (
-    isTeamListLoading ||
-    isPredecessorCandidatesLoading
-  ) {
+  if (isTeamListLoading || isPredecessorCandidatesLoading) {
     return <div>업무 등록 정보를 불러오는 중입니다.</div>
   }
 
@@ -131,14 +130,15 @@ function buildCreateFormContext(
   teams: TeamSummary[],
   predecessorCandidates: WorklogOptionPredecessorCandidate[],
   tags: WorklogOptionTagItem[],
-  teamId: number | null | undefined
+  teamId: number | null | undefined,
+  defaultDate: string
 ) {
   if (!teamId) return null
 
   const teamOptionsSource = buildTeamOptions(teams)
 
   return {
-    initialValues: buildInitialValues(teamId),
+    initialValues: buildInitialValues(teamId, defaultDate),
     teamOptionsSource,
     dependencyOptionsSource: buildDependencyOptions(predecessorCandidates),
     tagOptionsSource: buildTagOptions(tags),
@@ -161,7 +161,10 @@ function resolveInitialTeamId(
   return primaryTeamId ?? firstAuthActiveTeamId ?? teams[0]?.teamId ?? null
 }
 
-function buildInitialValues(teamId: number): WorklogFormValues {
+function buildInitialValues(
+  teamId: number,
+  defaultDate: string
+): WorklogFormValues {
   return {
     title: "",
     requestContent: "",
@@ -169,8 +172,8 @@ function buildInitialValues(teamId: number): WorklogFormValues {
     status: "PENDING",
     importance: "NORMAL",
     actualHours: 0,
-    instructionDate: "2026-04-13",
-    dueDate: "2026-04-16",
+    instructionDate: defaultDate,
+    dueDate: defaultDate,
     teamId,
     dependencyIds: [],
     attachmentNames: [],
@@ -181,6 +184,15 @@ function buildInitialValues(teamId: number): WorklogFormValues {
     removeTagIds: [],
     statusChangeReason: "",
   }
+}
+
+function getTodayDateString() {
+  const today = new Date()
+  const year = today.getFullYear()
+  const month = String(today.getMonth() + 1).padStart(2, "0")
+  const date = String(today.getDate()).padStart(2, "0")
+
+  return `${year}-${month}-${date}`
 }
 
 function buildTeamOptions(teams: TeamSummary[]): WorklogFormTeamOption[] {

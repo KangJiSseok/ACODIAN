@@ -130,6 +130,19 @@ export interface SearchTagsParams extends GetWorklogsParams {
   query?: string
 }
 
+export interface WorklogWritingAssistRequest {
+  requestContent?: string | null
+  workContent: string
+}
+
+export interface WorklogPolishResponse {
+  workContent: string
+}
+
+export interface WorklogTitleRecommendationResponse {
+  titles: string[]
+}
+
 export interface WorklogListApiItem {
   worklogId: number
   title: string

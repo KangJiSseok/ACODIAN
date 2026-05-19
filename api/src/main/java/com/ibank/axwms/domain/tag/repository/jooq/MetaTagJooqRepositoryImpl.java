@@ -89,7 +89,8 @@ public class MetaTagJooqRepositoryImpl implements MetaTagJooqRepository {
         List<SearchTagProjection> items = dsl.select(
                         TB_META_TAG.TAG_ID,
                         TB_META_TAG.TAG_NAME,
-                        TB_META_TAG.USAGE_COUNT
+                        TB_META_TAG.USAGE_COUNT,
+                        TB_META_TAG.DESCRIPTION
                 )
                 .from(TB_META_TAG)
                 .where(condition)

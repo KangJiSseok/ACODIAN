@@ -28,6 +28,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyCollection;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.BDDMockito.given;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
@@ -146,10 +147,15 @@ class TagMergeCandidateServiceTest {
     }
 
     @Test
-    @DisplayName("병합 후보 조회 시 삭제된 source 태그만 제외하고 남은 후보는 유지한다")
-    void 병합_후보_조회_시_삭제된_source_태그만_제외하고_남은_후보는_유지한다() {
+    @DisplayName("병합 후보 조회 시 활성 source 태그가 2개 미만이면 후보를 제외한다")
+    void 병합_후보_조회_시_활성_source_태그가_2개_미만이면_후보를_제외한다() {
         TagMergeCandidate candidate = candidate(TagMergeCandidateStatus.PENDING);
-        given(tagMergeCandidateRepository.findByStatusCodeOrderByCreatedAtDesc(TagMergeCandidateStatus.PENDING))
+        given(tagMergeCandidateRepository
+                .findByStatusCodeAndCreatedAtGreaterThanEqualAndCreatedAtLessThanOrderByCreatedAtDesc(
+                        eq(TagMergeCandidateStatus.PENDING),
+                        any(),
+                        any()
+                ))
                 .willReturn(List.of(candidate));
         given(tagMergeCandidateItemRepository.findByMergeCandidateIdIn(List.of(MERGE_CANDIDATE_ID)))
                 .willReturn(List.of(
@@ -166,10 +172,7 @@ class TagMergeCandidateServiceTest {
         TagMergeCandidateApiDto.Response response =
                 tagMergeCandidateService.getCandidates(TagMergeCandidateStatus.PENDING);
 
-        assertThat(response.items()).hasSize(1);
-        assertThat(response.items().getFirst().mergeCandidateTags())
-                .extracting(TagMergeCandidateApiDto.TagItem::tagId)
-                .containsExactly(OTHER_SOURCE_TAG_ID);
+        assertThat(response.items()).isEmpty();
     }
 
     @Test
@@ -183,7 +186,7 @@ class TagMergeCandidateServiceTest {
         given(tagMergeCandidateRepository.findById(MERGE_CANDIDATE_ID)).willReturn(Optional.of(candidate));
         given(tagMergeCandidateItemRepository.findByMergeCandidateId(MERGE_CANDIDATE_ID)).willReturn(items);
         given(tagMergeCandidateRepository.markAppliedIfPending(MERGE_CANDIDATE_ID)).willReturn(1);
-        given(tagRepository.findAllById(List.of(TARGET_TAG_ID, SOURCE_TAG_ID, OTHER_SOURCE_TAG_ID)))
+        given(tagRepository.findAllById(anyCollection()))
                 .willReturn(List.of(
                         metaTag(TARGET_TAG_ID, "기준정보", 7, false),
                         metaTag(SOURCE_TAG_ID, "기준 보정", 4, false),
@@ -258,6 +261,33 @@ class TagMergeCandidateServiceTest {
                 .isEqualTo(ErrorCode.TAG_MERGE_CANDIDATE_STATUS_INVALID);
 
         verify(worklogTagRepository, never()).replaceSourceTagsWithTarget(any(), any());
+    }
+
+    @Test
+    @DisplayName("병합 직전 활성 source 태그가 2개 미만이면 적용을 차단한다")
+    void 병합_직전_활성_source_태그가_2개_미만이면_적용을_차단한다() {
+        TagMergeCandidate candidate = candidate(TagMergeCandidateStatus.PENDING);
+        List<TagMergeCandidateItem> items = List.of(
+                TagMergeCandidateItem.create(MERGE_CANDIDATE_ID, SOURCE_TAG_ID, "기준 보정"),
+                TagMergeCandidateItem.create(MERGE_CANDIDATE_ID, OTHER_SOURCE_TAG_ID, "운영 기준 보강")
+        );
+        given(tagMergeCandidateRepository.findById(MERGE_CANDIDATE_ID)).willReturn(Optional.of(candidate));
+        given(tagMergeCandidateRepository.markAppliedIfPending(MERGE_CANDIDATE_ID)).willReturn(1);
+        given(tagMergeCandidateItemRepository.findByMergeCandidateId(MERGE_CANDIDATE_ID)).willReturn(items);
+        given(tagRepository.findAllById(anyCollection()))
+                .willReturn(List.of(
+                        metaTag(TARGET_TAG_ID, "기준정보", 10, false),
+                        metaTag(SOURCE_TAG_ID, "기준 보정", 4, true),
+                        metaTag(OTHER_SOURCE_TAG_ID, "운영 기준 보강", 3, false)
+                ));
+
+        assertThatThrownBy(() -> tagMergeCandidateService.mergeCandidate(MERGE_CANDIDATE_ID))
+                .isInstanceOf(BusinessException.class)
+                .extracting(error -> ((BusinessException) error).getErrorCode())
+                .isEqualTo(ErrorCode.COMMON_VALIDATION_ERROR);
+
+        verify(worklogTagRepository, never()).replaceSourceTagsWithTarget(any(), any());
+        verify(tagRepository, never()).softDeleteByIds(any());
     }
 
     private TagMergeCandidate candidate(TagMergeCandidateStatus statusCode) {

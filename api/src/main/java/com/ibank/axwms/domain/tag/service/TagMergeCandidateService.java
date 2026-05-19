@@ -17,6 +17,8 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.client.RestClientException;
 
+import java.time.LocalDate;
+import java.time.LocalDateTime;
 import java.util.Collection;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -70,12 +72,15 @@ public class TagMergeCandidateService {
     }
 
     /**
-     * 상태 필터가 있으면 해당 후보만, 없으면 전체 후보를 최신순으로 조회한다.
+     * 상태 필터가 있으면 해당 후보만, 없으면 전체 후보를 서버 오늘 날짜 기준 최신순으로 조회한다.
      */
     public TagMergeCandidateApiDto.Response getCandidates(TagMergeCandidateStatus statusCode) {
+        LocalDate today = LocalDate.now();
+        LocalDateTime from = today.atStartOfDay();
+        LocalDateTime to = today.plusDays(1).atStartOfDay();
         List<TagMergeCandidate> candidates = statusCode == null
-                ? tagMergeCandidateRepository.findAllByOrderByCreatedAtDesc()
-                : tagMergeCandidateRepository.findByStatusCodeOrderByCreatedAtDesc(statusCode);
+                ? tagMergeCandidateRepository.findByCreatedAtGreaterThanEqualAndCreatedAtLessThanOrderByCreatedAtDesc(from, to)
+                : tagMergeCandidateRepository.findByStatusCodeAndCreatedAtGreaterThanEqualAndCreatedAtLessThanOrderByCreatedAtDesc(statusCode, from, to);
         return toResponse(candidates);
     }
 
@@ -126,11 +131,7 @@ public class TagMergeCandidateService {
             throw new BusinessException(ErrorCode.TAG_MERGE_CANDIDATE_NOT_FOUND);
         }
 
-        List<Long> sourceTagIds = items.stream()
-                .map(TagMergeCandidateItem::getSourceTagId)
-                .distinct()
-                .toList();
-        validateActiveTags(candidate.getTargetTagId(), sourceTagIds);
+        List<Long> sourceTagIds = getActiveSourceTagIdsForMergeOrThrow(candidate, items);
 
         worklogTagRepository.replaceSourceTagsWithTarget(candidate.getTargetTagId(), sourceTagIds);
         tagRepository.softDeleteByIds(sourceTagIds);
@@ -244,8 +245,10 @@ public class TagMergeCandidateService {
         Map<Long, MetaTag> tagsById = getTagsById(candidates, itemsByCandidateId);
         Map<Long, List<TagMergeCandidateItem>> activeItemsByCandidateId =
                 filterActiveSourceItems(itemsByCandidateId, tagsById);
+        List<TagMergeCandidate> displayableCandidates =
+                filterCandidatesWithEnoughActiveSources(candidates, activeItemsByCandidateId);
         Map<Long, Integer> usageCountByTagId = getUsageCountByTagId(tagsById);
-        return TagMergeCandidateApiDto.Response.of(candidates, activeItemsByCandidateId, usageCountByTagId);
+        return TagMergeCandidateApiDto.Response.of(displayableCandidates, activeItemsByCandidateId, usageCountByTagId);
     }
 
     /**
@@ -282,6 +285,47 @@ public class TagMergeCandidateService {
                                 })
                                 .toList()
                 ));
+    }
+
+    /**
+     * 다른 후보 병합으로 source 가 빠진 뒤 최소 병합 단위가 깨진 후보는 목록 응답에서 제외한다.
+     */
+    private List<TagMergeCandidate> filterCandidatesWithEnoughActiveSources(
+            List<TagMergeCandidate> candidates,
+            Map<Long, List<TagMergeCandidateItem>> activeItemsByCandidateId
+    ) {
+        return candidates.stream()
+                .filter(candidate -> activeItemsByCandidateId
+                        .getOrDefault(candidate.getId(), List.of())
+                        .stream()
+                        .map(TagMergeCandidateItem::getSourceTagId)
+                        .distinct()
+                        .count() >= MIN_MERGE_CANDIDATE_TAG_COUNT)
+                .toList();
+    }
+
+    /**
+     * 병합 직전에 target 활성 여부와 남은 활성 source 개수를 재검증해 직접 API 호출도 차단한다.
+     */
+    private List<Long> getActiveSourceTagIdsForMergeOrThrow(TagMergeCandidate candidate,
+                                                            List<TagMergeCandidateItem> items) {
+        Map<Long, List<TagMergeCandidateItem>> itemsByCandidateId = Map.of(candidate.getId(), items);
+        Map<Long, MetaTag> tagsById = getTagsById(List.of(candidate), itemsByCandidateId);
+        MetaTag targetTag = tagsById.get(candidate.getTargetTagId());
+        if (targetTag == null || targetTag.getIsDeleted()) {
+            throw new BusinessException(ErrorCode.TAG_NOT_FOUND);
+        }
+
+        List<Long> sourceTagIds = filterActiveSourceItems(itemsByCandidateId, tagsById)
+                .getOrDefault(candidate.getId(), List.of())
+                .stream()
+                .map(TagMergeCandidateItem::getSourceTagId)
+                .distinct()
+                .toList();
+        if (sourceTagIds.size() < MIN_MERGE_CANDIDATE_TAG_COUNT) {
+            throw new BusinessException(ErrorCode.COMMON_VALIDATION_ERROR);
+        }
+        return sourceTagIds;
     }
 
     /**

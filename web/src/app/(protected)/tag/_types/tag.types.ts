@@ -2,6 +2,7 @@ export interface TagItem {
   id: number
   name: string
   usageCount: number
+  description?: string
   createdAt?: string
   updatedAt?: string
 }
@@ -12,6 +13,7 @@ export interface TagSearchApiItem {
   name?: string
   tagName?: string
   usageCount?: number | string | null
+  description?: string | null
   createdAt?: string | null
   updatedAt?: string | null
 }
@@ -40,6 +42,7 @@ export interface TagMergeSourceApiItem {
   tagName?: string | null
   sourceTagName?: string | null
   usageCount?: number | string | null
+  description?: string | null
 }
 
 export interface TagMergeCandidateApiItem {

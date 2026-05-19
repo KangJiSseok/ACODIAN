@@ -18,9 +18,12 @@ import type {
   WorklogListItem,
   WorklogOptionPredecessorCandidate,
   WorklogOptionTagItem,
+  WorklogPolishResponse,
   WorklogSearchApiItem,
   WorklogStatus,
   WorklogTagSearchApiItem,
+  WorklogTitleRecommendationResponse,
+  WorklogWritingAssistRequest,
 } from "../_types/worklog.types"
 
 type TagSearchApiResponse =
@@ -357,6 +360,24 @@ export const worklogService = {
     }
 
     return apiClient.post<CreateWorklogResponse, FormData>("/worklogs", formData)
+  },
+  async polishDraft(request: WorklogWritingAssistRequest) {
+    return apiClient.post<WorklogPolishResponse, WorklogWritingAssistRequest>(
+      "/worklogs/polish",
+      request
+    )
+  },
+  async recommendTitles(request: WorklogWritingAssistRequest) {
+    return apiClient.post<
+      WorklogTitleRecommendationResponse,
+      WorklogWritingAssistRequest
+    >("/worklogs/title-recommendations", request)
+  },
+  async retryAiSummary(id: number) {
+    return apiClient.post<EmptyResponse, undefined>(
+      `/worklogs/${id}/ai-summary/retry`,
+      undefined
+    )
   },
   async update(id: number, values: WorklogFormValues) {
     const request = {

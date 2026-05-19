@@ -54,13 +54,19 @@ public final class SearchTagApiDto {
                 @Schema(description = "태그 이름", example = "결산")
                 String tagName,
                 @Schema(description = "사용 횟수", example = "12")
-                Integer usageCount
+                Integer usageCount,
+                @Schema(description = "태그 설명", example = "월별 정산 및 결산 업무에 사용하는 태그")
+                String description
         ) {
+            /**
+             * 목록 조회 projection 의 read shape 를 공개 API 응답 필드로 그대로 고정한다.
+             */
             public static Item from(SearchTagProjection projection) {
                 return new Item(
                         projection.id(),
                         projection.tagName(),
-                        projection.usageCount()
+                        projection.usageCount(),
+                        projection.description()
                 );
             }
         }

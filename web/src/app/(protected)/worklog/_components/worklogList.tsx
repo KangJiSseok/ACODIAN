@@ -7,8 +7,7 @@ import { ImportanceBadge } from "./importanceBadge"
 import { StatusBadge } from "./statusBadge"
 import { useAuth } from "@/app/_common/hooks/useAuth"
 import { Button } from "@/components/ui/button"
-import { CardContent } from "@/components/ui/card"
-import { CardSpotlight } from "@/components/ui/card-spotlight"
+import { Card, CardContent } from "@/components/ui/card"
 import { getAiStatusLabel } from "../_utils/worklogFormat"
 import { WorklogPreviewDialog } from "./worklogPreviewDialog"
 
@@ -35,7 +34,7 @@ export function WorklogList({
           </div>
         ) : (
           worklogs.map((worklog) => (
-            <CardSpotlight
+            <Card
               key={worklog.id}
               role="button"
               tabIndex={0}
@@ -56,7 +55,7 @@ export function WorklogList({
                   setPreviewWorklog(worklog)
                 }
               }}
-              className={`group cursor-pointer rounded-[24px] transition-all duration-300 hover:-translate-y-1 ${
+              className={`cursor-pointer rounded-[24px] transition-all duration-300 hover:-translate-y-1 ${
                 selectedWorklogId === worklog.id ? "ring-2 ring-primary/40" : ""
               }`}
             >
@@ -64,7 +63,7 @@ export function WorklogList({
                 <div className="min-w-0 flex-1 space-y-4">
                   <div className="space-y-2">
                     <div className="flex flex-wrap items-center gap-2">
-                      <p className="text-[18px] font-semibold tracking-[-0.03em] text-foreground transition-colors group-hover/card-spotlight:text-primary">
+                      <p className="text-[18px] font-semibold tracking-[-0.03em] text-foreground">
                         {worklog.title}
                       </p>
                       <StatusBadge status={worklog.status} />
@@ -146,7 +145,7 @@ export function WorklogList({
                   </div>
                 </div>
               </CardContent>
-            </CardSpotlight>
+            </Card>
           ))
         )}
       </div>

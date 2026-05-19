@@ -7,6 +7,7 @@ import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
+import java.time.LocalDateTime;
 import java.util.List;
 
 public interface TagMergeCandidateRepository extends JpaRepository<TagMergeCandidate, Long> {
@@ -14,12 +15,19 @@ public interface TagMergeCandidateRepository extends JpaRepository<TagMergeCandi
     /**
      * 운영자가 처리 상태별 후보를 검토할 수 있도록 최신 생성 순서로 조회한다.
      */
-    List<TagMergeCandidate> findByStatusCodeOrderByCreatedAtDesc(TagMergeCandidateStatus statusCode);
+    List<TagMergeCandidate> findByStatusCodeAndCreatedAtGreaterThanEqualAndCreatedAtLessThanOrderByCreatedAtDesc(
+            TagMergeCandidateStatus statusCode,
+            LocalDateTime from,
+            LocalDateTime to
+    );
 
     /**
      * 상태 필터가 없는 후보 목록도 동일하게 최신 생성 순서로 제공한다.
      */
-    List<TagMergeCandidate> findAllByOrderByCreatedAtDesc();
+    List<TagMergeCandidate> findByCreatedAtGreaterThanEqualAndCreatedAtLessThanOrderByCreatedAtDesc(
+            LocalDateTime from,
+            LocalDateTime to
+    );
 
     /**
      * 병합 적용 요청이 동시에 들어와도 PENDING 상태를 먼저 선점한 트랜잭션만 후속 병합을 수행한다.
