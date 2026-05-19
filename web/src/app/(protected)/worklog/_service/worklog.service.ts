@@ -114,6 +114,9 @@ function normalizeSearchParams(params: SearchWorklogsParams) {
   return {
     ...params,
     keyword: params.keyword?.trim() || undefined,
+    statusCode: params.statusCode
+      ? worklogStatusApiCodeMap[params.statusCode] ?? params.statusCode
+      : undefined,
   }
 }
 
@@ -291,7 +294,7 @@ export const worklogService = {
     ...params
   }: SearchWorklogsParams = {}): Promise<PageResponse<WorklogListItem>> {
     const response = await apiClient.get<PageResponse<WorklogSearchApiItem>>(
-      "/worklogs/search",
+      "/worklogs/search/keyword",
       {
         params: normalizeSearchParams({ ...params, page, pageSize }),
       }
