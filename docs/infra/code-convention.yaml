@@ -73,7 +73,7 @@ ops:
     rule: 한 EC2 에 staging/production 이 공존하므로 staging 의 호스트 포트는 production 호스트 포트 +1 오프셋으로 고정한다. 예 — api production `127.0.0.1:8100:8100` / staging `127.0.0.1:8101:8100`, postgres production `8300:5432` / staging `8301:5432`, redis production `8400:6379` / staging `8401:6379`. Nginx listen(production 80/443, staging 8080/8443) 은 이 오프셋 규칙의 예외다. 근거는 ADR-010.
     stacks: [ec2, compose, nginx]
   - id: OPS-010
-    rule: web/api/ai 컨테이너는 호스트 바인딩을 `127.0.0.1:` 로 제한해 외부에서 Nginx 를 우회한 직접 접근을 차단한다. Nginx 는 같은 호스트에서 `proxy_pass http://127.0.0.1:<port>` 로 upstream 을 연다. DB 컨테이너(postgres/redis) 는 개발 편의(ADR-011) 를 위해 `0.0.0.0` 바인딩을 유지하고, 대신 OPS-011 의 비밀번호 정책으로 완화한다. 근거는 ADR-010.
+    rule: web/api 컨테이너는 호스트 바인딩을 `127.0.0.1:` 로 제한해 외부에서 Nginx 를 우회한 직접 접근을 차단한다. AI(FastAPI) 컨테이너는 외부 직접 검증/호출 요구 때문에 예외적으로 `0.0.0.0:${AI_HOST_PORT}:8200` 으로 host port 8200/8201 에 직접 개방하되, 기존 Nginx `/ai/` upstream 은 `127.0.0.1:8200/8201` 로 유지한다. DB 컨테이너(postgres/redis) 는 개발 편의(ADR-011) 를 위해 `0.0.0.0` 바인딩을 유지하고, Qdrant/Neo4j 는 ADR-019 의 저장소 의존성 정책을 따른다. 직접 개방된 AI/Qdrant/Neo4j 포트는 EC2 보안그룹 또는 host firewall 에서 접근 가능한 IP 를 제한해야 한다. 근거는 ADR-010, ADR-020.
     stacks: [compose, nginx, security]
   - id: OPS-011
     rule: '`DB_PASSWORD` 는 staging/production 각각 별도의 강한 무작위 값(최소 24자, 대소문자·숫자·기호 혼합) 으로 관리한다. ADR-011 로 DB 가 외부 개방되어 비밀번호가 유일한 1차 방어선이므로 재사용·예측 가능 패턴·기본값 복사를 금지한다. 운영 저장소는 GitLab CI/CD Variables(`DB_PASSWORD_STAGING`, `DB_PASSWORD_PRODUCTION`) 를 Protected + Mask 로 유지하고 서버 `.env` 에만 주입한다. 근거는 ADR-011.'

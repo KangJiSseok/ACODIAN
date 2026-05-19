@@ -88,7 +88,7 @@ services:
       AI_WORKLOG_SEARCH_ENABLED: ${AI_WORKLOG_SEARCH_ENABLED:-true}
       AI_WORKLOG_SEARCH_BASE_URL: http://ai:8200/ai
       AI_WORKLOG_SEARCH_CONNECT_TIMEOUT: ${AI_WORKLOG_SEARCH_CONNECT_TIMEOUT:-60s}
-      AI_WORKLOG_SEARCH_READ_TIMEOUT: ${AI_WORKLOG_SEARCH_READ_TIMEOUT:-60s}
+      AI_WORKLOG_SEARCH_READ_TIMEOUT: ${AI_WORKLOG_SEARCH_READ_TIMEOUT:-180s}
       AI_FILE_SUMMARY_ENABLED: ${AI_FILE_SUMMARY_ENABLED:-true}
       AI_FILE_SUMMARY_BASE_URL: http://ai:8200/ai
       AI_FILE_SUMMARY_CONNECT_TIMEOUT: ${AI_FILE_SUMMARY_CONNECT_TIMEOUT:-2s}
@@ -160,6 +160,7 @@ services:
       NEO4J_PASSWORD: ${NEO4J_PASSWORD}
       LIGHTRAG_QDRANT_URL: http://qdrant:6333
       LIGHTRAG_QDRANT_API_KEY: ${LIGHTRAG_QDRANT_API_KEY:-}
+      LIGHTRAG_QUERY_TIMEOUT_SECONDS: ${LIGHTRAG_QUERY_TIMEOUT_SECONDS:-120}
       API_BASE_URL: http://api:8100
       # ai 가 api 를 호출할 때 쓰는 JWT 검증 키. api 와 동일 시크릿이어야 한다.
       JWT_SECRET: ${JWT_SECRET}
@@ -180,7 +181,7 @@ services:
       AWS_ACCESS_KEY_ID: ${AWS_ACCESS_KEY_ID}
       AWS_SECRET_ACCESS_KEY: ${AWS_SECRET_ACCESS_KEY}
     ports:
-      - "127.0.0.1:${AI_HOST_PORT:?AI_HOST_PORT required (env-specific offset, e.g. 8200/8201)}:8200"
+      - "0.0.0.0:${AI_HOST_PORT:?AI_HOST_PORT required (env-specific offset, e.g. 8200/8201)}:8200"
     restart: unless-stopped
 
   # Celery worker — ai FastAPI 가 task.delay() 로 큐에 적재한 작업을 실제로 처리하는 별도 프로세스.

@@ -75,7 +75,7 @@ ai:
     enabled: ${AI_WORKLOG_SEARCH_ENABLED:false}
     base-url: ${AI_WORKLOG_SEARCH_BASE_URL:http://localhost:8000/ai}
     connect-timeout: ${AI_WORKLOG_SEARCH_CONNECT_TIMEOUT:60s}
-    read-timeout: ${AI_WORKLOG_SEARCH_READ_TIMEOUT:60s}
+    read-timeout: ${AI_WORKLOG_SEARCH_READ_TIMEOUT:180s}
   file-summary:
     enabled: ${AI_FILE_SUMMARY_ENABLED:false}
     base-url: ${AI_FILE_SUMMARY_BASE_URL:http://localhost:8000/ai}
