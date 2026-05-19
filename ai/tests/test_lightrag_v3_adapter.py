@@ -9,6 +9,7 @@ from app.config.settings import Settings
 from app.light.v3.service.lightrag_adapter import (
     LightRagConfigurationError,
     LightRagDependencies,
+    LightRagProviderUnavailableError,
     LightRagInsertFailedError,
     LightRagInsertTimeoutError,
     LightRagQueryFailedError,
@@ -17,6 +18,7 @@ from app.light.v3.service.lightrag_adapter import (
     LightRagWorklogIndexAdapter,
     close_lightrag_worklog_index_adapter,
     get_lightrag_worklog_index_adapter,
+    _build_gemini_llm_model_func,
 )
 from app.light.v3.service.worklog_document_builder import LightRagWorklogDocument
 from app.light.v3.service.worklog_custom_kg_builder import LightRagWorklogCustomKgDocument
@@ -853,3 +855,128 @@ def test_lightrag_adapter_maps_custom_kg_insert_failure() -> None:
                 ]
             )
         )
+
+
+class RetryableGeminiError(Exception):
+    """Gemini retryable provider 오류 테스트 fake."""
+
+    code = 503
+
+
+def make_completion_only_dependencies(
+    outcomes: list[Any],
+) -> tuple[LightRagDependencies, list[dict[str, Any]]]:
+    """LLM wrapper fallback 테스트용 dependency와 호출 기록을 만든다."""
+    calls: list[dict[str, Any]] = []
+    pending = list(outcomes)
+
+    async def fake_complete(prompt: str, **kwargs: Any) -> str:
+        calls.append({"prompt": prompt, **kwargs})
+        outcome = pending.pop(0)
+        if isinstance(outcome, BaseException):
+            raise outcome
+        return outcome
+
+    def fake_embedding_wrapper(**attrs: Any):
+        def decorate(func):
+            return func
+
+        return decorate
+
+    return (
+        LightRagDependencies(
+            lightrag_class=FakeLightRAG,
+            gemini_model_complete=fake_complete,
+            gemini_embed=FakeGeminiEmbed(),
+            embedding_wrapper=fake_embedding_wrapper,
+            query_param_class=FakeQueryParam,
+        ),
+        calls,
+    )
+
+
+def test_lightrag_llm_wrapper_retries_primary_model_after_retryable_error() -> None:
+    settings = make_settings()
+    settings.lightrag_query_llm_max_retries_per_model = 1
+    settings.lightrag_query_llm_retry_initial_delay_seconds = 0.0
+    dependencies, calls = make_completion_only_dependencies([RetryableGeminiError(), "ok"])
+    llm_func = _build_gemini_llm_model_func(settings_obj=settings, dependencies=dependencies)
+
+    result = asyncio.run(llm_func("prompt", keyword_extraction=True))
+
+    assert result == "ok"
+    assert [call["model_name"] for call in calls] == [
+        "gemini-2.5-flash",
+        "gemini-2.5-flash",
+    ]
+    assert calls[0]["api_key"] == "fake-gemini-api-key"
+
+
+def test_lightrag_llm_wrapper_falls_back_after_primary_retries_exhausted() -> None:
+    settings = make_settings()
+    settings.lightrag_llm_fallback_models = "gemini-fallback"
+    settings.lightrag_query_llm_max_retries_per_model = 0
+    settings.lightrag_query_llm_retry_initial_delay_seconds = 0.0
+    dependencies, calls = make_completion_only_dependencies([
+        RetryableGeminiError(),
+        "fallback ok",
+    ])
+    llm_func = _build_gemini_llm_model_func(settings_obj=settings, dependencies=dependencies)
+
+    result = asyncio.run(llm_func("prompt"))
+
+    assert result == "fallback ok"
+    assert [call["model_name"] for call in calls] == [
+        "gemini-2.5-flash",
+        "gemini-fallback",
+    ]
+
+
+def test_lightrag_llm_wrapper_raises_provider_unavailable_after_all_fallbacks_fail() -> None:
+    settings = make_settings()
+    settings.lightrag_llm_fallback_models = "gemini-fallback"
+    settings.lightrag_query_llm_max_retries_per_model = 0
+    settings.lightrag_query_llm_retry_initial_delay_seconds = 0.0
+    dependencies, calls = make_completion_only_dependencies([
+        RetryableGeminiError(),
+        RetryableGeminiError(),
+    ])
+    llm_func = _build_gemini_llm_model_func(settings_obj=settings, dependencies=dependencies)
+
+    with pytest.raises(LightRagProviderUnavailableError):
+        asyncio.run(llm_func("prompt"))
+
+    assert [call["model_name"] for call in calls] == [
+        "gemini-2.5-flash",
+        "gemini-fallback",
+    ]
+
+
+def test_lightrag_llm_wrapper_does_not_hide_non_retryable_errors() -> None:
+    settings = make_settings()
+    settings.lightrag_llm_fallback_models = "gemini-fallback"
+    dependencies, calls = make_completion_only_dependencies([ValueError("bad request")])
+    llm_func = _build_gemini_llm_model_func(settings_obj=settings, dependencies=dependencies)
+
+    with pytest.raises(ValueError, match="bad request"):
+        asyncio.run(llm_func("prompt"))
+
+    assert [call["model_name"] for call in calls] == ["gemini-2.5-flash"]
+
+
+def test_lightrag_adapter_query_preserves_provider_unavailable_error() -> None:
+    class ProviderUnavailableQueryLightRAG(FakeLightRAG):
+        async def aquery_llm(
+            self,
+            query: str,
+            *,
+            param: Any,
+            system_prompt: str | None = None,
+        ) -> dict[str, Any]:
+            raise LightRagProviderUnavailableError("provider unavailable")
+
+    dependencies, _, _, _ = make_dependencies(ProviderUnavailableQueryLightRAG)
+    adapter = LightRagWorklogIndexAdapter(settings_obj=make_settings(), dependencies=dependencies)
+
+    with pytest.raises(LightRagProviderUnavailableError):
+        asyncio.run(adapter.query_worklogs(make_query_options()))

@@ -155,3 +155,68 @@ def test_settings_accepts_lightrag_query_env_override(monkeypatch) -> None:
     assert settings.lightrag_query_top_k == 7
     assert settings.lightrag_query_chunk_top_k == 3
     assert settings.lightrag_query_response_type == "Single Paragraph"
+
+
+def test_settings_has_lightrag_llm_fallback_retry_defaults(monkeypatch) -> None:
+    """LightRAG query LLM fallback/retry 기본값을 제공해야 한다."""
+    monkeypatch.delenv("LIGHTRAG_LLM_FALLBACK_MODELS", raising=False)
+    monkeypatch.delenv("LIGHTRAG_QUERY_LLM_MAX_RETRIES_PER_MODEL", raising=False)
+    monkeypatch.delenv("LIGHTRAG_QUERY_LLM_RETRY_INITIAL_DELAY_SECONDS", raising=False)
+    monkeypatch.delenv("LIGHTRAG_QUERY_LLM_RETRY_MAX_DELAY_SECONDS", raising=False)
+
+    settings = Settings(_env_file=None)
+
+    assert settings.lightrag_llm_fallback_models == "gemini-2.5-flash-lite,gemini-2.0-flash"
+    assert settings.lightrag_llm_model_candidates == [
+        "gemini-2.5-flash",
+        "gemini-2.5-flash-lite",
+        "gemini-2.0-flash",
+    ]
+    assert settings.lightrag_query_llm_max_retries_per_model == 2
+    assert settings.lightrag_query_llm_retry_attempts_per_model == 3
+    assert settings.lightrag_query_llm_retry_initial_delay == 0.5
+    assert settings.lightrag_query_llm_retry_max_delay == 4.0
+
+
+def test_settings_uses_hardcoded_lightrag_fallback_when_env_is_blank(monkeypatch) -> None:
+    """env 값이 빈 문자열이어도 hardcoded fallback 후보를 사용해야 한다."""
+    monkeypatch.setenv("LIGHTRAG_LLM_FALLBACK_MODELS", "")
+
+    settings = Settings(_env_file=None)
+
+    assert settings.lightrag_llm_model_candidates == [
+        "gemini-2.5-flash",
+        "gemini-2.5-flash-lite",
+        "gemini-2.0-flash",
+    ]
+
+
+def test_settings_normalizes_lightrag_llm_model_candidates(monkeypatch) -> None:
+    """primary/fallback 모델 후보는 공백과 중복을 제거한 순서를 보존해야 한다."""
+    monkeypatch.setenv("LIGHTRAG_LLM_MODEL", "gemini-primary")
+    monkeypatch.setenv(
+        "LIGHTRAG_LLM_FALLBACK_MODELS",
+        " gemini-fallback-a, gemini-primary, ,gemini-fallback-b ",
+    )
+
+    settings = Settings(_env_file=None)
+
+    assert settings.lightrag_llm_model_candidates == [
+        "gemini-primary",
+        "gemini-fallback-a",
+        "gemini-fallback-b",
+    ]
+
+
+def test_settings_clamps_lightrag_llm_retry_policy() -> None:
+    """음수 retry/delay 설정은 실행 경계에서 안전한 값으로 정규화한다."""
+    settings = Settings(
+        _env_file=None,
+        lightrag_query_llm_max_retries_per_model=-1,
+        lightrag_query_llm_retry_initial_delay_seconds=-0.5,
+        lightrag_query_llm_retry_max_delay_seconds=-1.0,
+    )
+
+    assert settings.lightrag_query_llm_retry_attempts_per_model == 1
+    assert settings.lightrag_query_llm_retry_initial_delay == 0.0
+    assert settings.lightrag_query_llm_retry_max_delay == 0.0

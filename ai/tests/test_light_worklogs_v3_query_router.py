@@ -10,6 +10,7 @@ from app.light.v3.model.worklog_query import (
 )
 from app.light.v3.service.lightrag_adapter import (
     LightRagConfigurationError,
+    LightRagProviderUnavailableError,
     LightRagQueryFailedError,
     LightRagQueryTimeoutError,
 )
@@ -163,3 +164,15 @@ def test_light_worklogs_v3_query_maps_failed_error(monkeypatch) -> None:
 
     assert response.status_code == 500
     assert response.json() == {"detail": "LIGHTRAG_QUERY_FAILED"}
+
+
+def test_light_worklogs_v3_query_maps_provider_unavailable(monkeypatch) -> None:
+    install_fake_service(
+        monkeypatch,
+        FakeQueryService(LightRagProviderUnavailableError("provider unavailable")),
+    )
+
+    response = post_query()
+
+    assert response.status_code == 503
+    assert response.json() == {"detail": "LIGHTRAG_PROVIDER_UNAVAILABLE"}
