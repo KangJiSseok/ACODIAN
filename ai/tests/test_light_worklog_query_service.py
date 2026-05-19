@@ -4,9 +4,12 @@ from typing import Any
 
 import asyncio
 
+import pytest
+
 from app.config.settings import Settings
 from app.light.v3.model.worklog_query import WorklogLightQueryRequest
 from app.light.v3.service.lightrag_adapter import (
+    LightRagQueryFailedError,
     LightRagQueryOptions,
     LightRagQueryResult,
 )
@@ -125,3 +128,38 @@ def test_query_service_treats_null_allowed_team_ids_as_all_scope() -> None:
     assert len(adapter.calls) == 1
     assert adapter.calls[0].system_prompt is not None
     assert "allowedTeamIds = ALL" in adapter.calls[0].system_prompt
+
+
+def test_query_service_rejects_empty_llm_content() -> None:
+    adapter = FakeAdapter({"llm_response": {"content": None}, "data": {"references": []}})
+    service = LightWorklogQueryService(
+        settings_obj=Settings(_env_file=None),
+        adapter_factory=lambda: adapter,
+    )
+
+    with pytest.raises(LightRagQueryFailedError, match="empty LLM response"):
+        asyncio.run(service.query_worklogs(make_request()))
+
+
+def test_query_service_rejects_missing_llm_response() -> None:
+    adapter = FakeAdapter({"data": {"references": []}})
+    service = LightWorklogQueryService(
+        settings_obj=Settings(_env_file=None),
+        adapter_factory=lambda: adapter,
+    )
+
+    with pytest.raises(LightRagQueryFailedError, match="invalid LLM response"):
+        asyncio.run(service.query_worklogs(make_request()))
+
+
+def test_query_service_allows_missing_references() -> None:
+    adapter = FakeAdapter({"llm_response": {"content": "answer"}})
+    service = LightWorklogQueryService(
+        settings_obj=Settings(_env_file=None),
+        adapter_factory=lambda: adapter,
+    )
+
+    response = asyncio.run(service.query_worklogs(make_request()))
+
+    assert response.answer == "answer"
+    assert response.references == []

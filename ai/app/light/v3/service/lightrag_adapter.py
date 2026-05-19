@@ -9,17 +9,25 @@ LightRAG v1.4.10 문서 기준으로 `LightRAG` instance를 만들고,
 from __future__ import annotations
 
 import asyncio
+import logging
 import os
+import random
 from collections.abc import Awaitable, Callable
 from dataclasses import dataclass
-from typing import Any, Protocol
+from typing import Any, Protocol, TypeAlias
 
 from app.config.settings import Settings, settings
-from app.light.v3.service.worklog_document_builder import LightRagWorklogDocument
 from app.light.v3.service.worklog_custom_kg_builder import LightRagWorklogCustomKgDocument
+from app.light.v3.service.worklog_document_builder import LightRagWorklogDocument
+from app.task.retry_policy import is_retryable_ai_error
 
 _QDRANT_VECTOR_STORAGE = "QdrantVectorDBStorage"
 _NEO4J_GRAPH_STORAGE = "Neo4JStorage"
+
+EmbeddingFunc: TypeAlias = Callable[..., Awaitable[Any]]
+EmbeddingWrapper: TypeAlias = Callable[..., Callable[[EmbeddingFunc], EmbeddingFunc]]
+
+logger = logging.getLogger(__name__)
 
 
 class LightRagConfigurationError(RuntimeError):
@@ -40,6 +48,10 @@ class LightRagQueryTimeoutError(RuntimeError):
 
 class LightRagQueryFailedError(RuntimeError):
     """LightRAG query 실행 또는 응답 해석이 실패했음을 나타내는 예외."""
+
+
+class LightRagProviderUnavailableError(LightRagQueryFailedError):
+    """Gemini provider 일시 장애가 모든 retry/fallback 후에도 해소되지 않았음을 나타내는 예외."""
 
 
 class WorklogLightIndexAdapter(Protocol):
@@ -65,7 +77,7 @@ class LightRagDependencies:
     lightrag_class: type[Any]
     gemini_model_complete: Callable[..., Awaitable[str]]
     gemini_embed: Any
-    embedding_wrapper: Callable[..., Callable[[Callable[..., Awaitable[Any]]], Callable[..., Awaitable[Any]]]]
+    embedding_wrapper: EmbeddingWrapper
     query_param_class: type[Any]
 
 
@@ -166,6 +178,8 @@ class LightRagWorklogIndexAdapter:
             )
             return LightRagQueryResult(raw=raw)
         except LightRagConfigurationError:
+            raise
+        except LightRagProviderUnavailableError:
             raise
         except TimeoutError as exc:
             raise LightRagQueryTimeoutError("LightRAG query timed out") from exc
@@ -286,7 +300,12 @@ def _build_gemini_llm_model_func(
     settings_obj: Settings,
     dependencies: LightRagDependencies,
 ) -> Callable[..., Awaitable[str]]:
-    """Settings 기반 Gemini completion wrapper를 만든다."""
+    """Settings 기반 Gemini completion wrapper를 만든다.
+
+    LightRAG query 중 Gemini가 503/429 같은 일시 장애를 반환하면 모델별
+    bounded retry 후 fallback model 후보를 순회한다. prompt/API key/raw 응답은
+    로그에 남기지 않는다.
+    """
 
     async def llm_model_func(
         prompt: str,
@@ -295,17 +314,87 @@ def _build_gemini_llm_model_func(
         keyword_extraction: bool = False,
         **kwargs: Any,
     ) -> str:
-        return await dependencies.gemini_model_complete(
-            prompt,
-            system_prompt=system_prompt,
-            history_messages=history_messages or [],
-            keyword_extraction=keyword_extraction,
-            api_key=settings_obj.gemini_api_key,
-            model_name=settings_obj.lightrag_llm_model,
-            **kwargs,
+        candidates = settings_obj.lightrag_llm_model_candidates
+        max_attempts = settings_obj.lightrag_query_llm_retry_attempts_per_model
+        last_retryable_exc: BaseException | None = None
+
+        for model_name in candidates:
+            for attempt_index in range(max_attempts):
+                try:
+                    return await dependencies.gemini_model_complete(
+                        prompt,
+                        system_prompt=system_prompt,
+                        history_messages=history_messages or [],
+                        keyword_extraction=keyword_extraction,
+                        api_key=settings_obj.gemini_api_key,
+                        model_name=model_name,
+                        **kwargs,
+                    )
+                except Exception as exc:
+                    if not is_retryable_ai_error(exc):
+                        raise
+
+                    last_retryable_exc = exc
+                    next_attempt_exists = attempt_index + 1 < max_attempts
+                    if next_attempt_exists:
+                        delay = _compute_lightrag_llm_retry_delay(
+                            settings_obj,
+                            attempt_index=attempt_index,
+                        )
+                        logger.warning(
+                            "LightRAG Gemini query retry scheduled "
+                            "model=%s attempt=%s/%s delay=%.2fs error=%s status=%s",
+                            model_name,
+                            attempt_index + 2,
+                            max_attempts,
+                            delay,
+                            exc.__class__.__name__,
+                            _extract_ai_error_status(exc),
+                        )
+                        if delay > 0:
+                            await asyncio.sleep(delay)
+                        continue
+                    break
+
+        logger.error(
+            "LightRAG Gemini query exhausted all model fallbacks "
+            "models=%s last_error=%s status=%s",
+            candidates,
+            last_retryable_exc.__class__.__name__ if last_retryable_exc else None,
+            _extract_ai_error_status(last_retryable_exc) if last_retryable_exc else None,
         )
+        raise LightRagProviderUnavailableError(
+            "Gemini provider unavailable after LightRAG model fallbacks"
+        ) from last_retryable_exc
 
     return llm_model_func
+
+
+def _compute_lightrag_llm_retry_delay(
+    settings_obj: Settings,
+    *,
+    attempt_index: int,
+) -> float:
+    """LightRAG query LLM retry delay를 exponential backoff + jitter로 계산한다."""
+    initial_delay = settings_obj.lightrag_query_llm_retry_initial_delay
+    if initial_delay <= 0:
+        return 0.0
+
+    max_delay = settings_obj.lightrag_query_llm_retry_max_delay
+    base_delay = min(max_delay, initial_delay * (2**attempt_index))
+    jitter = random.uniform(0, min(base_delay * 0.25, 0.25))
+    return min(max_delay, base_delay + jitter)
+
+
+def _extract_ai_error_status(exc: BaseException) -> int | None:
+    """Provider 예외의 status code를 로그용으로 추출한다."""
+    for attr_name in ("status_code", "code"):
+        value = getattr(exc, attr_name, None)
+        try:
+            return int(value)
+        except (TypeError, ValueError):
+            continue
+    return None
 
 
 def _build_gemini_embedding_func(

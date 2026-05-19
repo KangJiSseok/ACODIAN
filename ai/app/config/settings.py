@@ -5,6 +5,12 @@ from pydantic import Field
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
+DEFAULT_LIGHTRAG_LLM_FALLBACK_MODELS = (
+    "gemini-2.5-flash-lite",
+    "gemini-2.0-flash",
+)
+
+
 class Settings(BaseSettings):
     app_name: str = "AX-WMS AI Service"
     app_version: str = "0.1.0"
@@ -51,6 +57,10 @@ class Settings(BaseSettings):
     lightrag_working_dir: str = "./data/lightrag-v3"
     lightrag_llm_model: str = "gemini-2.5-flash"
     lightrag_embedding_model: str = "gemini-embedding-001"
+    lightrag_llm_fallback_models: str = ",".join(DEFAULT_LIGHTRAG_LLM_FALLBACK_MODELS)
+    lightrag_query_llm_max_retries_per_model: int = 2
+    lightrag_query_llm_retry_initial_delay_seconds: float = 0.5
+    lightrag_query_llm_retry_max_delay_seconds: float = 4.0
     lightrag_embedding_max_token_size: int = 2048
     lightrag_index_max_batch_size: int = 10
     lightrag_insert_timeout_seconds: int = 120
@@ -90,6 +100,47 @@ class Settings(BaseSettings):
         Alembic 은 동기 엔진으로 동작하는 게 단순하므로 별도 URL 을 노출한다.
         """
         return self._with_driver("psycopg")
+
+    @property
+    def lightrag_llm_model_candidates(self) -> list[str]:
+        """LightRAG query LLM primary/fallback 후보를 순서대로 반환한다.
+
+        `LIGHTRAG_LLM_MODEL` 을 첫 후보로 두고,
+        `LIGHTRAG_LLM_FALLBACK_MODELS` 의 comma-separated 값을 뒤에 붙인다.
+        환경변수가 비어 있으면 코드 기본 fallback 후보를 사용한다.
+        공백과 중복은 제거해 같은 모델을 불필요하게 재호출하지 않는다.
+        """
+        configured_fallback_models = self.lightrag_llm_fallback_models.strip()
+        fallback_models = (
+            configured_fallback_models.split(",")
+            if configured_fallback_models
+            else DEFAULT_LIGHTRAG_LLM_FALLBACK_MODELS
+        )
+        raw_candidates = [self.lightrag_llm_model, *fallback_models]
+        candidates: list[str] = []
+        for raw_model in raw_candidates:
+            model = raw_model.strip()
+            if model and model not in candidates:
+                candidates.append(model)
+        return candidates
+
+    @property
+    def lightrag_query_llm_retry_attempts_per_model(self) -> int:
+        """LightRAG query LLM 모델별 총 시도 횟수를 반환한다."""
+        return max(self.lightrag_query_llm_max_retries_per_model, 0) + 1
+
+    @property
+    def lightrag_query_llm_retry_initial_delay(self) -> float:
+        """LightRAG query LLM retry initial delay를 0 이상으로 정규화한다."""
+        return max(self.lightrag_query_llm_retry_initial_delay_seconds, 0.0)
+
+    @property
+    def lightrag_query_llm_retry_max_delay(self) -> float:
+        """LightRAG query LLM retry max delay를 initial delay 이상으로 정규화한다."""
+        return max(
+            self.lightrag_query_llm_retry_max_delay_seconds,
+            self.lightrag_query_llm_retry_initial_delay,
+        )
 
     def _with_driver(self, driver: str) -> str:
         """``pgvector_dsn`` 에 SQLAlchemy 드라이버 prefix 를 적용한다.
