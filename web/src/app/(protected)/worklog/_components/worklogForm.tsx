@@ -182,6 +182,14 @@ export function WorklogForm({
   const [polishAssistError, setPolishAssistError] = useState("")
   const [titleRecommendations, setTitleRecommendations] = useState<string[]>([])
   const [polishedWorkContent, setPolishedWorkContent] = useState("")
+  const [polishedWorkContentSourceKey, setPolishedWorkContentSourceKey] =
+    useState<string | null>(null)
+  const [lastTitleRecommendationKey, setLastTitleRecommendationKey] = useState<
+    string | null
+  >(null)
+  const [lastPolishAssistKey, setLastPolishAssistKey] = useState<string | null>(
+    null,
+  )
   const [isRecommendingTitles, setIsRecommendingTitles] = useState(false)
   const [isPolishingWorkContent, setIsPolishingWorkContent] = useState(false)
   const [showSettingsValidationErrors, setShowSettingsValidationErrors] =
@@ -206,6 +214,27 @@ export function WorklogForm({
   const initialStatus = initialValues?.status ?? resolvedInitialValues.status
   const statusChangeReasonVisible = isEditMode && values.status !== initialStatus
   const canRequestWritingAssist = values.workContent.trim().length > 0
+  const writingAssistRequest = useMemo(
+    () => ({
+      requestContent: values.requestContent.trim() || null,
+      workContent: values.workContent.trim(),
+    }),
+    [values.requestContent, values.workContent],
+  )
+  const writingAssistKey = useMemo(
+    () => JSON.stringify(writingAssistRequest),
+    [writingAssistRequest],
+  )
+  const isTitleRecommendationRepeated =
+    lastTitleRecommendationKey === writingAssistKey
+  const isPolishAssistRepeated = lastPolishAssistKey === writingAssistKey
+  const canRecommendTitles =
+    canRequestWritingAssist && !isRecommendingTitles && !isTitleRecommendationRepeated
+  const canPolishWorkContent =
+    canRequestWritingAssist && !isPolishingWorkContent && !isPolishAssistRepeated
+  const canApplyPolishedWorkContent =
+    polishedWorkContent.trim().length > 0 &&
+    polishedWorkContentSourceKey === writingAssistKey
 
   const teamSource = useMemo<WorklogFormTeamOption[]>(
     () => teamOptionsSource ?? [],
@@ -461,24 +490,30 @@ export function WorklogForm({
     }
   }
 
-  const buildWritingAssistRequest = () => ({
-    requestContent: values.requestContent.trim() || null,
-    workContent: values.workContent.trim(),
-  })
+  const clearPolishedWorkContent = () => {
+    setPolishedWorkContent("")
+    setPolishedWorkContentSourceKey(null)
+  }
 
   const recommendTitles = async () => {
     if (!canRequestWritingAssist) {
       setTitleAssistError("업무 내용을 먼저 입력해주세요.")
       return
     }
+    if (isRecommendingTitles) return
+    if (isTitleRecommendationRepeated) {
+      setTitleAssistError(
+        "이미 같은 내용으로 제목을 추천했습니다. 내용을 수정하면 다시 요청할 수 있습니다.",
+      )
+      return
+    }
 
     setIsRecommendingTitles(true)
     setTitleAssistError("")
     try {
-      const response = await worklogService.recommendTitles(
-        buildWritingAssistRequest()
-      )
+      const response = await worklogService.recommendTitles(writingAssistRequest)
       setTitleRecommendations(response.titles)
+      setLastTitleRecommendationKey(writingAssistKey)
       if (response.titles.length === 0) {
         setTitleAssistError("추천할 수 있는 제목 후보가 없습니다.")
       }
@@ -496,14 +531,21 @@ export function WorklogForm({
       setPolishAssistError("업무 내용을 먼저 입력해주세요.")
       return
     }
+    if (isPolishingWorkContent) return
+    if (isPolishAssistRepeated) {
+      setPolishAssistError(
+        "이미 같은 내용으로 AI 내용 작성을 완료했습니다. 내용을 수정하면 다시 요청할 수 있습니다.",
+      )
+      return
+    }
 
     setIsPolishingWorkContent(true)
     setPolishAssistError("")
     try {
-      const response = await worklogService.polishDraft(
-        buildWritingAssistRequest()
-      )
+      const response = await worklogService.polishDraft(writingAssistRequest)
       setPolishedWorkContent(response.workContent)
+      setPolishedWorkContentSourceKey(writingAssistKey)
+      setLastPolishAssistKey(writingAssistKey)
     } catch (error) {
       setPolishAssistError(
         getApiErrorMessage(error, "AI 내용 작성을 처리하지 못했습니다.")
@@ -595,10 +637,12 @@ export function WorklogForm({
                   variant="secondary"
                   size="lg"
                   className="font-semibold"
-                  disabled={!canRequestWritingAssist || isRecommendingTitles}
+                  disabled={!canRecommendTitles}
                   onClick={recommendTitles}
                   title={
-                    canRequestWritingAssist
+                    isTitleRecommendationRepeated
+                      ? "이미 같은 내용으로 제목을 추천했습니다."
+                      : canRequestWritingAssist
                       ? "업무 내용을 바탕으로 제목 후보를 추천합니다."
                       : "업무 내용을 먼저 입력해주세요."
                   }
@@ -674,6 +718,7 @@ export function WorklogForm({
                   setTitleRecommendations([])
                   setTitleAssistError("")
                   setPolishAssistError("")
+                  clearPolishedWorkContent()
                 }}
                 className={`h-[220px] ${textareaClassName}`}
                 placeholder="이 업무를 수행해야 하는 목적과 배경을 작성합니다."
@@ -695,10 +740,12 @@ export function WorklogForm({
                       variant="secondary"
                       size="lg"
                       className="font-semibold"
-                      disabled={!canRequestWritingAssist || isPolishingWorkContent}
+                      disabled={!canPolishWorkContent}
                       onClick={polishWorkContent}
                       title={
-                        canRequestWritingAssist
+                        isPolishAssistRepeated
+                          ? "이미 같은 내용으로 AI 내용 작성을 완료했습니다."
+                          : canRequestWritingAssist
                           ? "업무 내용을 더 명확한 문장으로 정리합니다."
                           : "업무 내용을 먼저 입력해주세요."
                       }
@@ -719,6 +766,7 @@ export function WorklogForm({
                       setTitleRecommendations([])
                       setTitleAssistError("")
                       setPolishAssistError("")
+                      clearPolishedWorkContent()
                     }}
                     className={`h-[300px] ${textareaClassName}`}
                     placeholder="실제로 수행할 업무의 상세 내용을 작성합니다."
@@ -736,13 +784,16 @@ export function WorklogForm({
                       type="button"
                       variant="outline"
                       className="h-9 rounded-lg px-3.5 text-xs font-semibold"
-                      disabled={!polishedWorkContent.trim()}
-                      onClick={() =>
+                      disabled={!canApplyPolishedWorkContent}
+                      onClick={() => {
                         setValues((previous) => ({
                           ...previous,
                           workContent: polishedWorkContent,
                         }))
-                      }
+                        setTitleRecommendations([])
+                        setTitleAssistError("")
+                        setPolishAssistError("")
+                      }}
                     >
                       <Check className="size-3.5" />
                       본문에 반영

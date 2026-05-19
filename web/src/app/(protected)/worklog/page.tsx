@@ -12,11 +12,11 @@ import {
   SlidersHorizontal,
   Sparkles,
 } from "lucide-react"
-import { canCreateWorklog } from "./_utils/accessControl"
 import PageHeader from "@/app/_common/components/layout/pageHeader"
 import { Pagination } from "@/app/_common/components/data-display/pagination"
+import { useAuth } from "@/app/_common/hooks/useAuth"
+import { isDirectorProfile } from "@/app/_common/utils/organizationAccess.utils"
 import { LegendHelpDialog } from "./_components/legendHelpDialog"
-import { useAuth } from "./_hooks/useAuth"
 import { ImportanceBadge } from "./_components/importanceBadge"
 import { StatusBadge } from "./_components/statusBadge"
 import {
@@ -80,7 +80,7 @@ export default function WorklogPage() {
   const [aiMessages, setAiMessages] = useState<AiMessage[]>([])
   const [showFilters, setShowFilters] = useState(false)
   const [filters, setFilters] = useState<WorklogFilterState>(DEFAULT_FILTERS)
-  const canCreate = canCreateWorklog(user)
+  const canCreate = Boolean(user && !isDirectorProfile(user))
   const { data: filterOptions } = useWorklogFilterOptions()
   const memberOptions = useMemo(() => {
     const indexed = new Map<number, string>()
