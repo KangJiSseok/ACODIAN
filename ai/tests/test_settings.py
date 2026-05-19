@@ -97,6 +97,32 @@ def test_settings_accepts_lightrag_qdrant_env_override(monkeypatch) -> None:
     assert settings.lightrag_qdrant_api_key == "secret"
 
 
+def test_settings_has_lightrag_neo4j_defaults(monkeypatch) -> None:
+    """LightRAG graph storage는 기본적으로 로컬 Neo4j를 바라본다."""
+    monkeypatch.delenv("NEO4J_URI", raising=False)
+    monkeypatch.delenv("NEO4J_USER", raising=False)
+    monkeypatch.delenv("NEO4J_PASSWORD", raising=False)
+    monkeypatch.delenv("LIGHTRAG_GRAPH_STORAGE", raising=False)
+    monkeypatch.delenv("LIGHTRAG_NEO4J_DATABASE", raising=False)
+    settings = Settings(_env_file=None)
+
+    assert settings.neo4j_uri == "bolt://localhost:7687"
+    assert settings.neo4j_user == "neo4j"
+    assert settings.neo4j_password == "neo4j-local-password"
+    assert settings.lightrag_graph_storage == "Neo4JStorage"
+    assert settings.lightrag_neo4j_database == "neo4j"
+
+
+def test_settings_accepts_lightrag_neo4j_env_override(monkeypatch) -> None:
+    """운영 환경 env로 LightRAG Neo4j graph storage 값을 override할 수 있어야 한다."""
+    monkeypatch.setenv("LIGHTRAG_GRAPH_STORAGE", "Neo4JStorage")
+    monkeypatch.setenv("LIGHTRAG_NEO4J_DATABASE", "neo4j")
+    settings = Settings(_env_file=None)
+
+    assert settings.lightrag_graph_storage == "Neo4JStorage"
+    assert settings.lightrag_neo4j_database == "neo4j"
+
+
 def test_settings_has_lightrag_query_defaults(monkeypatch) -> None:
     """LightRAG query API 기본 운영값을 제공해야 한다."""
     monkeypatch.delenv("LIGHTRAG_QUERY_TIMEOUT_SECONDS", raising=False)

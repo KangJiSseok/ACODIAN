@@ -51,6 +51,7 @@ lightrag-hku==1.4.10
 marshmallow==3.26.2
 multidict==6.7.1
 mypy_extensions==1.1.0
+neo4j>=5.0.0,<7.0.0
 numpy==2.4.4
 olefile>=0.47
 openpyxl>=3.1.5
