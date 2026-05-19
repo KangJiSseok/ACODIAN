@@ -11,6 +11,9 @@ const resultCount = readSource(
 );
 const dashboardPage = readSource("app/(protected)/page.tsx");
 const worklogPage = readSource("app/(protected)/worklog/page.tsx");
+const worklogForm = readSource(
+  "app/(protected)/worklog/_components/worklogForm.tsx",
+);
 const filePage = readSource("app/(protected)/file/page.tsx");
 const departmentPage = readSource("app/(protected)/department/page.tsx");
 const teamPage = readSource("app/(protected)/team/page.tsx");
@@ -22,6 +25,32 @@ test("list result counts share one text style and count format", () => {
   assert.match(resultCount, /text-sm font-medium text-muted-foreground/);
   assert.match(resultCount, /ml-1 font-semibold text-foreground/);
   assert.match(resultCount, /toLocaleString\("ko-KR"\)/);
+});
+
+test("worklog attachments match backend upload size limits", () => {
+  assert.match(worklogForm, /const MAX_ATTACHMENT_COUNT = 10/);
+  assert.match(
+    worklogForm,
+    /const MAX_ATTACHMENT_FILE_SIZE_BYTES = 10 \* FILE_SIZE_UNIT/,
+  );
+  assert.match(
+    worklogForm,
+    /const MAX_ATTACHMENT_TOTAL_SIZE_BYTES = 100 \* FILE_SIZE_UNIT/,
+  );
+  assert.doesNotMatch(worklogForm, /20MB/);
+  assert.doesNotMatch(worklogForm, /200MB/);
+});
+
+test("tag search controls mirror worklog search button style", () => {
+  assert.match(tagManager, /function submitSearch\(\)/);
+  assert.match(
+    tagManager,
+    /<form[\s\S]*onSubmit=\{\(event\) => \{[\s\S]*submitSearch\(\)/,
+  );
+  assert.match(
+    tagManager,
+    /type="submit"[\s\S]*variant="default"[\s\S]*className="h-12 min-w-24 justify-center px-5 text-sm font-semibold"/,
+  );
 });
 
 test("workspace list sections use 조회된 result count labels", () => {

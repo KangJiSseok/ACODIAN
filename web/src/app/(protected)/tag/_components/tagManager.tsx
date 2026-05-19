@@ -13,6 +13,7 @@ const TAG_PAGE_SIZE = 20
 
 export function TagManager() {
   const [query, setQuery] = useState("")
+  const [searchInput, setSearchInput] = useState("")
   const [page, setPage] = useState(1)
   const {
     data: tagPage,
@@ -25,34 +26,55 @@ export function TagManager() {
   })
   const tags = tagPage?.items ?? []
 
+  function submitSearch() {
+    setQuery(searchInput)
+    setPage(1)
+  }
+
   return (
     <div className="space-y-6">
       <div className="space-y-4">
-        <div className="relative">
-          <Search className="pointer-events-none absolute left-4 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
-          <Input
-            value={query}
-            onChange={(event) => {
-              setQuery(event.target.value)
-              setPage(1)
-            }}
-            className="h-12 rounded-2xl pl-11 pr-12 text-sm"
-            placeholder="태그 이름으로 검색하세요"
-          />
-          <Button
-            type="button"
-            variant="ghost"
-            size="icon"
-            className="absolute right-3 top-1/2 size-8 -translate-y-1/2 rounded-xl text-muted-foreground"
-            aria-label="검색어 초기화"
-            onClick={() => {
-              setQuery("")
-              setPage(1)
-            }}
-          >
-            <RefreshCw className="size-4" />
-          </Button>
-        </div>
+        <form
+          className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between"
+          onSubmit={(event) => {
+            event.preventDefault()
+            submitSearch()
+          }}
+        >
+          <div className="relative flex-1">
+            <Search className="pointer-events-none absolute left-4 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
+            <Input
+              value={searchInput}
+              onChange={(event) => setSearchInput(event.target.value)}
+              className="h-12 rounded-2xl pl-11 pr-12 text-sm"
+              placeholder="태그 이름으로 검색하세요"
+            />
+            <Button
+              type="button"
+              variant="ghost"
+              size="icon"
+              className="absolute right-3 top-1/2 size-8 -translate-y-1/2 rounded-xl text-muted-foreground"
+              aria-label="검색어 초기화"
+              onClick={() => {
+                setSearchInput("")
+                setQuery("")
+                setPage(1)
+              }}
+            >
+              <RefreshCw className="size-4" />
+            </Button>
+          </div>
+          <div className="flex w-full items-center gap-2 sm:w-auto">
+            <Button
+              type="submit"
+              variant="default"
+              className="h-12 min-w-24 justify-center px-5 text-sm font-semibold"
+            >
+              <Search className="size-4" />
+              검색
+            </Button>
+          </div>
+        </form>
 
         <div className="h-0.5 bg-foreground/80 dark:bg-foreground/70" />
 
