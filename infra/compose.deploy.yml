@@ -181,7 +181,7 @@ services:
       AWS_ACCESS_KEY_ID: ${AWS_ACCESS_KEY_ID}
       AWS_SECRET_ACCESS_KEY: ${AWS_SECRET_ACCESS_KEY}
     ports:
-      - "127.0.0.1:${AI_HOST_PORT:?AI_HOST_PORT required (env-specific offset, e.g. 8200/8201)}:8200"
+      - "0.0.0.0:${AI_HOST_PORT:?AI_HOST_PORT required (env-specific offset, e.g. 8200/8201)}:8200"
     restart: unless-stopped
 
   # Celery worker — ai FastAPI 가 task.delay() 로 큐에 적재한 작업을 실제로 처리하는 별도 프로세스.
