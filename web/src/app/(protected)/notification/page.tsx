@@ -4,6 +4,7 @@ import type { ReactNode } from "react";
 import { useMemo, useState } from "react";
 import { ChevronDown, RefreshCw, SlidersHorizontal } from "lucide-react";
 import { Pagination } from "@/app/_common/components/data-display/pagination";
+import { ResultCount } from "@/app/_common/components/data-display/resultCount";
 import { useAuth } from "@/app/_common/hooks/useAuth";
 import PageHeader from "@/app/_common/components/layout/pageHeader";
 import type { AuthUser } from "@/app/_common/store/auth.store";
@@ -275,12 +276,11 @@ export default function NotificationPage() {
               <p className="mt-2 text-sm leading-6 text-muted-foreground">
                 알림을 선택하면 관련 업무 화면으로 이동합니다.
               </p>
-              <p className="text-sm font-medium text-muted-foreground">
-                표시 중인 알림{" "}
-                <span className="text-lg font-semibold text-foreground">
-                  {notificationPage?.totalCount ?? 0}건
-                </span>
-              </p>
+              <ResultCount
+                label="조회된 알림"
+                count={notificationPage?.totalCount ?? 0}
+                unit="개"
+              />
             </div>
           </div>
         </div>

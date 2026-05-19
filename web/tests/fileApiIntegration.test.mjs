@@ -37,7 +37,7 @@ test("file list uses the real /files PageResponse API instead of worklog mock da
   assert.match(page, /fileType:\s*fileType === ALL_FILTER_VALUE \? undefined : fileType/);
   assert.match(page, /period:\s*toPeriodDays\(period\)/);
   assert.match(page, /filePage\?\.items \?\? \[\]/);
-  assert.match(page, /totalCount/);
+  assert.match(page, /<ResultCount\s+label="조회된 파일"\s+count=\{visibleFiles\.length\}\s+unit="개"/);
   assert.match(page, /<Pagination/);
   assert.match(page, /handleDownloadSelectedFiles/);
   assert.match(page, /fetch\(file\.storedPath/);

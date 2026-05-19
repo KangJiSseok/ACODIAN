@@ -33,6 +33,7 @@ import {
   canUseUserDepartmentFilter,
   resolveUserListDepartmentId,
 } from "./_utils/userAccess.utils";
+import { ResultCount } from "@/app/_common/components/data-display/resultCount";
 
 const ALL_FILTER_VALUE = "all";
 const USER_PAGE_SIZE = 4;
@@ -267,9 +268,11 @@ export default function UserPage() {
                 사용자 카드를 선택하면 상세 페이지로 이동합니다.
               </p>
             </div>
-            <p className="text-sm font-medium text-muted-foreground">
-              표시 중인 사용자 {userPage?.totalCount ?? 0}명
-            </p>
+            <ResultCount
+              label="조회된 사용자"
+              count={userPage?.totalCount ?? 0}
+              unit="명"
+            />
           </div>
         </div>
 

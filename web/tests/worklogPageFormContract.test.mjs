@@ -44,8 +44,8 @@ test("worklog ai entry point uses mode copy", () => {
 });
 
 test("worklog create action is aligned with the visible worklog count", () => {
-  assert.match(worklogPage, /표시 중인 업무[\s\S]*canCreate \? \(/);
-  assert.match(worklogPage, /표시 중인 업무[\s\S]*href="\/worklog\/create"[\s\S]*업무 등록/);
+  assert.match(worklogPage, /조회된 업무[\s\S]*canCreate \? \(/);
+  assert.match(worklogPage, /조회된 업무[\s\S]*href="\/worklog\/create"[\s\S]*업무 등록/);
   assert.doesNotMatch(worklogPage, /<PageHeader[\s\S]*actions=\{/);
 });
 
