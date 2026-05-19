@@ -16,8 +16,8 @@ public record AiWorklogSearchProperties(
 ) {
 
     private static final String DEFAULT_BASE_URL = "http://localhost:8000/ai";
-    private static final Duration DEFAULT_CONNECT_TIMEOUT = Duration.ofSeconds(2);
-    private static final Duration DEFAULT_READ_TIMEOUT = Duration.ofSeconds(10);
+    private static final Duration DEFAULT_CONNECT_TIMEOUT = Duration.ofSeconds(60);
+    private static final Duration DEFAULT_READ_TIMEOUT = Duration.ofSeconds(60);
 
     public AiWorklogSearchProperties {
         baseUrl = normalizeBaseUrl(baseUrl);
