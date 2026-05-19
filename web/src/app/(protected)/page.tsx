@@ -192,7 +192,7 @@ export default function DashboardPage() {
 
 function getDashboardTitle(role: DashboardRole, hasTeamDashboard: boolean) {
   if (role === "NONE" && !hasTeamDashboard) {
-    return "Acodian 대시보드";
+    return "ACODIAN 대시보드";
   }
 
   return "업무 대시보드";
