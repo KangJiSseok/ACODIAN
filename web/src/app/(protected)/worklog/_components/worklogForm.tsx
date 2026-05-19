@@ -47,8 +47,8 @@ const TITLE_MAX_LENGTH = 100
 const CONTENT_MAX_LENGTH = 2000
 const FILE_SIZE_UNIT = 1024 * 1024
 const MAX_ATTACHMENT_COUNT = 10
-const MAX_ATTACHMENT_FILE_SIZE_BYTES = 20 * FILE_SIZE_UNIT
-const MAX_ATTACHMENT_TOTAL_SIZE_BYTES = 200 * FILE_SIZE_UNIT
+const MAX_ATTACHMENT_FILE_SIZE_BYTES = 10 * FILE_SIZE_UNIT
+const MAX_ATTACHMENT_TOTAL_SIZE_BYTES = 100 * FILE_SIZE_UNIT
 
 type SettingsValidationErrors = {
   actualHours?: string
@@ -381,10 +381,10 @@ export function WorklogForm({
         ? `이미 같은 이름의 첨부 파일이 있습니다: ${formatUniqueNames(duplicateNames)}`
         : "",
       tooLargeNames.length > 0
-        ? `개당 최대 20MB를 초과한 파일은 제외했습니다: ${formatUniqueNames(tooLargeNames)}`
+        ? `개당 최대 10MB를 초과한 파일은 제외했습니다: ${formatUniqueNames(tooLargeNames)}`
         : "",
       limitExceededNames.length > 0
-        ? `첨부 파일은 최대 10개, 전체 200MB까지 업로드할 수 있습니다: ${formatUniqueNames(limitExceededNames)}`
+        ? `첨부 파일은 최대 10개, 전체 100MB까지 업로드할 수 있습니다: ${formatUniqueNames(limitExceededNames)}`
         : "",
     ].filter(Boolean)
 
