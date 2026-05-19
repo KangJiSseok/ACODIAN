@@ -60,7 +60,8 @@ test("team leaders and members with teams use my dashboard", () => {
   assert.match(pageFile, /const hasTeamDashboard = teams\.length > 0/);
   assert.match(pageFile, /const canUseDashboard = isDashboardAdmin \|\| hasTeamDashboard/);
   assert.match(pageFile, /const isMyDashboardSelected =\s*canUseDashboard && scopeSelection\.view === "ME"/);
-  assert.match(pageFile, /title=\{getDashboardTitle\(dashboardRole, hasTeamDashboard\)\}/);
+  assert.match(pageFile, /const dashboardTitle = getDashboardTitle\(dashboardRole, hasTeamDashboard\)/);
+  assert.match(pageFile, /title=\{dashboardTitle\}/);
   assert.match(pageFile, /canUseDashboard\s*\?\s*\(/);
   assert.match(pageFile, /<MyDashboardView dashboard=\{myDashboardQuery\.data\} \/>/);
 });

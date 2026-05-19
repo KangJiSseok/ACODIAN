@@ -175,13 +175,16 @@ export default function FilePage() {
 
   return (
     <div className="flex flex-col gap-6">
-      <PageHeader title="파일 관리" description="업무일지에 연결된 파일을 확인합니다." />
+      <PageHeader title="파일 관리" />
 
       <div className="space-y-4">
-        <div className="flex items-center justify-between">
+        <div>
           <h2 className="text-[20px] font-semibold tracking-[-0.04em] text-foreground">
             파일 탐색
           </h2>
+          <p className="mt-2 text-sm leading-6 text-muted-foreground">
+            업무일지에 연결된 파일을 확인합니다.
+          </p>
         </div>
 
         <div className="flex flex-col gap-4">
@@ -191,14 +194,14 @@ export default function FilePage() {
               <Input
                 value={query}
                 onChange={(event) => updateQuery(event.target.value)}
-                className="h-12 pl-11"
+                className="h-12 rounded-2xl pl-11 pr-4 transition-all duration-500"
                 placeholder="파일명, AI 요약, 업무명으로 검색하세요"
                 aria-label="파일 검색"
               />
             </div>
             <div className="flex w-full items-center gap-2 sm:w-auto">
               <Button
-                variant="outline"
+                variant="secondary"
                 className="h-12 justify-center"
                 type="button"
                 onClick={() => setShowFilters((prev) => !prev)}

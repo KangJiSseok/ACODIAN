@@ -16,10 +16,16 @@ export default function DepartmentPage() {
 
   return (
     <section className="space-y-6">
-      <PageHeader
-        title="부서 관리"
-        description="관리 가능한 부서와 운영 현황을 확인합니다."
-      />
+      <PageHeader title="부서 관리" />
+
+      <section className="space-y-2">
+        <h2 className="text-[20px] font-semibold tracking-[-0.04em] text-foreground">
+          부서 관리
+        </h2>
+        <p className="max-w-3xl text-sm leading-6 text-muted-foreground">
+          관리 가능한 부서와 운영 현황을 확인합니다.
+        </p>
+      </section>
 
       <div className="grid gap-4 md:grid-cols-3">
         <SummaryCard

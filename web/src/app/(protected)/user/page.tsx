@@ -133,15 +133,17 @@ export default function UserPage() {
 
   return (
     <section className="space-y-6">
-      <PageHeader
-        title="사용자 관리"
-        description="조직 구성원의 소속, 직급, 재직 상태를 확인합니다."
-      />
+      <PageHeader title="사용자 관리" />
 
       <section className="space-y-4">
-        <h2 className="text-[20px] font-semibold tracking-[-0.04em] text-foreground">
-          사용자 탐색
-        </h2>
+        <div>
+          <h2 className="text-[20px] font-semibold tracking-[-0.04em] text-foreground">
+            사용자 탐색
+          </h2>
+          <p className="mt-2 text-sm leading-6 text-muted-foreground">
+            조직 구성원의 소속, 직급, 재직 상태를 확인합니다.
+          </p>
+        </div>
 
         <div className="flex flex-col gap-4">
           <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
@@ -151,13 +153,13 @@ export default function UserPage() {
                 value={query}
                 onChange={(event) => updateQuery(event.target.value)}
                 placeholder="이름으로 검색하세요"
-                className="h-12 pl-11"
+                className="h-12 rounded-2xl pl-11 pr-4 transition-all duration-500"
                 aria-label="사용자 검색"
               />
             </div>
             <div className="flex w-full items-center gap-2 sm:w-auto">
               <Button
-                variant="outline"
+                variant="secondary"
                 className="h-12 justify-center"
                 type="button"
                 onClick={() => setShowFilters((prev) => !prev)}

@@ -176,7 +176,7 @@ export default function WorklogPage() {
         id: loadingMessageId,
         role: "assistant",
         content:
-          "AI 검색 조건을 적용했습니다. 오른쪽 추천 카드에서 관련 업무일지를 확인할 수 있습니다.",
+          "AI 모드 조건을 적용했습니다. 오른쪽 추천 카드에서 관련 업무일지를 확인할 수 있습니다.",
       },
     ])
     setAiDraftQuery("")
@@ -301,7 +301,7 @@ export default function WorklogPage() {
                   }}
                 >
                   <Sparkles className="size-4" />
-                  AI 검색
+                  AI 모드
                 </Button>
               ) : null}
             </div>
@@ -678,7 +678,7 @@ function AiBottomComposer({
           <button
             type="button"
             className="absolute right-1 top-1 flex size-10 items-center justify-center rounded-full bg-foreground text-background shadow-sm transition hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-35"
-            aria-label="AI 검색 질문 전송"
+            aria-label="AI 모드 질문 전송"
             disabled={!canSubmit}
             onClick={onSubmit}
           >

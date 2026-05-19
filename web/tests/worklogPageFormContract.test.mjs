@@ -37,6 +37,12 @@ test("worklog list keyword copy describes title-only fallback search", () => {
   assert.doesNotMatch(worklogPage, /업무 제목 또는 내용으로 검색하세요/);
 });
 
+test("worklog ai entry point uses mode copy", () => {
+  assert.match(worklogPage, /AI 모드/);
+  assert.match(worklogPage, /aria-label="AI 모드 질문 전송"/);
+  assert.doesNotMatch(worklogPage, /AI 검색/);
+});
+
 test("worklog create action is aligned with the visible worklog count", () => {
   assert.match(worklogPage, /표시 중인 업무[\s\S]*canCreate \? \(/);
   assert.match(worklogPage, /표시 중인 업무[\s\S]*href="\/worklog\/create"[\s\S]*업무 등록/);
