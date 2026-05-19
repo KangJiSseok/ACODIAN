@@ -304,7 +304,7 @@ export default function WorklogPage() {
         <div
           className={cn(
             "flex flex-col gap-4 transition-all duration-500 ease-out",
-            aiMode && "mx-auto mt-[8vh] w-full max-w-5xl gap-6 px-0 py-0 ai-search-lift"
+            aiMode && "mx-auto mt-0 w-full max-w-5xl -translate-y-10 gap-6 px-0 py-0 ai-search-lift"
           )}
         >
           {aiMode ? (
