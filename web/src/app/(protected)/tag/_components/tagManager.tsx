@@ -4,7 +4,7 @@ import { useState } from "react"
 import { RefreshCw, Search } from "lucide-react"
 import { Pagination } from "@/app/_common/components/data-display/pagination"
 import { Button } from "@/components/ui/button"
-import { CardSpotlight } from "@/components/ui/card-spotlight"
+import { Card } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
 import { useTagList } from "../_hooks"
 
@@ -80,7 +80,7 @@ export function TagManager() {
       ) : (
         <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
           {tags.map((tag) => (
-            <CardSpotlight
+            <Card
               key={tag.id}
               className="rounded-[24px] border-border/75 transition-all duration-300 hover:-translate-y-1"
             >
@@ -97,8 +97,7 @@ export function TagManager() {
                 </div>
 
                 <div className="rounded-2xl border border-dashed border-border/60 bg-muted/25 p-3 text-sm leading-6 text-muted-foreground">
-                  업무일지 등록/수정, 파일 태그 필터에서 공통으로 사용하는 메타
-                  태그입니다.
+                  {tag.description || "등록된 태그 설명이 없습니다."}
                   {tag.updatedAt ? (
                     <span className="mt-1 block text-xs">
                       최근 수정 {tag.updatedAt}
@@ -106,7 +105,7 @@ export function TagManager() {
                   ) : null}
                 </div>
               </div>
-            </CardSpotlight>
+            </Card>
           ))}
         </div>
       )}

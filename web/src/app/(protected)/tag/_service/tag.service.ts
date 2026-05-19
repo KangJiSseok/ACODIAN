@@ -28,6 +28,7 @@ function toTagItem(item: TagSearchApiItem): TagItem | null {
     id,
     name,
     usageCount: toNumber(item.usageCount),
+    description: item.description ?? undefined,
     createdAt: item.createdAt ?? undefined,
     updatedAt: item.updatedAt ?? undefined,
   }
@@ -73,6 +74,7 @@ function toMergeTagItem(source: TagMergeSourceApiItem | string): TagItem | null 
     id,
     name,
     usageCount: toNumber(source.usageCount),
+    description: source.description ?? undefined,
   }
 }
 
