@@ -7,6 +7,7 @@ import type {
   GetWorklogsParams,
   ImportanceLevel,
   SearchPredecessorCandidatesParams,
+  SearchSemanticWorklogsParams,
   SearchTagsParams,
   SearchWorklogsParams,
   Worklog,
@@ -20,6 +21,7 @@ import type {
   WorklogOptionTagItem,
   WorklogPolishResponse,
   WorklogSearchApiItem,
+  WorklogSemanticSearchResponse,
   WorklogStatus,
   WorklogTagSearchApiItem,
   WorklogTitleRecommendationResponse,
@@ -304,6 +306,18 @@ export const worklogService = {
       ...response,
       items: response.items.map(toSearchedWorklogListItem),
     }
+  },
+  async searchSemanticWorklogs(
+    params: SearchSemanticWorklogsParams
+  ): Promise<WorklogSemanticSearchResponse> {
+    return apiClient.get<WorklogSemanticSearchResponse>(
+      "/worklogs/search/semantic",
+      {
+        params: {
+          query: params.query.trim(),
+        },
+      }
+    )
   },
   async getFilterOptions(): Promise<WorklogFilterOptions> {
     return apiClient.get<WorklogFilterOptions>("/worklogs/filter-options")

@@ -120,6 +120,20 @@ export interface SearchWorklogsParams extends GetWorklogsParams {
   period?: "LAST_7" | "LAST_30" | "LAST_90"
 }
 
+export interface SearchSemanticWorklogsParams {
+  query: string
+}
+
+export interface WorklogSemanticReference {
+  referenceId: string
+  filePath: string
+}
+
+export interface WorklogSemanticSearchResponse {
+  answer: string
+  references: WorklogSemanticReference[]
+}
+
 export interface SearchPredecessorCandidatesParams extends GetWorklogsParams {
   teamId: number
   query?: string
