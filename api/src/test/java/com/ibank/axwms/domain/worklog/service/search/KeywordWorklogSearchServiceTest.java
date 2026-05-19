@@ -12,8 +12,6 @@ import com.ibank.axwms.domain.tag.repository.TagRepository;
 import com.ibank.axwms.domain.worklog.WorklogImportance;
 import com.ibank.axwms.domain.worklog.WorklogStatus;
 import com.ibank.axwms.domain.worklog.dto.SearchWorklogsApiDto;
-import com.ibank.axwms.domain.worklog.policy.WorklogVisibilityPolicy;
-import com.ibank.axwms.domain.worklog.policy.WorklogVisibilityScope;
 import com.ibank.axwms.domain.worklog.repository.WorklogRepository;
 import com.ibank.axwms.domain.worklog.repository.jooq.projection.WorklogSearchProjection;
 import com.ibank.axwms.domain.worklog.repository.jooq.query.WorklogSearchQuery;
@@ -39,7 +37,6 @@ import org.springframework.data.domain.PageRequest;
 class KeywordWorklogSearchServiceTest {
 
     @Mock private WorklogRepository worklogRepository;
-    @Mock private WorklogVisibilityPolicy worklogVisibilityPolicy;
     @Mock private TeamRepository teamRepository;
     @Mock private TagRepository tagRepository;
 
@@ -58,11 +55,10 @@ class KeywordWorklogSearchServiceTest {
     class RepositoryDelegation {
 
         @Test
-        @DisplayName("정책이 결정한 Scope 와 정규화된 Query 를 Repository 에 위임하고 응답을 매핑한다")
-        void 정책이_결정한_Scope_와_정규화된_Query_를_Repository_에_위임한다() {
+        @DisplayName("호출자 userId 와 정규화된 Query 를 Repository 에 위임하고 응답을 매핑한다")
+        void 호출자_userId_와_정규화된_Query_를_Repository_에_위임한다() {
             // given
             CustomUserPrincipal principal = principal();
-            WorklogVisibilityScope scope = new WorklogVisibilityScope.MyTeams(USER_ID);
             SearchWorklogsApiDto.Request request = new SearchWorklogsApiDto.Request(
                     "결산",
                     TEAM_ID,
@@ -81,8 +77,7 @@ class KeywordWorklogSearchServiceTest {
                     51
             );
 
-            given(worklogVisibilityPolicy.resolve(principal)).willReturn(scope);
-            given(worklogRepository.searchWorklogPage(eq(scope), any(WorklogSearchQuery.class)))
+            given(worklogRepository.searchWorklogPage(eq(USER_ID), any(WorklogSearchQuery.class)))
                     .willReturn(projectionPage);
 
             // when
@@ -92,7 +87,7 @@ class KeywordWorklogSearchServiceTest {
                     keywordWorklogSearchService.searchWorklogs(principal, request);
 
             // then
-            WorklogSearchQuery captured = captureQuery(scope);
+            WorklogSearchQuery captured = captureQuery();
             assertThat(captured.keyword()).isEqualTo("결산");
             assertThat(captured.teamId()).isEqualTo(TEAM_ID);
             assertThat(captured.statusCode()).isEqualTo(WorklogStatus.IN_PROGRESS);
@@ -121,17 +116,15 @@ class KeywordWorklogSearchServiceTest {
         void Request_가_null_이면_기본값_Query_를_사용한다() {
             // given
             CustomUserPrincipal principal = principal();
-            WorklogVisibilityScope scope = new WorklogVisibilityScope.All();
 
-            given(worklogVisibilityPolicy.resolve(principal)).willReturn(scope);
-            given(worklogRepository.searchWorklogPage(eq(scope), any(WorklogSearchQuery.class)))
+            given(worklogRepository.searchWorklogPage(eq(USER_ID), any(WorklogSearchQuery.class)))
                     .willReturn(emptyPage());
 
             // when
             keywordWorklogSearchService.searchWorklogs(principal, null);
 
             // then
-            WorklogSearchQuery captured = captureQuery(scope);
+            WorklogSearchQuery captured = captureQuery();
             assertThat(captured.keyword()).isNull();
             assertThat(captured.teamId()).isNull();
             assertThat(captured.teamStatus()).isNull();
@@ -149,10 +142,8 @@ class KeywordWorklogSearchServiceTest {
         void keyword_의_공백은_trim_되고_빈_문자열은_null_로_정규화된다() {
             // given
             CustomUserPrincipal principal = principal();
-            WorklogVisibilityScope scope = new WorklogVisibilityScope.MyTeams(USER_ID);
 
-            given(worklogVisibilityPolicy.resolve(principal)).willReturn(scope);
-            given(worklogRepository.searchWorklogPage(eq(scope), any(WorklogSearchQuery.class)))
+            given(worklogRepository.searchWorklogPage(eq(USER_ID), any(WorklogSearchQuery.class)))
                     .willReturn(emptyPage());
 
             // when
@@ -161,7 +152,7 @@ class KeywordWorklogSearchServiceTest {
 
             // then
             ArgumentCaptor<WorklogSearchQuery> captor = ArgumentCaptor.forClass(WorklogSearchQuery.class);
-            verify(worklogRepository, times(2)).searchWorklogPage(eq(scope), captor.capture());
+            verify(worklogRepository, times(2)).searchWorklogPage(eq(USER_ID), captor.capture());
             List<WorklogSearchQuery> captured = captor.getAllValues();
 
             assertThat(captured.get(0).keyword()).isNull();
@@ -173,17 +164,15 @@ class KeywordWorklogSearchServiceTest {
         void period_가_null_이면_createdFrom_도_null_이다() {
             // given
             CustomUserPrincipal principal = principal();
-            WorklogVisibilityScope scope = new WorklogVisibilityScope.MyTeams(USER_ID);
 
-            given(worklogVisibilityPolicy.resolve(principal)).willReturn(scope);
-            given(worklogRepository.searchWorklogPage(eq(scope), any(WorklogSearchQuery.class)))
+            given(worklogRepository.searchWorklogPage(eq(USER_ID), any(WorklogSearchQuery.class)))
                     .willReturn(emptyPage());
 
             // when
             keywordWorklogSearchService.searchWorklogs(principal, requestWithKeyword(null));
 
             // then
-            WorklogSearchQuery captured = captureQuery(scope);
+            WorklogSearchQuery captured = captureQuery();
             assertThat(captured.createdFrom()).isNull();
         }
 
@@ -192,13 +181,11 @@ class KeywordWorklogSearchServiceTest {
         void period_가_LAST_7_이면_createdFrom_은_today_minusDays_7_이다() {
             // given
             CustomUserPrincipal principal = principal();
-            WorklogVisibilityScope scope = new WorklogVisibilityScope.MyTeams(USER_ID);
             SearchWorklogsApiDto.Request request = new SearchWorklogsApiDto.Request(
                     null, null, null, null, null, null, null, PeriodOption.LAST_7, null, null
             );
 
-            given(worklogVisibilityPolicy.resolve(principal)).willReturn(scope);
-            given(worklogRepository.searchWorklogPage(eq(scope), any(WorklogSearchQuery.class)))
+            given(worklogRepository.searchWorklogPage(eq(USER_ID), any(WorklogSearchQuery.class)))
                     .willReturn(emptyPage());
 
             // when
@@ -207,14 +194,14 @@ class KeywordWorklogSearchServiceTest {
             keywordWorklogSearchService.searchWorklogs(principal, request);
 
             // then
-            WorklogSearchQuery captured = captureQuery(scope);
+            WorklogSearchQuery captured = captureQuery();
             assertThat(captured.createdFrom()).isEqualTo(today.minusDays(7));
         }
     }
 
-    private WorklogSearchQuery captureQuery(WorklogVisibilityScope scope) {
+    private WorklogSearchQuery captureQuery() {
         ArgumentCaptor<WorklogSearchQuery> captor = ArgumentCaptor.forClass(WorklogSearchQuery.class);
-        verify(worklogRepository).searchWorklogPage(eq(scope), captor.capture());
+        verify(worklogRepository).searchWorklogPage(eq(USER_ID), captor.capture());
         return captor.getValue();
     }
 
