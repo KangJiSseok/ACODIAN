@@ -169,26 +169,28 @@ export default function NotificationPage() {
           <h2 className="text-[20px] font-semibold tracking-[-0.04em] text-foreground">
             알림 탐색
           </h2>
-          <Button
-            variant="outline"
-            className="h-12 justify-center"
-            type="button"
-            onClick={() => setShowFilters((prev) => !prev)}
-          >
-            <SlidersHorizontal className="size-4" />
-            필터
-            {activeFilterCount > 0 ? (
-              <span className="ml-1 rounded-full bg-primary px-2 py-0.5 text-[11px] font-semibold text-primary-foreground">
-                {activeFilterCount}
-              </span>
-            ) : null}
-            <ChevronDown
-              className={cn(
-                "ml-1 size-4 transition-transform duration-300 ease-out",
-                showFilters && "rotate-180",
-              )}
-            />
-          </Button>
+          <div className="flex w-full items-center gap-2 sm:w-auto">
+            <Button
+              variant="secondary"
+              className="h-12 justify-center"
+              type="button"
+              onClick={() => setShowFilters((prev) => !prev)}
+            >
+              <SlidersHorizontal className="size-4" />
+              필터
+              {activeFilterCount > 0 ? (
+                <span className="ml-1 rounded-full bg-primary px-2 py-0.5 text-[11px] font-semibold text-primary-foreground">
+                  {activeFilterCount}
+                </span>
+              ) : null}
+              <ChevronDown
+                className={cn(
+                  "ml-1 size-4 transition-transform duration-300 ease-out",
+                  showFilters && "rotate-180",
+                )}
+              />
+            </Button>
+          </div>
         </div>
 
         <div

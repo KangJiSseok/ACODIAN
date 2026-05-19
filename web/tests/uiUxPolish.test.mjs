@@ -11,6 +11,8 @@ const dashboardScopeSelector = readSource(
   "app/(protected)/_dashboard/_components/dashboardScopeSelector.tsx",
 );
 const filePage = readSource("app/(protected)/file/page.tsx");
+const departmentPage = readSource("app/(protected)/department/page.tsx");
+const teamPage = readSource("app/(protected)/team/page.tsx");
 const userPage = readSource("app/(protected)/user/page.tsx");
 const notificationPage = readSource("app/(protected)/notification/page.tsx");
 const notificationList = readSource(
@@ -35,16 +37,51 @@ test("dashboard scope selector uses compact filter sizing and short header copy"
   assert.doesNotMatch(dashboardPage, /AI 파이프라인 건강도를 비교합니다/);
 });
 
-test("file and user filters follow the worklog filter control size", () => {
+test("file, user, and notification filters follow the worklog filter style", () => {
   assert.match(filePage, /const activeFilterCount = \[fileType, period, aiStatus\]/);
+  assert.match(filePage, /className="h-12 rounded-2xl pl-11 pr-4 transition-all duration-500"/);
+  assert.match(filePage, /variant="secondary"[\s\S]*<SlidersHorizontal className="size-4" \/>[\s\S]*필터/);
   assert.match(filePage, /className="h-12 justify-center"/);
   assert.match(filePage, /className="space-y-4 pb-4 pt-3"/);
   assert.match(filePage, /className="grid gap-4 md:grid-cols-2 xl:grid-cols-4"/);
 
   assert.match(userPage, /const activeFilterCount = \[/);
+  assert.match(userPage, /className="h-12 rounded-2xl pl-11 pr-4 transition-all duration-500"/);
+  assert.match(userPage, /variant="secondary"[\s\S]*<SlidersHorizontal className="size-4" \/>[\s\S]*필터/);
   assert.match(userPage, /className="h-12 justify-center"/);
   assert.match(userPage, /className="space-y-4 pb-4 pt-3"/);
   assert.match(userPage, /className="grid gap-4 md:grid-cols-2 xl:grid-cols-4"/);
+
+  assert.match(notificationPage, /const activeFilterCount = \[departmentId, teamId\]/);
+  assert.match(notificationPage, /className="flex w-full items-center gap-2 sm:w-auto"[\s\S]*variant="secondary"[\s\S]*필터/);
+  assert.match(notificationPage, /className="h-12 justify-center"/);
+  assert.match(notificationPage, /className="space-y-4 pb-4 pt-3"/);
+  assert.match(notificationPage, /className="grid gap-4 md:grid-cols-2"/);
+});
+
+test("main workspace tabs show visible intro titles before helper copy", () => {
+  assert.match(
+    dashboardPage,
+    /md:flex-row md:items-start md:justify-between[\s\S]*\{dashboardTitle\}[\s\S]*\{dashboardIntroDescription\}[\s\S]*<DashboardScopeSelector/,
+  );
+  assert.match(
+    dashboardPage,
+    /업무 현황과 완료율, 마감 임박 업무를 확인합니다/,
+  );
+  assert.match(dashboardPage, /return "업무 대시보드"/);
+  assert.doesNotMatch(dashboardPage, /사업부장 대시보드/);
+
+  assert.match(filePage, /<PageHeader title="파일 관리" \/>/);
+  assert.match(filePage, /파일 탐색[\s\S]*업무일지에 연결된 파일을 확인합니다/);
+
+  assert.match(departmentPage, /<PageHeader title="부서 관리" \/>/);
+  assert.match(departmentPage, /부서 관리[\s\S]*관리 가능한 부서와 운영 현황을 확인합니다/);
+
+  assert.match(teamPage, /<PageHeader title="팀 관리" \/>/);
+  assert.match(teamPage, /팀 관리[\s\S]*관리 가능한 팀과 소속 구성원을 확인합니다/);
+
+  assert.match(userPage, /<PageHeader title="사용자 관리" \/>/);
+  assert.match(userPage, /사용자 탐색[\s\S]*조직 구성원의 소속, 직급, 재직 상태를 확인합니다/);
 });
 
 test("card spotlight gradient only appears on hover or focus", () => {

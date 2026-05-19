@@ -72,10 +72,16 @@ export default function TeamPage() {
 
   return (
     <section className="space-y-6">
-      <PageHeader
-        title="팀 관리"
-        description="관리 가능한 팀과 소속 구성원을 확인합니다."
-      />
+      <PageHeader title="팀 관리" />
+
+      <section className="space-y-2">
+        <h2 className="text-[20px] font-semibold tracking-[-0.04em] text-foreground">
+          팀 관리
+        </h2>
+        <p className="max-w-3xl text-sm leading-6 text-muted-foreground">
+          관리 가능한 팀과 소속 구성원을 확인합니다.
+        </p>
+      </section>
 
       <div className="grid gap-4 md:grid-cols-3">
         {teamFilters.map((item) => {
