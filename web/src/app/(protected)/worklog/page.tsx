@@ -928,56 +928,66 @@ function renderInlineMarkdown(text: string): ReactNode[] {
     /(\[[^\]\n]+\]\([^)]+\)|\*\*[^*\n]+\*\*|`[^`\n]+`|https?:\/\/[^\s<)]+)/g
   )
 
-  return parts.flatMap((part, index) => {
+  return parts.reduce<ReactNode[]>((nodes, part, index) => {
     if (!part) {
-      return []
+      return nodes
     }
 
     const link = part.match(/^\[([^\]\n]+)\]\(([^)]+)\)$/)
 
     if (link) {
       const [, label, href] = link
-      return [
+      nodes.push(
         renderMarkdownLink(
           renderEmojiShortcodes(label),
           href,
           `${part}-${index}`,
           part
-        ),
-      ]
+        )
+      )
+
+      return nodes
     }
 
     if (/^https?:\/\/[^\s<)]+$/.test(part)) {
       const trailingMark = part.match(/[.,;:!?)]$/)?.[0] ?? ""
       const href = trailingMark ? part.slice(0, -1) : part
 
-      return [
-        renderMarkdownLink(href, href, `${part}-${index}`),
-        trailingMark,
-      ].filter(Boolean)
+      nodes.push(renderMarkdownLink(href, href, `${part}-${index}`))
+
+      if (trailingMark) {
+        nodes.push(trailingMark)
+      }
+
+      return nodes
     }
 
     if (part.startsWith("**") && part.endsWith("**")) {
-      return [
+      nodes.push(
         <strong key={`${part}-${index}`}>
           {renderEmojiShortcodes(part.slice(2, -2))}
-        </strong>,
-      ]
+        </strong>
+      )
+
+      return nodes
     }
 
     if (part.startsWith("`") && part.endsWith("`")) {
-      return [
+      nodes.push(
         <code
           key={`${part}-${index}`}
           className="rounded bg-muted px-1.5 py-0.5 text-[0.92em]"
         >
           {part.slice(1, -1)}
-        </code>,
-      ]
+        </code>
+      )
+
+      return nodes
     }
 
-    return renderEmojiShortcodes(part)
-  })
+    nodes.push(...renderEmojiShortcodes(part))
+    return nodes
+  }, [])
 }
 
 function renderEmojiShortcodes(text: string): ReactNode[] {
