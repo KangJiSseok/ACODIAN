@@ -59,6 +59,7 @@ public class WorklogAiPostProcessService {
                     event.departmentId(),
                     event.teamId(),
                     event.worklogId(),
+                    event.worklogTitle(),
                     true,
                     List.of()
             );
@@ -71,6 +72,7 @@ public class WorklogAiPostProcessService {
                 event.departmentId(),
                 event.teamId(),
                 event.worklogId(),
+                event.worklogTitle(),
                 false,
                 failedStages
         );

@@ -219,6 +219,7 @@ public class NotificationService {
      * @param departmentId    업무 소속 부서 ID
      * @param teamId          업무 소속 팀 ID
      * @param worklogId       생성된 업무 ID
+     * @param worklogTitle    알림 본문에 표시할 업무일지 제목 snapshot
      * @param success         세 AI 요청이 모두 예외 없이 종료되었는지 여부
      * @param failedStages    실패한 단계 식별자 목록. 성공이면 비어 있어야 한다.
      * @return 신규 저장된 알림. 이미 같은 업무의 통합 결과 알림이 있으면 빈 Optional
@@ -228,6 +229,7 @@ public class NotificationService {
                                                                                Long departmentId,
                                                                                Long teamId,
                                                                                Long worklogId,
+                                                                               String worklogTitle,
                                                                                boolean success,
                                                                                List<String> failedStages) {
         String referenceType = NotificationReferenceType.WORKLOG.name();
@@ -247,7 +249,7 @@ public class NotificationService {
                 teamId,
                 notificationType,
                 createWorklogAiPostProcessTitle(success),
-                createWorklogAiPostProcessContent(worklogId, success, failedStages),
+                createWorklogAiPostProcessContent(worklogTitle, success, failedStages),
                 referenceType,
                 worklogId,
                 false,
@@ -269,13 +271,14 @@ public class NotificationService {
     }
 
     /**
-     * 실패 알림에는 운영자가 어느 AI 요청 단계가 실패했는지 바로 식별할 수 있는 단계명을 포함한다.
+     * AI 후처리 결과 알림은 업무 ID 대신 생성 시점 제목을 보여 사용자가 대상 업무를 바로 식별하게 한다.
      */
-    private String createWorklogAiPostProcessContent(Long worklogId, boolean success, List<String> failedStages) {
+    private String createWorklogAiPostProcessContent(String worklogTitle, boolean success, List<String> failedStages) {
+        String displayTitle = defaultIfBlank(worklogTitle, "대상 업무일지");
         if (success) {
-            return "업무 ID " + worklogId + "의 AI 후처리 요청이 모두 정상 접수되었습니다.";
+            return "업무일지 '" + displayTitle + "'의 AI 작업이 완료되었습니다.";
         }
-        return "업무 ID " + worklogId + "의 AI 후처리 요청 중 실패 단계가 있습니다. 실패 단계: "
+        return "업무일지 '" + displayTitle + "'의 AI 작업 중 실패 단계가 있습니다.\n실패 단계: "
                 + String.join(", ", normalizeFailedStages(failedStages));
     }
 

@@ -32,6 +32,8 @@ import org.mockito.junit.jupiter.MockitoExtension;
 @ExtendWith(MockitoExtension.class)
 class WorklogAiPostProcessServiceTest {
 
+    private static final String WORKLOG_TITLE = "월간 리스크 점검 보고";
+
     @Mock
     private FileSummaryClient fileSummaryClient;
 
@@ -105,6 +107,7 @@ class WorklogAiPostProcessServiceTest {
                 9L,
                 21L,
                 501L,
+                WORKLOG_TITLE,
                 true,
                 List.of()
         );
@@ -127,6 +130,7 @@ class WorklogAiPostProcessServiceTest {
                 eq(9L),
                 eq(21L),
                 eq(501L),
+                eq(WORKLOG_TITLE),
                 eq(false),
                 failedStagesCaptor.capture()
         );
@@ -151,6 +155,7 @@ class WorklogAiPostProcessServiceTest {
                 9L,
                 21L,
                 501L,
+                WORKLOG_TITLE,
                 true,
                 List.of()
         );
@@ -183,6 +188,7 @@ class WorklogAiPostProcessServiceTest {
                 9L,
                 21L,
                 501L,
+                WORKLOG_TITLE,
                 true,
                 List.of()
         );
@@ -191,6 +197,7 @@ class WorklogAiPostProcessServiceTest {
     private static WorklogAiPostProcessRequestedEvent eventWithFiles() {
         return new WorklogAiPostProcessRequestedEvent(
                 501L,
+                WORKLOG_TITLE,
                 "요청 내용",
                 "업무 내용",
                 101L,
@@ -208,6 +215,7 @@ class WorklogAiPostProcessServiceTest {
     private static WorklogAiPostProcessRequestedEvent eventWithoutFiles() {
         return new WorklogAiPostProcessRequestedEvent(
                 501L,
+                WORKLOG_TITLE,
                 "요청 내용",
                 "업무 내용",
                 101L,
