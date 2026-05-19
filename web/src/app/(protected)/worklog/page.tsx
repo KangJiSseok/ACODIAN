@@ -1,7 +1,7 @@
 "use client"
 
 import Link from "next/link"
-import { type ReactNode, useMemo, useState } from "react"
+import { type ReactNode, useEffect, useMemo, useState } from "react"
 import {
   ArrowLeft,
   ArrowUp,
@@ -104,7 +104,7 @@ export default function WorklogPage() {
   const { user } = useAuth()
   const [page, setPage] = useState(1)
   const [searchInput, setSearchInput] = useState("")
-  const [query, setQuery] = useState("")
+  const debouncedKeyword = useDebouncedValue(searchInput.trim(), 400)
   const [aiMode, setAiMode] = useState(false)
   const [aiDraftQuery, setAiDraftQuery] = useState("")
   const [aiMessages, setAiMessages] = useState<AiMessage[]>([])
@@ -131,7 +131,7 @@ export default function WorklogPage() {
     return Array.from(indexed, ([userId, userName]) => ({ userId, userName }))
   }, [filterOptions, filters.teamId])
   const hasSearchCondition =
-    query.trim().length > 0 ||
+    debouncedKeyword.length > 0 ||
     Object.values(filters).some((value) => value !== "all" && value !== "ALL")
   const listParams = useMemo(
     () => ({
@@ -144,7 +144,7 @@ export default function WorklogPage() {
     () => ({
       page,
       pageSize: WORKLOG_PAGE_SIZE,
-      keyword: query.trim() || undefined,
+      keyword: debouncedKeyword || undefined,
       teamId: filters.teamId === "all" ? undefined : Number(filters.teamId),
       statusCode:
         filters.status === "all" ? undefined : (filters.status as WorklogStatus),
@@ -160,7 +160,7 @@ export default function WorklogPage() {
           ? undefined
           : (filters.period as SearchWorklogsParams["period"]),
     }),
-    [filters, page, query]
+    [debouncedKeyword, filters, page]
   )
   const listQuery = useWorklogList(listParams, {
     enabled: !hasSearchCondition,
@@ -184,7 +184,6 @@ export default function WorklogPage() {
   }
 
   function submitSearch() {
-    setQuery(searchInput.trim())
     setPage(1)
   }
 
@@ -340,6 +339,7 @@ export default function WorklogPage() {
                     return
                   }
                   setSearchInput(event.target.value)
+                  setPage(1)
                 }}
                 className={cn(
                   "h-12 rounded-2xl pl-11 transition-all duration-500",
@@ -427,7 +427,6 @@ export default function WorklogPage() {
                     aria-label="필터 초기화"
                     onClick={() => {
                       setSearchInput("")
-                      setQuery("")
                       updateFilters(DEFAULT_FILTERS)
                     }}
                   >
@@ -766,6 +765,20 @@ function AiBottomComposer({
       </div>
     </div>
   )
+}
+
+function useDebouncedValue<T>(value: T, delayMs: number) {
+  const [debouncedValue, setDebouncedValue] = useState(value)
+
+  useEffect(() => {
+    const debounceTimer = window.setTimeout(() => {
+      setDebouncedValue(value)
+    }, delayMs)
+
+    return () => window.clearTimeout(debounceTimer)
+  }, [delayMs, value])
+
+  return debouncedValue
 }
 
 function MarkdownMessage({ content }: { content: string }) {
