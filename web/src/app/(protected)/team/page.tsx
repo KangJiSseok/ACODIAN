@@ -8,6 +8,7 @@ import {
   Users,
 } from "lucide-react";
 import { Pagination } from "@/app/_common/components/data-display/pagination";
+import { ResultCount } from "@/app/_common/components/data-display/resultCount";
 import { usePagination } from "@/app/_common/hooks/usePagination";
 import { useAuth } from "@/app/_common/hooks/useAuth";
 import { canCreateTeams } from "@/app/_common/utils/organizationAccess.utils";
@@ -137,9 +138,11 @@ export default function TeamPage() {
               <p className="mt-2 text-sm leading-6 text-muted-foreground">
                 팀 상태, 팀장, 관리자, 구성원 수와 운영 기간을 한눈에 확인합니다.
               </p>
-              <p className="text-sm font-medium text-muted-foreground">
-                표시 중인 팀 {filteredTeams.length}개
-              </p>
+              <ResultCount
+                label="조회된 팀"
+                count={filteredTeams.length}
+                unit="개"
+              />
             </div>
           </div>
         </div>

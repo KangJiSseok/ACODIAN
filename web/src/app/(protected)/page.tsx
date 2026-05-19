@@ -191,19 +191,11 @@ export default function DashboardPage() {
 }
 
 function getDashboardTitle(role: DashboardRole, hasTeamDashboard: boolean) {
-  if (role === "DIRECTOR") {
-    return "본부장 대시보드";
+  if (role === "NONE" && !hasTeamDashboard) {
+    return "Acodian 대시보드";
   }
 
-  if (role === "DEPARTMENT_HEAD") {
-    return "업무 대시보드";
-  }
-
-  if (hasTeamDashboard) {
-    return "업무 대시보드";
-  }
-
-  return "Acodian 대시보드";
+  return "업무 대시보드";
 }
 
 function getCurrentDepartmentOption(user: AuthUser | null | undefined) {

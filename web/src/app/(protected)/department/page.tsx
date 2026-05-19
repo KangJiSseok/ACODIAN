@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { Building2 } from "lucide-react";
+import { ResultCount } from "@/app/_common/components/data-display/resultCount";
 import PageHeader from "@/app/_common/components/layout/pageHeader";
 import { Button } from "@/components/ui/button";
 import { CardContent } from "@/components/ui/card";
@@ -62,9 +63,11 @@ export default function DepartmentPage() {
               <p className="mt-2 text-sm leading-6 text-muted-foreground">
                 활성 팀이 남아 있는 부서는 삭제할 수 없습니다.
               </p>
-              <p className="text-sm font-medium text-muted-foreground">
-                표시 중인 부서 {departments.length}개
-              </p>
+              <ResultCount
+                label="조회된 부서"
+                count={departments.length}
+                unit="개"
+              />
             </div>
           </div>
         </div>

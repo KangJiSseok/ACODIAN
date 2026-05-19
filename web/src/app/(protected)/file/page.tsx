@@ -3,6 +3,7 @@
 import { useMemo, useState } from "react";
 import type { AiProcessingStatus } from "@/app/(protected)/worklog/_types/worklog.types";
 import { Pagination } from "@/app/_common/components/data-display/pagination";
+import { ResultCount } from "@/app/_common/components/data-display/resultCount";
 import PageHeader from "@/app/_common/components/layout/pageHeader";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
@@ -10,7 +11,6 @@ import { Input } from "@/components/ui/input";
 import { Select } from "@/components/ui/select";
 import { cn } from "@/lib/utils";
 import {
-  CircleHelp,
   ChevronDown,
   Download,
   RefreshCw,
@@ -35,6 +35,7 @@ export default function FilePage() {
   const [downloadResultMessage, setDownloadResultMessage] =
     useState<DownloadResultMessage | null>(null);
   const [showFilters, setShowFilters] = useState(false);
+  const [searchInput, setSearchInput] = useState("");
   const [query, setQuery] = useState("");
   const [fileType, setFileType] = useState(ALL_FILTER_VALUE);
   const [period, setPeriod] = useState<FileFiltersValue["period"]>("ALL");
@@ -91,6 +92,7 @@ export default function FilePage() {
   ).length;
 
   function resetFilters() {
+    setSearchInput("");
     setQuery("");
     setFileType(ALL_FILTER_VALUE);
     setPeriod("ALL");
@@ -98,8 +100,8 @@ export default function FilePage() {
     setPage(1);
   }
 
-  function updateQuery(value: string) {
-    setQuery(value);
+  function submitSearch() {
+    setQuery(searchInput.trim());
     setPage(1);
   }
 
@@ -188,18 +190,32 @@ export default function FilePage() {
         </div>
 
         <div className="flex flex-col gap-4">
-          <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
+          <form
+            className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between"
+            onSubmit={(event) => {
+              event.preventDefault();
+              submitSearch();
+            }}
+          >
             <div className="relative flex-1">
               <Search className="pointer-events-none absolute left-4 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
               <Input
-                value={query}
-                onChange={(event) => updateQuery(event.target.value)}
+                value={searchInput}
+                onChange={(event) => setSearchInput(event.target.value)}
                 className="h-12 rounded-2xl pl-11 pr-4 transition-all duration-500"
                 placeholder="파일명, AI 요약, 업무명으로 검색하세요"
                 aria-label="파일 검색"
               />
             </div>
             <div className="flex w-full items-center gap-2 sm:w-auto">
+              <Button
+                type="submit"
+                variant="default"
+                className="h-12 min-w-24 justify-center px-5 text-sm font-semibold"
+              >
+                <Search className="size-4" />
+                검색
+              </Button>
               <Button
                 variant="secondary"
                 className="h-12 justify-center"
@@ -221,7 +237,7 @@ export default function FilePage() {
                 />
               </Button>
             </div>
-          </div>
+          </form>
 
           <div
             className={cn(
@@ -305,10 +321,11 @@ export default function FilePage() {
         <div className="border-t-2 border-foreground/70 pt-5">
           <div className="flex flex-col gap-3 lg:flex-row lg:items-center">
             <div className="flex flex-wrap items-center gap-3 text-sm text-muted-foreground">
-              <span className="font-medium">표시 중인 파일</span>
-              <span className="text-lg font-semibold text-foreground">
-                {visibleFiles.length}건 / 전체 {filePage?.totalCount ?? 0}건
-              </span>
+              <ResultCount
+                label="조회된 파일"
+                count={visibleFiles.length}
+                unit="개"
+              />
               <label className="ml-0 inline-flex items-center gap-2 text-sm text-muted-foreground lg:ml-3">
                 <Checkbox
                   checked={allVisibleFilesSelected}
@@ -317,15 +334,6 @@ export default function FilePage() {
                 />
                 <span>현재 페이지 전체 선택</span>
               </label>
-              <Button
-                variant="outline"
-                size="icon"
-                className="h-8 w-8"
-                type="button"
-                aria-label="AI 상태 안내"
-              >
-                <CircleHelp className="size-4" />
-              </Button>
             </div>
 
             <div className="flex items-center gap-2 lg:ml-auto">

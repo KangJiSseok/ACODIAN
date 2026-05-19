@@ -3,6 +3,7 @@
 import { useState } from "react"
 import { RefreshCw, Search } from "lucide-react"
 import { Pagination } from "@/app/_common/components/data-display/pagination"
+import { ResultCount } from "@/app/_common/components/data-display/resultCount"
 import { Button } from "@/components/ui/button"
 import { Card } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
@@ -55,12 +56,13 @@ export function TagManager() {
 
         <div className="h-0.5 bg-foreground/80 dark:bg-foreground/70" />
 
-        <div className="flex flex-wrap items-center gap-4 text-sm text-muted-foreground">
+        <div className="flex flex-wrap items-center gap-4">
           <div className="flex items-center gap-2">
-            <span className="font-medium">표시 중인 태그</span>
-            <span className="text-lg font-semibold text-foreground">
-              {tagPage?.totalCount ?? 0}개
-            </span>
+            <ResultCount
+              label="조회된 태그"
+              count={tagPage?.totalCount ?? 0}
+              unit="개"
+            />
           </div>
         </div>
       </div>

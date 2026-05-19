@@ -14,6 +14,7 @@ import {
 } from "lucide-react"
 import PageHeader from "@/app/_common/components/layout/pageHeader"
 import { Pagination } from "@/app/_common/components/data-display/pagination"
+import { ResultCount } from "@/app/_common/components/data-display/resultCount"
 import { useAuth } from "@/app/_common/hooks/useAuth"
 import { isDirectorProfile } from "@/app/_common/utils/organizationAccess.utils"
 import { LegendHelpDialog } from "./_components/legendHelpDialog"
@@ -529,12 +530,11 @@ export default function WorklogPage() {
           >
           <div className="grid gap-3 pb-4 sm:grid-cols-[minmax(0,1fr)_auto] sm:items-center">
             <div className="flex items-center gap-2">
-              <p className="text-sm text-muted-foreground">
-                표시 중인 업무{" "}
-                <span className="ml-1 font-semibold text-foreground">
-                  {worklogPage?.totalCount ?? 0}건
-                </span>
-              </p>
+              <ResultCount
+                label="조회된 업무"
+                count={worklogPage?.totalCount ?? 0}
+                unit="개"
+              />
               <LegendHelpDialog
                 title="업무 아이콘 안내"
                 description="업무 카드에서 보이는 상태와 중요도 아이콘 의미를 빠르게 확인할 수 있습니다."
