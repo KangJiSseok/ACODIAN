@@ -1,6 +1,7 @@
 import {
   keepPreviousData,
   useInfiniteQuery,
+  useMutation,
   useQuery,
   type UseQueryOptions,
 } from "@tanstack/react-query"
@@ -9,6 +10,7 @@ import type { PageResponse } from "@/app/_common/types/api.types"
 import type {
   GetWorklogsParams,
   SearchPredecessorCandidatesParams,
+  SearchSemanticWorklogsParams,
   SearchTagsParams,
   SearchWorklogsParams,
   WorklogListItem,
@@ -75,6 +77,13 @@ export function useWorklogSearch(
     queryKey: worklogKeys.search(params),
     queryFn: () => worklogService.searchWorklogs(params),
     ...options,
+  })
+}
+
+export function useWorklogSemanticSearch() {
+  return useMutation({
+    mutationFn: (params: SearchSemanticWorklogsParams) =>
+      worklogService.searchSemanticWorklogs(params),
   })
 }
 

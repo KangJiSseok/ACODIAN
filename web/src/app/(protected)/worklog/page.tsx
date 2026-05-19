@@ -1,7 +1,7 @@
 "use client"
 
 import Link from "next/link"
-import { useMemo, useState } from "react"
+import { type ReactNode, useEffect, useMemo, useState } from "react"
 import {
   ArrowLeft,
   ArrowUp,
@@ -17,6 +17,7 @@ import { Pagination } from "@/app/_common/components/data-display/pagination"
 import { ResultCount } from "@/app/_common/components/data-display/resultCount"
 import { useAuth } from "@/app/_common/hooks/useAuth"
 import { isDirectorProfile } from "@/app/_common/utils/organizationAccess.utils"
+import { getApiErrorMessage } from "@/app/_common/service/api-client"
 import { LegendHelpDialog } from "./_components/legendHelpDialog"
 import { ImportanceBadge } from "./_components/importanceBadge"
 import { StatusBadge } from "./_components/statusBadge"
@@ -24,6 +25,7 @@ import {
   useWorklogList,
   useWorklogFilterOptions,
   useWorklogSearch,
+  useWorklogSemanticSearch,
 } from "./_hooks/useWorklogList"
 import { WorklogList } from "./_components/worklogList"
 import {
@@ -62,6 +64,34 @@ const aiPromptExamples = [
   "마감 임박 업무만 우선순위로 정리해줘",
 ]
 
+const MARKDOWN_EMOJI_SHORTCODES: Record<string, string> = {
+  ":ai:": "AI",
+  ":books:": "📚",
+  ":bulb:": "💡",
+  ":calendar:": "📅",
+  ":chart_with_upwards_trend:": "📈",
+  ":check:": "✓",
+  ":clock:": "🕒",
+  ":fire:": "🔥",
+  ":gear:": "⚙️",
+  ":heavy_check_mark:": "✔️",
+  ":information_source:": "ℹ️",
+  ":link:": "🔗",
+  ":mag:": "🔍",
+  ":memo:": "📝",
+  ":pushpin:": "📌",
+  ":robot:": "🤖",
+  ":robot_face:": "🤖",
+  ":rocket:": "🚀",
+  ":smile:": "😄",
+  ":sparkles:": "✨",
+  ":star:": "⭐",
+  ":thumbsup:": "👍",
+  ":warning:": "⚠️",
+  ":white_check_mark:": "✅",
+  ":x:": "❌",
+}
+
 type AiMessage = {
   id: number
   role: "user" | "assistant"
@@ -75,12 +105,13 @@ export default function WorklogPage() {
   const { user } = useAuth()
   const [page, setPage] = useState(1)
   const [searchInput, setSearchInput] = useState("")
-  const [query, setQuery] = useState("")
+  const debouncedKeyword = useDebouncedValue(searchInput.trim(), 400)
   const [aiMode, setAiMode] = useState(false)
   const [aiDraftQuery, setAiDraftQuery] = useState("")
   const [aiMessages, setAiMessages] = useState<AiMessage[]>([])
   const [showFilters, setShowFilters] = useState(false)
   const [filters, setFilters] = useState<WorklogFilterState>(DEFAULT_FILTERS)
+  const semanticSearch = useWorklogSemanticSearch()
   const canCreate = Boolean(user && !isDirectorProfile(user))
   const { data: filterOptions } = useWorklogFilterOptions()
   const memberOptions = useMemo(() => {
@@ -101,7 +132,7 @@ export default function WorklogPage() {
     return Array.from(indexed, ([userId, userName]) => ({ userId, userName }))
   }, [filterOptions, filters.teamId])
   const hasSearchCondition =
-    query.trim().length > 0 ||
+    debouncedKeyword.length > 0 ||
     Object.values(filters).some((value) => value !== "all" && value !== "ALL")
   const listParams = useMemo(
     () => ({
@@ -114,7 +145,7 @@ export default function WorklogPage() {
     () => ({
       page,
       pageSize: WORKLOG_PAGE_SIZE,
-      keyword: query.trim() || undefined,
+      keyword: debouncedKeyword || undefined,
       teamId: filters.teamId === "all" ? undefined : Number(filters.teamId),
       statusCode:
         filters.status === "all" ? undefined : (filters.status as WorklogStatus),
@@ -130,7 +161,7 @@ export default function WorklogPage() {
           ? undefined
           : (filters.period as SearchWorklogsParams["period"]),
     }),
-    [filters, page, query]
+    [debouncedKeyword, filters, page]
   )
   const listQuery = useWorklogList(listParams, {
     enabled: !hasSearchCondition,
@@ -154,7 +185,6 @@ export default function WorklogPage() {
   }
 
   function submitSearch() {
-    setQuery(searchInput.trim())
     setPage(1)
   }
 
@@ -176,15 +206,48 @@ export default function WorklogPage() {
       {
         id: loadingMessageId,
         role: "assistant",
-        content:
-          "AI 모드 조건을 적용했습니다. 오른쪽 추천 카드에서 관련 업무일지를 확인할 수 있습니다.",
+        content: "관련 업무일지를 찾고 답변을 정리하고 있습니다.",
+        isLoading: true,
       },
     ])
     setAiDraftQuery("")
-    setSearchInput(normalizedQuestion)
-    setQuery(normalizedQuestion)
-    setPage(1)
     setShowFilters(false)
+    semanticSearch.mutate(
+      { query: normalizedQuestion },
+      {
+        onSuccess: (response) => {
+          setAiMessages((prev) =>
+            prev.map((message) =>
+              message.id === loadingMessageId
+                ? {
+                    ...message,
+                    content:
+                      response.answer?.trim() ||
+                      "조건에 맞는 AI 모드 답변이 없습니다.",
+                    isLoading: false,
+                  }
+                : message
+            )
+          )
+        },
+        onError: (error) => {
+          setAiMessages((prev) =>
+            prev.map((message) =>
+              message.id === loadingMessageId
+                ? {
+                    ...message,
+                    content: getApiErrorMessage(
+                      error,
+                      "AI 모드 요청을 처리하지 못했습니다."
+                    ),
+                    isLoading: false,
+                  }
+                : message
+            )
+          )
+        },
+      }
+    )
   }
 
   function returnToWorklogList() {
@@ -242,7 +305,7 @@ export default function WorklogPage() {
         <div
           className={cn(
             "flex flex-col gap-4 transition-all duration-500 ease-out",
-            aiMode && "mx-auto mt-[18vh] w-full max-w-5xl gap-6 px-0 py-0 ai-search-lift"
+            aiMode && "mx-auto mt-0 w-full max-w-5xl -translate-y-10 gap-6 px-0 py-0 ai-search-lift"
           )}
         >
           {aiMode ? (
@@ -277,6 +340,7 @@ export default function WorklogPage() {
                     return
                   }
                   setSearchInput(event.target.value)
+                  setPage(1)
                 }}
                 className={cn(
                   "h-12 rounded-2xl pl-11 transition-all duration-500",
@@ -364,7 +428,6 @@ export default function WorklogPage() {
                     aria-label="필터 초기화"
                     onClick={() => {
                       setSearchInput("")
-                      setQuery("")
                       updateFilters(DEFAULT_FILTERS)
                     }}
                   >
@@ -517,6 +580,7 @@ export default function WorklogPage() {
             composerValue={aiDraftQuery}
             onComposerChange={setAiDraftQuery}
             onComposerSubmit={() => submitAiQuestion(aiDraftQuery)}
+            isSubmitting={semanticSearch.isPending}
           />
         ) : null}
 
@@ -601,11 +665,13 @@ function AiConversationWorkspace({
   composerValue,
   onComposerChange,
   onComposerSubmit,
+  isSubmitting,
 }: {
   messages: AiMessage[]
   composerValue: string
   onComposerChange: (value: string) => void
   onComposerSubmit: () => void
+  isSubmitting: boolean
 }) {
   if (messages.length === 0) {
     return null
@@ -633,7 +699,11 @@ function AiConversationWorkspace({
                     "min-w-16 animate-pulse text-center text-lg"
                 )}
               >
-                {message.content}
+                {message.role === "assistant" && !message.isLoading ? (
+                  <MarkdownMessage content={message.content} />
+                ) : (
+                  message.content
+                )}
               </div>
             </div>
           ))}
@@ -643,6 +713,7 @@ function AiConversationWorkspace({
           value={composerValue}
           onChange={onComposerChange}
           onSubmit={onComposerSubmit}
+          disabled={isSubmitting}
         />
       </div>
     </section>
@@ -653,12 +724,14 @@ function AiBottomComposer({
   value,
   onChange,
   onSubmit,
+  disabled = false,
 }: {
   value: string
   onChange: (value: string) => void
   onSubmit: () => void
+  disabled?: boolean
 }) {
-  const canSubmit = value.trim().length > 0
+  const canSubmit = value.trim().length > 0 && !disabled
 
   return (
     <div className="z-10 mx-auto mb-3 w-full max-w-5xl shrink-0 px-1 pr-2">
@@ -666,6 +739,7 @@ function AiBottomComposer({
         <div className="relative min-w-0">
           <textarea
             value={value}
+            disabled={disabled}
             onChange={(event) => onChange(event.target.value)}
             onKeyDown={(event) => {
               if (event.key !== "Enter" || event.shiftKey) return
@@ -691,4 +765,248 @@ function AiBottomComposer({
       </div>
     </div>
   )
+}
+
+function useDebouncedValue<T>(value: T, delayMs: number) {
+  const [debouncedValue, setDebouncedValue] = useState(value)
+
+  useEffect(() => {
+    const debounceTimer = window.setTimeout(() => {
+      setDebouncedValue(value)
+    }, delayMs)
+
+    return () => window.clearTimeout(debounceTimer)
+  }, [delayMs, value])
+
+  return debouncedValue
+}
+
+function MarkdownMessage({ content }: { content: string }) {
+  const lines = content
+    .trim()
+    .split("\n")
+    .map((line) => line.trim())
+
+  if (lines.every((line) => line.length === 0)) {
+    return null
+  }
+
+  const elements: ReactNode[] = []
+  let paragraphLines: string[] = []
+  let unorderedItems: string[] = []
+  let orderedItems: string[] = []
+
+  const flushParagraph = () => {
+    if (paragraphLines.length === 0) return
+
+    const paragraph = paragraphLines.join("\n")
+    elements.push(
+      <p key={`paragraph-${elements.length}`} className="whitespace-pre-line">
+        {renderInlineMarkdown(paragraph)}
+      </p>
+    )
+    paragraphLines = []
+  }
+
+  const flushUnorderedList = () => {
+    if (unorderedItems.length === 0) return
+
+    elements.push(
+      <ul key={`unordered-${elements.length}`} className="list-disc space-y-1 pl-5">
+        {unorderedItems.map((item, index) => (
+          <li key={`${item}-${index}`}>{renderInlineMarkdown(item)}</li>
+        ))}
+      </ul>
+    )
+    unorderedItems = []
+  }
+
+  const flushOrderedList = () => {
+    if (orderedItems.length === 0) return
+
+    elements.push(
+      <ol key={`ordered-${elements.length}`} className="list-decimal space-y-1 pl-5">
+        {orderedItems.map((item, index) => (
+          <li key={`${item}-${index}`}>{renderInlineMarkdown(item)}</li>
+        ))}
+      </ol>
+    )
+    orderedItems = []
+  }
+
+  const flushLists = () => {
+    flushUnorderedList()
+    flushOrderedList()
+  }
+
+  lines.forEach((line) => {
+    if (!line) {
+      flushParagraph()
+      flushLists()
+      return
+    }
+
+    const heading = line.match(/^(#{1,3})\s+(.+)$/)
+    const unorderedItem = line.match(/^[-*]\s+(.+)$/)
+    const orderedItem = line.match(/^\d+[.)]\s+(.+)$/)
+
+    if (heading) {
+      flushParagraph()
+      flushLists()
+
+      const headingLevel = heading[1].length
+      const HeadingTag =
+        headingLevel === 1 ? "h2" : headingLevel === 2 ? "h3" : "h4"
+
+      elements.push(
+        <HeadingTag
+          key={`heading-${elements.length}`}
+          className={cn(
+            "font-semibold text-foreground",
+            headingLevel === 1 && "text-base",
+            headingLevel === 2 && "text-[15px]",
+            headingLevel === 3 && "text-sm"
+          )}
+        >
+          {renderInlineMarkdown(heading[2])}
+        </HeadingTag>
+      )
+      return
+    }
+
+    if (unorderedItem) {
+      flushParagraph()
+      flushOrderedList()
+      unorderedItems.push(unorderedItem[1])
+      return
+    }
+
+    if (orderedItem) {
+      flushParagraph()
+      flushUnorderedList()
+      orderedItems.push(orderedItem[1])
+      return
+    }
+
+    flushLists()
+    paragraphLines.push(line)
+  })
+
+  flushParagraph()
+  flushLists()
+
+  return <div className="space-y-3">{elements}</div>
+}
+
+function renderMarkdownLink(
+  label: ReactNode,
+  href: string,
+  key: string,
+  fallbackText = href
+): ReactNode {
+  const normalizedHref = href.trim()
+
+  if (!isSafeMarkdownHref(normalizedHref)) {
+    return renderEmojiShortcodes(fallbackText)
+  }
+
+  return (
+    <a
+      key={key}
+      href={normalizedHref}
+      target={normalizedHref.startsWith("/") ? undefined : "_blank"}
+      rel={normalizedHref.startsWith("/") ? undefined : "noreferrer"}
+      className="font-medium text-primary underline underline-offset-4"
+    >
+      {label}
+    </a>
+  )
+}
+
+function renderInlineMarkdown(text: string): ReactNode[] {
+  const parts = text.split(
+    /(\[[^\]\n]+\]\([^)]+\)|\*\*[^*\n]+\*\*|`[^`\n]+`|https?:\/\/[^\s<)]+)/g
+  )
+
+  return parts.reduce<ReactNode[]>((nodes, part, index) => {
+    if (!part) {
+      return nodes
+    }
+
+    const link = part.match(/^\[([^\]\n]+)\]\(([^)]+)\)$/)
+
+    if (link) {
+      const [, label, href] = link
+      nodes.push(
+        renderMarkdownLink(
+          renderEmojiShortcodes(label),
+          href,
+          `${part}-${index}`,
+          part
+        )
+      )
+
+      return nodes
+    }
+
+    if (/^https?:\/\/[^\s<)]+$/.test(part)) {
+      const trailingMark = part.match(/[.,;:!?)]$/)?.[0] ?? ""
+      const href = trailingMark ? part.slice(0, -1) : part
+
+      nodes.push(renderMarkdownLink(href, href, `${part}-${index}`))
+
+      if (trailingMark) {
+        nodes.push(trailingMark)
+      }
+
+      return nodes
+    }
+
+    if (part.startsWith("**") && part.endsWith("**")) {
+      nodes.push(
+        <strong key={`${part}-${index}`}>
+          {renderEmojiShortcodes(part.slice(2, -2))}
+        </strong>
+      )
+
+      return nodes
+    }
+
+    if (part.startsWith("`") && part.endsWith("`")) {
+      nodes.push(
+        <code
+          key={`${part}-${index}`}
+          className="rounded bg-muted px-1.5 py-0.5 text-[0.92em]"
+        >
+          {part.slice(1, -1)}
+        </code>
+      )
+
+      return nodes
+    }
+
+    nodes.push(...renderEmojiShortcodes(part))
+    return nodes
+  }, [])
+}
+
+function renderEmojiShortcodes(text: string): ReactNode[] {
+  const parts = text.split(/(:[a-z0-9_+-]+:)/gi)
+
+  return parts.map((part) => MARKDOWN_EMOJI_SHORTCODES[part.toLowerCase()] ?? part)
+}
+
+function isSafeMarkdownHref(href: string) {
+  const trimmedHref = href.trim()
+
+  if (trimmedHref.startsWith("/")) {
+    return true
+  }
+
+  try {
+    const url = new URL(trimmedHref)
+    return url.protocol === "http:" || url.protocol === "https:"
+  } catch {
+    return false
+  }
 }
