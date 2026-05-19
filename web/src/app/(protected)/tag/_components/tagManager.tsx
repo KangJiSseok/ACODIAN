@@ -94,9 +94,6 @@ export function TagManager() {
                       사용 횟수 {tag.usageCount}회
                     </p>
                   </div>
-                  <span className="rounded-full bg-primary/10 px-2.5 py-0.5 text-xs font-semibold text-primary">
-                    ID {tag.id}
-                  </span>
                 </div>
 
                 <div className="rounded-2xl border border-dashed border-border/60 bg-muted/25 p-3 text-sm leading-6 text-muted-foreground">

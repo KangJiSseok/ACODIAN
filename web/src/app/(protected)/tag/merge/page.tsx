@@ -8,9 +8,9 @@ export default function TagMergePage() {
           태그 병합
         </h1>
         <p className="mt-2 text-sm leading-6 text-muted-foreground">
-          백엔드가 추천한 태그 병합 후보를 병합될 태그명과 합쳐질 태그들로
-          확인합니다. 태그 병합 후보는 매일 새벽 스케줄링을 통해 자동으로
-          생성됩니다.
+          매일 자정 자동 생성된 태그 병합 후보를 확인합니다. 대표 태그와
+          합쳐질 태그를 검토한 뒤 후보를 수정하거나 병합할 수 있으며, 병합 후
+          업무일지에 연결된 태그는 대표 태그 기준으로 정리됩니다.
         </p>
       </div>
 
