@@ -43,7 +43,6 @@ class LightWorklogQueryService:
             chunk_top_k=self._settings.lightrag_query_chunk_top_k,
             response_type=self._settings.lightrag_query_response_type,
             system_prompt=build_worklog_query_system_prompt(
-                allowed_team_ids=request.allowed_team_ids,
                 worklog_detail_base_url=self._settings.worklog_detail_base_url,
             ),
         )
