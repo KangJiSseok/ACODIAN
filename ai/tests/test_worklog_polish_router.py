@@ -1,4 +1,6 @@
 import asyncio
+import logging
+
 from fastapi.testclient import TestClient
 
 from app.main import app
@@ -60,7 +62,11 @@ def test_worklog_polish_maps_retryable_provider_error_to_503(monkeypatch) -> Non
         async def generate_structured(self, *, contents, schema, instruction):
             raise RetryableProviderError()
 
-    monkeypatch.setattr(worklog_polish_chain, "get_gemini_client", lambda: FakeGeminiClient())
+    monkeypatch.setattr(
+        worklog_polish_chain,
+        "get_gemini_client",
+        lambda: FakeGeminiClient(),
+    )
 
     response = client.post(
         "/ai/worklogs/polish",
@@ -72,6 +78,75 @@ def test_worklog_polish_maps_retryable_provider_error_to_503(monkeypatch) -> Non
 
     assert response.status_code == 503
     assert response.json() == {"detail": "AI_PROVIDER_UNAVAILABLE"}
+
+
+def test_worklog_polish_endpoint_logs_boundary_without_body(monkeypatch, caplog) -> None:
+    from app.chain import worklog_polish_chain
+
+    class FakeGeminiClient:
+        async def generate_structured(self, *, contents, schema, instruction):
+            return WorklogPolishResponse(workContent="다듬어진 수행 내용")
+
+    monkeypatch.setattr(
+        worklog_polish_chain,
+        "get_gemini_client",
+        lambda: FakeGeminiClient(),
+    )
+    caplog.set_level(logging.INFO, logger="app.router.worklog_polish")
+
+    response = client.post(
+        "/ai/worklogs/polish",
+        json={
+            "requestContent": "민감한 요청 원문",
+            "workContent": "민감한 수행 원문",
+        },
+    )
+
+    assert response.status_code == 200
+    messages = [record.getMessage() for record in caplog.records]
+    assert any(
+        "event=worklog_polish.request.start" in message
+        and "endpoint=polish" in message
+        and "requestContentChars=9" in message
+        and "workContentChars=9" in message
+        for message in messages
+    )
+    assert any(
+        "event=worklog_polish.request.success" in message
+        and "endpoint=polish" in message
+        and "response_chars=10" in message
+        for message in messages
+    )
+    assert "민감한 요청 원문" not in caplog.text
+    assert "민감한 수행 원문" not in caplog.text
+
+
+def test_worklog_polish_endpoint_logs_retryable_exception(monkeypatch, caplog) -> None:
+    from app.chain import worklog_polish_chain
+
+    class FakeGeminiClient:
+        async def generate_structured(self, *, contents, schema, instruction):
+            raise RetryableProviderError()
+
+    monkeypatch.setattr(worklog_polish_chain, "get_gemini_client", lambda: FakeGeminiClient())
+    caplog.set_level(logging.WARNING, logger="app.router.worklog_polish")
+
+    response = client.post(
+        "/ai/worklogs/polish",
+        json={
+            "requestContent": "업무일지 내용을 다듬어 주세요.",
+            "workContent": "시맨틱 검색 구조를 정리했다.",
+        },
+    )
+
+    assert response.status_code == 503
+    assert any(
+        "event=worklog_polish.request.exception" in record.getMessage()
+        and "endpoint=polish" in record.getMessage()
+        and "exceptionClass=RetryableProviderError" in record.getMessage()
+        and "retryable=True" in record.getMessage()
+        for record in caplog.records
+    )
 
 
 def test_worklog_polish_chain_passes_prompt_boundaries(monkeypatch) -> None:
