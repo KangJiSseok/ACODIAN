@@ -30,6 +30,8 @@ notification:
     cron: 0 10 9 * * *
   worklog-due-soon-reminder:
     cron: 0 0 9 * * *
+  read-cleanup:
+    cron: 0 40 22 * * *
   stream:
     key: notifications:stream
     poll-timeout-millis: 2000

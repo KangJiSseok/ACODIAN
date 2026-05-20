@@ -11,10 +11,19 @@ import com.ibank.axwms.domain.worklog.WorklogStatus;
 import com.ibank.axwms.domain.worklog.dto.CreateWorklogApiDto;
 import com.ibank.axwms.domain.worklog.dto.GetWorklogDetailApiDto;
 import com.ibank.axwms.domain.worklog.dto.GetWorklogsApiDto;
-import com.ibank.axwms.domain.worklog.dto.UpdateWorklogStatusApiDto;
+import com.ibank.axwms.domain.worklog.dto.InternalWorklogPolishApiDto;
+import com.ibank.axwms.domain.worklog.dto.InternalWorklogTitleRecommendationApiDto;
+import com.ibank.axwms.domain.worklog.dto.PolishWorklogApiDto;
+import com.ibank.axwms.domain.worklog.dto.RecommendWorklogTitleApiDto;
 import com.ibank.axwms.domain.worklog.dto.UpdateWorklogApiDto;
+import com.ibank.axwms.domain.worklog.dto.UpdateWorklogStatusApiDto;
 import com.ibank.axwms.domain.worklog.entity.Worklog;
 import com.ibank.axwms.domain.worklog.entity.WorklogTag;
+import com.ibank.axwms.domain.worklog.event.WorklogAiPipelineRequestedEvent;
+import com.ibank.axwms.domain.worklog.event.WorklogAiPostProcessRequestedEvent;
+import com.ibank.axwms.domain.worklog.event.WorklogCompletedEvent;
+import com.ibank.axwms.domain.worklog.event.WorklogLightIndexRequestedEvent;
+import com.ibank.axwms.domain.worklog.external.WorklogPolishClient;
 import com.ibank.axwms.domain.worklog.policy.WorklogStatusPolicy;
 import com.ibank.axwms.domain.worklog.repository.WorklogDependencyRepository;
 import com.ibank.axwms.domain.worklog.repository.WorklogRepository;
@@ -36,6 +45,7 @@ import org.mockito.ArgumentCaptor;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageImpl;
 import org.springframework.data.domain.PageRequest;
@@ -49,14 +59,17 @@ import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.concurrent.atomic.AtomicReference;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.BDDMockito.given;
+import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.verifyNoInteractions;
 
 @ExtendWith(MockitoExtension.class)
 class WorklogServiceTest {
@@ -71,15 +84,93 @@ class WorklogServiceTest {
     @Mock private WorklogDependencyService worklogDependencyService;
     @Mock private WorklogStatusPolicy worklogStatusPolicy;
     @Mock private TagService tagService;
+    @Mock private ApplicationEventPublisher eventPublisher;
+    @Mock private WorklogPolishClient worklogPolishClient;
 
     @InjectMocks private WorklogService worklogService;
 
     private static final Long USER_ID = 101L;
     private static final Long TEAM_ID = 21L;
+    private static final Long DEPARTMENT_ID = 9L;
     private static final Long WORKLOG_ID = 501L;
     private static final List<Long> TAG_IDS = List.of(1L, 2L);
     private static final LocalDate INSTRUCTION_DATE = LocalDate.of(2026, 4, 22);
     private static final LocalDate DUE_DATE = LocalDate.of(2026, 4, 25);
+
+    @Test
+    @DisplayName("작성 보조는 요청 본문을 AI 클라이언트에 전달하고 응답으로 매핑한다")
+    void 작성_보조는_요청_본문을_ai_클라이언트에_전달하고_응답으로_매핑한다() {
+        PolishWorklogApiDto.Request request = new PolishWorklogApiDto.Request(
+                "재고 동기화 지연 원인을 정리해 주세요.",
+                "배치 로그를 비교하고 병목 구간을 확인했습니다."
+        );
+        InternalWorklogPolishApiDto.Request internalRequest = InternalWorklogPolishApiDto.Request.from(request);
+        given(worklogPolishClient.polishWorklog(internalRequest)).willReturn(
+                InternalWorklogPolishApiDto.Response.of(
+                        "배치 로그를 비교하고 병목 구간을 확인했습니다."
+                )
+        );
+
+        PolishWorklogApiDto.Response response = worklogService.polishWorklog(request);
+
+        assertThat(response).isEqualTo(PolishWorklogApiDto.Response.of(
+                "배치 로그를 비교하고 병목 구간을 확인했습니다."
+        ));
+        verify(worklogPolishClient).polishWorklog(internalRequest);
+        verifyNoInteractions(worklogRepository);
+    }
+
+    @Test
+    @DisplayName("AI 클라이언트 실패는 작성 보조 실패 코드로 드러난다")
+    void ai_클라이언트_실패는_작성_보조_실패_코드로_드러난다() {
+        PolishWorklogApiDto.Request request = new PolishWorklogApiDto.Request("요청", "수행 내용");
+        BusinessException failure = new BusinessException(ErrorCode.WORKLOG_AI_POLISH_FAILED);
+        given(worklogPolishClient.polishWorklog(InternalWorklogPolishApiDto.Request.from(request)))
+                .willThrow(failure);
+
+        assertThatThrownBy(() -> worklogService.polishWorklog(request))
+                .isSameAs(failure)
+                .extracting("errorCode")
+                .isEqualTo(ErrorCode.WORKLOG_AI_POLISH_FAILED);
+    }
+
+    @Test
+    @DisplayName("제목 추천은 요청 본문을 AI 클라이언트에 전달하고 후보 제목으로 매핑한다")
+    void 제목_추천은_요청_본문을_ai_클라이언트에_전달하고_후보_제목으로_매핑한다() {
+        RecommendWorklogTitleApiDto.Request request = new RecommendWorklogTitleApiDto.Request(
+                "재고 동기화 지연 원인을 정리해 주세요.",
+                "배치 로그를 비교하고 병목 구간을 확인했습니다."
+        );
+        InternalWorklogTitleRecommendationApiDto.Request internalRequest =
+                InternalWorklogTitleRecommendationApiDto.Request.from(request);
+        given(worklogPolishClient.recommendWorklogTitles(internalRequest)).willReturn(
+                InternalWorklogTitleRecommendationApiDto.Response.of(
+                        List.of("배치 로그 병목 구간 확인", "", "재고 동기화 지연 분석", "병목 구간 조치", "초과 후보")
+                )
+        );
+
+        RecommendWorklogTitleApiDto.Response response = worklogService.recommendWorklogTitles(request);
+
+        assertThat(response).isEqualTo(RecommendWorklogTitleApiDto.Response.of(
+                List.of("배치 로그 병목 구간 확인", "재고 동기화 지연 분석", "병목 구간 조치")
+        ));
+        verify(worklogPolishClient).recommendWorklogTitles(internalRequest);
+        verifyNoInteractions(worklogRepository);
+    }
+
+    @Test
+    @DisplayName("AI 클라이언트 실패는 제목 추천에서도 작성 보조 실패 코드로 드러난다")
+    void ai_클라이언트_실패는_제목_추천에서도_작성_보조_실패_코드로_드러난다() {
+        RecommendWorklogTitleApiDto.Request request = new RecommendWorklogTitleApiDto.Request("요청", "수행 내용");
+        BusinessException failure = new BusinessException(ErrorCode.WORKLOG_AI_POLISH_FAILED);
+        given(worklogPolishClient.recommendWorklogTitles(InternalWorklogTitleRecommendationApiDto.Request.from(request)))
+                .willThrow(failure);
+
+        assertThatThrownBy(() -> worklogService.recommendWorklogTitles(request))
+                .isSameAs(failure)
+                .extracting("errorCode")
+                .isEqualTo(ErrorCode.WORKLOG_AI_POLISH_FAILED);
+    }
 
     @Test
     @SuppressWarnings("unchecked")
@@ -89,15 +180,23 @@ class WorklogServiceTest {
         CustomUserPrincipal principal = principal();
         CreateWorklogApiDto.Request request = request(INSTRUCTION_DATE, DUE_DATE);
         List<MultipartFile> files = sampleFiles();
+        AtomicReference<Worklog> savedWorklogRef = new AtomicReference<>();
 
         given(teamService.getTeamOrThrow(TEAM_ID)).willReturn(sampleTeam());
         given(teamService.isMember(USER_ID, TEAM_ID)).willReturn(true);
         given(worklogRepository.save(any(Worklog.class))).willAnswer(invocation -> {
             Worklog toSave = invocation.getArgument(0);
             ReflectionTestUtils.setField(toSave, "id", WORKLOG_ID);
+            savedWorklogRef.set(toSave);
             return toSave;
         });
         given(tagService.normalizeExistingTagIds(TAG_IDS)).willReturn(TAG_IDS);
+        given(fileService.uploadWorklogFilesWithoutAiSummaryRequest(WORKLOG_ID, USER_ID, files))
+                .willReturn(List.of(new FileService.UploadedFile(9001L, "worklog/501/report.txt", "report.txt", "txt", 7L)));
+        doAnswer(invocation -> {
+            assertThat(savedWorklogRef.get().getAiProcessingStatus()).isEqualTo(AiProcessingStatus.PROCESSING);
+            return null;
+        }).when(eventPublisher).publishEvent(any(WorklogAiPostProcessRequestedEvent.class));
 
         // when
         CreateWorklogApiDto.Response response = worklogService.createWorklog(principal, request, files);
@@ -108,7 +207,9 @@ class WorklogServiceTest {
         verify(worklogRepository).save(worklogCaptor.capture());
         assertThat(worklogCaptor.getValue().getStatusCode()).isEqualTo(WorklogStatus.IN_PROGRESS);
         assertThat(worklogCaptor.getValue().getActualHours()).isEqualByComparingTo("3.10");
-        verify(fileService).uploadWorklogFiles(eq(WORKLOG_ID), eq(USER_ID), eq(files));
+        assertThat(worklogCaptor.getValue().getAiProcessingStatus()).isEqualTo(AiProcessingStatus.PROCESSING);
+        verify(fileService).uploadWorklogFilesWithoutAiSummaryRequest(eq(WORKLOG_ID), eq(USER_ID), eq(files));
+        verify(fileService, never()).uploadWorklogFiles(eq(WORKLOG_ID), eq(USER_ID), eq(files));
         verify(worklogStatusHistoryService).createStatusHistory(
                 eq(WORKLOG_ID),
                 eq(WorklogStatus.IN_PROGRESS),
@@ -119,11 +220,65 @@ class WorklogServiceTest {
         assertThat(tagCaptor.getValue())
                 .extracting(WorklogTag::getTagId)
                 .containsExactly(1L, 2L);
-        assertThat(tagCaptor.getValue())
-                .extracting(WorklogTag::getIsAiGenerated)
-                .containsOnly(Boolean.FALSE);
         verify(tagService).incrementUsageCountByIds(TAG_IDS);
         verify(worklogDependencyService).registerPredecessor(eq(WORKLOG_ID), eq(TEAM_ID), eq(request.predecessorWorklogIds()));
+        ArgumentCaptor<WorklogAiPostProcessRequestedEvent> eventCaptor = ArgumentCaptor.forClass(WorklogAiPostProcessRequestedEvent.class);
+        verify(eventPublisher).publishEvent(eventCaptor.capture());
+        assertThat(eventCaptor.getValue().worklogId()).isEqualTo(WORKLOG_ID);
+        assertThat(eventCaptor.getValue().worklogTitle()).isEqualTo(request.title());
+        assertThat(eventCaptor.getValue().requestContent()).isEqualTo(request.requestContent());
+        assertThat(eventCaptor.getValue().workContent()).isEqualTo(request.workContent());
+        assertThat(eventCaptor.getValue().authorId()).isEqualTo(USER_ID);
+        assertThat(eventCaptor.getValue().teamId()).isEqualTo(TEAM_ID);
+        assertThat(eventCaptor.getValue().departmentId()).isEqualTo(DEPARTMENT_ID);
+        assertThat(eventCaptor.getValue().files())
+                .singleElement()
+                .extracting(
+                        WorklogAiPostProcessRequestedEvent.FileSummaryTarget::fileId,
+                        WorklogAiPostProcessRequestedEvent.FileSummaryTarget::storageKey,
+                        WorklogAiPostProcessRequestedEvent.FileSummaryTarget::originalName,
+                        WorklogAiPostProcessRequestedEvent.FileSummaryTarget::fileExtension
+                )
+                .containsExactly(9001L, "worklog/501/report.txt", "report.txt", "txt");
+        verify(eventPublisher, never()).publishEvent(any(WorklogAiPipelineRequestedEvent.class));
+        verify(eventPublisher, never()).publishEvent(any(WorklogLightIndexRequestedEvent.class));
+    }
+
+    @Test
+    @DisplayName("최초 상태가 COMPLETED 인 업무 생성은 완료 전환 이벤트를 발행하지 않는다.")
+    void 최초_상태가_COMPLETED인_업무_생성은_완료_전환_이벤트를_발행하지_않는다() {
+        // given
+        CustomUserPrincipal principal = principal();
+        CreateWorklogApiDto.Request request = request(INSTRUCTION_DATE, DUE_DATE, WorklogStatus.COMPLETED);
+        given(teamService.getTeamOrThrow(TEAM_ID)).willReturn(sampleTeam());
+        given(teamService.isMember(USER_ID, TEAM_ID)).willReturn(true);
+        given(worklogRepository.save(any(Worklog.class))).willAnswer(invocation -> {
+            Worklog toSave = invocation.getArgument(0);
+            ReflectionTestUtils.setField(toSave, "id", WORKLOG_ID);
+            return toSave;
+        });
+        given(tagService.normalizeExistingTagIds(TAG_IDS)).willReturn(TAG_IDS);
+
+        // when
+        worklogService.createWorklog(principal, request, List.of());
+
+        // then
+        verify(worklogStatusHistoryService).createStatusHistory(
+                eq(WORKLOG_ID),
+                eq(WorklogStatus.COMPLETED),
+                eq(USER_ID)
+        );
+        verify(eventPublisher, never()).publishEvent(any(WorklogCompletedEvent.class));
+        ArgumentCaptor<WorklogAiPostProcessRequestedEvent> eventCaptor = ArgumentCaptor.forClass(WorklogAiPostProcessRequestedEvent.class);
+        verify(eventPublisher).publishEvent(eventCaptor.capture());
+        assertThat(eventCaptor.getValue().worklogId()).isEqualTo(WORKLOG_ID);
+        assertThat(eventCaptor.getValue().worklogTitle()).isEqualTo(request.title());
+        assertThat(eventCaptor.getValue().requestContent()).isEqualTo(request.requestContent());
+        assertThat(eventCaptor.getValue().workContent()).isEqualTo(request.workContent());
+        assertThat(eventCaptor.getValue().authorId()).isEqualTo(USER_ID);
+        assertThat(eventCaptor.getValue().teamId()).isEqualTo(TEAM_ID);
+        assertThat(eventCaptor.getValue().departmentId()).isEqualTo(DEPARTMENT_ID);
+        assertThat(eventCaptor.getValue().files()).isEmpty();
     }
 
     @Test
@@ -212,7 +367,7 @@ class WorklogServiceTest {
 
         // then
         assertThat(response.worklogId()).isEqualTo(WORKLOG_ID);
-        verify(fileService).uploadWorklogFiles(eq(WORKLOG_ID), eq(USER_ID), eq(files));
+        verify(fileService).uploadWorklogFilesWithoutAiSummaryRequest(eq(WORKLOG_ID), eq(USER_ID), eq(files));
         verify(worklogStatusHistoryService).createStatusHistory(
                 eq(WORKLOG_ID),
                 eq(WorklogStatus.IN_PROGRESS),
@@ -282,6 +437,7 @@ class WorklogServiceTest {
                 eq(USER_ID),
                 eq("완료 처리")
         );
+        verify(eventPublisher).publishEvent(new WorklogCompletedEvent(WORKLOG_ID));
     }
 
     @Test
@@ -311,6 +467,7 @@ class WorklogServiceTest {
                 eq(USER_ID),
                 eq("완료 처리")
         );
+        verify(eventPublisher).publishEvent(new WorklogCompletedEvent(WORKLOG_ID));
     }
 
     @Test
@@ -335,6 +492,50 @@ class WorklogServiceTest {
         assertThat(worklog.getStatusCode()).isEqualTo(WorklogStatus.IN_PROGRESS);
         verify(worklogStatusPolicy, never()).canTransition(any(), any());
         verify(worklogStatusHistoryService, never()).createStatusHistory(any(), any(), any(), any(), any());
+        verify(eventPublisher, never()).publishEvent(any(Object.class));
+    }
+
+    @Test
+    @DisplayName("실패한 AI 요약은 작성자 본인이 다시 후처리 요청할 수 있다")
+    void retryAiSummary_republishes_post_process_event_when_failed() {
+        // given
+        CustomUserPrincipal principal = principal();
+        Worklog worklog = savedWorklog(WorklogStatus.IN_PROGRESS);
+        worklog.failAiProcessing();
+        given(worklogRepository.findById(WORKLOG_ID)).willReturn(Optional.of(worklog));
+        given(teamService.getTeamOrThrow(TEAM_ID)).willReturn(sampleTeam());
+
+        // when
+        worklogService.retryAiSummary(principal, WORKLOG_ID);
+
+        // then
+        assertThat(worklog.getAiProcessingStatus()).isEqualTo(AiProcessingStatus.PROCESSING);
+        ArgumentCaptor<WorklogAiPostProcessRequestedEvent> eventCaptor =
+                ArgumentCaptor.forClass(WorklogAiPostProcessRequestedEvent.class);
+        verify(eventPublisher).publishEvent(eventCaptor.capture());
+        assertThat(eventCaptor.getValue().worklogId()).isEqualTo(WORKLOG_ID);
+        assertThat(eventCaptor.getValue().authorId()).isEqualTo(USER_ID);
+        assertThat(eventCaptor.getValue().teamId()).isEqualTo(TEAM_ID);
+        assertThat(eventCaptor.getValue().departmentId()).isEqualTo(DEPARTMENT_ID);
+        assertThat(eventCaptor.getValue().files()).isEmpty();
+    }
+
+    @Test
+    @DisplayName("AI 요약 실패 상태가 아니면 재요청을 차단한다")
+    void retryAiSummary_rejects_non_failed_status() {
+        // given
+        CustomUserPrincipal principal = principal();
+        Worklog worklog = savedWorklog(WorklogStatus.IN_PROGRESS);
+        given(worklogRepository.findById(WORKLOG_ID)).willReturn(Optional.of(worklog));
+
+        // when & then
+        assertThatThrownBy(() -> worklogService.retryAiSummary(principal, WORKLOG_ID))
+                .isInstanceOf(BusinessException.class)
+                .extracting(e -> ((BusinessException) e).getErrorCode())
+                .isEqualTo(ErrorCode.WORKLOG_AI_RETRY_STATUS_INVALID);
+
+        verify(teamService, never()).getTeamOrThrow(any());
+        verify(eventPublisher, never()).publishEvent(any(Object.class));
     }
 
     @Test
@@ -358,6 +559,7 @@ class WorklogServiceTest {
         assertThat(worklog.getCompletionDate()).isNull();
         verify(worklogStatusPolicy, never()).canTransition(any(), any());
         verify(worklogStatusHistoryService, never()).createStatusHistory(any(), any(), any(), any(), any());
+        verify(eventPublisher, never()).publishEvent(any(Object.class));
     }
 
     @Test
@@ -381,6 +583,27 @@ class WorklogServiceTest {
         assertThat(worklog.getCompletionDate()).isNull();
         verify(fileService, never()).uploadWorklogFiles(any(), any(), any());
         verify(worklogStatusHistoryService, never()).createStatusHistory(any(), any(), any(), any(), any());
+        verify(eventPublisher, never()).publishEvent(any(Object.class));
+    }
+
+
+    @Test
+    @DisplayName("업무 수정으로 신규 파일을 추가하면 기존 파일 AI 요약 요청 업로드 경로를 유지한다")
+    void updateWorklog_keeps_existing_file_summary_request_for_new_files() {
+        // given
+        CustomUserPrincipal principal = principal();
+        Worklog worklog = savedWorklog(WorklogStatus.IN_PROGRESS);
+        UpdateWorklogApiDto.Request request = updateRequest(WorklogStatus.IN_PROGRESS);
+        List<MultipartFile> newFiles = sampleFiles();
+
+        given(worklogRepository.findById(WORKLOG_ID)).willReturn(Optional.of(worklog));
+
+        // when
+        worklogService.updateWorklog(principal, WORKLOG_ID, request, newFiles);
+
+        // then
+        verify(fileService).uploadWorklogFiles(eq(WORKLOG_ID), eq(USER_ID), eq(newFiles));
+        verify(fileService, never()).uploadWorklogFilesWithoutAiSummaryRequest(any(), any(), any());
     }
 
     @Test
@@ -470,12 +693,17 @@ class WorklogServiceTest {
     }
 
     private static CreateWorklogApiDto.Request request(LocalDate instructionDate, LocalDate dueDate) {
+        return request(instructionDate, dueDate, WorklogStatus.IN_PROGRESS);
+    }
+
+    /** 생성 시 최초 상태별 이벤트 scope 를 분리해 검증할 수 있도록 상태만 바꾸는 fixture 를 제공한다. */
+    private static CreateWorklogApiDto.Request request(LocalDate instructionDate, LocalDate dueDate, WorklogStatus statusCode) {
         return new CreateWorklogApiDto.Request(
                 TEAM_ID,
                 "test",
                 "test",
                 "test",
-                WorklogStatus.IN_PROGRESS,
+                statusCode,
                 WorklogImportance.HIGH,
                 new BigDecimal("3.10"),
                 instructionDate,
@@ -536,6 +764,7 @@ class WorklogServiceTest {
 
     private Team sampleTeam() {
         Team team = Team.create(
+                DEPARTMENT_ID,
                 "물류혁신TF",
                 TeamStatus.ACTIVE,
                 "테스트 팀",

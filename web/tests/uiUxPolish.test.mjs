@@ -11,6 +11,8 @@ const dashboardScopeSelector = readSource(
   "app/(protected)/_dashboard/_components/dashboardScopeSelector.tsx",
 );
 const filePage = readSource("app/(protected)/file/page.tsx");
+const departmentPage = readSource("app/(protected)/department/page.tsx");
+const teamPage = readSource("app/(protected)/team/page.tsx");
 const userPage = readSource("app/(protected)/user/page.tsx");
 const notificationPage = readSource("app/(protected)/notification/page.tsx");
 const notificationList = readSource(
@@ -35,16 +37,51 @@ test("dashboard scope selector uses compact filter sizing and short header copy"
   assert.doesNotMatch(dashboardPage, /AI 파이프라인 건강도를 비교합니다/);
 });
 
-test("file and user filters follow the worklog filter control size", () => {
+test("file, user, and notification filters follow the worklog filter style", () => {
   assert.match(filePage, /const activeFilterCount = \[fileType, period, aiStatus\]/);
+  assert.match(filePage, /className="h-12 rounded-2xl pl-11 pr-4 transition-all duration-500"/);
+  assert.match(filePage, /variant="secondary"[\s\S]*<SlidersHorizontal className="size-4" \/>[\s\S]*필터/);
   assert.match(filePage, /className="h-12 justify-center"/);
   assert.match(filePage, /className="space-y-4 pb-4 pt-3"/);
   assert.match(filePage, /className="grid gap-4 md:grid-cols-2 xl:grid-cols-4"/);
 
   assert.match(userPage, /const activeFilterCount = \[/);
+  assert.match(userPage, /className="h-12 rounded-2xl pl-11 pr-4 transition-all duration-500"/);
+  assert.match(userPage, /variant="secondary"[\s\S]*<SlidersHorizontal className="size-4" \/>[\s\S]*필터/);
   assert.match(userPage, /className="h-12 justify-center"/);
   assert.match(userPage, /className="space-y-4 pb-4 pt-3"/);
   assert.match(userPage, /className="grid gap-4 md:grid-cols-2 xl:grid-cols-4"/);
+
+  assert.match(notificationPage, /const activeFilterCount = \[departmentId, teamId\]/);
+  assert.match(notificationPage, /className="flex w-full items-center gap-2 sm:w-auto"[\s\S]*variant="secondary"[\s\S]*필터/);
+  assert.match(notificationPage, /className="h-12 justify-center"/);
+  assert.match(notificationPage, /className="space-y-4 pb-4 pt-3"/);
+  assert.match(notificationPage, /className="grid gap-4 md:grid-cols-2"/);
+});
+
+test("main workspace tabs show visible intro titles before helper copy", () => {
+  assert.match(
+    dashboardPage,
+    /md:flex-row md:items-start md:justify-between[\s\S]*\{dashboardTitle\}[\s\S]*\{dashboardIntroDescription\}[\s\S]*<DashboardScopeSelector/,
+  );
+  assert.match(
+    dashboardPage,
+    /업무 현황과 완료율, 마감 임박 업무를 확인합니다/,
+  );
+  assert.match(dashboardPage, /return "업무 대시보드"/);
+  assert.doesNotMatch(dashboardPage, /사업부장 대시보드/);
+
+  assert.match(filePage, /<PageHeader title="파일 관리" \/>/);
+  assert.match(filePage, /파일 탐색[\s\S]*업무일지에 연결된 파일을 확인합니다/);
+
+  assert.match(departmentPage, /<PageHeader title="부서 관리" \/>/);
+  assert.match(departmentPage, /부서 관리[\s\S]*관리 가능한 부서와 운영 현황을 확인합니다/);
+
+  assert.match(teamPage, /<PageHeader title="팀 관리" \/>/);
+  assert.match(teamPage, /팀 관리[\s\S]*관리 가능한 팀과 소속 구성원을 확인합니다/);
+
+  assert.match(userPage, /<PageHeader title="사용자 관리" \/>/);
+  assert.match(userPage, /사용자 탐색[\s\S]*조직 구성원의 소속, 직급, 재직 상태를 확인합니다/);
 });
 
 test("card spotlight gradient only appears on hover or focus", () => {
@@ -53,11 +90,30 @@ test("card spotlight gradient only appears on hover or focus", () => {
   assert.doesNotMatch(cardSpotlight, /radial-gradient\(280px circle at 12% 0%/);
 });
 
-test("notification read actions share primary action styling", () => {
+test("notification actions use worklog-style variants with distinct colors", () => {
   assert.match(notificationPage, /variant="default"[\s\S]*onClick=\{markAllRead\}/);
+  assert.match(notificationPage, /알림 목록[\s\S]*onClick=\{markAllRead\}/);
   assert.match(notificationPage, /className="h-12 justify-center"/);
   assert.match(notificationList, /variant="default"[\s\S]*onClick=\{\(\) => onMarkRead\(notification\.id\)\}/);
-  assert.match(notificationList, /focus-visible:!text-primary-foreground active:!text-primary-foreground/);
+  assert.match(notificationList, /variant="secondary"[\s\S]*관련 화면 이동/);
+  assert.match(notificationList, /h-11 px-5 text-sm font-semibold/);
+  assert.doesNotMatch(notificationList, /shadow-\[/);
+});
+
+test("notification summary cards prioritize unread then read before total", () => {
+  assert.match(
+    notificationPage,
+    /label="읽지 않은 알림"[\s\S]*label="읽은 알림"[\s\S]*label="전체 알림"/,
+  );
+});
+
+test("notification page places status description under the status heading", () => {
+  assert.match(notificationPage, /<PageHeader title="알림" \/>/);
+  assert.doesNotMatch(notificationPage, /PageHeader title="알림" description=/);
+  assert.match(
+    notificationPage,
+    /알림 현황[\s\S]*업무 마감 알림과 읽음 상태를 확인합니다\.[\s\S]*className="grid gap-3 md:grid-cols-3"/,
+  );
 });
 
 test("notification center popover uses theme-specific opaque surface and text colors", () => {
@@ -68,11 +124,57 @@ test("notification center popover uses theme-specific opaque surface and text co
   assert.doesNotMatch(notificationCenterPopover, /bg-card text-card-foreground/);
 });
 
+test("notification center popover shows compact unread-notification cards", () => {
+  assert.match(notificationCenterPopover, /max-h-\[420px\] overflow-y-auto/);
+  assert.match(notificationCenterPopover, /최대 10개 표시/);
+  assert.match(notificationCenterPopover, /formatNotificationCenterDate\(notification\.createdAt\)/);
+  assert.match(notificationCenterPopover, /notification\.teamName/);
+  assert.doesNotMatch(notificationCenterPopover, /typeLabel/);
+  assert.doesNotMatch(notificationCenterPopover, /notification\.content/);
+});
+
+test("gnb maps notification team ids into notification center items", () => {
+  assert.match(gnb, /useAuth/);
+  assert.match(gnb, /teamNameById/);
+  assert.match(gnb, /teamName: getNotificationCenterTeamName/);
+});
+
+test("notification center mark-all action has a visible primary button surface", () => {
+  assert.match(notificationCenterPopover, /variant="default"/);
+  assert.match(notificationCenterPopover, /h-9 rounded-xl bg-primary px-3\.5/);
+  assert.match(notificationCenterPopover, /전체 읽음/);
+  assert.doesNotMatch(notificationCenterPopover, /CheckCheck/);
+  assert.match(notificationCenterPopover, /disabled=\{unreadCount === 0\}/);
+});
+
+test("notification center all-view action uses the primary component color", () => {
+  assert.match(notificationCenterPopover, /asChild[\s\S]*variant="default"[\s\S]*className="w-full rounded-xl bg-primary/);
+  assert.match(notificationCenterPopover, /!text-primary-foreground/);
+  assert.match(notificationCenterPopover, /hover:!text-primary-foreground/);
+  assert.match(notificationCenterPopover, /\[\&_svg\]:!text-primary-foreground/);
+  assert.match(notificationCenterPopover, /<Link href="\/notification" onClick=\{onClose\}>/);
+});
+
 test("notification center trigger keeps theme-appropriate text while open on topbar", () => {
   assert.match(gnb, /aria-expanded=\{isNotificationOpen\}/);
   assert.match(gnb, /aria-expanded:!text-slate-900/);
   assert.match(gnb, /dark:aria-expanded:!text-white/);
   assert.match(gnb, /dark:active:!text-white/);
+});
+
+test("notification center count uses the worklog red count badge", () => {
+  assert.match(gnb, /unreadCount > 0/);
+  assert.match(gnb, /group relative h-10 w-10/);
+  assert.match(gnb, /absolute -right-1\.5 -top-1\.5/);
+  assert.match(gnb, /rounded-full bg-red-600/);
+  assert.match(gnb, /ring-2 ring-background/);
+});
+
+test("notification center trigger shows only icon and count visually", () => {
+  assert.match(gnb, /<Bell className="size-4" \/>/);
+  assert.match(gnb, /<span className="sr-only">알림 센터<\/span>/);
+  assert.doesNotMatch(gnb, /className="hidden text-left md:inline">알림 센터/);
+  assert.match(gnb, /font-bold/);
 });
 
 test("workspace shell uses light gray navigation colors outside dark mode", () => {

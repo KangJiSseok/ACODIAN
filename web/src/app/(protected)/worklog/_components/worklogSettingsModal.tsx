@@ -82,7 +82,7 @@ export function WorklogSettingsModal({
 }: WorklogSettingsModalProps) {
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="relative flex max-h-[86vh] max-w-4xl flex-col overflow-hidden rounded-[28px] p-0">
+      <DialogContent className="relative flex max-h-[86vh] max-w-4xl flex-col overflow-hidden rounded-2xl p-0">
         <DialogHeader className="shrink-0 px-7 pb-4 pt-7">
           <DialogTitle>작업 설정</DialogTitle>
           <DialogDescription>
@@ -125,14 +125,14 @@ export function WorklogSettingsModal({
                 </div>
                 <div
                   className={cn(
-                    "space-y-3 overflow-hidden rounded-2xl border border-border/70 bg-muted/20 p-4",
+                    "space-y-3 overflow-hidden rounded-xl border border-border/70 bg-muted/20 p-4",
                     !statusChangeReasonVisible && "hidden"
                   )}
                 >
                   <label className="text-sm font-semibold text-foreground">
                     변경 사유
                   </label>
-                  <div className="rounded-2xl border border-input bg-background/75 px-4 py-3 shadow-sm transition-all focus-within:border-primary/45 focus-within:ring-2 focus-within:ring-primary/15">
+                  <div className="rounded-xl border border-input bg-background/75 px-4 py-3 shadow-sm transition-all focus-within:border-primary/45 focus-within:ring-2 focus-within:ring-primary/15">
                     <textarea
                       className="h-[112px] w-full resize-none bg-transparent pr-2 text-sm leading-6 text-foreground outline-none placeholder:text-muted-foreground [scrollbar-color:theme(colors.slate.400)_transparent] [scrollbar-gutter:stable] [scrollbar-width:thin] [&::-webkit-scrollbar]:w-2 [&::-webkit-scrollbar-thumb]:rounded-full [&::-webkit-scrollbar-thumb]:bg-muted-foreground/35 [&::-webkit-scrollbar-track]:bg-transparent"
                       value={values.statusChangeReason ?? ""}
@@ -241,11 +241,15 @@ export function WorklogSettingsModal({
               </ModalField>
             </div>
           </div>
-        <DialogFooter className="shrink-0 items-center justify-between border-t border-border/70 px-7 py-4">
+        <DialogFooter className="shrink-0 items-center justify-between border-t border-border/70 bg-muted/20 px-7 py-4">
           <p className="mr-auto text-xs text-muted-foreground">
-            설정은 이미 폼에 반영됩니다. 최종 저장은 등록/수정 버튼으로 완료됩니다.
+            설정을 확인한 뒤 반영 버튼으로 창을 닫습니다.
           </p>
-          <Button type="button" onClick={() => onOpenChange(false)}>
+          <Button
+            type="button"
+            className="h-10 min-w-28 rounded-lg px-5 font-semibold"
+            onClick={() => onOpenChange(false)}
+          >
             설정 반영
           </Button>
         </DialogFooter>
@@ -324,7 +328,7 @@ function DependencyDropdown({
         </div>
 
         {dependencySearchOpen && dependencyKeywordInput.trim() ? (
-          <div className="overflow-hidden rounded-2xl border border-border bg-popover p-2 shadow-[0_18px_48px_-28px_rgba(15,23,42,0.65)]">
+          <div className="overflow-hidden rounded-xl border border-border bg-popover p-2 shadow-[0_18px_48px_-28px_rgba(15,23,42,0.65)]">
             <div className="dashboard-scrollbar max-h-[220px] overflow-y-auto [scrollbar-gutter:stable]">
               {filteredDependencyCandidates.length === 0 ? (
                 <p className="px-3 py-3 text-sm text-muted-foreground">
@@ -335,7 +339,7 @@ function DependencyDropdown({
                   <button
                     key={dependency.id}
                     type="button"
-                    className="block w-full rounded-xl px-3 py-2.5 text-left transition-colors hover:bg-muted"
+                    className="block w-full rounded-xl px-3 py-2.5 text-left"
                     onMouseDown={(event) => event.preventDefault()}
                     onClick={() => onAddDependency(dependency.id)}
                   >
@@ -383,7 +387,7 @@ function DependencySelectionList({
 }) {
   if (dependencies.length === 0) {
     return (
-      <p className="rounded-2xl border border-dashed border-border/70 px-4 py-3 text-sm text-muted-foreground">
+        <p className="rounded-xl border border-dashed border-border/70 px-4 py-3 text-sm text-muted-foreground">
         선택한 선행 업무가 없습니다.
       </p>
     )
@@ -394,7 +398,7 @@ function DependencySelectionList({
       {dependencies.map((dependency) => (
         <div
           key={dependency.id}
-          className="flex items-start justify-between gap-3 rounded-2xl border border-border/70 bg-muted/25 px-4 py-3 text-sm"
+          className="flex items-start justify-between gap-3 rounded-xl border border-border/70 bg-muted/25 px-4 py-3 text-sm"
         >
           <div className="min-w-0">
             <p className="truncate font-medium text-foreground">
@@ -406,7 +410,7 @@ function DependencySelectionList({
           </div>
           <button
             type="button"
-            className="flex size-7 shrink-0 items-center justify-center rounded-lg text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+            className="flex size-7 shrink-0 items-center justify-center rounded-lg text-muted-foreground"
             aria-label={`${dependency.title} 선행 업무 제거`}
             onClick={() => onRemoveDependency(dependency.id)}
           >
@@ -428,7 +432,7 @@ function ScheduleDateControl({
   onChange: (value: string) => void
 }) {
   return (
-    <label className="group flex min-h-[76px] items-center gap-3 rounded-2xl border border-border/80 bg-background/75 px-4 py-3 shadow-sm transition-all hover:-translate-y-0.5 hover:border-primary/35 hover:bg-primary/5 hover:shadow-[0_16px_38px_-28px_rgba(30,58,138,0.8)] focus-within:border-primary/45 focus-within:ring-2 focus-within:ring-primary/15">
+    <label className="group flex min-h-[76px] items-center gap-3 rounded-2xl border border-border/80 bg-background/75 px-4 py-3 shadow-sm focus-within:border-primary/45 focus-within:ring-2 focus-within:ring-primary/15">
       <span className="flex size-10 shrink-0 items-center justify-center rounded-full border border-primary/20 bg-primary/10 text-primary">
         <CalendarDays className="size-5" />
       </span>
@@ -438,7 +442,7 @@ function ScheduleDateControl({
         </span>
         <input
           type="date"
-          className="schedule-date-input mt-1 h-10 w-full rounded-full border border-border/70 bg-background px-3 text-sm font-semibold text-foreground outline-none transition-colors [color-scheme:light] hover:border-primary/35 focus:border-primary dark:[color-scheme:dark]"
+          className="schedule-date-input mt-1 h-10 w-full rounded-full border border-border/70 bg-background px-3 text-sm font-semibold text-foreground outline-none transition-colors [color-scheme:light] focus:border-primary dark:[color-scheme:dark]"
           value={value}
           onChange={(event) => onChange(event.target.value)}
           aria-label={`${label} 날짜 입력`}

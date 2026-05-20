@@ -266,14 +266,20 @@ API_HOST_PORT=8101
 WEB_HOST_PORT=8001
 POSTGRES_HOST_PORT=8301
 REDIS_HOST_PORT=8401
+QDRANT_HOST_PORT=8501
+NEO4J_BOLT_HOST_PORT=8601
+NEO4J_HTTP_HOST_PORT=8603
 DB_NAME=postgres
 DB_USERNAME=postgres
+NEO4J_USER=neo4j
+NEO4J_PASSWORD=<staging Neo4j strong random password>
 DB_PASSWORD=<staging 전용 강한 무작위 값, 최소 24자>
 JWT_SECRET=<staging 전용 최소 32바이트 무작위 값>
 JWT_ACCESS_EXPIRATION=3600000
 JWT_REFRESH_EXPIRATION=1209600000
 AI_HOST_PORT=8201
-GEMINI_API_KEY=<staging 전용 실키>
+GEMINI_API_KEY=<staging 전용 대표 Gemini 실키 또는 공백>
+GEMINI_API_KEYS=<staging 전용 Gemini 실키들, comma-separated>
 AWS_S3_BUCKET=<staging/prod 공용 또는 staging 전용 버킷명>
 AWS_REGION=<예: ap-northeast-2>
 AWS_S3_BASE_PREFIX=<예: staging>
@@ -294,14 +300,20 @@ API_HOST_PORT=8100
 WEB_HOST_PORT=8000
 POSTGRES_HOST_PORT=8300
 REDIS_HOST_PORT=8400
+QDRANT_HOST_PORT=8500
+NEO4J_BOLT_HOST_PORT=8600
+NEO4J_HTTP_HOST_PORT=8602
 DB_NAME=postgres
 DB_USERNAME=postgres
+NEO4J_USER=neo4j
+NEO4J_PASSWORD=<production Neo4j strong random password>
 DB_PASSWORD=<production 전용 강한 무작위 값, staging 과 반드시 다른 값>
 JWT_SECRET=<production 전용 최소 32바이트 무작위 값, staging 과 반드시 다른 값>
 JWT_ACCESS_EXPIRATION=3600000
 JWT_REFRESH_EXPIRATION=1209600000
 AI_HOST_PORT=8200
-GEMINI_API_KEY=<production 전용 실키>
+GEMINI_API_KEY=<production 전용 대표 Gemini 실키 또는 공백>
+GEMINI_API_KEYS=<production 전용 Gemini 실키들, comma-separated>
 AWS_S3_BUCKET=<production 버킷명>
 AWS_REGION=<예: ap-northeast-2>
 AWS_S3_BASE_PREFIX=<예: production>
@@ -316,6 +328,8 @@ PROFILE_IMAGE_RETENTION_DAYS=1
 > `PROFILE_IMAGE_CLEANUP_CRON` 의 cron 식은 컨테이너 TZ 기준이다. compose 가 api 서비스에 `TZ=Asia/Seoul` 을 기본 주입하므로 위 값은 **KST 22:20** 으로 해석된다. UTC 운영이 필요하면 `.env` 에 `API_TZ=UTC` 를 추가하거나 cron 식 자체를 UTC 기준으로 다시 쓴다.
 
 > `WEB_IMAGE` / `API_IMAGE` 는 `.env` 에 두지 않는다. CI 가 `deploy_dev` / `deploy_prod` 단계에서 `WEB_IMAGE='ghcr.io/...:<ref-slug>'` / `API_IMAGE='...'` 형태로 SSH 호출 환경변수로 직접 주입한다 (ADR-003 의 "환경별 값은 서버 `.env` 또는 GitLab Variables" 원칙 + ADR-007 의 ghcr 네임스페이스).
+
+> Gemini 키는 단일 키만 쓰면 `GEMINI_API_KEY`, 복수 키 failover를 쓰면 `GEMINI_API_KEYS`에 comma-separated 로 넣는다. 둘 다 있으면 앱이 중복을 제거하고 `GEMINI_API_KEY`를 첫 후보로 사용한다.
 
 OPS-011 에 따라 `DB_PASSWORD` 는 staging/production 서로 다른 강한 무작위 값으로 유지한다. DB 가 외부 개방된 구조(ADR-011) 에서 비밀번호가 1차 방어선이 된다.
 

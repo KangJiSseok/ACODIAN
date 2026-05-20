@@ -120,6 +120,43 @@ export interface SearchWorklogsParams extends GetWorklogsParams {
   period?: "LAST_7" | "LAST_30" | "LAST_90"
 }
 
+export interface SearchSemanticWorklogsParams {
+  query: string
+}
+
+export interface WorklogSemanticReference {
+  referenceId: string
+  filePath: string
+}
+
+export interface WorklogSemanticSearchResponse {
+  answer: string
+  references: WorklogSemanticReference[]
+}
+
+export interface SearchPredecessorCandidatesParams extends GetWorklogsParams {
+  teamId: number
+  query?: string
+  excludeWorklogId?: number
+}
+
+export interface SearchTagsParams extends GetWorklogsParams {
+  query?: string
+}
+
+export interface WorklogWritingAssistRequest {
+  requestContent?: string | null
+  workContent: string
+}
+
+export interface WorklogPolishResponse {
+  workContent: string
+}
+
+export interface WorklogTitleRecommendationResponse {
+  titles: string[]
+}
+
 export interface WorklogListApiItem {
   worklogId: number
   title: string
@@ -199,11 +236,6 @@ export interface WorklogFilterTag {
   tagName: string
 }
 
-export interface WorklogOptionsApiResponse {
-  predecessorCandidates: WorklogOptionPredecessorCandidate[]
-  tags: WorklogOptionTagItem[]
-}
-
 export interface WorklogOptionPredecessorCandidate {
   worklogId: number
   title: string
@@ -228,6 +260,16 @@ export interface WorklogOptionTagItem {
   usageCount: number
   createdAt: string
   updatedAt: string
+}
+
+export interface WorklogTagSearchApiItem {
+  id?: number
+  tagId?: number
+  tagName?: string
+  name?: string
+  usageCount?: number | string | null
+  createdAt?: string | null
+  updatedAt?: string | null
 }
 
 export interface CreateWorklogResponse {
@@ -266,6 +308,7 @@ export interface WorklogFileItem {
   storedPath: string
   fileExtension: string
   fileSizeBytes: number
+  aiProcessingStatus?: string | null
 }
 
 export interface WorklogDependencyItem {

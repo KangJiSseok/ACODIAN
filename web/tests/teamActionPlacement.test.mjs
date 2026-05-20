@@ -42,10 +42,19 @@ test("team management page shows helper description copy", () => {
   assert.doesNotMatch(teamPage, /팀 상태, 책임자/);
 });
 
+test("team summary cards show active and inactive before total", () => {
+  assert.match(
+    teamPage,
+    /label: "활성화된 팀"[\s\S]*label: "비활성화된 팀"[\s\S]*label: "전체 팀"/,
+  );
+});
+
 test("team create action is exposed only to organization managers", () => {
   assert.match(teamPage, /useAuth\(\)/);
   assert.match(teamPage, /canCreateTeams\(user\)/);
-  assert.match(teamPage, /actions=\{canCreateTeam \?/);
+  assert.doesNotMatch(teamPage, /actions=\{canCreateTeam \?/);
+  assert.match(teamPage, /팀 목록[\s\S]*canCreateTeam \?/);
+  assert.match(teamPage, /팀 목록[\s\S]*\/team\/create[\s\S]*팀 등록/);
 });
 
 test("team detail owns edit and delete actions", () => {

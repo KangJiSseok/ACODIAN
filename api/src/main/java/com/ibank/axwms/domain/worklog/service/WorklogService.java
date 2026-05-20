@@ -2,18 +2,25 @@ package com.ibank.axwms.domain.worklog.service;
 
 import com.ibank.axwms.domain.file.repository.FileRepository;
 import com.ibank.axwms.domain.file.service.FileService;
+import com.ibank.axwms.domain.organization.team.entity.Team;
 import com.ibank.axwms.domain.organization.team.service.TeamService;
-import com.ibank.axwms.domain.tag.repository.jooq.projection.MetaTagDetailProjection;
 import com.ibank.axwms.domain.tag.service.TagService;
 import com.ibank.axwms.domain.worklog.WorklogStatus;
 import com.ibank.axwms.domain.worklog.dto.CreateWorklogApiDto;
 import com.ibank.axwms.domain.worklog.dto.GetWorklogDetailApiDto;
-import com.ibank.axwms.domain.worklog.dto.GetWorklogOptionsApiDto;
 import com.ibank.axwms.domain.worklog.dto.GetWorklogsApiDto;
+import com.ibank.axwms.domain.worklog.dto.InternalWorklogPolishApiDto;
+import com.ibank.axwms.domain.worklog.dto.InternalWorklogTitleRecommendationApiDto;
+import com.ibank.axwms.domain.worklog.dto.PolishWorklogApiDto;
+import com.ibank.axwms.domain.worklog.dto.RecommendWorklogTitleApiDto;
+import com.ibank.axwms.domain.worklog.dto.SearchPredecessorApiDto;
 import com.ibank.axwms.domain.worklog.dto.UpdateWorklogApiDto;
 import com.ibank.axwms.domain.worklog.dto.UpdateWorklogStatusApiDto;
 import com.ibank.axwms.domain.worklog.entity.Worklog;
 import com.ibank.axwms.domain.worklog.entity.WorklogTag;
+import com.ibank.axwms.domain.worklog.event.WorklogAiPostProcessRequestedEvent;
+import com.ibank.axwms.domain.worklog.event.WorklogCompletedEvent;
+import com.ibank.axwms.domain.worklog.external.WorklogPolishClient;
 import com.ibank.axwms.domain.worklog.policy.WorklogStatusPolicy;
 import com.ibank.axwms.domain.worklog.repository.WorklogDependencyRepository;
 import com.ibank.axwms.domain.worklog.repository.WorklogRepository;
@@ -24,15 +31,19 @@ import com.ibank.axwms.domain.worklog.repository.jooq.projection.WorklogDetailPr
 import com.ibank.axwms.domain.worklog.repository.jooq.projection.WorklogFileProjection;
 import com.ibank.axwms.domain.worklog.repository.jooq.projection.WorklogListProjection;
 import com.ibank.axwms.domain.worklog.repository.jooq.projection.WorklogStatusHistoryProjection;
+import com.ibank.axwms.domain.worklog.repository.jooq.query.PredecessorCandidateSearchQuery;
 import com.ibank.axwms.domain.worklog.repository.jooq.query.WorklogPageQuery;
+import com.ibank.axwms.global.enums.AiProcessingStatus;
 import com.ibank.axwms.global.error.BusinessException;
 import com.ibank.axwms.global.error.ErrorCode;
 import com.ibank.axwms.global.response.PageResponse;
 import com.ibank.axwms.global.security.CustomUserPrincipal;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.data.domain.Page;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.multipart.MultipartFile;
 
@@ -59,10 +70,45 @@ public class WorklogService {
     private final WorklogDependencyService worklogDependencyService;
     private final WorklogStatusPolicy worklogStatusPolicy;
     private final TagService tagService;
+    private final ApplicationEventPublisher eventPublisher;
+    private final WorklogPolishClient worklogPolishClient;
+
+    /**
+     * 인증된 작성 보조 요청의 초안을 AI 서버에 전달하고 저장 없이 다듬어진 본문만 반환한다.
+     * Controller 의 role gate 이후에는 사용자 식별자가 필요 없고, 원격 호출만 수행하므로 DB 트랜잭션을 열지 않는다.
+     *
+     * @param request 작성 보조 요청 DTO
+     * @return 다듬어진 본문
+     */
+    @Transactional(propagation = Propagation.NOT_SUPPORTED)
+    public PolishWorklogApiDto.Response polishWorklog(PolishWorklogApiDto.Request request) {
+        InternalWorklogPolishApiDto.Response response = worklogPolishClient.polishWorklog(
+                InternalWorklogPolishApiDto.Request.from(request)
+        );
+        return PolishWorklogApiDto.Response.of(response.workContent());
+    }
+
+    /**
+     * 인증된 제목 추천 요청의 초안을 AI 서버에 전달하고 저장 없이 후보 제목만 반환한다.
+     * 기존 작성 보조와 같은 동기 호출 경계이므로 별도 DB 트랜잭션을 열지 않는다.
+     *
+     * @param request 제목 추천 요청 DTO
+     * @return 최대 3개의 제목 후보
+     */
+    @Transactional(propagation = Propagation.NOT_SUPPORTED)
+    public RecommendWorklogTitleApiDto.Response recommendWorklogTitles(
+            RecommendWorklogTitleApiDto.Request request
+    ) {
+        InternalWorklogTitleRecommendationApiDto.Response response = worklogPolishClient.recommendWorklogTitles(
+                InternalWorklogTitleRecommendationApiDto.Request.from(request)
+        );
+        return RecommendWorklogTitleApiDto.Response.of(response.titles());
+    }
 
     /**
      * 로그인 사용자의 권한으로 업무를 등록한다.
      * 팀 존재 여부와 사용자의 해당 팀 소속 여부를 확인한 뒤 신규 Worklog 엔티티를 저장한다.
+     * 등록 트랜잭션 커밋 후에는 파일 요약, 본문 요약/태그 생성 파이프라인, Light v3 index 를 통합 후처리로 요청한다.
      *
      * @param principal 현재 로그인 사용자
      * @param request   업무 등록 요청 DTO
@@ -77,7 +123,7 @@ public class WorklogService {
             CreateWorklogApiDto.Request request,
             List<MultipartFile> files
     ) {
-        teamService.getTeamOrThrow(request.teamId());
+        Team team = teamService.getTeamOrThrow(request.teamId());
         if (!teamService.isMember(principal.userId(), request.teamId())) {
             throw new BusinessException(ErrorCode.WORKLOG_TEAM_FORBIDDEN);
         }
@@ -97,8 +143,11 @@ public class WorklogService {
                 request.dueDate()
         ));
 
-        log.info("access worklog create service");
-        fileService.uploadWorklogFiles(savedWorklog.getId(), principal.userId(), files);
+        List<FileService.UploadedFile> uploadedFiles = fileService.uploadWorklogFilesWithoutAiSummaryRequest(
+                savedWorklog.getId(),
+                principal.userId(),
+                files
+        );
         worklogStatusHistoryService.createStatusHistory(
                 savedWorklog.getId(),
                 request.statusCode(),
@@ -110,9 +159,45 @@ public class WorklogService {
                 savedWorklog.getTeamId(),
                 request.predecessorWorklogIds()
         );
+        savedWorklog.startAiProcessing();
+        publishWorklogAiPostProcessRequest(savedWorklog, team, uploadedFiles);
 
         return CreateWorklogApiDto.Response.of(savedWorklog.getId());
     }
+
+    /**
+     * 등록 트랜잭션이 성공한 업무만 세 AI 요청 통합 후처리에 넘기도록 AFTER_COMMIT 이벤트로 snapshot 을 분리한다.
+     */
+    private void publishWorklogAiPostProcessRequest(Worklog worklog, Team team, List<FileService.UploadedFile> uploadedFiles) {
+        eventPublisher.publishEvent(new WorklogAiPostProcessRequestedEvent(
+                worklog.getId(),
+                worklog.getTitle(),
+                worklog.getRequestContent(),
+                worklog.getWorkContent(),
+                worklog.getAuthorId(),
+                worklog.getTeamId(),
+                team.getDepartmentId(),
+                toFileSummaryTargets(uploadedFiles)
+        ));
+    }
+
+    /**
+     * file 모듈의 업로드 결과를 worklog 통합 후처리 이벤트가 소유하는 불변 snapshot 으로 변환한다.
+     */
+    private List<WorklogAiPostProcessRequestedEvent.FileSummaryTarget> toFileSummaryTargets(List<FileService.UploadedFile> uploadedFiles) {
+        if (uploadedFiles == null || uploadedFiles.isEmpty()) {
+            return List.of();
+        }
+        return uploadedFiles.stream()
+                .map(file -> new WorklogAiPostProcessRequestedEvent.FileSummaryTarget(
+                        file.fileId(),
+                        file.storageKey(),
+                        file.originalName(),
+                        file.fileExtension()
+                ))
+                .toList();
+    }
+
 
     /**
      * 등록 화면에서 직접 선택한 태그만 수동 태그로 연결하고 사용 횟수 캐시를 증가시킨다.
@@ -124,7 +209,7 @@ public class WorklogService {
         }
 
         List<WorklogTag> worklogTags = normalizedTagIds.stream()
-                .map(tagId -> WorklogTag.createManualSelected(worklogId, tagId))
+                .map(tagId -> WorklogTag.create(worklogId, tagId))
                 .toList();
         worklogTagRepository.saveAll(worklogTags);
         tagService.incrementUsageCountByIds(normalizedTagIds);
@@ -148,6 +233,22 @@ public class WorklogService {
         Map<Long, Long> predecessorCountByWorklogId = worklogDependencyRepository.countByWorklogIds(worklogIds);
 
         return GetWorklogsApiDto.Response.fromPage(page, predecessorCountByWorklogId);
+    }
+
+    /**
+     * 같은 팀 내 미완료 worklog 를 선행 후보로 검색한다.
+     * 요청자는 teamId 의 ACTIVE 멤버여야 하며, query 가 있으면 제목 LIKE, excludeWorklogId 가 있으면 결과에서 제외한다.
+     *
+     * @throws BusinessException WORKLOG_TEAM_FORBIDDEN 사용자가 요청 팀의 ACTIVE 멤버가 아닐 때
+     */
+    public PageResponse<SearchPredecessorApiDto.Response.Item> searchPredecessor(CustomUserPrincipal principal,
+                                                                                 SearchPredecessorApiDto.Request request) {
+        if (!teamService.isMember(principal.userId(), request.teamId())) {
+            throw new BusinessException(ErrorCode.WORKLOG_TEAM_FORBIDDEN);
+        }
+        PredecessorCandidateSearchQuery query = PredecessorCandidateSearchQuery.from(request);
+        Page<WorklogListProjection> page = worklogRepository.searchPredecessorCandidatePage(query);
+        return SearchPredecessorApiDto.Response.fromPage(page);
     }
 
     /**
@@ -233,6 +334,7 @@ public class WorklogService {
                 request.reason(),
                 statusChanged
         );
+        publishWorklogCompletedEventIfNeeded(worklogId, request.statusCode(), statusChanged);
 
         worklogDependencyService.replacePredecessors(
                 worklogId,
@@ -282,6 +384,23 @@ public class WorklogService {
                 request.reason(),
                 true
         );
+        publishWorklogCompletedEventIfNeeded(worklogId, request.statusCode(), true);
+    }
+
+    /**
+     * 실패한 AI 요약 처리를 작성자 본인이 다시 요청한다.
+     * 기존 등록 후처리 이벤트를 재사용하되 첨부 파일 요약은 재요청하지 않는다.
+     */
+    @Transactional
+    public void retryAiSummary(CustomUserPrincipal principal, Long worklogId) {
+        Worklog worklog = getEditableWorklogOrThrow(principal, worklogId);
+        if (worklog.getAiProcessingStatus() != AiProcessingStatus.FAILED) {
+            throw new BusinessException(ErrorCode.WORKLOG_AI_RETRY_STATUS_INVALID);
+        }
+
+        Team team = teamService.getTeamOrThrow(worklog.getTeamId());
+        worklog.startAiProcessing();
+        publishWorklogAiPostProcessRequest(worklog, team, List.of());
     }
 
     /**
@@ -347,6 +466,19 @@ public class WorklogService {
     }
 
     /**
+     * 완료 전환 후속 알림 판정은 커밋 이후 이벤트 흐름에서만 수행해 본문 수정 트랜잭션의 책임을 상태 저장으로 제한한다.
+     */
+    private void publishWorklogCompletedEventIfNeeded(Long worklogId,
+                                                      WorklogStatus nextStatusCode,
+                                                      boolean statusChanged) {
+        if (!(statusChanged && nextStatusCode == WorklogStatus.COMPLETED)) {
+            return;
+        }
+        eventPublisher.publishEvent(new WorklogCompletedEvent(worklogId));
+    }
+
+
+    /**
      * 수정 요청에서 삭제를 명시한 태그만 연결 해제한다.
      */
     private void removeManualTags(Long worklogId, List<Long> removeTagIds) {
@@ -389,30 +521,10 @@ public class WorklogService {
         }
 
         List<WorklogTag> worklogTags = newTagIds.stream()
-                .map(tagId -> WorklogTag.createManualSelected(worklogId, tagId))
+                .map(tagId -> WorklogTag.create(worklogId, tagId))
                 .toList();
         worklogTagRepository.saveAll(worklogTags);
         tagService.incrementUsageCountByIds(newTagIds);
-    }
-
-    /**
-     * 업무 등록 화면 진입 시 사용할 폼 옵션을 한 번에 반환한다.
-     * 의존성은 같은 팀 내에서만 등록 가능하므로 선행 후보는 요청 teamId 의 미삭제, 미완료 worklog 만 최신순으로 포함한다.
-     * 호출 사용자는 해당 팀의 ACTIVE 멤버여야 한다.
-     * 태그는 메타 태그 전체를 이름순으로 포함한다.
-     *
-     * @throws BusinessException WORKLOG_TEAM_FORBIDDEN 사용자가 요청 팀의 ACTIVE 멤버가 아닐 때
-     */
-    public GetWorklogOptionsApiDto.Response getWorklogOptions(CustomUserPrincipal principal,
-                                                              GetWorklogOptionsApiDto.Request request) {
-        Long teamId = request.teamId();
-        if (!teamService.isMember(principal.userId(), teamId)) {
-            throw new BusinessException(ErrorCode.WORKLOG_TEAM_FORBIDDEN);
-        }
-        List<WorklogListProjection> predecessorCandidates =
-                worklogRepository.findActivePredecessorCandidates(teamId);
-        List<MetaTagDetailProjection> tags = tagService.findAllTagDetails();
-        return GetWorklogOptionsApiDto.Response.of(predecessorCandidates, tags);
     }
 
     private void validateDateRange(LocalDate instructionDate, LocalDate dueDate) {

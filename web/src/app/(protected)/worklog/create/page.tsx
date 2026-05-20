@@ -7,7 +7,8 @@ import { useAuth } from "@/app/_common/hooks/useAuth"
 import { isDirectorProfile } from "@/app/_common/utils/organizationAccess.utils"
 import { WorklogForm } from "../_components/worklogForm"
 import {
-  useWorklogOptions,
+  usePredecessorCandidates,
+  useWorklogTagInfiniteSearch,
 } from "../_hooks/useWorklogList"
 import { worklogService } from "../_service/worklog.service"
 import { useTeamList } from "../../team/_hooks/useTeamList"
@@ -17,7 +18,8 @@ import type {
   WorklogFormTagOption,
   WorklogFormTeamOption,
   WorklogFormValues,
-  WorklogOptionsApiResponse,
+  WorklogOptionPredecessorCandidate,
+  WorklogOptionTagItem,
   WorklogStatus,
 } from "../_types/worklog.types"
 
@@ -40,6 +42,7 @@ export default function WorklogCreatePage() {
     isLoading: isTeamListLoading,
   } = useTeamList({ pageSize: 100 })
   const canCreate = Boolean(user && !isDirectorProfile(user))
+  const defaultDate = useMemo(() => getTodayDateString(), [])
   const activeTeams = useMemo(
     () => filterActiveTeams(teamPage?.items ?? []),
     [teamPage?.items]
@@ -49,29 +52,52 @@ export default function WorklogCreatePage() {
     [activeTeams, user]
   )
   const [selectedTeamId, setSelectedTeamId] = useState<number | null>(null)
+  const [tagSearchQuery, setTagSearchQuery] = useState("")
   const effectiveTeamId = selectedTeamId ?? defaultTeamId
   const {
-    data: worklogOptions,
-    isError: isWorklogOptionsError,
-    isLoading: isWorklogOptionsLoading,
-  } = useWorklogOptions(effectiveTeamId)
+    data: predecessorCandidates,
+    isError: isPredecessorCandidatesError,
+    isLoading: isPredecessorCandidatesLoading,
+  } = usePredecessorCandidates({
+    teamId: effectiveTeamId ?? 0,
+    pageSize: 100,
+  })
+  const {
+    data: tagPages,
+    fetchNextPage: fetchNextTagPage,
+    hasNextPage: hasNextTagPage,
+    isFetchingNextPage: isFetchingNextTagPage,
+  } = useWorklogTagInfiniteSearch(tagSearchQuery, {
+    enabled: canCreate,
+    retry: false,
+  })
+  const tagOptions = useMemo(
+    () => mergeTagOptions(tagPages?.pages.flatMap((page) => page.items) ?? []),
+    [tagPages?.pages]
+  )
   const formContext = useMemo(
-    () => buildCreateFormContext(activeTeams, worklogOptions, effectiveTeamId),
-    [activeTeams, effectiveTeamId, worklogOptions]
+    () =>
+      buildCreateFormContext(
+        activeTeams,
+        predecessorCandidates?.items ?? [],
+        tagOptions,
+        effectiveTeamId,
+        defaultDate
+      ),
+    [activeTeams, defaultDate, effectiveTeamId, predecessorCandidates?.items, tagOptions]
   )
 
   if (!canCreate) {
     return <div>업무 등록 권한이 없습니다.</div>
   }
 
-  if (isTeamListLoading || isWorklogOptionsLoading) {
+  if (isTeamListLoading || isPredecessorCandidatesLoading) {
     return <div>업무 등록 정보를 불러오는 중입니다.</div>
   }
 
   if (
     isTeamListError ||
-    isWorklogOptionsError ||
-    !worklogOptions ||
+    isPredecessorCandidatesError ||
     !formContext
   ) {
     return <div>업무 등록 정보를 불러오지 못했습니다.</div>
@@ -87,6 +113,10 @@ export default function WorklogCreatePage() {
         teamOptionsSource={formContext.teamOptionsSource}
         dependencyOptionsSource={formContext.dependencyOptionsSource}
         tagOptionsSource={formContext.tagOptionsSource}
+        hasMoreTagCandidates={Boolean(hasNextTagPage)}
+        isFetchingMoreTagCandidates={isFetchingNextTagPage}
+        onTagSearchKeywordChange={setTagSearchQuery}
+        onLoadMoreTagCandidates={() => fetchNextTagPage()}
         onSubmit={async (values) => {
           const created = await worklogService.create(values)
           router.push(`/worklog/detail/${created.worklogId}`)
@@ -98,18 +128,20 @@ export default function WorklogCreatePage() {
 
 function buildCreateFormContext(
   teams: TeamSummary[],
-  worklogOptions: WorklogOptionsApiResponse | undefined,
-  teamId: number | null | undefined
+  predecessorCandidates: WorklogOptionPredecessorCandidate[],
+  tags: WorklogOptionTagItem[],
+  teamId: number | null | undefined,
+  defaultDate: string
 ) {
-  if (!worklogOptions || !teamId) return null
+  if (!teamId) return null
 
   const teamOptionsSource = buildTeamOptions(teams)
 
   return {
-    initialValues: buildInitialValues(teamId),
+    initialValues: buildInitialValues(teamId, defaultDate),
     teamOptionsSource,
-    dependencyOptionsSource: buildDependencyOptions(worklogOptions),
-    tagOptionsSource: buildTagOptions(worklogOptions),
+    dependencyOptionsSource: buildDependencyOptions(predecessorCandidates),
+    tagOptionsSource: buildTagOptions(tags),
   }
 }
 
@@ -129,7 +161,10 @@ function resolveInitialTeamId(
   return primaryTeamId ?? firstAuthActiveTeamId ?? teams[0]?.teamId ?? null
 }
 
-function buildInitialValues(teamId: number): WorklogFormValues {
+function buildInitialValues(
+  teamId: number,
+  defaultDate: string
+): WorklogFormValues {
   return {
     title: "",
     requestContent: "",
@@ -137,8 +172,8 @@ function buildInitialValues(teamId: number): WorklogFormValues {
     status: "PENDING",
     importance: "NORMAL",
     actualHours: 0,
-    instructionDate: "2026-04-13",
-    dueDate: "2026-04-16",
+    instructionDate: defaultDate,
+    dueDate: defaultDate,
     teamId,
     dependencyIds: [],
     attachmentNames: [],
@@ -149,6 +184,15 @@ function buildInitialValues(teamId: number): WorklogFormValues {
     removeTagIds: [],
     statusChangeReason: "",
   }
+}
+
+function getTodayDateString() {
+  const today = new Date()
+  const year = today.getFullYear()
+  const month = String(today.getMonth() + 1).padStart(2, "0")
+  const date = String(today.getDate()).padStart(2, "0")
+
+  return `${year}-${month}-${date}`
 }
 
 function buildTeamOptions(teams: TeamSummary[]): WorklogFormTeamOption[] {
@@ -163,9 +207,9 @@ function filterActiveTeams(teams: TeamSummary[]) {
 }
 
 function buildDependencyOptions(
-  worklogOptions: WorklogOptionsApiResponse
+  predecessorCandidates: WorklogOptionPredecessorCandidate[]
 ): WorklogFormDependencyOption[] {
-  return worklogOptions.predecessorCandidates.map((candidate) => ({
+  return predecessorCandidates.map((candidate) => ({
     id: candidate.worklogId,
     title: candidate.title,
     status: statusCodeMap[candidate.statusCode] ?? "PENDING",
@@ -181,9 +225,9 @@ function buildDependencyOptions(
 }
 
 function buildTagOptions(
-  worklogOptions: WorklogOptionsApiResponse
+  tags: WorklogOptionTagItem[]
 ): WorklogFormTagOption[] {
-  return worklogOptions.tags.map((tag) => ({
+  return tags.map((tag) => ({
     id: tag.tagId,
     name: tag.tagName,
     usageCount: tag.usageCount,
@@ -191,4 +235,10 @@ function buildTagOptions(
     source: "MANUAL",
     reuseHint: "",
   }))
+}
+
+function mergeTagOptions(tags: WorklogOptionTagItem[]) {
+  return Array.from(
+    new Map(tags.map((tag) => [tag.tagId, tag])).values()
+  )
 }

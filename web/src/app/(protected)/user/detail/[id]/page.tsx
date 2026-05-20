@@ -2,6 +2,7 @@
 
 import { useParams } from "next/navigation";
 import PageHeader from "@/app/_common/components/layout/pageHeader";
+import { useAuth } from "@/app/_common/hooks/useAuth";
 import { useDepartmentList } from "../../../department/_hooks";
 import UserDetail from "../../_components/userDetail";
 import {
@@ -13,11 +14,19 @@ import {
 export default function UserDetailPage() {
   const params = useParams<{ id: string }>();
   const userId = Number(params.id);
+  const { user: currentUser } = useAuth();
+  const isSelfProfile = currentUser?.userId === userId;
+  const shouldLoadUserManagementInsights = Boolean(currentUser) && !isSelfProfile;
   const { data: user, isLoading, error } = useUserDetail(userId);
-  const { data: skills, isLoading: isSkillsLoading } = useUserSkills(userId);
+  const { data: skills, isLoading: isSkillsLoading } = useUserSkills(
+    userId,
+    shouldLoadUserManagementInsights,
+  );
   const { data: evaluations, isLoading: isEvaluationsLoading } =
-    useUserEvaluations(userId);
-  const { data: departments } = useDepartmentList();
+    useUserEvaluations(userId, shouldLoadUserManagementInsights);
+  const { data: departments } = useDepartmentList(
+    shouldLoadUserManagementInsights,
+  );
 
   return (
     <section className="space-y-6">
@@ -52,6 +61,7 @@ export default function UserDetailPage() {
           evaluations={evaluations?.items ?? []}
           isSkillsLoading={isSkillsLoading}
           isEvaluationsLoading={isEvaluationsLoading}
+          isSelfProfile={isSelfProfile}
         />
       ) : null}
     </section>

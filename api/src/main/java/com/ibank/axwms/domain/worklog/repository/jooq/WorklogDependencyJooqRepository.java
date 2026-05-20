@@ -1,6 +1,7 @@
 package com.ibank.axwms.domain.worklog.repository.jooq;
 
 import com.ibank.axwms.domain.worklog.repository.jooq.projection.BlockedPredecessorRowProjection;
+import com.ibank.axwms.domain.worklog.repository.jooq.projection.WorklogDependencyReadyParentProjection;
 import com.ibank.axwms.domain.worklog.repository.jooq.projection.WorklogDependencyProjection;
 
 import java.util.Collection;
@@ -42,4 +43,9 @@ public interface WorklogDependencyJooqRepository {
      * 선행 업무 replace 시 기존 set 과 신규 set 의 diff 계산에 사용한다.
      */
     Set<Long> findDependsOnWorklogIdsByWorklogId(Long worklogId);
+
+    /**
+     * 방금 완료된 선행 업무를 직접 참조하는 부모 중 모든 미삭제 선행 업무가 완료된 부모만 알림 후보로 반환한다.
+     */
+    List<WorklogDependencyReadyParentProjection> findReadyParentsByCompletedPredecessorId(Long completedWorklogId);
 }

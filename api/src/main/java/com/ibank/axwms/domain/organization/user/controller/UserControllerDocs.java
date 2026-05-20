@@ -29,7 +29,8 @@ public interface UserControllerDocs {
 
     @Operation(
             summary = "현재 로그인 사용자 조회",
-            description = "JWT access token 으로 인증된 현재 사용자의 프로필/이메일/전화번호/입사일/재직 상태/부서/소속 팀 문맥을 반환한다."
+            description = "JWT access token 으로 인증된 현재 사용자의 프로필/이메일/전화번호/입사일/재직 상태/부서/활성 소속 팀 문맥을 반환한다. "
+                    + "teams 는 ACTIVE membership 이면서 soft-delete 되지 않은 ACTIVE 팀만 포함한다."
     )
     @SecurityRequirement(name = "bearerAuth")
     @ApiResponses({
@@ -141,6 +142,7 @@ public interface UserControllerDocs {
             description = "DIRECTOR 또는 DEPT_HEAD 가 사용자 목록을 페이지네이션으로 조회한다. "
                     + "userName, departmentId, positionName, employmentStatus optional filter 를 적용하며, "
                     + "employmentStatus 가 없으면 ACTIVE/LEAVE 만 포함하고 RETIRED 는 항상 제외한다. "
+                    + "각 목록 항목은 사용자의 입사일 joinDate 를 포함한다. "
                     + "page 기본값은 1, pageSize 기본값은 20이고 최대 100이다. "
                     + "정렬은 DIRECTOR, DEPT_HEAD, TEAM_LEAD, MEMBER 순서다."
     )

@@ -1,24 +1,74 @@
 "use client"
 
-import { useRef } from "react"
+import { useRef, useState } from "react"
 import { Upload, X } from "lucide-react"
 import { Button } from "@/components/ui/button"
+import { cn } from "@/lib/utils"
 
 interface WorklogFileUploadProps {
   attachmentNames: string[]
+  maxFileCount: number
+  maxFileSizeMb: number
+  maxTotalSizeMb: number
   onAddAttachmentFiles: (files: File[]) => void
   onRemoveAttachmentName: (name: string) => void
 }
 
 export function WorklogFileUpload({
   attachmentNames,
+  maxFileCount,
+  maxFileSizeMb,
+  maxTotalSizeMb,
   onAddAttachmentFiles,
   onRemoveAttachmentName,
 }: WorklogFileUploadProps) {
   const fileInputRef = useRef<HTMLInputElement>(null)
+  const dragDepthRef = useRef(0)
+  const [isDragging, setIsDragging] = useState(false)
+  const hasFiles = attachmentNames.length > 0
+
+  const openFilePicker = () => {
+    fileInputRef.current?.click()
+  }
+
+  const addDroppedFiles = (files: FileList | null) => {
+    const nextFiles = Array.from(files ?? [])
+    if (nextFiles.length > 0) {
+      onAddAttachmentFiles(nextFiles)
+    }
+  }
 
   return (
-    <section className="rounded-[1.75rem] border border-border/70 bg-muted/35 p-5">
+    <section
+      className={cn(
+        "rounded-[1.75rem] border border-border/70 bg-muted/35 p-5 transition-colors",
+        isDragging && "border-primary/45 bg-primary/5"
+      )}
+      onDragEnter={(event) => {
+        event.preventDefault()
+        dragDepthRef.current += 1
+        if (event.dataTransfer.types.includes("Files")) {
+          setIsDragging(true)
+        }
+      }}
+      onDragOver={(event) => {
+        event.preventDefault()
+        event.dataTransfer.dropEffect = "copy"
+      }}
+      onDragLeave={(event) => {
+        event.preventDefault()
+        dragDepthRef.current = Math.max(0, dragDepthRef.current - 1)
+        if (dragDepthRef.current === 0) {
+          setIsDragging(false)
+        }
+      }}
+      onDrop={(event) => {
+        event.preventDefault()
+        dragDepthRef.current = 0
+        setIsDragging(false)
+        addDroppedFiles(event.dataTransfer.files)
+      }}
+    >
       <div className="mb-4 flex items-start justify-between gap-4">
         <div>
           <p className="text-xs uppercase tracking-[0.2em] text-muted-foreground">
@@ -33,19 +83,34 @@ export function WorklogFileUpload({
         </span>
       </div>
 
-      <div className="rounded-2xl border border-border/60 bg-input/95 p-4 shadow-sm">
+      <div
+        className={cn(
+          "rounded-2xl border border-dashed border-border/70 bg-input/95 p-5 shadow-sm transition-colors",
+          isDragging && "border-primary/60 bg-primary/10"
+        )}
+      >
         <div className="flex flex-wrap items-center justify-between gap-3">
           <div>
             <p className="text-sm font-semibold text-foreground">파일 업로드</p>
             <p className="mt-1 text-xs text-muted-foreground">
-              업무와 관련된 문서, 이미지, 자료 파일을 첨부합니다.
+              파일을 이 영역에 끌어다 놓거나 파일 선택 버튼으로 첨부합니다.
             </p>
+            <p className="mt-1 text-xs text-muted-foreground">
+              최대 {maxFileCount}개, 개당 {maxFileSizeMb}MB, 전체{" "}
+              {maxTotalSizeMb}MB까지 업로드할 수 있습니다.
+            </p>
+            {hasFiles ? (
+              <p className="mt-1 text-xs font-medium text-primary">
+                현재 {attachmentNames.length}/{maxFileCount}개 파일이
+                선택되었습니다.
+              </p>
+            ) : null}
           </div>
           <Button
             type="button"
             variant="secondary"
-            className="h-10 rounded-2xl px-4 text-sm"
-            onClick={() => fileInputRef.current?.click()}
+            className="h-10 rounded-lg px-4 text-sm"
+            onClick={openFilePicker}
           >
             <Upload className="size-4" />
             파일 선택
@@ -54,7 +119,7 @@ export function WorklogFileUpload({
       </div>
 
       <div className="mt-3 space-y-2">
-        {attachmentNames.length === 0 ? (
+        {!hasFiles ? (
           <p className="rounded-2xl border border-dashed border-border/70 bg-card/45 px-4 py-3 text-sm text-muted-foreground">
             아직 업로드된 파일이 없습니다.
           </p>
@@ -69,7 +134,7 @@ export function WorklogFileUpload({
               </span>
               <button
                 type="button"
-                className="flex size-7 shrink-0 items-center justify-center rounded-lg text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+                className="flex size-7 shrink-0 items-center justify-center rounded-lg text-muted-foreground"
                 aria-label={`${name} 제거`}
                 onClick={() => onRemoveAttachmentName(name)}
               >

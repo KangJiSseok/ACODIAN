@@ -33,19 +33,24 @@ from __future__ import annotations
 
 import asyncio
 import hashlib
+import logging
 import shutil
 import tempfile
 import time
 from pathlib import Path
-from typing import Any, TypeVar
+from typing import Any, Callable, TypeVar, cast
 
 from google import genai
 from google.genai import types
 from pydantic import BaseModel
 
+from app.client.gemini_key_pool import GeminiApiKeyCandidate, GeminiApiKeyPool
 from app.config.settings import settings
+from app.task.retry_policy import is_retryable_ai_error
 
 SchemaT = TypeVar("SchemaT", bound=BaseModel)
+ResultT = TypeVar("ResultT")
+logger = logging.getLogger(__name__)
 
 
 class GeminiClient:
@@ -65,10 +70,10 @@ class GeminiClient:
         Raises:
             RuntimeError: 키가 비어 있을 때.
         """
-        key = api_key or settings.gemini_api_key
-        if not key:
-            raise RuntimeError("GEMINI_API_KEY is not configured")
-        self._client = genai.Client(api_key=key)
+        keys = [api_key] if api_key is not None else settings.gemini_api_key_candidates
+        self._key_pool = GeminiApiKeyPool(keys)
+        self._clients: dict[str, genai.Client] = {}
+        self._file_key_by_name: dict[str, str] = {}
 
     async def generate_text(self, prompt: str, *, model: str | None = None) -> str:
         """단일 프롬프트로 텍스트를 생성한다.
@@ -81,10 +86,12 @@ class GeminiClient:
             생성된 텍스트. 응답이 비어 있으면 빈 문자열.
         """
         target_model = model or settings.gemini_model
-        response = await asyncio.to_thread(
-            self._client.models.generate_content,
-            model=target_model,
-            contents=prompt,
+        response = await self._with_key_failover(
+            "generate_text",
+            lambda _candidate, client: client.models.generate_content(
+                model=target_model,
+                contents=prompt,
+            ),
         )
         return getattr(response, "text", "") or ""
 
@@ -105,15 +112,18 @@ class GeminiClient:
             각 입력 텍스트에 대응하는 부동소수점 벡터 리스트.
         """
         target_model = model or settings.embedding_model
-        response = await asyncio.to_thread(
-            self._client.models.embed_content,
-            model=target_model,
-            contents=texts,
-            config=types.EmbedContentConfig(
-                output_dimensionality=settings.embedding_dim,
+        response = await self._with_key_failover(
+            "embed",
+            lambda _candidate, client: client.models.embed_content(
+                model=target_model,
+                contents=cast(Any, texts),
+                config=types.EmbedContentConfig(
+                    output_dimensionality=settings.embedding_dim,
+                ),
             ),
         )
-        return [list(item.values) for item in response.embeddings]
+        embeddings = cast(Any, response).embeddings or []
+        return [list(item.values or []) for item in embeddings]
 
     # ------------------------------------------------------------------
     # 파일 단위 요약(파일 첨부 AI 파이프라인)에서 사용하는 추가 메서드.
@@ -127,27 +137,34 @@ class GeminiClient:
         실패하므로 SHA1 기반의 ASCII-safe 임시 사본을 만들어 업로드한다.
         """
 
-        def _upload_sync() -> Any:
+        def _upload_sync(candidate: GeminiApiKeyCandidate, client: genai.Client) -> Any:
             upload_path, cleanup_dir = self._make_ascii_safe(path)
             try:
                 config_kwargs: dict[str, Any] = {"display_name": path.name}
                 if mime_type:
                     config_kwargs["mime_type"] = mime_type
                 config = types.UploadFileConfig(**config_kwargs)
-                uploaded = self._client.files.upload(file=str(upload_path), config=config)
-                return self._wait_active(uploaded)
+                uploaded = client.files.upload(file=str(upload_path), config=config)
+                active_file = self._wait_active(uploaded, client=client)
+                self._file_key_by_name[active_file.name] = candidate.value
+                return active_file
             finally:
                 if cleanup_dir is not None:
                     shutil.rmtree(cleanup_dir, ignore_errors=True)
 
-        return await asyncio.to_thread(_upload_sync)
+        return await self._with_key_failover("upload_file", _upload_sync)
 
     async def delete_file(self, file_obj: Any) -> None:
         """업로드된 Files API 자원을 정리한다. 실패해도 호출 흐름을 막지 않는다."""
 
         def _delete_sync() -> None:
             try:
-                self._client.files.delete(name=file_obj.name)
+                file_name = file_obj.name
+                key = self._file_key_by_name.get(file_name)
+                if key is None:
+                    key = self._key_pool.candidates[0].value
+                self._client_for_key(key).files.delete(name=file_name)
+                self._file_key_by_name.pop(file_name, None)
             except Exception:
                 pass
 
@@ -167,24 +184,26 @@ class GeminiClient:
         """
 
         target_model = model or settings.gemini_model
-        response = await asyncio.to_thread(
-            self._client.models.generate_content,
-            model=target_model,
-            contents=contents,
-            config=types.GenerateContentConfig(
-                temperature=0.1,
-                top_p=0.95,
-                response_mime_type="application/json",
-                response_schema=schema,
-                system_instruction=instruction,
+        response = await self._with_key_failover(
+            "generate_structured",
+            lambda _candidate, client: client.models.generate_content(
+                model=target_model,
+                contents=contents,
+                config=types.GenerateContentConfig(
+                    temperature=0.1,
+                    top_p=0.95,
+                    response_mime_type="application/json",
+                    response_schema=schema,
+                    system_instruction=instruction,
+                ),
             ),
         )
         parsed = response.parsed
         if parsed is None:
             raise ValueError("Gemini returned no parsed response.")
-        return parsed
+        return cast(SchemaT, parsed)
 
-    def _wait_active(self, file_obj: Any) -> Any:
+    def _wait_active(self, file_obj: Any, *, client: genai.Client) -> Any:
         """Files API 업로드 직후 ACTIVE 상태가 될 때까지 폴링한다."""
 
         deadline = time.monotonic() + settings.gemini_file_active_timeout_sec
@@ -198,7 +217,55 @@ class GeminiClient:
             if time.monotonic() > deadline:
                 raise TimeoutError(f"File {current.name} did not become ACTIVE in time")
             time.sleep(settings.gemini_file_active_poll_sec)
-            current = self._client.files.get(name=current.name)
+            current = client.files.get(name=current.name)
+
+    async def _with_key_failover(
+        self,
+        operation_name: str,
+        operation: Callable[[GeminiApiKeyCandidate, genai.Client], ResultT],
+    ) -> ResultT:
+        """Retryable Gemini 오류에서 같은 모델/요청을 다음 API key로 재시도한다."""
+        candidates = self._key_pool.ordered_candidates_for_call()
+        last_retryable_exc: BaseException | None = None
+
+        for attempt_index, candidate in enumerate(candidates):
+            client = self._client_for_key(candidate.value)
+            try:
+                return await asyncio.to_thread(operation, candidate, client)
+            except Exception as exc:
+                if not is_retryable_ai_error(exc):
+                    raise
+
+                last_retryable_exc = exc
+                next_key_exists = attempt_index + 1 < len(candidates)
+                if next_key_exists:
+                    logger.warning(
+                        "Gemini %s retryable error; failing over to next API key "
+                        "key_index=%s next_key_index=%s error=%s status=%s",
+                        operation_name,
+                        candidate.index,
+                        candidates[attempt_index + 1].index,
+                        exc.__class__.__name__,
+                        _extract_ai_error_status(exc),
+                    )
+                    continue
+                break
+
+        logger.error(
+            "Gemini %s exhausted all API key candidates key_count=%s last_error=%s status=%s",
+            operation_name,
+            len(candidates),
+            last_retryable_exc.__class__.__name__ if last_retryable_exc else None,
+            _extract_ai_error_status(last_retryable_exc) if last_retryable_exc else None,
+        )
+        raise last_retryable_exc or RuntimeError("Gemini provider unavailable")
+
+    def _client_for_key(self, key: str) -> genai.Client:
+        client = self._clients.get(key)
+        if client is None:
+            client = genai.Client(api_key=key)
+            self._clients[key] = client
+        return client
 
     @staticmethod
     def _make_ascii_safe(path: Path) -> tuple[Path, Path | None]:
@@ -212,6 +279,21 @@ class GeminiClient:
             safe_path = tmp_dir / safe_name
             shutil.copy2(path, safe_path)
             return safe_path, tmp_dir
+
+
+def _extract_ai_error_status(exc: BaseException | None) -> int | None:
+    """Provider 예외의 status code를 로그용으로 추출한다."""
+    if exc is None:
+        return None
+    for attr_name in ("status_code", "code"):
+        value = getattr(exc, attr_name, None)
+        if value is None:
+            continue
+        try:
+            return int(value)
+        except (TypeError, ValueError):
+            continue
+    return None
 
 
 # 프로세스당 1 회만 만드는 싱글톤. 키 누락 시 첫 `get_gemini_client()` 호출에서 RuntimeError 가 난다.

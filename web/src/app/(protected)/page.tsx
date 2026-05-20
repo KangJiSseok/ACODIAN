@@ -129,36 +129,47 @@ export default function DashboardPage() {
     (isDepartmentDetailSelected && departmentDashboardQuery.error) ||
     (isTeamDetailSelected && teamDashboardQuery.error) ||
     (isMyDashboardSelected && myDashboardQuery.error);
+  const dashboardTitle = getDashboardTitle(dashboardRole, hasTeamDashboard);
+  const dashboardIntroDescription = canUseDashboard
+    ? getDashboardIntroDescription(
+        scopeSelection,
+        departments,
+        adminTeams,
+        teams,
+        dashboardRole,
+      )
+    : "도메인별 라우트와 기본 레이아웃이 연결된 상태입니다.";
 
   return (
     <ScaffoldPage
-      title={getDashboardTitle(dashboardRole, hasTeamDashboard)}
-      description={
-        canUseDashboard
-          ? getDashboardDescription(
-              scopeSelection,
-              departments,
-              adminTeams,
-              teams,
-              dashboardRole,
-            )
-          : "도메인별 라우트와 기본 레이아웃이 연결된 상태입니다."
-      }
-      actions={
-        canUseDashboard ? (
-          <DashboardScopeSelector
-            value={scopeSelection}
-            dashboardRole={dashboardRole}
-            departments={departments}
-            adminTeams={adminTeams}
-            adminTeamsLoading={adminTeamsLoading}
-            teams={teams}
-            onChange={setSelectedScope}
-          />
-        ) : undefined
-      }
+      title={dashboardTitle}
+      description=""
       contentVariant={canUseDashboard ? "plain" : "panel"}
     >
+      <section className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
+        <div className="min-w-0 space-y-2">
+          <h2 className="text-[20px] font-semibold tracking-[-0.04em] text-foreground">
+            {dashboardTitle}
+          </h2>
+          <p className="max-w-3xl text-sm leading-6 text-muted-foreground">
+            {dashboardIntroDescription}
+          </p>
+        </div>
+        {canUseDashboard ? (
+          <div className="flex shrink-0 md:justify-end">
+            <DashboardScopeSelector
+              value={scopeSelection}
+              dashboardRole={dashboardRole}
+              departments={departments}
+              adminTeams={adminTeams}
+              adminTeamsLoading={adminTeamsLoading}
+              teams={teams}
+              onChange={setSelectedScope}
+            />
+          </div>
+        ) : null}
+      </section>
+
       {!canUseDashboard ? <DashboardShortcutGrid user={user} /> : null}
 
       {canUseDashboard && isLoading ? <DirectorDashboardLoading /> : null}
@@ -180,19 +191,11 @@ export default function DashboardPage() {
 }
 
 function getDashboardTitle(role: DashboardRole, hasTeamDashboard: boolean) {
-  if (role === "DIRECTOR") {
-    return "본부장 대시보드";
+  if (role === "NONE" && !hasTeamDashboard) {
+    return "ACODIAN 대시보드";
   }
 
-  if (role === "DEPARTMENT_HEAD") {
-    return "사업부장 대시보드";
-  }
-
-  if (hasTeamDashboard) {
-    return "내 업무 대시보드";
-  }
-
-  return "AX-WMS 대시보드";
+  return "업무 대시보드";
 }
 
 function getCurrentDepartmentOption(user: AuthUser | null | undefined) {
@@ -244,6 +247,22 @@ function getDashboardDescription(
   }
 
   return "관리자 관점 · 전체 부서 비교 기준";
+}
+
+function getDashboardIntroDescription(
+  value: DashboardScopeSelection,
+  departments: DepartmentSummary[],
+  adminTeams: DashboardTeamOption[],
+  teams: AuthUserTeam[],
+  role: DashboardRole,
+) {
+  return `${getDashboardDescription(
+    value,
+    departments,
+    adminTeams,
+    teams,
+    role,
+  )}으로 업무 현황과 완료율, 마감 임박 업무를 확인합니다.`;
 }
 
 function getDepartmentDashboardTeamOptions(

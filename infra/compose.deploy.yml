@@ -31,6 +31,43 @@ services:
       retries: 10
     restart: unless-stopped
 
+  qdrant:
+    image: qdrant/qdrant:v1.17.1
+    volumes:
+      - qdrant-data:/qdrant/storage
+    ports:
+      - "${QDRANT_HOST_PORT:?QDRANT_HOST_PORT required (env-specific offset, e.g. 8500/8501)}:6333"
+    healthcheck:
+      test: ["CMD-SHELL", "timeout 3 bash -c '</dev/tcp/127.0.0.1/6333'"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+    restart: unless-stopped
+
+  neo4j:
+    image: neo4j:5.26-community
+    environment:
+      NEO4J_AUTH: ${NEO4J_USER:-neo4j}/${NEO4J_PASSWORD:?NEO4J_PASSWORD required}
+      NEO4J_server_memory_heap_initial__size: ${NEO4J_HEAP_INITIAL_SIZE:-512m}
+      NEO4J_server_memory_heap_max__size: ${NEO4J_HEAP_MAX_SIZE:-1G}
+      NEO4J_server_memory_pagecache_size: ${NEO4J_PAGECACHE_SIZE:-512m}
+    volumes:
+      - neo4j-data:/data
+      - neo4j-logs:/logs
+    ports:
+      - "${NEO4J_BOLT_HOST_PORT:?NEO4J_BOLT_HOST_PORT required (env-specific offset, e.g. 8600/8601)}:7687"
+      - "${NEO4J_HTTP_HOST_PORT:?NEO4J_HTTP_HOST_PORT required (env-specific offset, e.g. 8602/8603)}:7474"
+    healthcheck:
+      test:
+        [
+          "CMD-SHELL",
+          "NEO4J_USERNAME=\"$${NEO4J_AUTH%%/*}\" NEO4J_PASSWORD=\"$${NEO4J_AUTH#*/}\" cypher-shell 'RETURN 1' >/dev/null",
+        ]
+      interval: 10s
+      timeout: 5s
+      retries: 20
+    restart: unless-stopped
+
   api:
     image: ${API_IMAGE}
     depends_on:
@@ -50,12 +87,23 @@ services:
       REDIS_PORT: 6379
       AI_WORKLOG_SEARCH_ENABLED: ${AI_WORKLOG_SEARCH_ENABLED:-true}
       AI_WORKLOG_SEARCH_BASE_URL: http://ai:8200/ai
-      AI_WORKLOG_SEARCH_CONNECT_TIMEOUT: ${AI_WORKLOG_SEARCH_CONNECT_TIMEOUT:-2s}
-      AI_WORKLOG_SEARCH_READ_TIMEOUT: ${AI_WORKLOG_SEARCH_READ_TIMEOUT:-10s}
+      AI_WORKLOG_SEARCH_CONNECT_TIMEOUT: ${AI_WORKLOG_SEARCH_CONNECT_TIMEOUT:-60s}
+      AI_WORKLOG_SEARCH_READ_TIMEOUT: ${AI_WORKLOG_SEARCH_READ_TIMEOUT:-180s}
       AI_FILE_SUMMARY_ENABLED: ${AI_FILE_SUMMARY_ENABLED:-true}
       AI_FILE_SUMMARY_BASE_URL: http://ai:8200/ai
       AI_FILE_SUMMARY_CONNECT_TIMEOUT: ${AI_FILE_SUMMARY_CONNECT_TIMEOUT:-2s}
       AI_FILE_SUMMARY_READ_TIMEOUT: ${AI_FILE_SUMMARY_READ_TIMEOUT:-3s}
+      AI_WORKLOG_PIPELINE_ENABLED: ${AI_WORKLOG_PIPELINE_ENABLED:-true}
+      AI_WORKLOG_PIPELINE_BASE_URL: ${AI_WORKLOG_PIPELINE_BASE_URL:-http://ai:8200/ai}
+      AI_WORKLOG_PIPELINE_CONNECT_TIMEOUT: ${AI_WORKLOG_PIPELINE_CONNECT_TIMEOUT:-2s}
+      AI_WORKLOG_PIPELINE_READ_TIMEOUT: ${AI_WORKLOG_PIPELINE_READ_TIMEOUT:-3s}
+      AI_WORKLOG_POLISH_BASE_URL: ${AI_WORKLOG_POLISH_BASE_URL:-http://ai:8200/ai}
+      AI_WORKLOG_POLISH_CONNECT_TIMEOUT: ${AI_WORKLOG_POLISH_CONNECT_TIMEOUT:-2s}
+      AI_WORKLOG_POLISH_READ_TIMEOUT: ${AI_WORKLOG_POLISH_READ_TIMEOUT:-10s}
+      AI_WORKLOG_LIGHT_INDEX_ENABLED: ${AI_WORKLOG_LIGHT_INDEX_ENABLED:-true}
+      AI_WORKLOG_LIGHT_INDEX_BASE_URL: ${AI_WORKLOG_LIGHT_INDEX_BASE_URL:-http://ai:8200/ai}
+      AI_WORKLOG_LIGHT_INDEX_CONNECT_TIMEOUT: ${AI_WORKLOG_LIGHT_INDEX_CONNECT_TIMEOUT:-2s}
+      AI_WORKLOG_LIGHT_INDEX_READ_TIMEOUT: ${AI_WORKLOG_LIGHT_INDEX_READ_TIMEOUT:-300s}
       JWT_SECRET: ${JWT_SECRET}
       JWT_ACCESS_EXPIRATION: ${JWT_ACCESS_EXPIRATION:-3600000}
       JWT_REFRESH_EXPIRATION: ${JWT_REFRESH_EXPIRATION:-1209600000}
@@ -96,6 +144,10 @@ services:
         condition: service_healthy
       redis:
         condition: service_healthy
+      qdrant:
+        condition: service_healthy
+      neo4j:
+        condition: service_healthy
     environment:
       ENVIRONMENT: ${APP_ENV:-deploy}
       API_PREFIX: /ai
@@ -106,11 +158,18 @@ services:
       # 서비스 간 통신은 컨테이너 네트워크 hostname 을 그대로 사용한다.
       PGVECTOR_DSN: postgresql://${DB_USERNAME:-postgres}:${DB_PASSWORD:-postgres}@postgres:5432/${DB_NAME:-postgres}
       REDIS_URL: redis://redis:6379/0
+      NEO4J_URI: bolt://neo4j:7687
+      NEO4J_USER: ${NEO4J_USER:-neo4j}
+      NEO4J_PASSWORD: ${NEO4J_PASSWORD}
+      LIGHTRAG_QDRANT_URL: http://qdrant:6333
+      LIGHTRAG_QDRANT_API_KEY: ${LIGHTRAG_QDRANT_API_KEY:-}
+      LIGHTRAG_QUERY_TIMEOUT_SECONDS: ${LIGHTRAG_QUERY_TIMEOUT_SECONDS:-120}
       API_BASE_URL: http://api:8100
       # ai 가 api 를 호출할 때 쓰는 JWT 검증 키. api 와 동일 시크릿이어야 한다.
       JWT_SECRET: ${JWT_SECRET}
       # Gemini — 실제 키는 서버 .env / GitLab Variables 로만 주입한다 (ADR-003 / GEN-002).
-      GEMINI_API_KEY: ${GEMINI_API_KEY}
+      GEMINI_API_KEY: ${GEMINI_API_KEY:-}
+      GEMINI_API_KEYS: ${GEMINI_API_KEYS:-}
       GEMINI_MODEL: ${GEMINI_MODEL:-gemini-2.5-flash}
       GEMINI_REQUEST_TIMEOUT_SECONDS: ${GEMINI_REQUEST_TIMEOUT_SECONDS:-30}
       GEMINI_MAX_RETRIES: ${GEMINI_MAX_RETRIES:-3}
@@ -126,7 +185,7 @@ services:
       AWS_ACCESS_KEY_ID: ${AWS_ACCESS_KEY_ID}
       AWS_SECRET_ACCESS_KEY: ${AWS_SECRET_ACCESS_KEY}
     ports:
-      - "127.0.0.1:${AI_HOST_PORT:?AI_HOST_PORT required (env-specific offset, e.g. 8200/8201)}:8200"
+      - "0.0.0.0:${AI_HOST_PORT:?AI_HOST_PORT required (env-specific offset, e.g. 8200/8201)}:8200"
     restart: unless-stopped
 
   # Celery worker — ai FastAPI 가 task.delay() 로 큐에 적재한 작업을 실제로 처리하는 별도 프로세스.
@@ -139,14 +198,24 @@ services:
         condition: service_healthy
       redis:
         condition: service_healthy
+      qdrant:
+        condition: service_healthy
+      neo4j:
+        condition: service_healthy
     environment:
       ENVIRONMENT: ${APP_ENV:-deploy}
       LOG_LEVEL: ${AI_LOG_LEVEL:-INFO}
       PGVECTOR_DSN: postgresql://${DB_USERNAME:-postgres}:${DB_PASSWORD:-postgres}@postgres:5432/${DB_NAME:-postgres}
       REDIS_URL: redis://redis:6379/0
+      NEO4J_URI: bolt://neo4j:7687
+      NEO4J_USER: ${NEO4J_USER:-neo4j}
+      NEO4J_PASSWORD: ${NEO4J_PASSWORD}
+      LIGHTRAG_QDRANT_URL: http://qdrant:6333
+      LIGHTRAG_QDRANT_API_KEY: ${LIGHTRAG_QDRANT_API_KEY:-}
       API_BASE_URL: http://api:8100
       JWT_SECRET: ${JWT_SECRET}
-      GEMINI_API_KEY: ${GEMINI_API_KEY}
+      GEMINI_API_KEY: ${GEMINI_API_KEY:-}
+      GEMINI_API_KEYS: ${GEMINI_API_KEYS:-}
       GEMINI_MODEL: ${GEMINI_MODEL:-gemini-2.5-flash}
       GEMINI_REQUEST_TIMEOUT_SECONDS: ${GEMINI_REQUEST_TIMEOUT_SECONDS:-30}
       GEMINI_MAX_RETRIES: ${GEMINI_MAX_RETRIES:-3}
@@ -166,3 +235,9 @@ services:
 volumes:
   postgres-data:
     name: axwms-${APP_ENV:?APP_ENV required for volume name isolation}-postgres-data
+  qdrant-data:
+    name: axwms-${APP_ENV:?APP_ENV required for volume name isolation}-qdrant-data
+  neo4j-data:
+    name: axwms-${APP_ENV:?APP_ENV required for volume name isolation}-neo4j-data
+  neo4j-logs:
+    name: axwms-${APP_ENV:?APP_ENV required for volume name isolation}-neo4j-logs

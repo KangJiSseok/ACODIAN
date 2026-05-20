@@ -73,7 +73,7 @@ ops:
     rule: 한 EC2 에 staging/production 이 공존하므로 staging 의 호스트 포트는 production 호스트 포트 +1 오프셋으로 고정한다. 예 — api production `127.0.0.1:8100:8100` / staging `127.0.0.1:8101:8100`, postgres production `8300:5432` / staging `8301:5432`, redis production `8400:6379` / staging `8401:6379`. Nginx listen(production 80/443, staging 8080/8443) 은 이 오프셋 규칙의 예외다. 근거는 ADR-010.
     stacks: [ec2, compose, nginx]
   - id: OPS-010
-    rule: web/api/ai 컨테이너는 호스트 바인딩을 `127.0.0.1:` 로 제한해 외부에서 Nginx 를 우회한 직접 접근을 차단한다. Nginx 는 같은 호스트에서 `proxy_pass http://127.0.0.1:<port>` 로 upstream 을 연다. DB 컨테이너(postgres/redis) 는 개발 편의(ADR-011) 를 위해 `0.0.0.0` 바인딩을 유지하고, 대신 OPS-011 의 비밀번호 정책으로 완화한다. 근거는 ADR-010.
+    rule: web/api 컨테이너는 호스트 바인딩을 `127.0.0.1:` 로 제한해 외부에서 Nginx 를 우회한 직접 접근을 차단한다. AI(FastAPI) 컨테이너는 외부 직접 검증/호출 요구 때문에 예외적으로 `0.0.0.0:${AI_HOST_PORT}:8200` 으로 host port 8200/8201 에 직접 개방하되, 기존 Nginx `/ai/` upstream 은 `127.0.0.1:8200/8201` 로 유지한다. DB 컨테이너(postgres/redis) 는 개발 편의(ADR-011) 를 위해 `0.0.0.0` 바인딩을 유지하고, Qdrant/Neo4j 는 ADR-019 의 저장소 의존성 정책을 따른다. 직접 개방된 AI/Qdrant/Neo4j 포트는 EC2 보안그룹 또는 host firewall 에서 접근 가능한 IP 를 제한해야 한다. 근거는 ADR-010, ADR-020.
     stacks: [compose, nginx, security]
   - id: OPS-011
     rule: '`DB_PASSWORD` 는 staging/production 각각 별도의 강한 무작위 값(최소 24자, 대소문자·숫자·기호 혼합) 으로 관리한다. ADR-011 로 DB 가 외부 개방되어 비밀번호가 유일한 1차 방어선이므로 재사용·예측 가능 패턴·기본값 복사를 금지한다. 운영 저장소는 GitLab CI/CD Variables(`DB_PASSWORD_STAGING`, `DB_PASSWORD_PRODUCTION`) 를 Protected + Mask 로 유지하고 서버 `.env` 에만 주입한다. 근거는 ADR-011.'
@@ -105,3 +105,6 @@ ops:
   - id: OPS-020
     rule: 'Nginx 의 per-IP rate limit / connection limit / slowloris timeout / `server_tokens off` 는 `infra/nginx/snippets/rate-limit.conf` 단일 SSOT 에서 정의하고 `axwms.conf` 의 server 블록 밖(=http 컨텍스트) 에서 include 한다. zone 키는 `$binary_remote_addr` 로 고정하고 응답 코드는 `limit_req_status 429` / `limit_conn_status 429` 로 둔다. 값 튜닝은 EC2 SSH 직접 수정 금지 — PR 리뷰 후 OPS-017 의 자동 동기화 흐름(`scp + sudo install + nginx -t + systemctl reload`) 으로 반영한다. `keepalive_timeout` 은 Debian/Ubuntu nginx.conf 기본값과 중복 정의 시 `directive is duplicate` 로 `nginx -t` 가 실패하므로 본 snippet 에 두지 않으며, 필요 시 nginx.conf 측에서 조정한다. zone 변경 시 nginx 의 shared memory 가 비워지므로 reload 직후 짧은 카운터 초기화는 정상이다. 근거는 ADR-018.'
     stacks: [nginx, security, ec2]
+  - id: OPS-021
+    rule: 'Qdrant 와 Neo4j 는 애플리케이션 이미지가 아니라 AI 저장소 의존성이다. `infra/compose.deploy.yml` 에서는 postgres/redis 와 같은 상태 저장형 서비스로 관리하고 named volume, healthcheck 를 둔다. Qdrant, Neo4j Bolt, Neo4j HTTP Browser 는 개발 편의를 위해 호스트 포트로 외부 개방하며, EC2 보안그룹 또는 방화벽에서 접근 가능한 IP 를 제한한다. 배포 스크립트의 `pull` / `rm -sf` 애플리케이션 컨테이너 목록에는 넣지 않고 `up -d --remove-orphans` 대상에만 포함한다. 환경별 host port 는 staging +1 규칙을 따라 Qdrant 8500/8501, Neo4j Bolt 8600/8601, Neo4j HTTP Browser 8602/8603 으로 둔다. 실제 `NEO4J_PASSWORD` 는 EC2 `.env` 또는 GitLab CI/CD Variables 로만 주입한다.'
+    stacks: [compose, qdrant, neo4j, ai, ec2]

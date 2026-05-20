@@ -2,6 +2,7 @@ package com.ibank.axwms.domain.worklog.repository.jooq;
 
 import com.ibank.axwms.domain.worklog.WorklogStatus;
 import com.ibank.axwms.domain.worklog.repository.jooq.projection.BlockedPredecessorRowProjection;
+import com.ibank.axwms.domain.worklog.repository.jooq.projection.WorklogDependencyReadyParentProjection;
 import com.ibank.axwms.domain.worklog.repository.jooq.projection.WorklogDependencyProjection;
 import lombok.RequiredArgsConstructor;
 import org.jooq.CommonTableExpression;
@@ -75,37 +76,35 @@ public class WorklogDependencyJooqRepositoryImpl implements WorklogDependencyJoo
             return Set.of();
         }
 
-        // CTE 내부에서 자기 자신을 다시 참조할 때 사용할 unqualified 컬럼/테이블 핸들.
-        Field<Long> cteOrigin = DSL.field(DSL.name("origin_id"), Long.class);
-        Field<Long> cteWorklog = DSL.field(DSL.name("worklog_id"), Long.class);
-        Table<?> cteTable = DSL.table(DSL.name("reachable"));
+        Table<?> reachableStep = DSL.table(DSL.name("reachable")).as("r");
+        Field<Long> stepOrigin = DSL.field(DSL.name("r", "origin_id"), Long.class);
+        Field<Long> stepWorklog = DSL.field(DSL.name("r", "worklog_id"), Long.class);
+        Table<?> reachableResult = DSL.table(DSL.name("reachable")).as("result");
+        Field<Long> resultOrigin = DSL.field(DSL.name("result", "origin_id"), Long.class);
+        Field<Long> resultWorklog = DSL.field(DSL.name("result", "worklog_id"), Long.class);
 
         CommonTableExpression<?> reachable = DSL.name("reachable")
                 .fields("origin_id", "worklog_id")
                 .as(
-                        // anchor: 새 선행 후보 자체를 origin 으로 두고, 그 후보가 의존하는 worklog 들을 첫 hop 으로 잡는다.
                         DSL.select(
                                         TB_WORKLOG_DEPENDENCY.WORKLOG_ID,
                                         TB_WORKLOG_DEPENDENCY.DEPENDS_ON_WORKLOG_ID)
                                 .from(TB_WORKLOG_DEPENDENCY)
                                 .where(TB_WORKLOG_DEPENDENCY.WORKLOG_ID.in(newPredecessorIds))
-                                // recursive: 누적된 worklog 마다 한 단계 더 depends_on 을 따라간다.
-                                // UNION (not UNION ALL) — 이미 본 (origin, worklog) 쌍은 dedup 해
-                                // 데이터에 의도치 않은 사이클이 존재해도 무한 루프를 방지한다.
                                 .union(
-                                        DSL.select(cteOrigin, TB_WORKLOG_DEPENDENCY.DEPENDS_ON_WORKLOG_ID)
-                                                .from(cteTable)
+                                        DSL.select(stepOrigin, TB_WORKLOG_DEPENDENCY.DEPENDS_ON_WORKLOG_ID)
+                                                .from(reachableStep)
                                                 .join(TB_WORKLOG_DEPENDENCY)
-                                                .on(TB_WORKLOG_DEPENDENCY.WORKLOG_ID.eq(cteWorklog))
+                                                .on(TB_WORKLOG_DEPENDENCY.WORKLOG_ID.eq(stepWorklog))
                                 )
                 );
 
         return new HashSet<>(
                 dsl.withRecursive(reachable)
-                        .selectDistinct(cteOrigin)
-                        .from(reachable)
-                        .where(cteWorklog.eq(candidateWorklogId))
-                        .fetch(cteOrigin)
+                        .selectDistinct(resultOrigin)
+                        .from(reachableResult)
+                        .where(resultWorklog.eq(candidateWorklogId))
+                        .fetch(resultOrigin)
         );
     }
 
@@ -136,5 +135,55 @@ public class WorklogDependencyJooqRepositoryImpl implements WorklogDependencyJoo
                 .and(pred.STATUS_CODE.ne(WorklogStatus.COMPLETED.name()))
                 .orderBy(my.WORKLOG_ID.asc(), pred.WORKLOG_ID.asc())
                 .fetch(record -> BlockedPredecessorRowProjection.from(record, my, pred));
+    }
+
+    /**
+     * 완료된 선행 업무를 anchor 로 잡고 직접 부모의 다른 미삭제 선행이 모두 완료됐을 때만 후속 알림 후보로 노출한다.
+     */
+    @Override
+    public List<WorklogDependencyReadyParentProjection> findReadyParentsByCompletedPredecessorId(Long completedWorklogId) {
+        if (completedWorklogId == null) {
+            return List.of();
+        }
+
+        var anchorDependency = TB_WORKLOG_DEPENDENCY.as("anchor_dependency");
+        var parent = TB_WORKLOG.as("parent_worklog");
+        var parentTeam = TB_TEAM.as("parent_team");
+        var allDependency = TB_WORKLOG_DEPENDENCY.as("all_dependency");
+        var predecessor = TB_WORKLOG.as("predecessor_worklog");
+
+        return dsl.selectDistinct(
+                        parent.WORKLOG_ID,
+                        parent.AUTHOR_ID,
+                        parent.TEAM_ID,
+                        parentTeam.DEPARTMENT_ID,
+                        parentTeam.TEAM_NAME,
+                        parent.TITLE
+                )
+                .from(anchorDependency)
+                .join(parent).on(parent.WORKLOG_ID.eq(anchorDependency.WORKLOG_ID))
+                .join(parentTeam).on(parentTeam.TEAM_ID.eq(parent.TEAM_ID)
+                        .and(parentTeam.DELETED_AT.isNull()))
+                .where(anchorDependency.DEPENDS_ON_WORKLOG_ID.eq(completedWorklogId))
+                .and(parent.IS_DELETED.isFalse())
+                .and(DSL.notExists(
+                        DSL.selectOne()
+                                .from(allDependency)
+                                .join(predecessor)
+                                .on(predecessor.WORKLOG_ID.eq(allDependency.DEPENDS_ON_WORKLOG_ID))
+                                .where(allDependency.WORKLOG_ID.eq(parent.WORKLOG_ID))
+                                .and(predecessor.IS_DELETED.isFalse())
+                                .and(predecessor.STATUS_CODE.ne(WorklogStatus.COMPLETED.name()))
+                ))
+                .orderBy(parent.WORKLOG_ID.asc())
+                .fetch(record -> WorklogDependencyReadyParentProjection.from(
+                        record,
+                        parent.WORKLOG_ID,
+                        parent.AUTHOR_ID,
+                        parent.TEAM_ID,
+                        parentTeam.DEPARTMENT_ID,
+                        parentTeam.TEAM_NAME,
+                        parent.TITLE
+                ));
     }
 }

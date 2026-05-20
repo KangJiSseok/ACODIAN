@@ -119,5 +119,5 @@ export function resolveBreadcrumbs(pathname: string): BreadcrumbItem[] {
     }
   }
 
-  return [{ label: "AX-WMS" }];
+  return [{ label: "ACODIAN" }];
 }

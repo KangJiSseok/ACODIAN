@@ -16,6 +16,7 @@ import com.ibank.axwms.domain.organization.team.repository.jooq.projection.TeamD
 import com.ibank.axwms.domain.organization.team.repository.jooq.projection.TeamStatusSummaryProjection;
 import com.ibank.axwms.domain.organization.team.repository.jooq.projection.TeamSummaryProjection;
 import com.ibank.axwms.domain.organization.team.repository.jooq.projection.TeamUserSummaryProjection;
+import com.ibank.axwms.domain.organization.team.repository.jooq.projection.UserTeamSummaryProjection;
 import com.ibank.axwms.domain.organization.team.repository.jooq.query.TeamPageQuery;
 import com.ibank.axwms.domain.organization.user.EmploymentStatus;
 import com.ibank.axwms.domain.organization.user.UserRole;
@@ -115,6 +116,34 @@ class TeamRepositoryIntegrationTest extends IntegrationTestSupport {
         assertThat(result.getContent())
                 .extracting(TeamSummaryProjection::teamId)
                 .doesNotContain(fixture.leftOnlyTeamId(), fixture.deletedTeamId());
+    }
+
+    @Test
+    @DisplayName("현재 사용자 프로필 팀 요약은 ACTIVE 팀 상태만 조회한다")
+    void 현재_사용자_프로필_팀_요약은_ACTIVE_팀_상태만_조회한다() {
+        TeamFixture fixture = seedVisibleScopeFixture();
+
+        List<UserTeamSummaryProjection> result = userTeamRepository.findActiveUserTeamSummaries(fixture.callerId());
+
+        assertThat(result)
+                .extracting(
+                        UserTeamSummaryProjection::isPrimary,
+                        UserTeamSummaryProjection::teamId,
+                        UserTeamSummaryProjection::teamName,
+                        UserTeamSummaryProjection::isLeader,
+                        UserTeamSummaryProjection::teamRole,
+                        UserTeamSummaryProjection::allocation
+                )
+                .containsExactly(
+                        tuple(true, fixture.primaryTeamId(), "주담당팀", false, "주담당", "주담당"),
+                        tuple(false, fixture.leaderTeamId(), "리더팀", true, "리더", "겸임")
+                );
+        assertThat(result)
+                .extracting(UserTeamSummaryProjection::teamId)
+                .doesNotContain(fixture.inactiveDuplicateTeamId(), fixture.leftOnlyTeamId(), fixture.deletedTeamId());
+        assertThat(userTeamRepository.findUserTeamSummaries(fixture.callerId()))
+                .extracting(UserTeamSummaryProjection::teamId)
+                .contains(fixture.inactiveDuplicateTeamId());
     }
 
     @Test

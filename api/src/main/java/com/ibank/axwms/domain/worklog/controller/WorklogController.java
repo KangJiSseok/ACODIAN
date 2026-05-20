@@ -3,12 +3,16 @@ package com.ibank.axwms.domain.worklog.controller;
 import com.ibank.axwms.domain.worklog.dto.CreateWorklogApiDto;
 import com.ibank.axwms.domain.worklog.dto.GetWorklogDetailApiDto;
 import com.ibank.axwms.domain.worklog.dto.GetWorklogFilterOptionsApiDto;
-import com.ibank.axwms.domain.worklog.dto.GetWorklogOptionsApiDto;
 import com.ibank.axwms.domain.worklog.dto.GetWorklogsApiDto;
+import com.ibank.axwms.domain.worklog.dto.PolishWorklogApiDto;
+import com.ibank.axwms.domain.worklog.dto.RecommendWorklogTitleApiDto;
+import com.ibank.axwms.domain.worklog.dto.SearchPredecessorApiDto;
+import com.ibank.axwms.domain.worklog.dto.SearchSemanticWorklogsApiDto;
 import com.ibank.axwms.domain.worklog.dto.SearchWorklogsApiDto;
 import com.ibank.axwms.domain.worklog.dto.UpdateWorklogApiDto;
 import com.ibank.axwms.domain.worklog.dto.UpdateWorklogStatusApiDto;
 import com.ibank.axwms.domain.worklog.service.WorklogService;
+import com.ibank.axwms.domain.worklog.service.search.LightRagWorklogSearchService;
 import com.ibank.axwms.domain.worklog.service.search.WorklogSearchService;
 import com.ibank.axwms.global.response.EmptyResponse;
 import com.ibank.axwms.global.response.PageResponse;
@@ -23,8 +27,8 @@ import org.springframework.web.bind.annotation.ModelAttribute;
 import org.springframework.web.bind.annotation.PatchMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
-import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestBody;
+import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestPart;
 import org.springframework.web.bind.annotation.ResponseStatus;
 import org.springframework.web.bind.annotation.RestController;
@@ -38,17 +42,37 @@ import java.util.List;
 public class WorklogController implements WorklogControllerDocs {
 
     private final WorklogService worklogService;
-    private final WorklogSearchService worklogSearchService;
+    private final WorklogSearchService keywordWorklogSearchService;
+    private final LightRagWorklogSearchService lightRagWorklogSearchService;
 
     @Override
     @PostMapping
     @ResponseStatus(HttpStatus.CREATED)
     public CreateWorklogApiDto.Response createWorklog(
             @Valid @RequestPart CreateWorklogApiDto.Request request,
-            @RequestPart List<MultipartFile> files,
+            @RequestPart(value = "files", required = false) List<MultipartFile> files,
             @AuthenticationPrincipal CustomUserPrincipal principal
     ) {
         return worklogService.createWorklog(principal, request, files);
+    }
+
+
+    @Override
+    @PostMapping("/polish")
+    @PreAuthorize("hasAnyRole('DIRECTOR','DEPT_HEAD','TEAM_LEAD','MEMBER')")
+    public PolishWorklogApiDto.Response polishWorklog(
+            @Valid @RequestBody PolishWorklogApiDto.Request request
+    ) {
+        return worklogService.polishWorklog(request);
+    }
+
+    @Override
+    @PostMapping("/title-recommendations")
+    @PreAuthorize("hasAnyRole('DIRECTOR','DEPT_HEAD','TEAM_LEAD','MEMBER')")
+    public RecommendWorklogTitleApiDto.Response recommendWorklogTitles(
+            @Valid @RequestBody RecommendWorklogTitleApiDto.Request request
+    ) {
+        return worklogService.recommendWorklogTitles(request);
     }
 
     @Override
@@ -72,13 +96,23 @@ public class WorklogController implements WorklogControllerDocs {
     }
 
     @Override
-    @GetMapping("/search")
+    @GetMapping("/search/keyword")
     @PreAuthorize("hasAnyRole('DIRECTOR','DEPT_HEAD','TEAM_LEAD','MEMBER')")
-    public PageResponse<SearchWorklogsApiDto.Response.Item> searchWorklogs(
+    public PageResponse<SearchWorklogsApiDto.Response.Item> searchKeywordWorklogs(
             @AuthenticationPrincipal CustomUserPrincipal principal,
             @Valid @ModelAttribute SearchWorklogsApiDto.Request request
     ) {
-        return worklogSearchService.searchWorklogs(principal, request);
+        return keywordWorklogSearchService.searchWorklogs(principal, request);
+    }
+
+    @Override
+    @GetMapping("/search/semantic")
+    @PreAuthorize("hasAnyRole('DIRECTOR','DEPT_HEAD','TEAM_LEAD','MEMBER')")
+    public SearchSemanticWorklogsApiDto.Response searchSemanticWorklogs(
+            @AuthenticationPrincipal CustomUserPrincipal principal,
+            @Valid @ModelAttribute SearchSemanticWorklogsApiDto.Request request
+    ) {
+        return lightRagWorklogSearchService.searchWorklogs(principal, request);
     }
 
     @Override
@@ -87,7 +121,7 @@ public class WorklogController implements WorklogControllerDocs {
     public GetWorklogFilterOptionsApiDto.Response getFilterOptions(
             @AuthenticationPrincipal CustomUserPrincipal principal
     ) {
-        return worklogSearchService.getFilterOptions(principal);
+        return keywordWorklogSearchService.getFilterOptions(principal);
     }
 
     @Override
@@ -118,12 +152,24 @@ public class WorklogController implements WorklogControllerDocs {
     }
 
     @Override
-    @GetMapping("/options")
+    @PostMapping("/{worklogId}/ai-summary/retry")
+    @ResponseStatus(HttpStatus.OK)
     @PreAuthorize("hasAnyRole('DIRECTOR','DEPT_HEAD','TEAM_LEAD','MEMBER')")
-    public GetWorklogOptionsApiDto.Response getWorklogOptions(
+    public EmptyResponse retryAiSummary(
             @AuthenticationPrincipal CustomUserPrincipal principal,
-            @Valid @ModelAttribute GetWorklogOptionsApiDto.Request request
+            @PathVariable Long worklogId
     ) {
-        return worklogService.getWorklogOptions(principal, request);
+        worklogService.retryAiSummary(principal, worklogId);
+        return EmptyResponse.INSTANCE;
+    }
+
+    @Override
+    @GetMapping("/predecessor-candidates/search")
+    @PreAuthorize("hasAnyRole('DIRECTOR','DEPT_HEAD','TEAM_LEAD','MEMBER')")
+    public PageResponse<SearchPredecessorApiDto.Response.Item> searchPredecessor(
+            @AuthenticationPrincipal CustomUserPrincipal principal,
+            @Valid @ModelAttribute SearchPredecessorApiDto.Request request
+    ) {
+        return worklogService.searchPredecessor(principal, request);
     }
 }

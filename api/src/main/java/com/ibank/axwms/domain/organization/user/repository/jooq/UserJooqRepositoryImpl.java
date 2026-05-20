@@ -65,6 +65,7 @@ public class UserJooqRepositoryImpl implements UserJooqRepository {
                         TB_USER.USER_NAME,
                         TB_USER.EMAIL,
                         TB_USER.PHONE,
+                        TB_USER.JOIN_DATE,
                         TB_USER.DEPARTMENT_ID,
                         TB_DEPARTMENT.DEPARTMENT_NAME,
                         TB_USER.PROFILE_IMAGE_URL,

@@ -78,6 +78,12 @@ public enum ErrorCode {
     EVALUATION_SELF_WRITE_FORBIDDEN(HttpStatus.FORBIDDEN, "자기 자신에게 평가는 작성할 수 없습니다."),
     /** 업무일지에 연결하려는 태그 ID 가 메타 태그 풀에 없을 때 사용한다. */
     TAG_NOT_FOUND(HttpStatus.NOT_FOUND, "태그를 찾을 수 없습니다."),
+    /** 저장된 태그 병합 후보를 찾을 수 없을 때 사용한다. */
+    TAG_MERGE_CANDIDATE_NOT_FOUND(HttpStatus.NOT_FOUND, "태그 병합 후보를 찾을 수 없습니다."),
+    /** 태그 병합 후보가 현재 요청에서 처리할 수 없는 상태일 때 사용한다. */
+    TAG_MERGE_CANDIDATE_STATUS_INVALID(HttpStatus.CONFLICT, "처리할 수 없는 태그 병합 후보 상태입니다."),
+    /** AI 서버에서 태그 병합 후보를 생성하지 못했을 때 사용한다. */
+    TAG_MERGE_CANDIDATE_GENERATION_FAILED(HttpStatus.SERVICE_UNAVAILABLE, "태그 병합 후보 생성에 실패했습니다. 잠시 후 다시 시도해 주세요."),
     /** 업무 지시 일자와 마감 일자 범위가 올바르지 않은 경우 사용한다. */
     WORKLOG_INVALID_DATE_RANGE(HttpStatus.BAD_REQUEST, "업무 날짜 정보가 유효하지 않습니다."),
     /** 로그인 사용자가 대상 팀 소속이 아니어서 업무를 등록/변경할 수 없는 경우 사용한다. */
@@ -94,6 +100,12 @@ public enum ErrorCode {
     WORKLOG_EDIT_FORBIDDEN(HttpStatus.FORBIDDEN, "업무일지 수정 권한이 없습니다."),
     /** 업무일지 수정 요청에서 현재 상태 기준으로 허용되지 않은 다음 상태를 지정할 때 사용한다. */
     WORKLOG_STATUS_TRANSITION_INVALID(HttpStatus.BAD_REQUEST, "허용되지 않은 업무 상태 전이입니다."),
+    /** AI 작성 보조 upstream 이 실패해 저장 전 초안 추천을 완료할 수 없을 때 사용한다. */
+    WORKLOG_AI_POLISH_FAILED(HttpStatus.BAD_GATEWAY, "업무일지 작성 보조를 처리할 수 없습니다. 잠시 후 다시 시도해 주세요."),
+    /** AI 요약 재요청을 수행할 수 없는 현재 처리 상태일 때 사용한다. */
+    WORKLOG_AI_RETRY_STATUS_INVALID(HttpStatus.CONFLICT, "AI 요약 실패 상태에서만 다시 요청할 수 있습니다."),
+    /** LightRAG 업무일지 시맨틱 검색 upstream 이 실패해 검색 결과를 만들 수 없을 때 사용한다. */
+    WORKLOG_SEMANTIC_SEARCH_FAILED(HttpStatus.BAD_GATEWAY, "업무일지 시맨틱 검색을 처리할 수 없습니다. 잠시 후 다시 시도해 주세요."),
     /** 삭제 요청 대상 파일이 존재하지 않거나 해당 worklog 에 속해 있지 않을 때 사용한다. */
     WORKLOG_FILE_NOT_FOUND(HttpStatus.NOT_FOUND, "삭제 대상 첨부 파일을 찾을 수 없습니다."),
     /** 외부 스토리지 업로드 실패로 업무 첨부 파일을 보관할 수 없어 업무 등록을 완료할 수 없을 때 사용한다. */

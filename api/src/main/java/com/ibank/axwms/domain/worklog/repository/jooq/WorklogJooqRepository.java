@@ -12,6 +12,7 @@ import com.ibank.axwms.domain.worklog.repository.jooq.projection.WorklogBriefPro
 import com.ibank.axwms.domain.worklog.repository.jooq.projection.WorklogDetailProjection;
 import com.ibank.axwms.domain.worklog.repository.jooq.projection.WorklogListProjection;
 import com.ibank.axwms.domain.worklog.repository.jooq.projection.WorklogSearchProjection;
+import com.ibank.axwms.domain.worklog.repository.jooq.query.PredecessorCandidateSearchQuery;
 import com.ibank.axwms.domain.worklog.repository.jooq.query.WorklogPageQuery;
 import com.ibank.axwms.domain.worklog.repository.jooq.query.WorklogSearchQuery;
 import org.springframework.data.domain.Page;
@@ -34,15 +35,16 @@ public interface WorklogJooqRepository {
      */
     Map<Long, Long> findTeamIdsByWorklogIds(Collection<Long> worklogIds);
 
+    /** 호출자가 admin grant 또는 ACTIVE membership 으로 볼 수 있는 팀의 업무일지 검색 페이지를 조회한다. */
+    Page<WorklogSearchProjection> searchWorklogPage(Long userId, WorklogSearchQuery query);
+
     /**
-     * 업무 등록 화면 진입 시 노출할 선행 업무 후보를 조회한다.
-     * 의존성은 같은 팀 내에서만 등록 가능하므로 요청 teamId 의 미삭제, 미완료 (status_code != COMPLETED) worklog 만 최신순으로 반환한다.
+     * 같은 팀 내 미삭제, 미완료 worklog 를 페이지로 검색해 선행 업무 후보로 노출한다.
+     * 의존성은 같은 팀 한정이므로 teamId 에 단일 제약이 걸리고, query 가 있으면 제목 LIKE 로 좁힌다.
+     * excludeWorklogId 가 있으면 해당 ID 의 worklog 는 결과에서 제외 (수정 화면 자기참조 사전 차단).
      * 호출 측 service 가 사용자의 teamId 멤버십을 사전 검증한다.
      */
-    List<WorklogListProjection> findActivePredecessorCandidates(Long teamId);
-
-    /** 가시 범위와 정규화된 검색 query 로 업무일지 페이지를 조회한다. */
-    Page<WorklogSearchProjection> searchWorklogPage(WorklogVisibilityScope scope, WorklogSearchQuery query);
+    Page<WorklogListProjection> searchPredecessorCandidatePage(PredecessorCandidateSearchQuery query);
 
     // ----- 대시보드 ME 위젯용 -----
     // 모든 ME 쿼리는 (author = me) AND (team = teamId) 두 조건으로 좁힌다 — 다중 팀 사용자가

@@ -13,6 +13,7 @@ export interface NotificationApiItem {
   referenceId: number | null;
   departmentId: number | null;
   teamId: number | null;
+  teamName?: string | null;
   isRead: boolean;
   readAt: string | null;
   createdAt: string;

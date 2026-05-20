@@ -2,10 +2,14 @@
 
 import { useMemo, useState, type ReactNode } from "react"
 import {
+  Check,
   ChevronRight,
   FileText,
+  Loader2,
   Settings2,
+  Sparkles,
   Tag,
+  Wand2,
 } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { CardSpotlight } from "@/components/ui/card-spotlight"
@@ -13,6 +17,7 @@ import { Input } from "@/components/ui/input"
 import { Textarea } from "@/components/ui/textarea"
 import { getApiErrorMessage } from "@/app/_common/service/api-client"
 import { cn } from "@/lib/utils"
+import { worklogService } from "../_service/worklog.service"
 import type {
   WorklogFormDependencyOption,
   WorklogFormTagOption,
@@ -38,6 +43,12 @@ const editableStatusTransitionMap: Record<WorklogStatus, WorklogStatus[]> = {
 }
 
 const creatableStatusOptions = worklogStatusLegendOrder
+const TITLE_MAX_LENGTH = 100
+const CONTENT_MAX_LENGTH = 2000
+const FILE_SIZE_UNIT = 1024 * 1024
+const MAX_ATTACHMENT_COUNT = 10
+const MAX_ATTACHMENT_FILE_SIZE_BYTES = 10 * FILE_SIZE_UNIT
+const MAX_ATTACHMENT_TOTAL_SIZE_BYTES = 100 * FILE_SIZE_UNIT
 
 type SettingsValidationErrors = {
   actualHours?: string
@@ -68,6 +79,15 @@ function getSettingsValidationErrors(
 
 function hasSettingsValidationErrors(errors: SettingsValidationErrors) {
   return Boolean(errors.actualHours)
+}
+
+function getTodayDateString() {
+  const today = new Date()
+  const year = today.getFullYear()
+  const month = String(today.getMonth() + 1).padStart(2, "0")
+  const date = String(today.getDate()).padStart(2, "0")
+
+  return `${year}-${month}-${date}`
 }
 
 function hasCircularDependency(
@@ -109,6 +129,10 @@ export function WorklogForm({
   teamOptionsSource,
   dependencyOptionsSource,
   tagOptionsSource,
+  hasMoreTagCandidates,
+  isFetchingMoreTagCandidates,
+  onTagSearchKeywordChange,
+  onLoadMoreTagCandidates,
 }: {
   initialValues?: WorklogFormValues
   onSubmit: (values: WorklogFormValues) => Promise<void> | void
@@ -118,12 +142,17 @@ export function WorklogForm({
   teamOptionsSource?: WorklogFormTeamOption[]
   dependencyOptionsSource?: WorklogFormDependencyOption[]
   tagOptionsSource?: WorklogFormTagOption[]
+  hasMoreTagCandidates?: boolean
+  isFetchingMoreTagCandidates?: boolean
+  onTagSearchKeywordChange?: (keyword: string) => void
+  onLoadMoreTagCandidates?: () => void
 }) {
   const controlClassName = "h-11 rounded-2xl px-4 text-sm"
   const searchControlClassName = "h-11 rounded-2xl pl-11 pr-4 text-sm"
   const textareaClassName =
     "dashboard-scrollbar resize-none rounded-[1.25rem] px-4 py-3 text-base overflow-y-auto [scrollbar-gutter:stable]"
   const isEditMode = currentWorklogId !== undefined
+  const fallbackDate = getTodayDateString()
   const resolvedInitialValues = initialValues ?? {
     title: "",
     requestContent: "",
@@ -131,8 +160,8 @@ export function WorklogForm({
     status: "PENDING" as const,
     importance: "NORMAL" as const,
     actualHours: 0,
-    instructionDate: "2026-04-13",
-    dueDate: "2026-04-16",
+    instructionDate: fallbackDate,
+    dueDate: fallbackDate,
     teamId: teamOptionsSource?.[0]?.id ?? 0,
     dependencyIds: [],
     attachmentNames: [],
@@ -149,12 +178,33 @@ export function WorklogForm({
     String(resolvedInitialValues.actualHours),
   )
   const [submitError, setSubmitError] = useState("")
+  const [titleAssistError, setTitleAssistError] = useState("")
+  const [polishAssistError, setPolishAssistError] = useState("")
+  const [titleRecommendations, setTitleRecommendations] = useState<string[]>([])
+  const [polishedWorkContent, setPolishedWorkContent] = useState("")
+  const [polishedWorkContentSourceKey, setPolishedWorkContentSourceKey] =
+    useState<string | null>(null)
+  const [lastTitleRecommendationKey, setLastTitleRecommendationKey] = useState<
+    string | null
+  >(null)
+  const [lastPolishAssistKey, setLastPolishAssistKey] = useState<string | null>(
+    null,
+  )
+  const [isRecommendingTitles, setIsRecommendingTitles] = useState(false)
+  const [isPolishingWorkContent, setIsPolishingWorkContent] = useState(false)
   const [showSettingsValidationErrors, setShowSettingsValidationErrors] =
     useState(false)
   const [dependencyKeywordInput, setDependencyKeywordInput] = useState("")
   const [dependencySearchOpen, setDependencySearchOpen] = useState(false)
   const [tagKeywordInput, setTagKeywordInput] = useState("")
   const [tagSearchOpen, setTagSearchOpen] = useState(false)
+  const [selectedTagOptions, setSelectedTagOptions] = useState<
+    WorklogFormTagOption[]
+  >(() =>
+    (tagOptionsSource ?? []).filter((tag) =>
+      resolvedInitialValues.tagIds.includes(tag.id),
+    ),
+  )
   const settingsValidationErrors = getSettingsValidationErrors(
     actualHoursInput,
     {
@@ -163,6 +213,28 @@ export function WorklogForm({
   )
   const initialStatus = initialValues?.status ?? resolvedInitialValues.status
   const statusChangeReasonVisible = isEditMode && values.status !== initialStatus
+  const canRequestWritingAssist = values.workContent.trim().length > 0
+  const writingAssistRequest = useMemo(
+    () => ({
+      requestContent: values.requestContent.trim() || null,
+      workContent: values.workContent.trim(),
+    }),
+    [values.requestContent, values.workContent],
+  )
+  const writingAssistKey = useMemo(
+    () => JSON.stringify(writingAssistRequest),
+    [writingAssistRequest],
+  )
+  const isTitleRecommendationRepeated =
+    lastTitleRecommendationKey === writingAssistKey
+  const isPolishAssistRepeated = lastPolishAssistKey === writingAssistKey
+  const canRecommendTitles =
+    canRequestWritingAssist && !isRecommendingTitles && !isTitleRecommendationRepeated
+  const canPolishWorkContent =
+    canRequestWritingAssist && !isPolishingWorkContent && !isPolishAssistRepeated
+  const canApplyPolishedWorkContent =
+    polishedWorkContent.trim().length > 0 &&
+    polishedWorkContentSourceKey === writingAssistKey
 
   const teamSource = useMemo<WorklogFormTeamOption[]>(
     () => teamOptionsSource ?? [],
@@ -241,30 +313,16 @@ export function WorklogForm({
     [dependencyCandidates, values.dependencyIds],
   )
   const selectedTags = useMemo(
-    () => tagSource.filter((tag) => values.tagIds.includes(tag.id)),
-    [tagSource, values.tagIds],
+    () =>
+      mergeTagOptions([...selectedTagOptions, ...tagSource]).filter((tag) =>
+        values.tagIds.includes(tag.id),
+      ),
+    [selectedTagOptions, tagSource, values.tagIds],
   )
   const filteredTagCandidates = useMemo(() => {
-    const normalizedKeyword = tagKeywordInput.trim().toLowerCase()
-    if (!normalizedKeyword) return []
-
     return tagSource
-      .filter((tag) => {
-        if (values.tagIds.includes(tag.id)) return false
-
-        const searchableText = [
-          tag.name,
-          tag.category,
-          tag.source,
-          tag.reuseHint,
-        ]
-          .join(" ")
-          .toLowerCase()
-
-        return searchableText.includes(normalizedKeyword)
-      })
-      .slice(0, 8)
-  }, [tagKeywordInput, tagSource, values.tagIds])
+      .filter((tag) => !values.tagIds.includes(tag.id))
+  }, [tagSource, values.tagIds])
 
   const incompleteDependencies = dependencyCandidates.filter(
     (worklog) =>
@@ -293,20 +351,46 @@ export function WorklogForm({
   const addAttachmentFiles = (files: File[]) => {
     const seenNames = new Set(values.attachmentNames)
     const duplicateNames: string[] = []
+    const tooLargeNames: string[] = []
+    const limitExceededNames: string[] = []
+    let currentTotalSize = getCurrentAttachmentSizeBytes(values)
     const nextFiles = files.filter((file) => {
       if (seenNames.has(file.name)) {
         duplicateNames.push(file.name)
         return false
       }
+      if (file.size > MAX_ATTACHMENT_FILE_SIZE_BYTES) {
+        tooLargeNames.push(file.name)
+        return false
+      }
+      if (seenNames.size >= MAX_ATTACHMENT_COUNT) {
+        limitExceededNames.push(file.name)
+        return false
+      }
+      if (currentTotalSize + file.size > MAX_ATTACHMENT_TOTAL_SIZE_BYTES) {
+        limitExceededNames.push(file.name)
+        return false
+      }
       seenNames.add(file.name)
+      currentTotalSize += file.size
       return true
     })
 
-    if (duplicateNames.length > 0) {
-      setSubmitError(
-        `이미 같은 이름의 첨부 파일이 있습니다: ${Array.from(new Set(duplicateNames)).join(", ")}`,
-      )
-    } else {
+    const errors = [
+      duplicateNames.length > 0
+        ? `이미 같은 이름의 첨부 파일이 있습니다: ${formatUniqueNames(duplicateNames)}`
+        : "",
+      tooLargeNames.length > 0
+        ? `개당 최대 10MB를 초과한 파일은 제외했습니다: ${formatUniqueNames(tooLargeNames)}`
+        : "",
+      limitExceededNames.length > 0
+        ? `첨부 파일은 최대 10개, 전체 100MB까지 업로드할 수 있습니다: ${formatUniqueNames(limitExceededNames)}`
+        : "",
+    ].filter(Boolean)
+
+    if (errors.length > 0) {
+      setSubmitError(errors.join(" "))
+    } else if (submitError) {
       setSubmitError("")
     }
 
@@ -349,13 +433,27 @@ export function WorklogForm({
   }
 
   const addTag = (tagId: number) => {
+    const selectedTag = tagSource.find((tag) => tag.id === tagId)
+
+    if (selectedTag) {
+      setSelectedTagOptions((current) =>
+        mergeTagOptions([...current, selectedTag]),
+      )
+    }
+
     setValues((previous) => ({
       ...previous,
       tagIds: Array.from(new Set([...previous.tagIds, tagId])),
       removeTagIds: (previous.removeTagIds ?? []).filter((item) => item !== tagId),
     }))
     setTagKeywordInput("")
+    onTagSearchKeywordChange?.("")
     setTagSearchOpen(false)
+  }
+
+  const updateTagKeywordInput = (nextKeyword: string) => {
+    setTagKeywordInput(nextKeyword)
+    onTagSearchKeywordChange?.(nextKeyword)
   }
 
   const removeTag = (tagId: number) => {
@@ -364,6 +462,7 @@ export function WorklogForm({
       tagIds: previous.tagIds.filter((item) => item !== tagId),
       removeTagIds: Array.from(new Set([...(previous.removeTagIds ?? []), tagId])),
     }))
+    setSelectedTagOptions((current) => current.filter((tag) => tag.id !== tagId))
   }
 
   const updateValues = (nextValues: WorklogFormValues) => {
@@ -388,6 +487,71 @@ export function WorklogForm({
       )
     ) {
       setSubmitError("")
+    }
+  }
+
+  const clearPolishedWorkContent = () => {
+    setPolishedWorkContent("")
+    setPolishedWorkContentSourceKey(null)
+  }
+
+  const recommendTitles = async () => {
+    if (!canRequestWritingAssist) {
+      setTitleAssistError("업무 내용을 먼저 입력해주세요.")
+      return
+    }
+    if (isRecommendingTitles) return
+    if (isTitleRecommendationRepeated) {
+      setTitleAssistError(
+        "이미 같은 내용으로 제목을 추천했습니다. 내용을 수정하면 다시 요청할 수 있습니다.",
+      )
+      return
+    }
+
+    setIsRecommendingTitles(true)
+    setTitleAssistError("")
+    try {
+      const response = await worklogService.recommendTitles(writingAssistRequest)
+      setTitleRecommendations(response.titles)
+      setLastTitleRecommendationKey(writingAssistKey)
+      if (response.titles.length === 0) {
+        setTitleAssistError("추천할 수 있는 제목 후보가 없습니다.")
+      }
+    } catch (error) {
+      setTitleAssistError(
+        getApiErrorMessage(error, "AI 제목 추천을 처리하지 못했습니다.")
+      )
+    } finally {
+      setIsRecommendingTitles(false)
+    }
+  }
+
+  const polishWorkContent = async () => {
+    if (!canRequestWritingAssist) {
+      setPolishAssistError("업무 내용을 먼저 입력해주세요.")
+      return
+    }
+    if (isPolishingWorkContent) return
+    if (isPolishAssistRepeated) {
+      setPolishAssistError(
+        "이미 같은 내용으로 AI 내용 작성을 완료했습니다. 내용을 수정하면 다시 요청할 수 있습니다.",
+      )
+      return
+    }
+
+    setIsPolishingWorkContent(true)
+    setPolishAssistError("")
+    try {
+      const response = await worklogService.polishDraft(writingAssistRequest)
+      setPolishedWorkContent(response.workContent)
+      setPolishedWorkContentSourceKey(writingAssistKey)
+      setLastPolishAssistKey(writingAssistKey)
+    } catch (error) {
+      setPolishAssistError(
+        getApiErrorMessage(error, "AI 내용 작성을 처리하지 못했습니다.")
+      )
+    } finally {
+      setIsPolishingWorkContent(false)
     }
   }
 
@@ -465,15 +629,66 @@ export function WorklogForm({
             <p className="text-xs uppercase tracking-[0.2em] text-muted-foreground">
               핵심 정보
             </p>
-            <Field label="제목">
-              <Input
-                className={controlClassName}
-                value={values.title}
-                onChange={(event) =>
-                  setValues({ ...values, title: event.target.value })
-                }
-                placeholder="업무의 제목을 간결하게 작성하세요."
-              />
+            <Field
+              label="제목"
+              actions={
+                <Button
+                  type="button"
+                  variant="secondary"
+                  size="lg"
+                  className="font-semibold"
+                  disabled={!canRecommendTitles}
+                  onClick={recommendTitles}
+                  title={
+                    isTitleRecommendationRepeated
+                      ? "이미 같은 내용으로 제목을 추천했습니다."
+                      : canRequestWritingAssist
+                      ? "업무 내용을 바탕으로 제목 후보를 추천합니다."
+                      : "업무 내용을 먼저 입력해주세요."
+                  }
+                >
+                  {isRecommendingTitles ? (
+                    <Loader2 className="size-4 animate-spin" />
+                  ) : (
+                    <Sparkles className="size-4" />
+                  )}
+                  AI 제목 추천
+                </Button>
+              }
+            >
+              <div className="space-y-3">
+                <Input
+                  className={controlClassName}
+                  value={values.title}
+                  maxLength={TITLE_MAX_LENGTH}
+                  onChange={(event) =>
+                    setValues({ ...values, title: event.target.value })
+                  }
+                  placeholder="업무의 제목을 간결하게 작성하세요."
+                />
+                {titleRecommendations.length > 0 ? (
+                  <div className="flex flex-wrap gap-2">
+                    {titleRecommendations.map((title) => (
+                      <button
+                        key={title}
+                        type="button"
+                        className="rounded-full border border-primary/20 bg-primary/10 px-3 py-1.5 text-xs font-semibold text-primary transition-colors hover:border-primary/40 hover:bg-primary/15"
+                        onClick={() =>
+                          setValues((previous) => ({ ...previous, title }))
+                        }
+                      >
+                        {title}
+                      </button>
+                    ))}
+                  </div>
+                ) : null}
+                {titleAssistError ? (
+                  <p className="text-xs text-destructive">{titleAssistError}</p>
+                ) : null}
+              </div>
+              <p className="mt-1 text-right text-xs text-muted-foreground">
+                {values.title.length}/{TITLE_MAX_LENGTH}
+              </p>
             </Field>
 
             <Field
@@ -497,23 +712,110 @@ export function WorklogForm({
             >
               <Textarea
                 value={values.requestContent}
-                onChange={(event) =>
+                maxLength={CONTENT_MAX_LENGTH}
+                onChange={(event) => {
                   setValues({ ...values, requestContent: event.target.value })
-                }
+                  setTitleRecommendations([])
+                  setTitleAssistError("")
+                  setPolishAssistError("")
+                  clearPolishedWorkContent()
+                }}
                 className={`h-[220px] ${textareaClassName}`}
                 placeholder="이 업무를 수행해야 하는 목적과 배경을 작성합니다."
               />
+              <p className="mt-1 text-right text-xs text-muted-foreground">
+                {values.requestContent.length}/{CONTENT_MAX_LENGTH}
+              </p>
             </Field>
 
             <Field label="업무 내용">
-              <Textarea
-                value={values.workContent}
-                onChange={(event) =>
-                  setValues({ ...values, workContent: event.target.value })
-                }
-                className={`h-[300px] ${textareaClassName}`}
-                placeholder="실제로 수행할 업무의 상세 내용을 작성합니다."
-              />
+              <div className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_32px_minmax(0,1fr)]">
+                <div className="space-y-2">
+                  <div className="flex min-h-9 flex-wrap items-center justify-between gap-3">
+                    <p className="text-xs font-semibold uppercase tracking-[0.16em] text-muted-foreground">
+                      원문
+                    </p>
+                    <Button
+                      type="button"
+                      variant="secondary"
+                      size="lg"
+                      className="font-semibold"
+                      disabled={!canPolishWorkContent}
+                      onClick={polishWorkContent}
+                      title={
+                        isPolishAssistRepeated
+                          ? "이미 같은 내용으로 AI 내용 작성을 완료했습니다."
+                          : canRequestWritingAssist
+                          ? "업무 내용을 더 명확한 문장으로 정리합니다."
+                          : "업무 내용을 먼저 입력해주세요."
+                      }
+                    >
+                      {isPolishingWorkContent ? (
+                        <Loader2 className="size-4 animate-spin" />
+                      ) : (
+                        <Wand2 className="size-4" />
+                      )}
+                      AI 내용 작성
+                    </Button>
+                  </div>
+                  <Textarea
+                    value={values.workContent}
+                    maxLength={CONTENT_MAX_LENGTH}
+                    onChange={(event) => {
+                      setValues({ ...values, workContent: event.target.value })
+                      setTitleRecommendations([])
+                      setTitleAssistError("")
+                      setPolishAssistError("")
+                      clearPolishedWorkContent()
+                    }}
+                    className={`h-[300px] ${textareaClassName}`}
+                    placeholder="실제로 수행할 업무의 상세 내용을 작성합니다."
+                  />
+                </div>
+                <div className="hidden items-center justify-center pt-12 text-muted-foreground xl:flex">
+                  <ChevronRight className="size-5" />
+                </div>
+                <div className="space-y-2">
+                  <div className="flex min-h-9 flex-wrap items-center justify-between gap-2">
+                    <p className="text-xs font-semibold uppercase tracking-[0.16em] text-muted-foreground">
+                      정리된 업무 내용
+                    </p>
+                    <Button
+                      type="button"
+                      variant="outline"
+                      className="h-9 rounded-lg px-3.5 text-xs font-semibold"
+                      disabled={!canApplyPolishedWorkContent}
+                      onClick={() => {
+                        setValues((previous) => ({
+                          ...previous,
+                          workContent: polishedWorkContent,
+                        }))
+                        setTitleRecommendations([])
+                        setTitleAssistError("")
+                        setPolishAssistError("")
+                      }}
+                    >
+                      <Check className="size-3.5" />
+                      본문에 반영
+                    </Button>
+                  </div>
+                  <Textarea
+                    value={polishedWorkContent}
+                    maxLength={CONTENT_MAX_LENGTH}
+                    onChange={(event) => setPolishedWorkContent(event.target.value)}
+                    className={`h-[300px] ${textareaClassName}`}
+                    placeholder="AI 내용 작성 결과가 여기에 표시됩니다."
+                  />
+                </div>
+              </div>
+              {polishAssistError ? (
+                <p className="mt-2 text-xs text-destructive">
+                  {polishAssistError}
+                </p>
+              ) : null}
+              <p className="mt-1 text-right text-xs text-muted-foreground">
+                {values.workContent.length}/{CONTENT_MAX_LENGTH}
+              </p>
             </Field>
 
             {isEditMode ? (
@@ -532,6 +834,9 @@ export function WorklogForm({
             <div className="border-t border-border/70 pt-6">
               <WorklogFileUpload
                 attachmentNames={values.attachmentNames}
+                maxFileCount={MAX_ATTACHMENT_COUNT}
+                maxFileSizeMb={MAX_ATTACHMENT_FILE_SIZE_BYTES / FILE_SIZE_UNIT}
+                maxTotalSizeMb={MAX_ATTACHMENT_TOTAL_SIZE_BYTES / FILE_SIZE_UNIT}
                 onAddAttachmentFiles={addAttachmentFiles}
                 onRemoveAttachmentName={removeAttachmentName}
               />
@@ -575,11 +880,14 @@ export function WorklogForm({
         circularDependencyDetected={circularDependencyDetected}
         statusChangeReasonVisible={statusChangeReasonVisible}
         tagKeywordInput={tagKeywordInput}
-        onTagKeywordInputChange={setTagKeywordInput}
+        onTagKeywordInputChange={updateTagKeywordInput}
         tagSearchOpen={tagSearchOpen}
         onTagSearchOpenChange={setTagSearchOpen}
         filteredTagCandidates={filteredTagCandidates}
         selectedTags={selectedTags}
+        hasMoreTagCandidates={hasMoreTagCandidates}
+        isFetchingMoreTagCandidates={isFetchingMoreTagCandidates}
+        onLoadMoreTagCandidates={onLoadMoreTagCandidates}
         onAddTag={addTag}
         onRemoveTag={removeTag}
       />
@@ -602,6 +910,27 @@ function appendRemovedFileId(values: WorklogFormValues, filename: string) {
   return Array.from(new Set([...(values.removeFileIds ?? []), removedFileId]))
 }
 
+function getCurrentAttachmentSizeBytes(values: WorklogFormValues) {
+  const removedFileIds = new Set(values.removeFileIds ?? [])
+  const existingFileSizeBytes =
+    values.attachmentFileItems
+      ?.filter((file) => !removedFileIds.has(file.fileId))
+      .reduce((sum, file) => sum + file.fileSizeBytes, 0) ?? 0
+
+  return values.attachmentFiles.reduce(
+    (sum, file) => sum + file.size,
+    existingFileSizeBytes,
+  )
+}
+
+function formatUniqueNames(names: string[]) {
+  return Array.from(new Set(names)).join(", ")
+}
+
+function mergeTagOptions(tags: WorklogFormTagOption[]) {
+  return Array.from(new Map(tags.map((tag) => [tag.id, tag])).values())
+}
+
 function FormPanel({
   eyebrow,
   title,
@@ -616,7 +945,7 @@ function FormPanel({
   children: ReactNode
 }) {
   return (
-    <CardSpotlight className={cn("rounded-[28px]", className)}>
+    <CardSpotlight className={cn("rounded-[28px]", className)} disableSpotlight>
       <div className="space-y-6 p-6">
         <div className="flex items-start justify-between gap-4">
           <div className="space-y-2">
@@ -627,7 +956,7 @@ function FormPanel({
               {title}
             </h2>
           </div>
-          <div className="flex size-11 items-center justify-center rounded-2xl border border-primary/20 bg-gradient-to-br from-primary/16 via-primary/8 to-transparent text-primary">
+          <div className="flex size-11 items-center justify-center rounded-xl border border-primary/20 bg-gradient-to-br from-primary/16 via-primary/8 to-transparent text-primary">
             {icon}
           </div>
         </div>
@@ -673,18 +1002,22 @@ function InlineActionButton({
   return (
     <button
       type="button"
-      className="group inline-flex h-9 items-center gap-2 rounded-2xl border border-primary/25 bg-primary/10 px-3.5 text-xs font-semibold text-primary shadow-[0_12px_28px_-22px_rgba(30,58,138,0.85)] transition-all hover:-translate-y-0.5 hover:border-primary/50 hover:bg-primary hover:text-primary-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background"
+      className="relative inline-flex h-9 items-center gap-2 rounded-lg border border-primary/25 bg-primary/10 px-3.5 text-xs font-semibold text-primary shadow-[0_12px_28px_-22px_rgba(30,58,138,0.85)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background"
       onClick={onClick}
-      aria-label={`${label} 설정 모달 열기`}
+      aria-label={
+        count && count > 0
+          ? `${label} 설정 모달 열기, 선택 ${count}개`
+          : `${label} 설정 모달 열기`
+      }
     >
       {icon}
       <span>{label}</span>
-      {count !== undefined ? (
-        <span className="rounded-full bg-primary px-1.5 py-0.5 text-[10px] leading-none text-primary-foreground transition-colors group-hover:bg-primary-foreground group-hover:text-primary">
-          {count}개
+      <ChevronRight className="size-3.5" />
+      {count && count > 0 ? (
+        <span className="absolute -right-1.5 -top-1.5 flex min-w-4 items-center justify-center rounded-full bg-red-600 px-1 text-[10px] font-bold leading-4 text-white ring-2 ring-background">
+          {count > 99 ? "99+" : count}
         </span>
       ) : null}
-      <ChevronRight className="size-3.5 transition-transform group-hover:translate-x-0.5" />
     </button>
   )
 }

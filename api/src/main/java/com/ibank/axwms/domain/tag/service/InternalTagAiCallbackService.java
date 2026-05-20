@@ -2,6 +2,7 @@ package com.ibank.axwms.domain.tag.service;
 
 import com.ibank.axwms.domain.tag.dto.GetTagsAiApiDto;
 import com.ibank.axwms.domain.tag.repository.TagRepository;
+import com.ibank.axwms.domain.tag.repository.jooq.MetaTagJooqRepository.AiGeneratedTagCommand;
 import com.ibank.axwms.domain.worklog.dto.ApplyWorklogAiTagsApiDto;
 import com.ibank.axwms.domain.worklog.entity.Worklog;
 import com.ibank.axwms.domain.worklog.entity.WorklogTag;
@@ -43,7 +44,7 @@ public class InternalTagAiCallbackService {
         getWorklogOrThrow(worklogId);
 
         List<Long> normalizedExistingTagIds = tagService.normalizeExistingTagIds(request.existingTagIds());
-        List<Long> newTagIds = createMissingTags(request.newTagNames());
+        List<Long> newTagIds = createMissingTags(request.effectiveNewTags());
         List<Long> tagIds = Stream.concat(normalizedExistingTagIds.stream(), newTagIds.stream())
                 .distinct()
                 .toList();
@@ -64,13 +65,16 @@ public class InternalTagAiCallbackService {
     /**
      * AI가 새로 제안한 태그명 중 아직 태그 풀에 없는 값만 멱등 생성하고 적용 대상 ID를 반환한다.
      */
-    private List<Long> createMissingTags(List<String> newTagNames) {
-        List<String> tagNames = normalizeTagNames(newTagNames);
-        if (tagNames.isEmpty()) {
+    private List<Long> createMissingTags(List<ApplyWorklogAiTagsApiDto.NewTag> newTags) {
+        List<AiGeneratedTagCommand> tags = normalizeNewTags(newTags);
+        if (tags.isEmpty()) {
             return List.of();
         }
 
-        tagRepository.insertTagNamesIgnoreDuplicates(tagNames);
+        tagRepository.insertAiGeneratedTagsIgnoreDuplicates(tags);
+        List<String> tagNames = tags.stream()
+                .map(AiGeneratedTagCommand::tagName)
+                .toList();
         return tagRepository.findAllByTagNameIn(tagNames).stream()
                 .map(tag -> tag.getId())
                 .toList();
@@ -89,7 +93,7 @@ public class InternalTagAiCallbackService {
                 .collect(Collectors.toSet());
         List<WorklogTag> newLinks = tagIds.stream()
                 .filter(tagId -> !linkedTagIds.contains(tagId))
-                .map(tagId -> WorklogTag.createAiGenerated(worklogId, tagId))
+                .map(tagId -> WorklogTag.create(worklogId, tagId))
                 .toList();
 
         if (newLinks.isEmpty()) {
@@ -104,11 +108,20 @@ public class InternalTagAiCallbackService {
     /**
      * AI가 반환한 태그명에서 공백 값과 중복 값을 제거해 DB 처리 단위를 고정한다.
      */
-    private List<String> normalizeTagNames(List<String> tagNames) {
-        return tagNames.stream()
-                .map(String::trim)
-                .filter(tagName -> !tagName.isBlank())
-                .distinct()
+    private List<AiGeneratedTagCommand> normalizeNewTags(List<ApplyWorklogAiTagsApiDto.NewTag> newTags) {
+        return newTags.stream()
+                .map(tag -> new AiGeneratedTagCommand(
+                        tag.tagName().trim(),
+                        tag.description().trim()
+                ))
+                .filter(tag -> !tag.tagName().isBlank() && !tag.description().isBlank())
+                .collect(Collectors.toMap(
+                        tag -> tag.tagName(),
+                        tag -> tag,
+                        (left, right) -> left
+                ))
+                .values()
+                .stream()
                 .limit(5)
                 .toList();
     }

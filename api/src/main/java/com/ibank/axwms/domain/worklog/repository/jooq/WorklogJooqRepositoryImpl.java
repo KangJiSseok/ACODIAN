@@ -15,6 +15,7 @@ import com.ibank.axwms.domain.worklog.repository.jooq.projection.WorklogBriefPro
 import com.ibank.axwms.domain.worklog.repository.jooq.projection.WorklogDetailProjection;
 import com.ibank.axwms.domain.worklog.repository.jooq.projection.WorklogListProjection;
 import com.ibank.axwms.domain.worklog.repository.jooq.projection.WorklogSearchProjection;
+import com.ibank.axwms.domain.worklog.repository.jooq.query.PredecessorCandidateSearchQuery;
 import com.ibank.axwms.domain.worklog.repository.jooq.query.WorklogPageQuery;
 import com.ibank.axwms.domain.worklog.repository.jooq.query.WorklogSearchQuery;
 import com.ibank.axwms.global.enums.AiProcessingStatus;
@@ -156,12 +157,32 @@ public class WorklogJooqRepositoryImpl implements WorklogJooqRepository {
     }
 
     @Override
-    public List<WorklogListProjection> findActivePredecessorCandidates(Long teamId) {
+    public Page<WorklogListProjection> searchPredecessorCandidatePage(PredecessorCandidateSearchQuery query) {
+        int pageIndex = query.pageIndex();
+        int pageSize = query.pageSize();
+        PageRequest pageRequest = PageRequest.of(pageIndex, pageSize);
+
         Condition condition = TB_WORKLOG.IS_DELETED.isFalse()
                 .and(TB_WORKLOG.STATUS_CODE.ne(WorklogStatus.COMPLETED.name()))
-                .and(TB_WORKLOG.TEAM_ID.eq(teamId));
+                .and(TB_WORKLOG.TEAM_ID.eq(query.teamId()));
+        if (query.query() != null) {
+            condition = condition.and(TB_WORKLOG.TITLE.containsIgnoreCase(query.query()));
+        }
+        if (query.excludeWorklogId() != null) {
+            condition = condition.and(TB_WORKLOG.WORKLOG_ID.ne(query.excludeWorklogId()));
+        }
 
-        return dsl.select(
+        long total = dsl.selectCount()
+                .from(TB_WORKLOG)
+                .where(condition)
+                .fetchSingle(0, Integer.class)
+                .longValue();
+
+        if (total == 0) {
+            return new PageImpl<>(List.of(), pageRequest, 0);
+        }
+
+        List<WorklogListProjection> items = dsl.select(
                         TB_WORKLOG.WORKLOG_ID,
                         TB_WORKLOG.TITLE,
                         TB_WORKLOG.STATUS_CODE,
@@ -183,7 +204,11 @@ public class WorklogJooqRepositoryImpl implements WorklogJooqRepository {
                 .join(TB_USER).on(TB_WORKLOG.AUTHOR_ID.eq(TB_USER.USER_ID))
                 .where(condition)
                 .orderBy(TB_WORKLOG.CREATED_AT.desc(), TB_WORKLOG.WORKLOG_ID.desc())
+                .limit(pageSize)
+                .offset((long) pageIndex * pageSize)
                 .fetch(WorklogListProjection::from);
+
+        return new PageImpl<>(items, pageRequest, total);
     }
 
     private Condition visibleTeamCondition(Long userId) {
@@ -202,13 +227,13 @@ public class WorklogJooqRepositoryImpl implements WorklogJooqRepository {
     }
 
     @Override
-    public Page<WorklogSearchProjection> searchWorklogPage(WorklogVisibilityScope scope, WorklogSearchQuery query) {
+    public Page<WorklogSearchProjection> searchWorklogPage(Long userId, WorklogSearchQuery query) {
         int pageIndex = query.pageIndex();
         int pageSize = query.pageSize();
         PageRequest pageRequest = PageRequest.of(pageIndex, pageSize);
 
         Condition condition = applySearchFilters(
-                TB_WORKLOG.IS_DELETED.isFalse().and(toCondition(scope)),
+                TB_WORKLOG.IS_DELETED.isFalse().and(visibleTeamCondition(userId)),
                 query);
 
         long total = dsl.selectCount()
@@ -362,7 +387,7 @@ public class WorklogJooqRepositoryImpl implements WorklogJooqRepository {
         return switch (scope) {
             case WorklogVisibilityScope.All ignored -> DSL.noCondition();
             case WorklogVisibilityScope.Department department ->
-                    TB_WORKLOG.TEAM_ID.in(visibleNonDeletedTeamIds(department.userId()));
+                    TB_WORKLOG.TEAM_ID.in(nonDeletedDepartmentTeamIds(department.departmentId()));
             case WorklogVisibilityScope.MyTeams myTeams ->
                     TB_WORKLOG.TEAM_ID.in(visibleNonDeletedTeamIds(myTeams.userId()));
         };
@@ -738,9 +763,20 @@ public class WorklogJooqRepositoryImpl implements WorklogJooqRepository {
         return switch (scope) {
             case WorklogVisibilityScope.All ignored -> DSL.noCondition();
             case WorklogVisibilityScope.Department department ->
-                    TB_TEAM.TEAM_ID.in(visibleTeamIds(department.userId()));
+                    TB_TEAM.DEPARTMENT_ID.eq(department.departmentId());
             case WorklogVisibilityScope.MyTeams myTeams -> TB_TEAM.TEAM_ID.in(visibleTeamIds(myTeams.userId()));
         };
+    }
+
+    /**
+     * DEPT_HEAD 검색 범위는 사용자 멤버십이 아니라 부서 소유 팀 기준으로 해석한다.
+     * keyword 검색 조건과 semantic 검색의 AI allowedTeamIds 산출이 같은 부서 팀 집합을 보도록 한다.
+     */
+    private Select<Record1<Long>> nonDeletedDepartmentTeamIds(Long departmentId) {
+        return DSL.select(TB_TEAM.TEAM_ID)
+                .from(TB_TEAM)
+                .where(TB_TEAM.DELETED_AT.isNull())
+                .and(TB_TEAM.DEPARTMENT_ID.eq(departmentId));
     }
 
     /**

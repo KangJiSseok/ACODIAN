@@ -14,7 +14,7 @@ import java.util.List;
 @NoArgsConstructor(access = AccessLevel.PRIVATE)
 public final class UpdateWorklogApiDto {
 
-    private static final int CONTENT_MAX_LENGTH = 10_000;
+    private static final int CONTENT_MAX_LENGTH = 2_000;
 
     /**
      * 업무일지 부분 수정 요청 본문 (multipart 의 JSON part).
@@ -28,15 +28,15 @@ public final class UpdateWorklogApiDto {
     @Schema(description = "업무일지 부분 수정 요청 (multipart JSON part). null 인 필드는 변경되지 않는다. teamId 는 수정할 수 없다.")
     public record Request(
             @Schema(description = "업무 제목", example = "4월 결산 보고서 작성 (수정)")
-            @Size(min = 1, max = 200, message = "title 은 1~200자여야 합니다.")
+            @Size(min = 1, max = 100, message = "title 은 1~100자여야 합니다.")
             String title,
 
             @Schema(description = "업무 요청/지시 내용")
-            @Size(max = CONTENT_MAX_LENGTH, message = "requestContent 는 10000자를 초과할 수 없습니다.")
+            @Size(max = CONTENT_MAX_LENGTH, message = "requestContent 는 2000자를 초과할 수 없습니다.")
             String requestContent,
 
             @Schema(description = "실제 수행 업무 내용")
-            @Size(min = 1, max = CONTENT_MAX_LENGTH, message = "workContent 는 1~10000자여야 합니다.")
+            @Size(min = 1, max = CONTENT_MAX_LENGTH, message = "workContent 는 1~2000자여야 합니다.")
             String workContent,
 
             @Schema(description = "업무 상태 코드", example = "IN_PROGRESS")

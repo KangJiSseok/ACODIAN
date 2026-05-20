@@ -6,5 +6,7 @@ package com.ibank.axwms.domain.notification;
 public enum NotificationType {
     WORKLOG_DUE_SOON,
     WORKLOG_DUE_TODAY,
-    WORKLOG_OVERDUE
+    WORKLOG_OVERDUE,
+    WORKLOG_DEPENDENCY_READY,
+    WORKLOG_AI_POST_PROCESS_RESULT
 }

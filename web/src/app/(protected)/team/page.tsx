@@ -8,6 +8,7 @@ import {
   Users,
 } from "lucide-react";
 import { Pagination } from "@/app/_common/components/data-display/pagination";
+import { ResultCount } from "@/app/_common/components/data-display/resultCount";
 import { usePagination } from "@/app/_common/hooks/usePagination";
 import { useAuth } from "@/app/_common/hooks/useAuth";
 import { canCreateTeams } from "@/app/_common/utils/organizationAccess.utils";
@@ -33,7 +34,6 @@ const teamFilters: Array<{
     inactive: TeamCount;
   }) => TeamCount;
 }> = [
-  { key: "all", label: "전체 팀", getCount: (summary) => summary.total },
   {
     key: "ACTIVE",
     label: "활성화된 팀",
@@ -44,6 +44,7 @@ const teamFilters: Array<{
     label: "비활성화된 팀",
     getCount: (summary) => summary.inactive,
   },
+  { key: "all", label: "전체 팀", getCount: (summary) => summary.total },
 ];
 
 export default function TeamPage() {
@@ -72,20 +73,16 @@ export default function TeamPage() {
 
   return (
     <section className="space-y-6">
-      <PageHeader
-        title="팀 관리"
-        description="관리 가능한 팀과 소속 구성원을 확인합니다."
-        actions={canCreateTeam ? (
-          <Button
-            asChild
-            type="button"
-            variant="default"
-            className="h-10 min-w-32 px-6 text-sm font-semibold !text-primary-foreground hover:!text-primary-foreground"
-          >
-            <Link href="/team/create">팀 등록</Link>
-          </Button>
-        ) : null}
-      />
+      <PageHeader title="팀 관리" />
+
+      <section className="space-y-2">
+        <h2 className="text-[20px] font-semibold tracking-[-0.04em] text-foreground">
+          팀 관리
+        </h2>
+        <p className="max-w-3xl text-sm leading-6 text-muted-foreground">
+          관리 가능한 팀과 소속 구성원을 확인합니다.
+        </p>
+      </section>
 
       <div className="grid gap-4 md:grid-cols-3">
         {teamFilters.map((item) => {
@@ -121,19 +118,31 @@ export default function TeamPage() {
 
       <section className="space-y-4">
         <div className="border-t-2 border-foreground/70 pt-5">
-          <div className="grid gap-3 sm:grid-cols-[minmax(0,1fr)_auto] sm:items-end">
-                <div>
-                  <h2 className="text-[20px] font-semibold tracking-[-0.04em] text-foreground">
-                    {filter === "all" ? "팀 목록" : `${getTeamStatusLabel(filter)} 팀`}
-                  </h2>
-                  <p className="mt-2 text-sm leading-6 text-muted-foreground">
-                    팀 상태, 팀장, 관리자, 구성원 수와 운영 기간을 한눈에 확인합니다.
-                  </p>
-                </div>
-                <div className="flex flex-col gap-3 sm:items-end">
-                  <p className="text-sm font-medium text-muted-foreground">
-                    표시 중인 팀 {filteredTeams.length}개
-                  </p>
+          <div className="space-y-2">
+            <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+              <h2 className="text-[20px] font-semibold tracking-[-0.04em] text-foreground">
+                {filter === "all" ? "팀 목록" : `${getTeamStatusLabel(filter)} 팀`}
+              </h2>
+              {canCreateTeam ? (
+                <Button
+                  asChild
+                  type="button"
+                  variant="default"
+                  className="h-10 min-w-32 px-6 text-sm font-semibold !text-primary-foreground hover:!text-primary-foreground"
+                >
+                  <Link href="/team/create">팀 등록</Link>
+                </Button>
+              ) : null}
+            </div>
+            <div className="flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
+              <p className="mt-2 text-sm leading-6 text-muted-foreground">
+                팀 상태, 팀장, 관리자, 구성원 수와 운영 기간을 한눈에 확인합니다.
+              </p>
+              <ResultCount
+                label="조회된 팀"
+                count={filteredTeams.length}
+                unit="개"
+              />
             </div>
           </div>
         </div>

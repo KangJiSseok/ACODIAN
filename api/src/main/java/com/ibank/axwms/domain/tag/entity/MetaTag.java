@@ -34,6 +34,12 @@ public class MetaTag {
     @Column(name = "usage_count", nullable = false)
     private Integer usageCount;
 
+    @Column(name = "description", columnDefinition = "TEXT")
+    private String description;
+
+    @Column(name = "is_ai_generated", nullable = false)
+    private Boolean isAiGenerated;
+
     @CreationTimestamp
     @Column(name = "created_at", nullable = false, updatable = false)
     private LocalDateTime createdAt;
@@ -42,6 +48,9 @@ public class MetaTag {
     @Column(name = "updated_at", nullable = false)
     private LocalDateTime updatedAt;
 
+    @Column(name = "is_deleted", nullable = false)
+    private Boolean isDeleted;
+
     /**
      * 새 태그 풀 항목을 생성하며, 사용 횟수는 업무일지 연결 성공 이후 증가시킨다.
      */
@@ -49,6 +58,8 @@ public class MetaTag {
         MetaTag metaTag = new MetaTag();
         metaTag.tagName = tagName;
         metaTag.usageCount = 0;
+        metaTag.isAiGenerated = Boolean.FALSE;
+        metaTag.isDeleted = Boolean.FALSE;
         return metaTag;
     }
 }

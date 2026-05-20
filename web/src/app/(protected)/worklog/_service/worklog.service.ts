@@ -6,6 +6,9 @@ import type {
   CreateWorklogResponse,
   GetWorklogsParams,
   ImportanceLevel,
+  SearchPredecessorCandidatesParams,
+  SearchSemanticWorklogsParams,
+  SearchTagsParams,
   SearchWorklogsParams,
   Worklog,
   WorklogDetailApiResponse,
@@ -14,10 +17,21 @@ import type {
   WorklogFormValues,
   WorklogListApiItem,
   WorklogListItem,
-  WorklogOptionsApiResponse,
+  WorklogOptionPredecessorCandidate,
+  WorklogOptionTagItem,
+  WorklogPolishResponse,
   WorklogSearchApiItem,
+  WorklogSemanticSearchResponse,
   WorklogStatus,
+  WorklogTagSearchApiItem,
+  WorklogTitleRecommendationResponse,
+  WorklogWritingAssistRequest,
 } from "../_types/worklog.types"
+
+type TagSearchApiResponse =
+  | PageResponse<WorklogTagSearchApiItem>
+  | WorklogTagSearchApiItem[]
+  | { tags: WorklogTagSearchApiItem[] }
 
 const worklogStatusCodeMap: Record<string, WorklogStatus> = {
   PENDING: "PENDING",
@@ -102,6 +116,26 @@ function normalizeSearchParams(params: SearchWorklogsParams) {
   return {
     ...params,
     keyword: params.keyword?.trim() || undefined,
+    statusCode: params.statusCode
+      ? worklogStatusApiCodeMap[params.statusCode] ?? params.statusCode
+      : undefined,
+  }
+}
+
+function normalizePredecessorSearchParams(
+  params: SearchPredecessorCandidatesParams
+) {
+  return {
+    ...params,
+    query: params.query?.trim() || undefined,
+  }
+}
+
+function normalizeTagSearchParams(params: SearchTagsParams) {
+  return {
+    page: params.page ?? 1,
+    pageSize: params.pageSize ?? 5,
+    query: params.query?.trim() || undefined,
   }
 }
 
@@ -122,6 +156,64 @@ function toAiProcessingStatus(
   code: string | null | undefined
 ): AiProcessingStatus {
   return code ? aiProcessingStatusCodeMap[code] ?? "PENDING" : "PENDING"
+}
+
+function getTagSearchItems(response: TagSearchApiResponse) {
+  if (Array.isArray(response)) return response
+  if ("tags" in response && Array.isArray(response.tags)) return response.tags
+  if ("items" in response && Array.isArray(response.items)) return response.items
+  return []
+}
+
+function toWorklogOptionTagItem(
+  item: WorklogTagSearchApiItem
+): WorklogOptionTagItem | null {
+  const tagId = Number(item.tagId ?? item.id)
+  const tagName = item.tagName ?? item.name
+
+  if (!Number.isFinite(tagId) || !tagName) {
+    return null
+  }
+
+  return {
+    tagId,
+    tagName,
+    usageCount: toNumber(item.usageCount),
+    createdAt: item.createdAt ?? "",
+    updatedAt: item.updatedAt ?? "",
+  }
+}
+
+function toWorklogOptionTagPage(
+  response: TagSearchApiResponse,
+  params: SearchTagsParams
+): PageResponse<WorklogOptionTagItem> {
+  if (!Array.isArray(response) && "items" in response) {
+    return {
+      ...response,
+      items: response.items
+        .map(toWorklogOptionTagItem)
+        .filter((tag): tag is WorklogOptionTagItem => tag !== null),
+    }
+  }
+
+  const page = params.page ?? 1
+  const pageSize = params.pageSize ?? 5
+  const items = getTagSearchItems(response)
+    .map(toWorklogOptionTagItem)
+    .filter((tag): tag is WorklogOptionTagItem => tag !== null)
+
+  return {
+    items,
+    page,
+    pageSize,
+    totalCount: items.length,
+    totalPages: 1,
+    isFirst: page === 1,
+    isLast: true,
+    hasNext: false,
+    hasPrevious: page > 1,
+  }
 }
 
 function toStatusHistory(
@@ -204,7 +296,7 @@ export const worklogService = {
     ...params
   }: SearchWorklogsParams = {}): Promise<PageResponse<WorklogListItem>> {
     const response = await apiClient.get<PageResponse<WorklogSearchApiItem>>(
-      "/worklogs/search",
+      "/worklogs/search/keyword",
       {
         params: normalizeSearchParams({ ...params, page, pageSize }),
       }
@@ -215,13 +307,39 @@ export const worklogService = {
       items: response.items.map(toSearchedWorklogListItem),
     }
   },
+  async searchSemanticWorklogs(
+    params: SearchSemanticWorklogsParams
+  ): Promise<WorklogSemanticSearchResponse> {
+    return apiClient.get<WorklogSemanticSearchResponse>(
+      "/worklogs/search/semantic",
+      {
+        params: {
+          query: params.query.trim(),
+        },
+      }
+    )
+  },
   async getFilterOptions(): Promise<WorklogFilterOptions> {
     return apiClient.get<WorklogFilterOptions>("/worklogs/filter-options")
   },
-  async getOptions(teamId: number): Promise<WorklogOptionsApiResponse> {
-    return apiClient.get<WorklogOptionsApiResponse>("/worklogs/options", {
-      params: { teamId },
+  async searchPredecessorCandidates(
+    params: SearchPredecessorCandidatesParams
+  ): Promise<PageResponse<WorklogOptionPredecessorCandidate>> {
+    return apiClient.get<PageResponse<WorklogOptionPredecessorCandidate>>(
+      "/worklogs/predecessor-candidates/search",
+      {
+        params: normalizePredecessorSearchParams(params),
+      }
+    )
+  },
+  async searchTags(
+    params: SearchTagsParams = {}
+  ): Promise<PageResponse<WorklogOptionTagItem>> {
+    const response = await apiClient.get<TagSearchApiResponse>("/tags/search", {
+      params: normalizeTagSearchParams(params),
     })
+
+    return toWorklogOptionTagPage(response, params)
   },
   async getById(id: number): Promise<Worklog | undefined> {
     const response = await apiClient.get<WorklogDetailApiResponse>(
@@ -259,6 +377,24 @@ export const worklogService = {
     }
 
     return apiClient.post<CreateWorklogResponse, FormData>("/worklogs", formData)
+  },
+  async polishDraft(request: WorklogWritingAssistRequest) {
+    return apiClient.post<WorklogPolishResponse, WorklogWritingAssistRequest>(
+      "/worklogs/polish",
+      request
+    )
+  },
+  async recommendTitles(request: WorklogWritingAssistRequest) {
+    return apiClient.post<
+      WorklogTitleRecommendationResponse,
+      WorklogWritingAssistRequest
+    >("/worklogs/title-recommendations", request)
+  },
+  async retryAiSummary(id: number) {
+    return apiClient.post<EmptyResponse, undefined>(
+      `/worklogs/${id}/ai-summary/retry`,
+      undefined
+    )
   },
   async update(id: number, values: WorklogFormValues) {
     const request = {

@@ -3,8 +3,11 @@ package com.ibank.axwms.domain.worklog.controller;
 import com.ibank.axwms.domain.worklog.dto.CreateWorklogApiDto;
 import com.ibank.axwms.domain.worklog.dto.GetWorklogDetailApiDto;
 import com.ibank.axwms.domain.worklog.dto.GetWorklogFilterOptionsApiDto;
-import com.ibank.axwms.domain.worklog.dto.GetWorklogOptionsApiDto;
 import com.ibank.axwms.domain.worklog.dto.GetWorklogsApiDto;
+import com.ibank.axwms.domain.worklog.dto.PolishWorklogApiDto;
+import com.ibank.axwms.domain.worklog.dto.RecommendWorklogTitleApiDto;
+import com.ibank.axwms.domain.worklog.dto.SearchPredecessorApiDto;
+import com.ibank.axwms.domain.worklog.dto.SearchSemanticWorklogsApiDto;
 import com.ibank.axwms.domain.worklog.dto.SearchWorklogsApiDto;
 import com.ibank.axwms.domain.worklog.dto.UpdateWorklogApiDto;
 import com.ibank.axwms.domain.worklog.dto.UpdateWorklogStatusApiDto;
@@ -26,7 +29,9 @@ import java.util.List;
 @Tag(name = "Worklog", description = "업무일지 API")
 public interface WorklogControllerDocs {
 
-    @Operation(summary = "업무 등록", description = "로그인 사용자의 권한으로 업무를 등록한다.")
+    @Operation(summary = "업무 등록",
+            description = "로그인 사용자의 권한으로 업무를 등록한다. "
+                    + "files part 는 첨부 파일이 있을 때만 전달한다.")
     @SecurityRequirement(name = "bearerAuth")
     @ApiResponses({
             @ApiResponse(responseCode = "201", description = "업무 등록에 성공한다."),
@@ -40,6 +45,34 @@ public interface WorklogControllerDocs {
             List<MultipartFile> files,
             CustomUserPrincipal principal
     );
+
+    @Operation(summary = "업무일지 작성 보조",
+            description = "사용자가 저장 전 작성한 requestContent 와 workContent 를 AI 서버에 동기 전달해 "
+                    + "다듬어진 workContent 만 반환한다. "
+                    + "저장/수정, AI summary 상태, 비동기 callback 파이프라인과 결합하지 않는다.")
+    @SecurityRequirement(name = "bearerAuth")
+    @ApiResponses({
+            @ApiResponse(responseCode = "200", description = "작성 보조 결과를 반환한다."),
+            @ApiResponse(responseCode = "400", description = "요청 값이 올바르지 않다.", content = @Content),
+            @ApiResponse(responseCode = "401", description = "인증이 필요하다.", content = @Content),
+            @ApiResponse(responseCode = "403", description = "업무일지 작성 권한이 없다.", content = @Content),
+            @ApiResponse(responseCode = "502", description = "AI 작성 보조 서버 호출에 실패했다.", content = @Content)
+    })
+    PolishWorklogApiDto.Response polishWorklog(PolishWorklogApiDto.Request request);
+
+    @Operation(summary = "업무일지 제목 추천",
+            description = "사용자가 저장 전 작성한 requestContent 와 workContent 를 AI 서버에 동기 전달해 "
+                    + "workContent 의 수행 사실을 근거로 최대 3개의 한국어 제목 후보를 반환한다. "
+                    + "저장/수정, 기존 작성 보조 polish 응답, 비동기 callback 파이프라인과 결합하지 않는다.")
+    @SecurityRequirement(name = "bearerAuth")
+    @ApiResponses({
+            @ApiResponse(responseCode = "200", description = "제목 추천 결과를 반환한다."),
+            @ApiResponse(responseCode = "400", description = "요청 값이 올바르지 않다.", content = @Content),
+            @ApiResponse(responseCode = "401", description = "인증이 필요하다.", content = @Content),
+            @ApiResponse(responseCode = "403", description = "업무일지 작성 권한이 없다.", content = @Content),
+            @ApiResponse(responseCode = "502", description = "AI 작성 보조 서버 호출에 실패했다.", content = @Content)
+    })
+    RecommendWorklogTitleApiDto.Response recommendWorklogTitles(RecommendWorklogTitleApiDto.Request request);
 
     @Operation(summary = "업무 목록 조회",
             description = "로그인 사용자의 역할에 따라 가시 범위가 달라진다. "
@@ -72,7 +105,7 @@ public interface WorklogControllerDocs {
             @Parameter(description = "업무 ID", example = "501") Long worklogId
     );
 
-    @Operation(summary = "업무일지 검색",
+    @Operation(summary = "업무일지 키워드 검색",
             description = "업무 제목 LIKE 검색과 팀/상태/중요도/작성자/태그/기간 필터를 조합한다. "
                     + "가시 범위는 업무 목록 조회와 동일하며, 정렬은 created_at 내림차순으로 고정된다.")
     @SecurityRequirement(name = "bearerAuth")
@@ -81,9 +114,25 @@ public interface WorklogControllerDocs {
             @ApiResponse(responseCode = "400", description = "요청 값이 올바르지 않다.", content = @Content),
             @ApiResponse(responseCode = "401", description = "인증이 필요하다.", content = @Content)
     })
-    PageResponse<SearchWorklogsApiDto.Response.Item> searchWorklogs(
+    PageResponse<SearchWorklogsApiDto.Response.Item> searchKeywordWorklogs(
             @Parameter(hidden = true) CustomUserPrincipal principal,
             @ParameterObject SearchWorklogsApiDto.Request request
+    );
+
+    @Operation(summary = "업무일지 시맨틱 검색",
+            description = "검색어와 접근 가능한 팀 범위를 LightRAG v3 업무일지 query API에 전달하고, "
+                    + "AI 서버가 반환한 answer와 references를 반환한다. "
+                    + "page/pageSize는 적용하지 않는다.")
+    @SecurityRequirement(name = "bearerAuth")
+    @ApiResponses({
+            @ApiResponse(responseCode = "200", description = "시맨틱 검색 답변과 reference 목록을 반환한다."),
+            @ApiResponse(responseCode = "400", description = "요청 값이 올바르지 않다.", content = @Content),
+            @ApiResponse(responseCode = "401", description = "인증이 필요하다.", content = @Content),
+            @ApiResponse(responseCode = "502", description = "AI 시맨틱 검색 서버 호출에 실패했다.", content = @Content)
+    })
+    SearchSemanticWorklogsApiDto.Response searchSemanticWorklogs(
+            @Parameter(hidden = true) CustomUserPrincipal principal,
+            @ParameterObject SearchSemanticWorklogsApiDto.Request request
     );
 
     @Operation(summary = "업무일지 검색 필터 옵션 조회",
@@ -140,20 +189,37 @@ public interface WorklogControllerDocs {
             UpdateWorklogStatusApiDto.Request request
     );
 
-    @Operation(summary = "업무 등록 화면 폼 옵션 조회",
-            description = "업무 등록 화면 진입 시 사용할 폼 옵션을 한 번에 반환한다. "
-                    + "의존성은 같은 팀 내에서만 등록 가능하므로 선행 후보는 요청 teamId 의 미삭제, 미완료 worklog 만 최신순으로 포함된다. "
-                    + "요청자는 해당 팀의 ACTIVE 멤버여야 한다. "
-                    + "태그는 메타 태그 전체를 이름순으로 반환한다.")
+    @Operation(summary = "AI 업무 요약 재요청",
+            description = "AI 요약 생성이 실패한 업무에 대해 작성자 본인이 요약/태그 후처리 파이프라인을 다시 요청한다. "
+                    + "첨부 파일 요약은 재요청하지 않는다.")
     @SecurityRequirement(name = "bearerAuth")
     @ApiResponses({
-            @ApiResponse(responseCode = "200", description = "폼 옵션을 반환한다."),
+            @ApiResponse(responseCode = "200", description = "AI 요약 재요청에 성공한다."),
+            @ApiResponse(responseCode = "401", description = "인증이 필요하다.", content = @Content),
+            @ApiResponse(responseCode = "403", description = "작성자가 아니다.", content = @Content),
+            @ApiResponse(responseCode = "404", description = "업무가 없거나 소프트 삭제됨", content = @Content),
+            @ApiResponse(responseCode = "409", description = "AI 요약 실패 상태가 아니어서 재요청할 수 없다.", content = @Content)
+    })
+    EmptyResponse retryAiSummary(
+            @Parameter(hidden = true) CustomUserPrincipal principal,
+            @Parameter(description = "AI 요약 재요청 대상 업무 ID", example = "501") Long worklogId
+    );
+
+    @Operation(summary = "선행 업무 후보 검색",
+            description = "업무 등록/수정 화면에서 선행으로 지정할 worklog 후보를 검색한다. "
+                    + "의존성은 같은 팀 한정이라 요청 teamId 의 ACTIVE 멤버여야 하며, "
+                    + "후보는 해당 팀의 미삭제 + 미완료 worklog 만 노출된다. "
+                    + "query 가 있으면 제목 LIKE 로 좁히고, excludeWorklogId 가 있으면 결과에서 제외한다. "
+                    + "정렬은 created_at 내림차순으로 고정된다.")
+    @SecurityRequirement(name = "bearerAuth")
+    @ApiResponses({
+            @ApiResponse(responseCode = "200", description = "선행 후보 페이지를 반환한다."),
             @ApiResponse(responseCode = "400", description = "요청 값이 올바르지 않다.", content = @Content),
             @ApiResponse(responseCode = "401", description = "인증이 필요하다.", content = @Content),
             @ApiResponse(responseCode = "403", description = "요청 팀의 ACTIVE 멤버가 아니다.", content = @Content)
     })
-    GetWorklogOptionsApiDto.Response getWorklogOptions(
+    PageResponse<SearchPredecessorApiDto.Response.Item> searchPredecessor(
             @Parameter(hidden = true) CustomUserPrincipal principal,
-            @ParameterObject GetWorklogOptionsApiDto.Request request
+            @ParameterObject SearchPredecessorApiDto.Request request
     );
 }

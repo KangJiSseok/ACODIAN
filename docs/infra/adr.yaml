@@ -258,7 +258,7 @@
        컨테이너가 "어느 서비스인가" 를 포트 한 자리수로 기억할 수 있게 8x00 네이밍으로 통일한다.
 
     3. 컨테이너 호스트 바인딩
-       - web/api/ai 는 `127.0.0.1:<HOST>:<INTERNAL>` 형태로 바인딩해 외부에서 Nginx 를 우회할 수 없게 한다 (OPS-010).
+       - web/api 는 `127.0.0.1:<HOST>:<INTERNAL>` 형태로 바인딩해 외부에서 Nginx 를 우회할 수 없게 한다 (OPS-010). ai 도 원래 이 원칙을 따랐으나, AI 직접 검증/호출 요구로 host binding 은 ADR-020 이 예외적으로 재정의한다.
        - production 호스트 포트는 컨테이너 내부 포트와 동일하게 둔다 (예: `127.0.0.1:8100:8100`).
        - staging 호스트 포트는 production +1 오프셋으로 둔다 (예: `127.0.0.1:8101:8100`). 이 규칙은 OPS-009 로 상수화한다.
        - Nginx 는 `proxy_pass http://127.0.0.1:8100` 처럼 로컬로만 upstream 을 연다.
@@ -270,7 +270,7 @@
   consequence: |
     긍정적 영향:
       - TLS 종료가 Nginx 단일 지점에 모여 FE/API/AI HTTPS 일관성이 확보된다. mixed content 문제 해소.
-      - 외부 스캔에 노출되는 TCP 포트가 Nginx(80/443, 8080/8443) 와 DB(ADR-011) 로 축소된다. 공격 표면 감소.
+      - 외부 스캔에 노출되는 TCP 포트가 Nginx(80/443, 8080/8443) 와 DB(ADR-011) 로 축소된다. 단, ADR-020 이후 AI 8200/8201 은 직접 노출 예외가 되므로 보안그룹/방화벽 통제가 필요하다.
       - 포트 번호 규칙성이 높아 팀원이 외워서 디버깅 가능.
       - production/staging 이 같은 EC2 에 공존해도 충돌이 구조적으로 방지된다 (+1 오프셋 + 127.0.0.1 바인딩).
 
@@ -576,7 +576,7 @@
     표준가이드 docx 의 nextjs 3000 / nestjs 4000 / fastapi 5000 스킴은 컨테이너↔nginx localhost 통신이라 SSAFY 외부 노출 정책과 무관하고, nestjs 항목은 본 프로젝트 Spring Boot 스택과 어긋나며, ADR-010/014/015 가 8x00 위에 다섯 서비스 + nginx + sudoers + TLS 를 정합한 비용은 docx 한 줄에 맞추기 위해 회수할 가치가 없다.
   decision: |
     `ai/Dockerfile` 신규 — `python:3.12-slim` 단일 stage, non-root, EXPOSE 8200, CMD `uvicorn app.main:app --host 0.0.0.0 --port 8200`. `ai/.dockerignore` 동반.
-    `infra/compose.deploy.yml` 에 `ai` 서비스 추가 — production `127.0.0.1:8200:8200` / staging `127.0.0.1:8201:8200`, depends_on postgres/redis healthy, 내부 통신은 compose hostname.
+    `infra/compose.deploy.yml` 에 `ai` 서비스 추가 — 최초 결정은 production `127.0.0.1:8200:8200` / staging `127.0.0.1:8201:8200` 였으나, AI 직접 검증/호출을 위해 host binding 은 ADR-020 에서 `0.0.0.0:8200/8201:8200` 으로 재정의한다. depends_on postgres/redis healthy, 내부 통신은 compose hostname.
     `remote-deploy.sh` 일반화 — `AI_IMAGE` require_var 및 `pull/rm -sf/up -d` 인자에 ai 포함.
     `.gitlab-ci.yml` 확장 — `AI_IMAGE_BASE` 변수, `ai_image` job(`-f ai/Dockerfile ai`), `.ai_deploy_changes` anchor, `.deploy_changes` 합집합에 ai/** 편입, deploy_dev/prod ssh 한 줄에 `AI_IMAGE` 주입.
     이미지 네임스페이스: `ghcr.io/axwms-s209/axwms-ai` (ADR-007 organization 그대로). 태그 정책은 api/web 과 동일.
@@ -584,7 +584,7 @@
     Celery worker / Neo4j / ai → api 호출 인증 흐름은 사용 코드가 0건이라 본 ADR 범위 밖. 사용 시점에 별 ADR.
   consequence: |
     pending-decisions #5 의 ai 잔존 항목 종결. ai 도 CI 선빌드 + ghcr push + EC2 SSH compose 흐름에 편입되어 ADR-002/005/007/014 의 패턴이 영역 무관하게 일관된다.
-    Gemini API 키 없이 기동하면 `/ai/` 호출이 외부 호출 단계에서 실패하므로 첫 deploy 전 서버 `.env` 의 `GEMINI_API_KEY` 주입이 필수다.
+    Gemini API 키 없이 기동하면 `/ai/` 호출이 외부 호출 단계에서 실패하므로 첫 deploy 전 서버 `.env` 의 `GEMINI_API_KEY` 또는 `GEMINI_API_KEYS` 주입이 필수다. 복수 키 failover 운용 시 `GEMINI_API_KEYS` 를 compose 가 ai/ai_worker 컨테이너에 함께 전달해야 한다.
     파일 업로드가 붙는 시점에는 API 컨테이너에도 `AWS_S3_BUCKET`, `AWS_REGION`, `AWS_S3_BASE_PREFIX`, `AWS_S3_PUBLIC_BASE_URL`, `AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY` 를 서버 `.env` 또는 GitLab CI/CD Variables 로 주입해야 한다.
 
 - id: ADR-017
@@ -700,3 +700,67 @@
       - 정상 사용자 429 발생률 > 0.1% → 값 완화 또는 인증 사용자 한정 화이트리스트.
       - 앱 레벨 throttle 도입 → nginx 값과 책임 분담 재정렬.
       - SSAFY 가 보안그룹 IP 화이트리스트를 허용해 DB 외부 개방 완화책이 추가되는 시점 → ADR-011 / 본 ADR 의 분담 재검토.
+- id: ADR-019
+  title: AI LightRAG 저장소 의존성으로 Qdrant와 Neo4j compose 서비스 편입
+  status: adopted
+  date: 2026-05-18
+  stacks: [docker, compose, ai, qdrant, neo4j, ec2]
+  context: |
+    LightRAG v3 업무일지 검색은 vector storage 로 Qdrant 를 사용하고, graph backing store 로 Neo4j 를 사용할 수 있다.
+    로컬 compose 에는 이미 Qdrant 가 있었지만 EC2 배포 compose 에는 Qdrant 와 Neo4j 가 없어 운영 배포 시 AI 컨테이너가 같은 compose network 안의 저장소에 붙을 수 없었다.
+    두 서비스는 애플리케이션 이미지가 아니라 상태를 보존해야 하는 저장소 의존성이므로 api/web/ai 이미지 교체 흐름이 아니라 postgres/redis 와 같은 상태 저장형 서비스 모델을 따라야 한다.
+  decision: |
+    `infra/compose.deploy.yml` 에 qdrant 와 neo4j 서비스를 추가하고 named volume, healthcheck, restart policy 를 둔다.
+    개발 편의를 위해 Qdrant 와 Neo4j 는 DB 계열 서비스처럼 호스트 포트로 외부 개방한다.
+    로컬 LightRAG smoke 테스트도 같은 저장소 구성을 쓸 수 있도록 `infra/compose.local.yml` 에도 Neo4j 를 추가한다.
+    `ai` 와 `ai_worker` 에 `LIGHTRAG_QDRANT_URL=http://qdrant:6333`, `NEO4J_URI=bolt://neo4j:7687`, `NEO4J_USER`, `NEO4J_PASSWORD` 를 주입한다.
+    qdrant 와 neo4j 는 `remote-deploy.sh` 의 `pull` / `rm -sf` 대상에 넣지 않고, `up -d --remove-orphans` 대상에만 포함한다.
+    환경별 host port 는 Qdrant 8500/8501, Neo4j Bolt 8600/8601, Neo4j HTTP Browser 8602/8603 으로 예약한다.
+  consequence: |
+    AI 컨테이너는 Qdrant 와 Neo4j healthcheck 통과 이후 기동되며, graph/vector 데이터는 애플리케이션 재배포 후에도 유지된다.
+    EC2 `.env` 는 신규 host port 와 환경별 강한 `NEO4J_PASSWORD` 를 반드시 정의해야 한다.
+    자체 운영 Qdrant 는 기본적으로 API key 없이 사용하므로, EC2 보안그룹 또는 방화벽에서 접근 가능한 IP 를 제한해야 한다.
+    이후 Qdrant 인증을 켜면 `LIGHTRAG_QDRANT_API_KEY` 를 EC2 `.env` 또는 GitLab CI/CD Variables 로만 주입한다.
+
+- id: ADR-020
+  title: AI FastAPI host port 직접 외부 개방 예외
+  status: adopted
+  date: 2026-05-19
+  stacks: [infra, compose, ai, ec2, security]
+  context: |
+    ADR-010 과 OPS-010 은 web/api/ai 애플리케이션 컨테이너를 `127.0.0.1:<HOST>:<INTERNAL>` 로 바인딩해
+    외부 요청이 반드시 systemd Nginx 의 HTTPS, rate limit, proxy header 경계를 지나가도록 정했다.
+    이후 AI 업무일지 검색과 LightRAG 검증 과정에서 외부 도구/테스트 클라이언트가
+    Nginx path-based route(`/ai/`) 없이 배포 서버의 AI FastAPI 포트에 직접 요청해야 하는 요구가 생겼다.
+
+    이 요구는 ADR-010 의 애플리케이션 컨테이너 직접 접근 차단 원칙과 충돌하지만,
+    사용자가 AI 서버에 한해 직접 개방을 명시적으로 결정했다. web/api 의 Nginx 전면 경계는 유지하고,
+    예외 범위를 AI host port 로만 좁혀 기록한다.
+  decision: |
+    AI(FastAPI) 컨테이너만 host port 를 전체 인터페이스에 직접 바인딩한다.
+
+    1. `infra/compose.deploy.yml` 의 `ai` 서비스는 `0.0.0.0:${AI_HOST_PORT}:8200` 형태로 바인딩한다.
+       - production: `0.0.0.0:8200:8200`
+       - staging: `0.0.0.0:8201:8200` (OPS-009 의 +1 오프셋 유지)
+    2. `web` 과 `api` 서비스는 ADR-010 원칙대로 `127.0.0.1:${WEB_HOST_PORT}:8000`,
+       `127.0.0.1:${API_HOST_PORT}:8100` 바인딩을 유지한다.
+    3. 기존 Nginx `/ai/` 경로와 upstream(`127.0.0.1:8200/8201`)은 삭제하지 않는다.
+       직접 포트가 필요한 클라이언트와 HTTPS/Nginx 경유 클라이언트를 동시에 지원한다.
+    4. AI 직접 포트는 Nginx 의 HTTPS termination, `req_ai` rate limit, proxy header 정책을 우회한다.
+       따라서 실제 운영 노출 범위는 EC2 보안그룹 또는 host firewall 에서 제한하고,
+       AI 앱 인증/레이트리밋 필요성은 별도 작업으로 점검한다.
+  consequence: |
+    긍정적 영향:
+      - 외부 클라이언트가 `http://<host>:8200/ai/...` 또는 `http://<host>:8201/ai/...` 로 AI 서버를 직접 검증할 수 있다.
+      - 기존 `https://k14s209.p.ssafy.io/ai/...` 및 staging `https://k14s209.p.ssafy.io:8443/ai/...` 경로는 유지된다.
+      - 예외가 AI 서비스 하나로 한정되어 web/api 의 직접 접근 차단 정책은 유지된다.
+
+    부정적 영향과 완화:
+      - AI 직접 포트는 평문 HTTP 로 노출될 수 있다. 완화: 민감 요청/토큰 사용 여부를 확인하고 필요 시 TLS termination 또는 인증 정책을 별도 도입한다.
+      - Nginx `req_ai` rate limit 과 slowloris 보호를 우회한다. 완화: EC2 보안그룹/host firewall 접근 IP 제한 및 AI 앱 레벨 제한을 검토한다.
+      - staging `8201` 도 public exposure 가 생긴다. 완화: staging 직접 포트가 필요하지 않은 네트워크에서는 보안그룹/방화벽으로 차단한다.
+
+    재검토 트리거:
+      - AI 앱 인증 또는 앱 레벨 rate limit 이 도입되어 직접 포트 보호 책임을 재정의해야 할 때.
+      - 외부 직접 호출 요구가 사라져 Nginx `/ai/` 경유만으로 충분해질 때.
+      - 운영 보안그룹 정책이 8200/8201 public inbound 를 허용하지 않거나 IP whitelist 만 허용하도록 바뀔 때.

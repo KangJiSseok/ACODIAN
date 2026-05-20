@@ -1,5 +1,6 @@
 "use client"
 
+import Image from "next/image"
 import Link from "next/link"
 import { useParams } from "next/navigation"
 import { useState } from "react"
@@ -23,9 +24,13 @@ export default function WorklogDetailPage() {
   const { data: worklog, isError, isLoading } = useWorklogDetail(worklogId)
   const [transitionNotice, setTransitionNotice] = useState<string>()
   const [transitionErrorMessage, setTransitionErrorMessage] = useState<string>()
+  const [aiSummaryRetryErrorMessage, setAiSummaryRetryErrorMessage] = useState<string>()
   const transitionMutation = useMutation({
     mutationFn: ({ nextStatus, reason }: { nextStatus: WorklogStatus; reason: string }) =>
       worklogService.transitionStatus(worklogId, nextStatus, reason),
+  })
+  const aiSummaryRetryMutation = useMutation({
+    mutationFn: () => worklogService.retryAiSummary(worklogId),
   })
 
   const handleTransition = async (nextStatus: WorklogStatus, reason: string) => {
@@ -51,9 +56,28 @@ export default function WorklogDetailPage() {
     }
   }
 
+  const handleRetryAiSummary = async () => {
+    setAiSummaryRetryErrorMessage(undefined)
+
+    try {
+      await aiSummaryRetryMutation.mutateAsync()
+      await Promise.all([
+        queryClient.invalidateQueries({
+          queryKey: worklogKeys.detail(worklogId),
+        }),
+        queryClient.invalidateQueries({ queryKey: worklogKeys.lists() }),
+        queryClient.invalidateQueries({ queryKey: worklogKeys.searches() }),
+      ])
+    } catch (error) {
+      setAiSummaryRetryErrorMessage(
+        getApiErrorMessage(error, "AI 요약을 다시 요청하지 못했습니다.")
+      )
+    }
+  }
+
   if (isLoading) return <div>업무를 불러오는 중입니다.</div>
   const selectedWorklog = worklog
-  if (isError || !selectedWorklog) return <div>업무를 찾을 수 없습니다.</div>
+  if (isError || !selectedWorklog) return <WorklogNotFoundState />
 
   return (
     <div className="flex flex-col gap-5 lg:gap-6">
@@ -64,8 +88,8 @@ export default function WorklogDetailPage() {
           canEditSelectedWorklog(user?.userId, selectedWorklog) ? (
             <Button
               asChild
-              variant="outline"
-              className="h-12 min-w-32 px-6 text-sm font-semibold"
+              variant="secondary"
+              className="h-10 min-w-32 px-5 text-sm font-semibold"
             >
               <Link href={`/worklog/edit/${selectedWorklog.id}`}>
                 <PencilLine className="size-4" />
@@ -83,7 +107,27 @@ export default function WorklogDetailPage() {
         transitionNotice={transitionNotice}
         transitionErrorMessage={transitionErrorMessage}
         transitionDisabledMessage="업무 상태는 작성자 본인만 변경할 수 있습니다."
+        canRetryAiSummary={canEditSelectedWorklog(user?.userId, selectedWorklog)}
+        isRetryingAiSummary={aiSummaryRetryMutation.isPending}
+        aiSummaryRetryErrorMessage={aiSummaryRetryErrorMessage}
+        onRetryAiSummary={handleRetryAiSummary}
       />
+    </div>
+  )
+}
+
+function WorklogNotFoundState() {
+  return (
+    <div className="flex min-h-[420px] flex-col items-center justify-center gap-5 text-center">
+      <Image
+        src="/videos/403error.webp"
+        alt=""
+        width={240}
+        height={135}
+        unoptimized
+        className="h-auto w-60 object-contain"
+      />
+      <p className="text-lg font-semibold text-foreground">업무를 찾을 수 없습니다.</p>
     </div>
   )
 }

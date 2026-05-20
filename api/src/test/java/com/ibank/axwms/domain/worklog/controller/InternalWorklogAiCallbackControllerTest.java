@@ -95,7 +95,7 @@ class InternalWorklogAiCallbackControllerTest {
     void AI_태그_적용_메서드는_서비스를_호출하고_empty_response_를_반환한다() {
         ApplyWorklogAiTagsApiDto.Request request = new ApplyWorklogAiTagsApiDto.Request(
                 List.of(1L, 2L),
-                List.of("신규 태그")
+                List.of(new ApplyWorklogAiTagsApiDto.NewTag("신규 태그", "AI가 새로 제안한 업무 태그"))
         );
 
         EmptyResponse response = internalWorklogAiCallbackController.applyAiGeneratedTags(501L, request);

@@ -16,14 +16,14 @@ import com.ibank.axwms.global.response.PageResponse;
 import com.ibank.axwms.global.security.CustomUserPrincipal;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
+import java.time.temporal.ChronoUnit;
 import java.util.List;
+import java.util.Optional;
 import lombok.RequiredArgsConstructor;
 import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
-
-import java.time.temporal.ChronoUnit;
-import java.util.Optional;
 
 @Service
 @RequiredArgsConstructor
@@ -34,6 +34,10 @@ public class NotificationService {
     private static final String WORKLOG_DUE_SOON_TITLE = "업무 마감 3일 전 알림";
     private static final String WORKLOG_DUE_TODAY_TITLE = "업무 마감 오늘까지 알림";
     private static final String WORKLOG_OVERDUE_TITLE = "업무 마감일 초과 알림";
+    private static final String WORKLOG_DEPENDENCY_READY_TITLE = "선행 업무 완료 알림";
+    private static final String WORKLOG_AI_POST_PROCESS_SUCCESS_TITLE = "업무 AI 후처리 요청 완료";
+    private static final String WORKLOG_AI_POST_PROCESS_FAILURE_TITLE = "업무 AI 후처리 요청 실패";
+    private static final int READ_NOTIFICATION_RETENTION_DAYS = 3;
     private static final List<String> WORKLOG_REMINDER_NOTIFICATION_TYPES = List.of(
             NotificationType.WORKLOG_DUE_SOON.name(),
             NotificationType.WORKLOG_DUE_TODAY.name(),
@@ -73,6 +77,15 @@ public class NotificationService {
     public void markNotificationAsRead(CustomUserPrincipal principal, Long notificationId) {
         Notification notification = getNotificationOrThrow(notificationId, principal.userId());
         notification.markAsRead(LocalDateTime.now());
+    }
+
+    /**
+     * 읽은 알림은 최초 readAt 기준 3일 후 삭제하고, 안읽은 알림은 보관 대상에서 제외한다.
+     */
+    @Transactional
+    public int deleteExpiredReadNotifications(LocalDateTime now) {
+        LocalDateTime expiredAt = now.minusDays(READ_NOTIFICATION_RETENTION_DAYS);
+        return notificationRepository.deleteReadNotificationsReadAtBeforeOrEqual(expiredAt);
     }
 
     /**
@@ -142,6 +155,166 @@ public class NotificationService {
         });
         notificationRepository.flush();
         return candidates.size();
+    }
+
+    /**
+     * 부모 업무 기준 1회 알림 계약을 DB upsert no-op 과 이벤트 발행 조건으로 함께 고정한다.
+     */
+    @Transactional(propagation = Propagation.REQUIRES_NEW)
+    public Optional<Notification> createWorklogDependencyReadyNotification(Long recipientUserId,
+                                                                           Long departmentId,
+                                                                           Long teamId,
+                                                                           Long parentWorklogId,
+                                                                           String teamName,
+                                                                           String parentTitle) {
+        String referenceType = NotificationReferenceType.WORKLOG.name();
+        String notificationType = NotificationType.WORKLOG_DEPENDENCY_READY.name();
+        if (notificationRepository.existsByUserIdAndReferenceTypeAndReferenceIdAndNotificationType(
+                recipientUserId,
+                referenceType,
+                parentWorklogId,
+                notificationType
+        )) {
+            return Optional.empty();
+        }
+
+        Notification notification = Notification.createWorklogDependencyReady(
+                recipientUserId,
+                departmentId,
+                teamId,
+                parentWorklogId,
+                WORKLOG_DEPENDENCY_READY_TITLE,
+                createWorklogDependencyReadyContent(teamName, parentTitle)
+        );
+        int insertedCount = notificationRepository.insertWorklogDependencyReadyNotificationIfAbsent(
+                notification.getUserId(),
+                notification.getDepartmentId(),
+                notification.getTeamId(),
+                notification.getNotificationType(),
+                notification.getTitle(),
+                notification.getContent(),
+                notification.getReferenceType(),
+                notification.getReferenceId()
+        );
+        if (insertedCount == 0) {
+            return Optional.empty();
+        }
+
+        Optional<Notification> savedNotification = notificationRepository
+                .findFirstByUserIdAndReferenceTypeAndReferenceIdAndNotificationTypeOrderByIdAsc(
+                        recipientUserId,
+                        referenceType,
+                        parentWorklogId,
+                        notificationType
+                );
+        savedNotification.ifPresent(saved -> publishNotificationCreatedEvents(List.of(saved)));
+        return savedNotification;
+    }
+
+
+    /**
+     * 업무 생성 후 통합 AI 요청 결과를 업무 기준 1회 알림으로 저장하고 SSE 전파 이벤트를 발행한다.
+     *
+     * @param recipientUserId 작성자 사용자 ID
+     * @param departmentId    업무 소속 부서 ID
+     * @param teamId          업무 소속 팀 ID
+     * @param worklogId       생성된 업무 ID
+     * @param worklogTitle    알림 본문에 표시할 업무일지 제목 snapshot
+     * @param success         세 AI 요청이 모두 예외 없이 종료되었는지 여부
+     * @param failedStages    실패한 단계 식별자 목록. 성공이면 비어 있어야 한다.
+     * @return 신규 저장된 알림. 이미 같은 업무의 통합 결과 알림이 있으면 빈 Optional
+     */
+    @Transactional(propagation = Propagation.REQUIRES_NEW)
+    public Optional<Notification> createWorklogAiPostProcessResultNotification(Long recipientUserId,
+                                                                               Long departmentId,
+                                                                               Long teamId,
+                                                                               Long worklogId,
+                                                                               String worklogTitle,
+                                                                               boolean success,
+                                                                               List<String> failedStages) {
+        String referenceType = NotificationReferenceType.WORKLOG.name();
+        String notificationType = NotificationType.WORKLOG_AI_POST_PROCESS_RESULT.name();
+        if (notificationRepository.existsByUserIdAndReferenceTypeAndReferenceIdAndNotificationType(
+                recipientUserId,
+                referenceType,
+                worklogId,
+                notificationType
+        )) {
+            return Optional.empty();
+        }
+
+        Notification notification = Notification.create(
+                recipientUserId,
+                departmentId,
+                teamId,
+                notificationType,
+                createWorklogAiPostProcessTitle(success),
+                createWorklogAiPostProcessContent(worklogTitle, success, failedStages),
+                referenceType,
+                worklogId,
+                false,
+                null
+        );
+        Notification saved = notificationRepository.saveAndFlush(notification);
+        publishNotificationCreatedEvents(List.of(saved));
+        return Optional.of(saved);
+    }
+
+    /**
+     * 성공/실패 결과를 같은 notification type 안에서 구분할 수 있도록 사용자-facing 제목만 분리한다.
+     */
+    private String createWorklogAiPostProcessTitle(boolean success) {
+        if (success) {
+            return WORKLOG_AI_POST_PROCESS_SUCCESS_TITLE;
+        }
+        return WORKLOG_AI_POST_PROCESS_FAILURE_TITLE;
+    }
+
+    /**
+     * AI 후처리 결과 알림은 업무 ID 대신 생성 시점 제목을 보여 사용자가 대상 업무를 바로 식별하게 한다.
+     */
+    private String createWorklogAiPostProcessContent(String worklogTitle, boolean success, List<String> failedStages) {
+        String displayTitle = defaultIfBlank(worklogTitle, "대상 업무일지");
+        if (success) {
+            return "업무일지 '" + displayTitle + "'의 AI 작업이 완료되었습니다.";
+        }
+        return "업무일지 '" + displayTitle + "'의 AI 작업 중 실패 단계가 있습니다.\n실패 단계: "
+                + String.join(", ", normalizeFailedStages(failedStages));
+    }
+
+    /**
+     * 실패 단계가 비어 들어온 방어 케이스에서도 알림 본문이 원인 미상임을 명확히 드러내게 한다.
+     */
+    private List<String> normalizeFailedStages(List<String> failedStages) {
+        if (failedStages == null || failedStages.isEmpty()) {
+            return List.of("UNKNOWN");
+        }
+        List<String> normalized = failedStages.stream()
+                .filter(stage -> stage != null && !stage.isBlank())
+                .map(String::trim)
+                .toList();
+        if (normalized.isEmpty()) {
+            return List.of("UNKNOWN");
+        }
+        return normalized;
+    }
+
+    /**
+     * 팀명/부모 제목이 누락되어도 알림 본문이 빈 값으로 깨지지 않도록 운영 메시지의 최소 문맥을 보존한다.
+     */
+    private String createWorklogDependencyReadyContent(String teamName, String parentTitle) {
+        return defaultIfBlank(teamName, "소속 팀") + "의 " + defaultIfBlank(parentTitle, "대상 업무")
+                + " 선행 업무가 모두 완료되었습니다. 업무를 진행해 주세요.";
+    }
+
+    /**
+     * 커밋 후 snapshot 이벤트의 선택 필드가 null 이어도 사용자 메시지 조립 책임을 listener 로 새지 않게 한다.
+     */
+    private String defaultIfBlank(String value, String defaultValue) {
+        if (value == null || value.isBlank()) {
+            return defaultValue;
+        }
+        return value;
     }
 
     /**

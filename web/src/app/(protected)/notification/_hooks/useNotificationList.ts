@@ -40,15 +40,18 @@ export function useNotificationList(params: GetNotificationsParams = {}) {
 }
 
 export function useNotificationCenter() {
-  const query = useNotificationList({
+  const notificationListQuery = useNotificationList({
     isRead: false,
     page: 1,
-    pageSize: 3,
+    pageSize: 10,
   });
+  const unreadNotifications = notificationListQuery.notifications.filter(
+    (notification) => !notification.isRead,
+  );
 
   return {
-    ...query,
-    unreadCount: query.notificationPage?.totalCount ?? 0,
-    recentUnreadNotifications: query.notifications,
+    ...notificationListQuery,
+    unreadCount: notificationListQuery.notificationPage?.totalCount ?? 0,
+    notificationCenterNotifications: unreadNotifications,
   };
 }

@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { Building2 } from "lucide-react";
+import { ResultCount } from "@/app/_common/components/data-display/resultCount";
 import PageHeader from "@/app/_common/components/layout/pageHeader";
 import { Button } from "@/components/ui/button";
 import { CardContent } from "@/components/ui/card";
@@ -16,10 +17,16 @@ export default function DepartmentPage() {
 
   return (
     <section className="space-y-6">
-      <PageHeader
-        title="부서 관리"
-        description="관리 가능한 부서와 운영 현황을 확인합니다."
-      />
+      <PageHeader title="부서 관리" />
+
+      <section className="space-y-2">
+        <h2 className="text-[20px] font-semibold tracking-[-0.04em] text-foreground">
+          부서 관리
+        </h2>
+        <p className="max-w-3xl text-sm leading-6 text-muted-foreground">
+          관리 가능한 부서와 운영 현황을 확인합니다.
+        </p>
+      </section>
 
       <div className="grid gap-4 md:grid-cols-3">
         <SummaryCard
@@ -38,16 +45,11 @@ export default function DepartmentPage() {
 
       <section className="space-y-4">
         <div className="border-t-2 border-foreground/70 pt-5">
-          <div className="grid gap-3 sm:grid-cols-[minmax(0,1fr)_auto] sm:items-end">
-            <div>
+          <div className="space-y-2">
+            <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
               <h2 className="text-[20px] font-semibold tracking-[-0.04em] text-foreground">
                 부서 목록
               </h2>
-              <p className="mt-2 text-sm leading-6 text-muted-foreground">
-                활성 팀이 남아 있는 부서는 삭제할 수 없습니다.
-              </p>
-            </div>
-            <div className="flex flex-col gap-3 sm:items-end">
               <Button
                 asChild
                 type="button"
@@ -56,9 +58,16 @@ export default function DepartmentPage() {
               >
                 <Link href="/department/create">부서 등록</Link>
               </Button>
-              <p className="text-sm font-medium text-muted-foreground">
-                표시 중인 부서 {departments.length}개
+            </div>
+            <div className="flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
+              <p className="mt-2 text-sm leading-6 text-muted-foreground">
+                활성 팀이 남아 있는 부서는 삭제할 수 없습니다.
               </p>
+              <ResultCount
+                label="조회된 부서"
+                count={departments.length}
+                unit="개"
+              />
             </div>
           </div>
         </div>

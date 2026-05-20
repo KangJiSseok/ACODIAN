@@ -22,8 +22,8 @@ test("사용자 상세 조회 API를 서비스와 훅에 연결한다", () => {
   assert.match(service, /`\/users\/\$\{userId\}\/evaluations`/);
 
   assert.match(hooks, /useUserDetail\(userId: number\)/);
-  assert.match(hooks, /useUserSkills\(userId: number\)/);
-  assert.match(hooks, /useUserEvaluations\(userId: number\)/);
+  assert.match(hooks, /useUserSkills\(userId: number,\s*enabled = true\)/);
+  assert.match(hooks, /useUserEvaluations\(userId: number,\s*enabled = true\)/);
   assert.match(hookIndex, /export \* from "\.\/useUserDetail"/);
 
   assert.match(types, /interface UserDetail/);
@@ -37,8 +37,8 @@ test("사용자 상세 화면을 사용자 정보, 스킬 설정, 관리자 평�
   const component = readUserFile("_components/userDetail.tsx");
 
   assert.match(page, /useUserDetail\(userId\)/);
-  assert.match(page, /useUserSkills\(userId\)/);
-  assert.match(page, /useUserEvaluations\(userId\)/);
+  assert.match(page, /useUserSkills\(\s*userId,\s*shouldLoadUserManagementInsights,?\s*\)/);
+  assert.match(page, /useUserEvaluations\(\s*userId,\s*shouldLoadUserManagementInsights,?\s*\)/);
   assert.match(page, /<UserDetail/);
 
   assert.match(component, /사용자 정보/);

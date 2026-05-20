@@ -68,6 +68,7 @@ class UserRepositoryIntegrationTest extends IntegrationTestSupport {
                         UserSummaryProjection::userName,
                         UserSummaryProjection::email,
                         UserSummaryProjection::phone,
+                        UserSummaryProjection::joinDate,
                         UserSummaryProjection::departmentId,
                         UserSummaryProjection::departmentName,
                         UserSummaryProjection::teamId,
@@ -77,10 +78,16 @@ class UserRepositoryIntegrationTest extends IntegrationTestSupport {
                         UserSummaryProjection::employmentStatus
                 )
                 .containsExactly(
-                        tuple(fixture.directorId(), "본부장", "director@example.com", "010-0000-0001", fixture.logisticsDepartmentId(), "물류본부", null, null, "임원", "본부장", EmploymentStatus.ACTIVE),
-                        tuple(fixture.deptHeadId(), "부서장", "dept-head@example.com", "010-0000-0002", fixture.logisticsDepartmentId(), "물류본부", fixture.primaryTeamId(), "대표팀", "부장", "사업부장", EmploymentStatus.ACTIVE),
-                        tuple(fixture.teamLeadId(), "팀장", "team-lead@example.com", "010-0000-0003", fixture.supportDepartmentId(), "지원본부", fixture.secondaryTeamId(), "지원팀", "과장", "팀장", EmploymentStatus.LEAVE),
-                        tuple(fixture.memberId(), "팀원", "member@example.com", "010-0000-0004", fixture.supportDepartmentId(), "지원본부", null, null, "사원", "팀원", EmploymentStatus.ACTIVE)
+                        tuple(fixture.directorId(), "본부장", "director@example.com", "010-0000-0001", LocalDate.of(2025, 1, 1),
+                                fixture.logisticsDepartmentId(), "물류본부", null, null, "임원", "본부장", EmploymentStatus.ACTIVE),
+                        tuple(fixture.deptHeadId(), "부서장", "dept-head@example.com", "010-0000-0002", LocalDate.of(2025, 1, 1),
+                                fixture.logisticsDepartmentId(), "물류본부", fixture.primaryTeamId(), "대표팀",
+                                "부장", "사업부장", EmploymentStatus.ACTIVE),
+                        tuple(fixture.teamLeadId(), "팀장", "team-lead@example.com", "010-0000-0003", LocalDate.of(2025, 1, 1),
+                                fixture.supportDepartmentId(), "지원본부", fixture.secondaryTeamId(), "지원팀",
+                                "과장", "팀장", EmploymentStatus.LEAVE),
+                        tuple(fixture.memberId(), "팀원", "member@example.com", "010-0000-0004", null,
+                                fixture.supportDepartmentId(), "지원본부", null, null, "사원", "팀원", EmploymentStatus.ACTIVE)
                 );
         assertThat(result.getContent())
                 .extracting(UserSummaryProjection::userName)
@@ -265,7 +272,17 @@ class UserRepositoryIntegrationTest extends IntegrationTestSupport {
         User director = userRepository.save(createUser(logistics.getId(), "본부장", "director@example.com", UserRole.DIRECTOR, EmploymentStatus.ACTIVE, "임원", "본부장", "010-0000-0001"));
         User deptHead = userRepository.save(createUser(logistics.getId(), "부서장", "dept-head@example.com", UserRole.DEPT_HEAD, EmploymentStatus.ACTIVE, "부장", "사업부장", "010-0000-0002"));
         User teamLead = userRepository.save(createUser(support.getId(), "팀장", "team-lead@example.com", UserRole.TEAM_LEAD, EmploymentStatus.LEAVE, "과장", "팀장", "010-0000-0003"));
-        User member = userRepository.save(createUser(support.getId(), "팀원", "member@example.com", UserRole.MEMBER, EmploymentStatus.ACTIVE, "사원", "팀원", "010-0000-0004"));
+        User member = userRepository.save(createUser(
+                support.getId(),
+                "팀원",
+                "member@example.com",
+                UserRole.MEMBER,
+                EmploymentStatus.ACTIVE,
+                "사원",
+                "팀원",
+                "010-0000-0004",
+                null
+        ));
         userRepository.save(createUser(support.getId(), "퇴직자", "retired@example.com", UserRole.MEMBER, EmploymentStatus.RETIRED, "사원", "팀원", "010-0000-0005"));
 
         userTeamRepository.save(UserTeam.create(deptHead.getId(), primaryTeam.getId(), true, "관리", "주담당", true, UserTeamStatus.ACTIVE));
@@ -311,6 +328,19 @@ class UserRepositoryIntegrationTest extends IntegrationTestSupport {
                             String positionName,
                             String titleName,
                             String phone) {
+        return createUser(departmentId, userName, email, role, employmentStatus, positionName, titleName, phone, LocalDate.of(2025, 1, 1));
+    }
+
+    /** 입사일 null 통과처럼 목록 조회 계약에서 필요한 경계값을 지정해 테스트 사용자를 생성한다. */
+    private User createUser(Long departmentId,
+                            String userName,
+                            String email,
+                            UserRole role,
+                            EmploymentStatus employmentStatus,
+                            String positionName,
+                            String titleName,
+                            String phone,
+                            LocalDate joinDate) {
         return User.create(
                 departmentId,
                 userName,
@@ -320,7 +350,7 @@ class UserRepositoryIntegrationTest extends IntegrationTestSupport {
                 employmentStatus,
                 positionName,
                 titleName,
-                LocalDate.of(2025, 1, 1),
+                joinDate,
                 phone,
                 null
         );

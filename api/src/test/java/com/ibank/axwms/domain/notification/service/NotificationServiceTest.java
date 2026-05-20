@@ -7,9 +7,11 @@ import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.BDDMockito.given;
 import static org.mockito.BDDMockito.then;
 
+import com.ibank.axwms.domain.notification.NotificationType;
 import com.ibank.axwms.domain.notification.dto.MarkAllNotificationsReadApiDto;
 import com.ibank.axwms.domain.notification.dto.SearchNotificationsApiDto;
 import com.ibank.axwms.domain.notification.entity.Notification;
+import com.ibank.axwms.domain.notification.event.NotificationCreatedEvent;
 import com.ibank.axwms.domain.notification.repository.NotificationRepository;
 import com.ibank.axwms.domain.notification.repository.jooq.projection.NotificationSearchProjection;
 import com.ibank.axwms.domain.notification.repository.jooq.query.NotificationSearchQuery;
@@ -27,14 +29,21 @@ import org.mockito.ArgumentCaptor;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.data.domain.PageImpl;
 import org.springframework.data.domain.PageRequest;
+import org.springframework.test.util.ReflectionTestUtils;
 
 @ExtendWith(MockitoExtension.class)
 class NotificationServiceTest {
 
+    private static final String WORKLOG_TITLE = "월간 리스크 점검 보고";
+
     @Mock
     private NotificationRepository notificationRepository;
+
+    @Mock
+    private ApplicationEventPublisher applicationEventPublisher;
 
     @InjectMocks
     private NotificationService notificationService;
@@ -140,6 +149,90 @@ class NotificationServiceTest {
         then(notificationRepository).should().markUnreadAsReadByUserId(eq(101L), readAtCaptor.capture());
         assertThat(response.updatedCount()).isEqualTo(3);
         assertThat(readAtCaptor.getValue()).isNotNull();
+    }
+
+    @Test
+    @DisplayName("deleteExpiredReadNotifications 는 기준 시각 3일 전까지 읽은 알림 삭제를 위임한다")
+    void deleteExpiredReadNotifications_는_기준_시각_3일_전까지_읽은_알림_삭제를_위임한다() {
+        LocalDateTime now = LocalDateTime.of(2026, 5, 18, 9, 30);
+        given(notificationRepository.deleteReadNotificationsReadAtBeforeOrEqual(
+                LocalDateTime.of(2026, 5, 15, 9, 30)
+        )).willReturn(2);
+
+        int deletedCount = notificationService.deleteExpiredReadNotifications(now);
+
+        assertThat(deletedCount).isEqualTo(2);
+        then(notificationRepository).should()
+                .deleteReadNotificationsReadAtBeforeOrEqual(LocalDateTime.of(2026, 5, 15, 9, 30));
+    }
+
+    @Test
+    @DisplayName("업무 AI 통합 후처리 성공 알림을 저장하고 생성 이벤트를 발행한다")
+    void createWorklogAiPostProcessResultNotification_saves_success_notification_and_publishes_event() {
+        given(notificationRepository.existsByUserIdAndReferenceTypeAndReferenceIdAndNotificationType(
+                101L, "WORKLOG", 501L, NotificationType.WORKLOG_AI_POST_PROCESS_RESULT.name()
+        )).willReturn(false);
+        given(notificationRepository.saveAndFlush(any(Notification.class))).willAnswer(invocation -> {
+            Notification notification = invocation.getArgument(0);
+            ReflectionTestUtils.setField(notification, "id", 1001L);
+            ReflectionTestUtils.setField(notification, "createdAt", LocalDateTime.of(2026, 5, 18, 15, 0));
+            return notification;
+        });
+
+        Optional<Notification> result = notificationService.createWorklogAiPostProcessResultNotification(
+                101L, 9L, 21L, 501L, WORKLOG_TITLE, true, List.of()
+        );
+
+        assertThat(result).isPresent();
+        assertThat(result.get().getNotificationType()).isEqualTo(NotificationType.WORKLOG_AI_POST_PROCESS_RESULT.name());
+        assertThat(result.get().getTitle()).isEqualTo("업무 AI 후처리 요청 완료");
+        assertThat(result.get().getContent())
+                .contains(WORKLOG_TITLE)
+                .contains("AI 작업이 완료되었습니다");
+        ArgumentCaptor<NotificationCreatedEvent> eventCaptor = ArgumentCaptor.forClass(NotificationCreatedEvent.class);
+        then(applicationEventPublisher).should().publishEvent(eventCaptor.capture());
+        assertThat(eventCaptor.getValue().notificationId()).isEqualTo(1001L);
+        assertThat(eventCaptor.getValue().userId()).isEqualTo(101L);
+        assertThat(eventCaptor.getValue().type()).isEqualTo(NotificationType.WORKLOG_AI_POST_PROCESS_RESULT.name());
+        assertThat(eventCaptor.getValue().content()).isEqualTo(result.get().getContent());
+    }
+
+    @Test
+    @DisplayName("업무 AI 통합 후처리 실패 알림 본문에는 실패 단계가 포함된다")
+    void createWorklogAiPostProcessResultNotification_includes_failed_stages() {
+        given(notificationRepository.existsByUserIdAndReferenceTypeAndReferenceIdAndNotificationType(
+                101L, "WORKLOG", 501L, NotificationType.WORKLOG_AI_POST_PROCESS_RESULT.name()
+        )).willReturn(false);
+        given(notificationRepository.saveAndFlush(any(Notification.class))).willAnswer(invocation -> invocation.getArgument(0));
+
+        Optional<Notification> result = notificationService.createWorklogAiPostProcessResultNotification(
+                101L, 9L, 21L, 501L, WORKLOG_TITLE, false, List.of("WORKLOG_PIPELINE", "LIGHT_INDEX")
+        );
+
+        assertThat(result).isPresent();
+        assertThat(result.get().getTitle()).isEqualTo("업무 AI 후처리 요청 실패");
+        assertThat(result.get().getContent())
+                .contains(WORKLOG_TITLE)
+                .contains("AI 작업 중 실패 단계가 있습니다")
+                .contains("\n실패 단계: WORKLOG_PIPELINE, LIGHT_INDEX")
+                .contains("WORKLOG_PIPELINE")
+                .contains("LIGHT_INDEX");
+    }
+
+    @Test
+    @DisplayName("업무 AI 통합 후처리 알림은 제목 snapshot 이 비어도 기본 업무일지 문맥을 사용한다")
+    void createWorklogAiPostProcessResultNotification_uses_fallback_when_title_is_blank() {
+        given(notificationRepository.existsByUserIdAndReferenceTypeAndReferenceIdAndNotificationType(
+                101L, "WORKLOG", 501L, NotificationType.WORKLOG_AI_POST_PROCESS_RESULT.name()
+        )).willReturn(false);
+        given(notificationRepository.saveAndFlush(any(Notification.class))).willAnswer(invocation -> invocation.getArgument(0));
+
+        Optional<Notification> result = notificationService.createWorklogAiPostProcessResultNotification(
+                101L, 9L, 21L, 501L, " ", true, List.of()
+        );
+
+        assertThat(result).isPresent();
+        assertThat(result.get().getContent()).contains("대상 업무일지");
     }
 
     private CustomUserPrincipal principal() {

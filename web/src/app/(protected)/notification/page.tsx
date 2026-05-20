@@ -4,6 +4,7 @@ import type { ReactNode } from "react";
 import { useMemo, useState } from "react";
 import { ChevronDown, RefreshCw, SlidersHorizontal } from "lucide-react";
 import { Pagination } from "@/app/_common/components/data-display/pagination";
+import { ResultCount } from "@/app/_common/components/data-display/resultCount";
 import { useAuth } from "@/app/_common/hooks/useAuth";
 import PageHeader from "@/app/_common/components/layout/pageHeader";
 import type { AuthUser } from "@/app/_common/store/auth.store";
@@ -130,31 +131,19 @@ export default function NotificationPage() {
 
   return (
     <section className="space-y-6">
-      <PageHeader title="알림" description="업무 마감 알림과 읽음 상태를 확인합니다." />
+      <PageHeader title="알림" />
 
       <section className="space-y-4">
-        <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+        <div>
           <h2 className="text-[20px] font-semibold tracking-[-0.04em] text-foreground">
             알림 현황
           </h2>
-          <Button
-            type="button"
-            variant="default"
-            className="h-10 min-w-32 rounded-2xl px-5 text-sm font-semibold !text-primary-foreground hover:!text-primary-foreground focus-visible:!text-primary-foreground active:!text-primary-foreground"
-            onClick={markAllRead}
-            disabled={unreadCount === 0 || isMarkingAllRead}
-          >
-            전체 읽음 처리
-          </Button>
+          <p className="mt-2 text-sm leading-6 text-muted-foreground">
+            업무 마감 알림과 읽음 상태를 확인합니다.
+          </p>
         </div>
 
         <div className="grid gap-3 md:grid-cols-3">
-          <SummaryCard
-            label="전체 알림"
-            value={totalCount}
-            active={activeView === "TOTAL"}
-            onClick={() => updateView("TOTAL")}
-          />
           <SummaryCard
             label="읽지 않은 알림"
             value={unreadCount}
@@ -167,6 +156,12 @@ export default function NotificationPage() {
             active={activeView === "READ"}
             onClick={() => updateView("READ")}
           />
+          <SummaryCard
+            label="전체 알림"
+            value={totalCount}
+            active={activeView === "TOTAL"}
+            onClick={() => updateView("TOTAL")}
+          />
         </div>
       </section>
 
@@ -175,26 +170,28 @@ export default function NotificationPage() {
           <h2 className="text-[20px] font-semibold tracking-[-0.04em] text-foreground">
             알림 탐색
           </h2>
-          <Button
-            variant="outline"
-            className="h-12 justify-center"
-            type="button"
-            onClick={() => setShowFilters((prev) => !prev)}
-          >
-            <SlidersHorizontal className="size-4" />
-            필터
-            {activeFilterCount > 0 ? (
-              <span className="ml-1 rounded-full bg-primary px-2 py-0.5 text-[11px] font-semibold text-primary-foreground">
-                {activeFilterCount}
-              </span>
-            ) : null}
-            <ChevronDown
-              className={cn(
-                "ml-1 size-4 transition-transform duration-300 ease-out",
-                showFilters && "rotate-180",
-              )}
-            />
-          </Button>
+          <div className="flex w-full items-center gap-2 sm:w-auto">
+            <Button
+              variant="secondary"
+              className="h-12 justify-center"
+              type="button"
+              onClick={() => setShowFilters((prev) => !prev)}
+            >
+              <SlidersHorizontal className="size-4" />
+              필터
+              {activeFilterCount > 0 ? (
+                <span className="ml-1 rounded-full bg-primary px-2 py-0.5 text-[11px] font-semibold text-primary-foreground">
+                  {activeFilterCount}
+                </span>
+              ) : null}
+              <ChevronDown
+                className={cn(
+                  "ml-1 size-4 transition-transform duration-300 ease-out",
+                  showFilters && "rotate-180",
+                )}
+              />
+            </Button>
+          </div>
         </div>
 
         <div
@@ -260,21 +257,31 @@ export default function NotificationPage() {
 
       <section className="space-y-4">
         <div className="border-t-2 border-foreground/70 pt-5">
-          <div className="flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
-            <div>
+          <div className="space-y-2">
+            <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
               <h2 className="text-[20px] font-semibold tracking-[-0.04em] text-foreground">
                 알림 목록
               </h2>
+              <Button
+                type="button"
+                variant="default"
+                className="h-11 px-5 text-sm font-semibold sm:min-w-36"
+                onClick={markAllRead}
+                disabled={unreadCount === 0 || isMarkingAllRead}
+              >
+                전체 읽음 처리
+              </Button>
+            </div>
+            <div className="flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
               <p className="mt-2 text-sm leading-6 text-muted-foreground">
                 알림을 선택하면 관련 업무 화면으로 이동합니다.
               </p>
+              <ResultCount
+                label="조회된 알림"
+                count={notificationPage?.totalCount ?? 0}
+                unit="개"
+              />
             </div>
-            <p className="text-sm font-medium text-muted-foreground">
-              표시 중인 알림{" "}
-              <span className="text-lg font-semibold text-foreground">
-                {notificationPage?.totalCount ?? 0}건
-              </span>
-            </p>
           </div>
         </div>
 

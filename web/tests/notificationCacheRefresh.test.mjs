@@ -17,3 +17,13 @@ test("notification queries are scoped by current user and always refetch on moun
   assert.match(notificationListHookFile, /staleTime:\s*0/);
   assert.match(notificationListHookFile, /refetchOnMount:\s*"always"/);
 });
+
+test("notification center fetches only unread notifications capped at ten", () => {
+  assert.match(notificationListHookFile, /const notificationListQuery = useNotificationList/);
+  assert.match(notificationListHookFile, /isRead:\s*false/);
+  assert.match(notificationListHookFile, /pageSize:\s*10/);
+  assert.match(notificationListHookFile, /filter\(\s*\(notification\) => !notification\.isRead,\s*\)/);
+  assert.match(notificationListHookFile, /unreadCount: notificationListQuery\.notificationPage\?\.totalCount \?\? 0/);
+  assert.match(notificationListHookFile, /notificationCenterNotifications: unreadNotifications/);
+  assert.doesNotMatch(notificationListHookFile, /pageSize:\s*100/);
+});

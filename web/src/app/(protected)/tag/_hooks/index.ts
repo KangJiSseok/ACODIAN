@@ -1,1 +1,6 @@
-export { useTagList } from "./useTagList"
+export {
+  useMergeTagCandidate,
+  useTagList,
+  useTagMergeCandidates,
+  useUpdateTagMergeCandidate,
+} from "./useTagList"

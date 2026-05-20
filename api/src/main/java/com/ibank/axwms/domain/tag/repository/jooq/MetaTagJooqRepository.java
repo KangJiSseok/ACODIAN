@@ -1,8 +1,10 @@
 package com.ibank.axwms.domain.tag.repository.jooq;
 
-import com.ibank.axwms.domain.tag.repository.jooq.projection.MetaTagDetailProjection;
+import com.ibank.axwms.domain.tag.repository.jooq.projection.SearchTagProjection;
 import com.ibank.axwms.domain.tag.repository.jooq.projection.TagInfoProjection;
 import com.ibank.axwms.domain.tag.repository.jooq.projection.TagSummaryProjection;
+import com.ibank.axwms.domain.tag.repository.jooq.query.SearchTagQuery;
+import org.springframework.data.domain.Page;
 
 import java.util.Collection;
 import java.util.List;
@@ -10,23 +12,39 @@ import java.util.List;
 public interface MetaTagJooqRepository {
 
     /**
-     * AI 태그 콜백 재시도나 병렬 처리에서 동일 태그명이 들어와도 이미 존재하면 무시하고 없는 값만 추가한다.
+     * AI가 새로 제안한 태그와 설명을 함께 생성하고 이미 존재하는 태그명은 그대로 둔다.
      */
-    void insertTagNamesIgnoreDuplicates(Collection<String> tagNames);
+    void insertAiGeneratedTagsIgnoreDuplicates(Collection<AiGeneratedTagCommand> tags);
 
     /**
-     * 필터 옵션 등에 노출할 모든 태그를 (id, name) 형태로 조회한다.
+     * 필터 옵션 등에 노출할 활성 태그를 (id, name) 형태로 조회한다.
      */
     List<TagSummaryProjection> findAllTagSummaries();
 
     /**
-     * 태그의 사용 횟수를 포함하여 모든 태그를 (id, name, usageCount) 형태로 조회한다.
+     * 태그의 설명과 사용 횟수를 포함하여 활성 태그를 FastAPI 내부 콜백용으로 조회한다.
      */
     List<TagInfoProjection> findAllTagInfo();
 
     /**
-     * 메타 태그의 모든 컬럼을 (id, name, usageCount, createdAt, updatedAt) 형태로 이름순 조회한다.
-     * 업무 등록 화면 폼 옵션 등 상세 정보가 필요한 화면용.
+     * 메타 태그를 태그명 LIKE (대소문자 무시) 로 검색해 페이지로 반환한다.
+     * query 가 null/blank 면 전체 조회와 동일하며, 정렬은 usage_count desc + tag_name asc 로 고정한다.
      */
-    List<MetaTagDetailProjection> findAllTagDetails();
+    Page<SearchTagProjection> searchTagPage(SearchTagQuery query);
+
+    /**
+     * 병합된 source 태그를 목록/검색에서 제외하기 위해 soft-delete 처리한다.
+     */
+    void softDeleteByIds(Collection<Long> tagIds);
+
+    /**
+     * 병합 target 태그의 설명과 현재 연결 업무 수 기반 사용 횟수를 함께 갱신한다.
+     */
+    void updateDescriptionAndUsageCount(Long tagId, String description, int usageCount);
+
+    record AiGeneratedTagCommand(
+            String tagName,
+            String description
+    ) {
+    }
 }
