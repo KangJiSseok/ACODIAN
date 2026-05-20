@@ -24,6 +24,7 @@ import com.ibank.axwms.testsupport.IntegrationTestSupport;
 import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.util.List;
+import java.util.Set;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -124,6 +125,31 @@ class WorklogDependencyRepositoryIntegrationTest extends IntegrationTestSupport 
         assertThat(parents)
                 .extracting(WorklogDependencyReadyParentProjection::parentWorklogId)
                 .containsExactly(visibleParent.getId());
+    }
+
+    @Test
+    @DisplayName("새 선행 후보의 재귀 의존 경로가 대상 업무에 도달하면 사이클 유발 후보만 반환한다")
+    void 새_선행_후보의_재귀_의존_경로가_대상_업무에_도달하면_사이클_유발_후보만_반환한다() {
+        // given
+        Fixture fixture = seedFixture();
+        Worklog candidate = saveWorklog(fixture.author(), fixture.team(), "대상 업무", WorklogStatus.IN_PROGRESS, false);
+        Worklog cyclingPredecessor = saveWorklog(fixture.author(), fixture.team(), "순환 후보", WorklogStatus.IN_PROGRESS, false);
+        Worklog middle = saveWorklog(fixture.author(), fixture.team(), "중간 선행", WorklogStatus.IN_PROGRESS, false);
+        Worklog safePredecessor = saveWorklog(fixture.author(), fixture.team(), "안전 후보", WorklogStatus.IN_PROGRESS, false);
+        Worklog safeLeaf = saveWorklog(fixture.author(), fixture.team(), "안전 말단", WorklogStatus.IN_PROGRESS, false);
+
+        saveDependency(cyclingPredecessor, middle);
+        saveDependency(middle, candidate);
+        saveDependency(safePredecessor, safeLeaf);
+
+        // when
+        Set<Long> causingPredecessorIds = worklogDependencyRepository.findPredecessorsCausingCycle(
+                candidate.getId(),
+                List.of(cyclingPredecessor.getId(), safePredecessor.getId())
+        );
+
+        // then
+        assertThat(causingPredecessorIds).containsExactly(cyclingPredecessor.getId());
     }
 
     /**
