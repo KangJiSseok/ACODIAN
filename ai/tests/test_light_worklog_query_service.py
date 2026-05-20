@@ -60,7 +60,8 @@ def test_query_service_applies_settings_defaults_and_normalizes_reference() -> N
     assert call.chunk_top_k == 5
     assert call.response_type == "Multiple Paragraphs"
     assert call.system_prompt is not None
-    assert "allowedTeamIds = ALL" in call.system_prompt
+    assert "allowedTeamIds" not in call.system_prompt
+    assert "Access Scope" not in call.system_prompt
     assert response.answer == "native answer"
     assert response.references[0].reference_id == "1"
     assert response.references[0].file_path == "worklog://1"
@@ -69,7 +70,7 @@ def test_query_service_applies_settings_defaults_and_normalizes_reference() -> N
     assert response.internal_only is True
 
 
-def test_query_service_passes_allowed_team_ids_into_system_prompt() -> None:
+def test_query_service_omits_allowed_team_ids_from_system_prompt() -> None:
     adapter = FakeAdapter(
         {
             "llm_response": {"content": "answer"},
@@ -85,13 +86,14 @@ def test_query_service_passes_allowed_team_ids_into_system_prompt() -> None:
 
     assert len(adapter.calls) == 1
     assert adapter.calls[0].system_prompt is not None
-    assert "allowedTeamIds = [106]" in adapter.calls[0].system_prompt
+    assert "allowedTeamIds" not in adapter.calls[0].system_prompt
+    assert "teamId" not in adapter.calls[0].system_prompt
     assert "https://k14s209.p.ssafy.io:8443/worklog/detail/<worklog_id>" in (
         adapter.calls[0].system_prompt
     )
 
 
-def test_query_service_passes_empty_allowed_team_ids_into_system_prompt() -> None:
+def test_query_service_does_not_treat_empty_allowed_team_ids_as_prompt_restriction() -> None:
     adapter = FakeAdapter(
         {
             "llm_response": {"content": "answer"},
@@ -107,11 +109,11 @@ def test_query_service_passes_empty_allowed_team_ids_into_system_prompt() -> Non
 
     assert len(adapter.calls) == 1
     assert adapter.calls[0].system_prompt is not None
-    assert "allowedTeamIds = []" in adapter.calls[0].system_prompt
-    assert "no teams are permitted" in adapter.calls[0].system_prompt
+    assert "allowedTeamIds" not in adapter.calls[0].system_prompt
+    assert "no teams are permitted" not in adapter.calls[0].system_prompt
 
 
-def test_query_service_treats_null_allowed_team_ids_as_all_scope() -> None:
+def test_query_service_does_not_add_all_scope_for_null_allowed_team_ids() -> None:
     adapter = FakeAdapter(
         {
             "llm_response": {"content": "answer"},
@@ -127,7 +129,8 @@ def test_query_service_treats_null_allowed_team_ids_as_all_scope() -> None:
 
     assert len(adapter.calls) == 1
     assert adapter.calls[0].system_prompt is not None
-    assert "allowedTeamIds = ALL" in adapter.calls[0].system_prompt
+    assert "allowedTeamIds" not in adapter.calls[0].system_prompt
+    assert "ALL" not in adapter.calls[0].system_prompt
 
 
 def test_query_service_rejects_empty_llm_content() -> None:
