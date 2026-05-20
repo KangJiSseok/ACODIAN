@@ -39,7 +39,7 @@ def test_settings_accepts_lightrag_kg_language_env_override(monkeypatch) -> None
     assert settings.lightrag_kg_language == "한국어"
 
 
-def test_settings_has_lightrag_qdrant_defaults(monkeypatch) -> None:
+def test_settings_has_lightrag_qdrant_defaults_for_vector_storage(monkeypatch) -> None:
     """LightRAG v3 vector storage는 기본적으로 로컬 Qdrant를 바라본다."""
     monkeypatch.delenv("LIGHTRAG_VECTOR_STORAGE", raising=False)
     monkeypatch.delenv("LIGHTRAG_QDRANT_URL", raising=False)
@@ -50,7 +50,7 @@ def test_settings_has_lightrag_qdrant_defaults(monkeypatch) -> None:
     assert settings.lightrag_qdrant_api_key == ""
 
 
-def test_settings_accepts_lightrag_qdrant_env_override(monkeypatch) -> None:
+def test_settings_accepts_lightrag_qdrant_local_env_override(monkeypatch) -> None:
     """환경별 Qdrant URL/API key를 Settings로 주입할 수 있어야 한다."""
     monkeypatch.setenv("LIGHTRAG_VECTOR_STORAGE", "QdrantVectorDBStorage")
     monkeypatch.setenv("LIGHTRAG_QDRANT_URL", "http://qdrant:6333")
@@ -158,7 +158,7 @@ def test_settings_accepts_lightrag_query_env_override(monkeypatch) -> None:
 
 
 def test_settings_has_lightrag_llm_fallback_retry_defaults(monkeypatch) -> None:
-    """LightRAG query LLM fallback/retry 기본값을 제공해야 한다."""
+    """LightRAG query LLM은 기본적으로 downgrade fallback 없이 retry 정책만 제공해야 한다."""
     monkeypatch.delenv("LIGHTRAG_LLM_FALLBACK_MODELS", raising=False)
     monkeypatch.delenv("LIGHTRAG_QUERY_LLM_MAX_RETRIES_PER_MODEL", raising=False)
     monkeypatch.delenv("LIGHTRAG_QUERY_LLM_RETRY_INITIAL_DELAY_SECONDS", raising=False)
@@ -166,29 +166,21 @@ def test_settings_has_lightrag_llm_fallback_retry_defaults(monkeypatch) -> None:
 
     settings = Settings(_env_file=None)
 
-    assert settings.lightrag_llm_fallback_models == "gemini-2.5-flash-lite,gemini-2.0-flash"
-    assert settings.lightrag_llm_model_candidates == [
-        "gemini-2.5-flash",
-        "gemini-2.5-flash-lite",
-        "gemini-2.0-flash",
-    ]
+    assert settings.lightrag_llm_fallback_models == ""
+    assert settings.lightrag_llm_model_candidates == ["gemini-2.5-flash"]
     assert settings.lightrag_query_llm_max_retries_per_model == 2
     assert settings.lightrag_query_llm_retry_attempts_per_model == 3
     assert settings.lightrag_query_llm_retry_initial_delay == 0.5
     assert settings.lightrag_query_llm_retry_max_delay == 4.0
 
 
-def test_settings_uses_hardcoded_lightrag_fallback_when_env_is_blank(monkeypatch) -> None:
-    """env 값이 빈 문자열이어도 hardcoded fallback 후보를 사용해야 한다."""
+def test_settings_keeps_lightrag_primary_only_when_fallback_env_is_blank(monkeypatch) -> None:
+    """env 값이 빈 문자열이면 lower-model fallback 없이 primary만 사용해야 한다."""
     monkeypatch.setenv("LIGHTRAG_LLM_FALLBACK_MODELS", "")
 
     settings = Settings(_env_file=None)
 
-    assert settings.lightrag_llm_model_candidates == [
-        "gemini-2.5-flash",
-        "gemini-2.5-flash-lite",
-        "gemini-2.0-flash",
-    ]
+    assert settings.lightrag_llm_model_candidates == ["gemini-2.5-flash"]
 
 
 def test_settings_normalizes_lightrag_llm_model_candidates(monkeypatch) -> None:
@@ -220,3 +212,23 @@ def test_settings_clamps_lightrag_llm_retry_policy() -> None:
     assert settings.lightrag_query_llm_retry_attempts_per_model == 1
     assert settings.lightrag_query_llm_retry_initial_delay == 0.0
     assert settings.lightrag_query_llm_retry_max_delay == 0.0
+
+
+def test_settings_uses_single_gemini_api_key_candidate(monkeypatch) -> None:
+    """기존 GEMINI_API_KEY만 있어도 하위 호환 후보를 제공해야 한다."""
+    monkeypatch.setenv("GEMINI_API_KEY", " primary-key ")
+    monkeypatch.delenv("GEMINI_API_KEYS", raising=False)
+
+    settings = Settings(_env_file=None)
+
+    assert settings.gemini_api_key_candidates == ["primary-key"]
+
+
+def test_settings_normalizes_gemini_api_key_candidates(monkeypatch) -> None:
+    """다중 Gemini key 후보는 공백/빈 항목/중복을 제거하고 순서를 보존해야 한다."""
+    monkeypatch.setenv("GEMINI_API_KEY", "key-a")
+    monkeypatch.setenv("GEMINI_API_KEYS", " key-b, key-a, ,key-c,key-b ")
+
+    settings = Settings(_env_file=None)
+
+    assert settings.gemini_api_key_candidates == ["key-a", "key-b", "key-c"]

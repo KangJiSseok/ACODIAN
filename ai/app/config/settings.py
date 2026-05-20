@@ -5,10 +5,7 @@ from pydantic import Field
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
-DEFAULT_LIGHTRAG_LLM_FALLBACK_MODELS = (
-    "gemini-2.5-flash-lite",
-    "gemini-2.0-flash",
-)
+DEFAULT_LIGHTRAG_LLM_FALLBACK_MODELS: tuple[str, ...] = ()
 
 
 class Settings(BaseSettings):
@@ -76,6 +73,7 @@ class Settings(BaseSettings):
     worklog_detail_base_url: str = "https://k14s209.p.ssafy.io:8443/worklog/detail"
     lightrag_graph_storage: str = "Neo4JStorage"
     lightrag_neo4j_database: str = "neo4j"
+    gemini_api_keys: str = ""                            # 추가 Gemini 프로젝트 키 후보. comma-separated, 실제 키는 env로만 주입한다.
 
     model_config = SettingsConfigDict(
         # ai/.env 를 자동 로드한다 (없으면 위 기본값을 사용).
@@ -107,7 +105,8 @@ class Settings(BaseSettings):
 
         `LIGHTRAG_LLM_MODEL` 을 첫 후보로 두고,
         `LIGHTRAG_LLM_FALLBACK_MODELS` 의 comma-separated 값을 뒤에 붙인다.
-        환경변수가 비어 있으면 코드 기본 fallback 후보를 사용한다.
+        기본값은 downgrade fallback 없이 primary model만 사용한다.
+        fallback은 운영자가 환경변수로 명시한 경우에만 escape hatch로 사용한다.
         공백과 중복은 제거해 같은 모델을 불필요하게 재호출하지 않는다.
         """
         configured_fallback_models = self.lightrag_llm_fallback_models.strip()
@@ -122,6 +121,22 @@ class Settings(BaseSettings):
             model = raw_model.strip()
             if model and model not in candidates:
                 candidates.append(model)
+        return candidates
+
+    @property
+    def gemini_api_key_candidates(self) -> list[str]:
+        """Gemini API key 후보를 순서 보존 + 중복 제거 형태로 반환한다.
+
+        `GEMINI_API_KEY`는 하위 호환을 위한 primary key로 먼저 시도하고,
+        `GEMINI_API_KEYS`의 comma-separated 후보를 뒤에 붙인다.
+        빈 항목/공백/중복은 제거하며 key 원문은 로그에 남기지 않는다.
+        """
+        raw_candidates = [self.gemini_api_key, *self.gemini_api_keys.split(",")]
+        candidates: list[str] = []
+        for raw_key in raw_candidates:
+            key = raw_key.strip()
+            if key and key not in candidates:
+                candidates.append(key)
         return candidates
 
     @property
