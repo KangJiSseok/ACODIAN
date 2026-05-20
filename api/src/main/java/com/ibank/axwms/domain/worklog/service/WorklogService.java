@@ -159,6 +159,7 @@ public class WorklogService {
                 savedWorklog.getTeamId(),
                 request.predecessorWorklogIds()
         );
+        savedWorklog.startAiProcessing();
         publishWorklogAiPostProcessRequest(savedWorklog, team, uploadedFiles);
 
         return CreateWorklogApiDto.Response.of(savedWorklog.getId());

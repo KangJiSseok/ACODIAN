@@ -41,7 +41,7 @@ public class WorklogAiPostProcessService {
     private final WorklogAiProcessingStatusService worklogAiProcessingStatusService;
 
     /**
-     * 커밋된 업무 snapshot 으로 세 AI 요청을 모두 시도하고, dispatch 성공은 콜백 대기 상태로 남긴다.
+     * 커밋된 업무 snapshot 으로 세 AI 요청을 모두 시도하고, dispatch 성공은 통합 후처리 완료 상태로 남긴다.
      *
      * @param event 업무 생성 트랜잭션 안에서 확정된 AI 후처리 입력 snapshot
      */
@@ -53,7 +53,7 @@ public class WorklogAiPostProcessService {
         requestLightIndex(event, failedStages);
 
         if (failedStages.isEmpty()) {
-            worklogAiProcessingStatusService.startAiProcessing(event.worklogId());
+            worklogAiProcessingStatusService.completeAiProcessing(event.worklogId());
             notificationService.createWorklogAiPostProcessResultNotification(
                     event.authorId(),
                     event.departmentId(),

@@ -79,7 +79,7 @@ class WorklogAiPostProcessServiceTest {
     }
 
     @Test
-    @DisplayName("세 AI 요청이 모두 dispatch 되면 처리중 상태와 성공 알림을 생성한다")
+    @DisplayName("세 AI 요청이 모두 dispatch 되면 완료 상태와 성공 알림을 생성한다")
     void process_creates_success_notification_when_all_requests_succeed() {
         WorklogAiPostProcessRequestedEvent event = eventWithFiles();
 
@@ -87,20 +87,21 @@ class WorklogAiPostProcessServiceTest {
 
         ArgumentCaptor<TriggerFileSummaryDto.Request> fileCaptor = ArgumentCaptor.forClass(TriggerFileSummaryDto.Request.class);
         verify(fileService).startWorklogFileAiSummaryProcessing(9001L);
+        ArgumentCaptor<TriggerWorklogPipelineDto.Request> pipelineCaptor = ArgumentCaptor.forClass(TriggerWorklogPipelineDto.Request.class);
+        ArgumentCaptor<TriggerWorklogLightIndexDto.Request> indexCaptor = ArgumentCaptor.forClass(TriggerWorklogLightIndexDto.Request.class);
+
         verify(fileSummaryClient).requestSummary(fileCaptor.capture());
+        verify(worklogPipelineClient).requestPipeline(pipelineCaptor.capture());
+        verify(worklogLightIndexClient).requestIndex(indexCaptor.capture());
+
         assertThat(fileCaptor.getValue().fileId()).isEqualTo(9001L);
         assertThat(fileCaptor.getValue().worklogId()).isEqualTo(501L);
-
-        ArgumentCaptor<TriggerWorklogPipelineDto.Request> pipelineCaptor = ArgumentCaptor.forClass(TriggerWorklogPipelineDto.Request.class);
-        verify(worklogPipelineClient).requestPipeline(pipelineCaptor.capture());
         assertThat(pipelineCaptor.getValue().worklogId()).isEqualTo(501L);
         assertThat(pipelineCaptor.getValue().departmentId()).isEqualTo(9L);
-
-        ArgumentCaptor<TriggerWorklogLightIndexDto.Request> indexCaptor = ArgumentCaptor.forClass(TriggerWorklogLightIndexDto.Request.class);
-        verify(worklogLightIndexClient).requestIndex(indexCaptor.capture());
         assertThat(indexCaptor.getValue().worklogIds()).containsExactly(501L);
 
-        verify(worklogAiProcessingStatusService).startAiProcessing(501L);
+        verify(worklogAiProcessingStatusService).completeAiProcessing(501L);
+        verify(worklogAiProcessingStatusService, never()).startAiProcessing(any());
         verify(worklogAiProcessingStatusService, never()).failAiProcessing(any());
         verify(notificationService).createWorklogAiPostProcessResultNotification(
                 101L,
@@ -125,6 +126,7 @@ class WorklogAiPostProcessServiceTest {
         ArgumentCaptor<List<String>> failedStagesCaptor = ArgumentCaptor.forClass(List.class);
         verify(worklogAiProcessingStatusService).failAiProcessing(501L);
         verify(worklogAiProcessingStatusService, never()).startAiProcessing(any());
+        verify(worklogAiProcessingStatusService, never()).completeAiProcessing(any());
         verify(notificationService).createWorklogAiPostProcessResultNotification(
                 eq(101L),
                 eq(9L),
@@ -139,7 +141,7 @@ class WorklogAiPostProcessServiceTest {
     }
 
     @Test
-    @DisplayName("파일이 없으면 파일 요약 호출 없이 처리중 상태와 성공 알림을 생성한다")
+    @DisplayName("파일이 없으면 파일 요약 호출 없이 완료 상태와 성공 알림을 생성한다")
     void process_skips_file_summary_when_no_files() {
         WorklogAiPostProcessRequestedEvent event = eventWithoutFiles();
 
@@ -148,7 +150,8 @@ class WorklogAiPostProcessServiceTest {
         verify(fileSummaryClient, never()).requestSummary(any());
         verify(worklogPipelineClient).requestPipeline(any());
         verify(worklogLightIndexClient).requestIndex(any());
-        verify(worklogAiProcessingStatusService).startAiProcessing(501L);
+        verify(worklogAiProcessingStatusService).completeAiProcessing(501L);
+        verify(worklogAiProcessingStatusService, never()).startAiProcessing(any());
         verify(worklogAiProcessingStatusService, never()).failAiProcessing(any());
         verify(notificationService).createWorklogAiPostProcessResultNotification(
                 101L,
@@ -163,7 +166,7 @@ class WorklogAiPostProcessServiceTest {
 
 
     @Test
-    @DisplayName("파일 요약이 비활성화되어 있으면 파일 요약 호출만 건너뛰고 처리중 상태로 처리한다")
+    @DisplayName("파일 요약이 비활성화되어 있으면 파일 요약 호출만 건너뛰고 완료 상태로 처리한다")
     void process_skips_file_summary_when_file_summary_disabled() {
         WorklogAiPostProcessService disabledService = new WorklogAiPostProcessService(
                 fileSummaryClient,
@@ -181,7 +184,8 @@ class WorklogAiPostProcessServiceTest {
 
         verify(fileService, never()).startWorklogFileAiSummaryProcessing(any());
         verify(fileSummaryClient, never()).requestSummary(any());
-        verify(worklogAiProcessingStatusService).startAiProcessing(501L);
+        verify(worklogAiProcessingStatusService).completeAiProcessing(501L);
+        verify(worklogAiProcessingStatusService, never()).startAiProcessing(any());
         verify(worklogAiProcessingStatusService, never()).failAiProcessing(any());
         verify(notificationService).createWorklogAiPostProcessResultNotification(
                 101L,
