@@ -28,3 +28,12 @@ test("login video avoids eager fallback downloads", () => {
   assert.doesNotMatch(loginClientFile, /login-bg\.mp4/);
   assert.doesNotMatch(loginClientFile, /login-bg-poster\.jpg/);
 });
+
+test("login form does not expose test account defaults", () => {
+  assert.match(loginClientFile, /const \[email, setEmail\] = useState\(""\)/);
+  assert.match(loginClientFile, /const \[password, setPassword\] = useState\(""\)/);
+  assert.match(loginClientFile, /placeholder="이메일"/);
+  assert.match(loginClientFile, /placeholder="비밀번호"/);
+  assert.doesNotMatch(loginClientFile, /director@ibank\.local/);
+  assert.doesNotMatch(loginClientFile, /password1!/);
+});
