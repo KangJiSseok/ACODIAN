@@ -57,6 +57,20 @@ def test_polish_worklog_with_gemini_uses_expected_prompt(monkeypatch) -> None:
     assert len(fake_client.calls) == 1
 
 
+def test_polish_prompt_allows_safe_rationale_expansion_without_fact_leakage() -> None:
+    system_prompt = " ".join(WORKLOG_POLISH_SYSTEM_PROMPT.split())
+    user_template = " ".join(WORKLOG_POLISH_USER_TEMPLATE.split())
+
+    assert "generally valid technical/domain reasoning" in system_prompt
+    assert "cause, comparison, selection rationale" in system_prompt
+    assert "follow-up management" in system_prompt
+    assert "background/context/style guidance only" in system_prompt
+    assert "never as evidence that requested work was performed" in system_prompt
+    assert "Do not reduce the output to grammar correction only" in system_prompt
+    assert "Avoid promotional, sales, or marketing language" in system_prompt
+    assert "Preserve performed-fact boundaries from workContent" in user_template
+
+
 def test_recommend_worklog_titles_with_gemini_uses_expected_prompt(monkeypatch) -> None:
     from app.chain import worklog_polish_chain
 
