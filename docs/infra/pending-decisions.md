@@ -114,7 +114,7 @@
   - Celery worker / Neo4j 는 본 단계 범위 밖(ADR-016 결정 7항). 사용 코드가 생기는 시점에 별 ADR 로 분리.
 
 ### 운영자 후속 작업 (코드 변경 외)
-- 서버 `/opt/axwms/{staging,production}/.env` 에 `AI_HOST_PORT=8200`(prod) / `8201`(staging), `GEMINI_API_KEY=<실키>` 추가. 가이드 섹션 8/14 갱신은 별 MR 로 분리.
+- 서버 `/opt/axwms/{staging,production}/.env` 에 `AI_HOST_PORT=8200`(prod) / `8201`(staging), `GEMINI_API_KEY=<대표 실키>` 또는 `GEMINI_API_KEYS=<복수 실키>` 추가. 가이드 섹션 8/14 갱신은 별 MR 로 분리.
 - 첫 deploy 직후 `/ai/health` 에 nginx 경유로 200 이 떨어지는지 확인.
 
 ---
