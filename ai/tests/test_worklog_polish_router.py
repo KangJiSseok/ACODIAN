@@ -13,6 +13,10 @@ from app.prompt.worklog_polish_prompt import (
 client = TestClient(app)
 
 
+class RetryableProviderError(Exception):
+    code = 503
+
+
 def test_worklog_polish_contract(monkeypatch) -> None:
     from app.chain import worklog_polish_chain
 
@@ -47,6 +51,27 @@ def test_worklog_polish_contract(monkeypatch) -> None:
     }
     assert set(response.json()) == {"workContent"}
     assert captured["schema"] is WorklogPolishResponse
+
+
+def test_worklog_polish_maps_retryable_provider_error_to_503(monkeypatch) -> None:
+    from app.chain import worklog_polish_chain
+
+    class FakeGeminiClient:
+        async def generate_structured(self, *, contents, schema, instruction):
+            raise RetryableProviderError()
+
+    monkeypatch.setattr(worklog_polish_chain, "get_gemini_client", lambda: FakeGeminiClient())
+
+    response = client.post(
+        "/ai/worklogs/polish",
+        json={
+            "requestContent": "업무일지 내용을 다듬어 주세요.",
+            "workContent": "시맨틱 검색 구조를 정리했다.",
+        },
+    )
+
+    assert response.status_code == 503
+    assert response.json() == {"detail": "AI_PROVIDER_UNAVAILABLE"}
 
 
 def test_worklog_polish_chain_passes_prompt_boundaries(monkeypatch) -> None:
@@ -157,6 +182,27 @@ def test_worklog_title_recommendation_contract(monkeypatch) -> None:
     assert set(response.json()) == {"titles"}
     assert captured["schema"] is WorklogTitleRecommendationResponse
     assert captured["instruction"] == WORKLOG_TITLE_RECOMMENDATION_SYSTEM_PROMPT
+
+
+def test_worklog_title_recommendation_maps_retryable_provider_error_to_503(monkeypatch) -> None:
+    from app.chain import worklog_polish_chain
+
+    class FakeGeminiClient:
+        async def generate_structured(self, *, contents, schema, instruction):
+            raise RetryableProviderError()
+
+    monkeypatch.setattr(worklog_polish_chain, "get_gemini_client", lambda: FakeGeminiClient())
+
+    response = client.post(
+        "/ai/worklogs/title-recommendations",
+        json={
+            "requestContent": "업무일지 제목을 추천해 주세요.",
+            "workContent": "시맨틱 검색 구조를 정리했다.",
+        },
+    )
+
+    assert response.status_code == 503
+    assert response.json() == {"detail": "AI_PROVIDER_UNAVAILABLE"}
 
 
 def test_worklog_title_recommendation_response_normalizes_titles() -> None:
