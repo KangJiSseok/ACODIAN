@@ -8,7 +8,7 @@ import { useMutation, useQueryClient } from "@tanstack/react-query"
 import { PencilLine } from "lucide-react"
 import PageHeader from "@/app/_common/components/layout/pageHeader"
 import { useAuth } from "@/app/_common/hooks/useAuth"
-import { ApiClientError, getApiErrorMessage } from "@/app/_common/service/api-client"
+import { getApiErrorMessage } from "@/app/_common/service/api-client"
 import { dashboardKeys } from "../../../_dashboard/_hooks/useDirectorDashboard"
 import { WorklogDetail } from "../../_components/worklogDetail"
 import { worklogKeys, useWorklogDetail } from "../../_hooks/useWorklogList"
@@ -21,7 +21,7 @@ export default function WorklogDetailPage() {
   const { user } = useAuth()
   const queryClient = useQueryClient()
   const worklogId = Number(params.id)
-  const { data: worklog, error, isError, isLoading } = useWorklogDetail(worklogId)
+  const { data: worklog, isError, isLoading } = useWorklogDetail(worklogId)
   const [transitionNotice, setTransitionNotice] = useState<string>()
   const [transitionErrorMessage, setTransitionErrorMessage] = useState<string>()
   const [aiSummaryRetryErrorMessage, setAiSummaryRetryErrorMessage] = useState<string>()
@@ -77,8 +77,7 @@ export default function WorklogDetailPage() {
 
   if (isLoading) return <div>업무를 불러오는 중입니다.</div>
   const selectedWorklog = worklog
-  if (isWorklogForbidden(error)) return <WorklogForbiddenState />
-  if (isError || !selectedWorklog) return <div>업무를 찾을 수 없습니다.</div>
+  if (isError || !selectedWorklog) return <WorklogNotFoundState />
 
   return (
     <div className="flex flex-col gap-5 lg:gap-6">
@@ -117,7 +116,7 @@ export default function WorklogDetailPage() {
   )
 }
 
-function WorklogForbiddenState() {
+function WorklogNotFoundState() {
   return (
     <div className="flex min-h-[420px] flex-col items-center justify-center gap-5 text-center">
       <Image
@@ -131,10 +130,6 @@ function WorklogForbiddenState() {
       <p className="text-lg font-semibold text-foreground">업무를 찾을 수 없습니다.</p>
     </div>
   )
-}
-
-function isWorklogForbidden(error: unknown) {
-  return error instanceof ApiClientError && error.status === 403
 }
 
 function canEditSelectedWorklog(userId: number | undefined, worklog: Worklog) {

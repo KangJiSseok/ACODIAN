@@ -77,6 +77,16 @@ test("worklog detail page invalidates worklog and dashboard queries after status
   assert.doesNotMatch(detailPageFile, /team\.isLeader/);
 });
 
+test("worklog detail page shows the animated empty state for hidden or missing worklogs", () => {
+  assert.match(detailPageFile, /function WorklogNotFoundState\(\)/);
+  assert.match(
+    detailPageFile,
+    /if \(isError \|\| !selectedWorklog\) return <WorklogNotFoundState \/>/,
+  );
+  assert.match(detailPageFile, /src="\/videos\/403error\.webp"/);
+  assert.match(detailPageFile, /unoptimized/);
+});
+
 test("status transition UI follows server policy and keeps final states closed", () => {
   assert.match(transitionFile, /PENDING: \["IN_PROGRESS"\]/);
   assert.match(transitionFile, /IN_PROGRESS: \["DONE", "ON_HOLD", "CANCELLED"\]/);
