@@ -253,7 +253,7 @@ class LightRagWorklogIndexAdapter:
     """방어로직"""
     def _ensure_required_config(self) -> None:
         """LightRAG runtime에 필요한 설정이 있는지 확인한다."""
-        if not self._settings.gemini_api_key:
+        if not self._settings.gemini_api_key_candidates:
             raise LightRagConfigurationError("GEMINI_API_KEY is required for LightRAG")
         if self._settings.lightrag_vector_storage.strip() != _QDRANT_VECTOR_STORAGE:
             raise LightRagConfigurationError(
@@ -302,9 +302,9 @@ def _build_gemini_llm_model_func(
 ) -> Callable[..., Awaitable[str]]:
     """Settings 기반 Gemini completion wrapper를 만든다.
 
-    LightRAG query 중 Gemini가 503/429 같은 일시 장애를 반환하면 모델별
-    bounded retry 후 fallback model 후보를 순회한다. prompt/API key/raw 응답은
-    로그에 남기지 않는다.
+    LightRAG query 중 Gemini가 503/429 같은 일시 장애를 반환하면 같은 모델에서
+    API key 후보를 먼저 순회한다. lower-model fallback은 명시 설정된 경우에만
+    모든 key/attempt 소진 후 escape hatch로 사용한다. prompt/API key/raw 응답은 로그에 남기지 않는다.
     """
 
     async def llm_model_func(
@@ -315,56 +315,73 @@ def _build_gemini_llm_model_func(
         **kwargs: Any,
     ) -> str:
         candidates = settings_obj.lightrag_llm_model_candidates
+        key_candidates = settings_obj.gemini_api_key_candidates
         max_attempts = settings_obj.lightrag_query_llm_retry_attempts_per_model
         last_retryable_exc: BaseException | None = None
 
         for model_name in candidates:
             for attempt_index in range(max_attempts):
-                try:
-                    return await dependencies.gemini_model_complete(
-                        prompt,
-                        system_prompt=system_prompt,
-                        history_messages=history_messages or [],
-                        keyword_extraction=keyword_extraction,
-                        api_key=settings_obj.gemini_api_key,
-                        model_name=model_name,
-                        **kwargs,
-                    )
-                except Exception as exc:
-                    if not is_retryable_ai_error(exc):
-                        raise
+                for key_index, api_key in enumerate(key_candidates):
+                    try:
+                        return await dependencies.gemini_model_complete(
+                            prompt,
+                            system_prompt=system_prompt,
+                            history_messages=history_messages or [],
+                            keyword_extraction=keyword_extraction,
+                            api_key=api_key,
+                            model_name=model_name,
+                            **kwargs,
+                        )
+                    except Exception as exc:
+                        if not is_retryable_ai_error(exc):
+                            raise
 
-                    last_retryable_exc = exc
-                    next_attempt_exists = attempt_index + 1 < max_attempts
-                    if next_attempt_exists:
-                        delay = _compute_lightrag_llm_retry_delay(
-                            settings_obj,
-                            attempt_index=attempt_index,
-                        )
-                        logger.warning(
-                            "LightRAG Gemini query retry scheduled "
-                            "model=%s attempt=%s/%s delay=%.2fs error=%s status=%s",
-                            model_name,
-                            attempt_index + 2,
-                            max_attempts,
-                            delay,
-                            exc.__class__.__name__,
-                            _extract_ai_error_status(exc),
-                        )
-                        if delay > 0:
-                            await asyncio.sleep(delay)
+                        last_retryable_exc = exc
+                        next_key_exists = key_index + 1 < len(key_candidates)
+                        if next_key_exists:
+                            logger.warning(
+                                "LightRAG Gemini query key failover scheduled "
+                                "model=%s attempt=%s/%s key_index=%s next_key_index=%s "
+                                "error=%s status=%s",
+                                model_name,
+                                attempt_index + 1,
+                                max_attempts,
+                                key_index,
+                                key_index + 1,
+                                exc.__class__.__name__,
+                                _extract_ai_error_status(exc),
+                            )
+                            continue
                         continue
-                    break
+                next_attempt_exists = attempt_index + 1 < max_attempts
+                if next_attempt_exists:
+                    delay = _compute_lightrag_llm_retry_delay(
+                        settings_obj,
+                        attempt_index=attempt_index,
+                    )
+                    logger.warning(
+                        "LightRAG Gemini query retry scheduled after all API keys "
+                        "model=%s attempt=%s/%s delay=%.2fs error=%s status=%s",
+                        model_name,
+                        attempt_index + 2,
+                        max_attempts,
+                        delay,
+                        last_retryable_exc.__class__.__name__ if last_retryable_exc else None,
+                        _extract_ai_error_status(last_retryable_exc) if last_retryable_exc else None,
+                    )
+                    if delay > 0:
+                        await asyncio.sleep(delay)
 
         logger.error(
-            "LightRAG Gemini query exhausted all model fallbacks "
-            "models=%s last_error=%s status=%s",
+            "LightRAG Gemini query exhausted all API key/model candidates "
+            "models=%s key_count=%s last_error=%s status=%s",
             candidates,
+            len(key_candidates),
             last_retryable_exc.__class__.__name__ if last_retryable_exc else None,
             _extract_ai_error_status(last_retryable_exc) if last_retryable_exc else None,
         )
         raise LightRagProviderUnavailableError(
-            "Gemini provider unavailable after LightRAG model fallbacks"
+            "Gemini provider unavailable after LightRAG API key/model fallbacks"
         ) from last_retryable_exc
 
     return llm_model_func
@@ -390,6 +407,8 @@ def _extract_ai_error_status(exc: BaseException) -> int | None:
     """Provider 예외의 status code를 로그용으로 추출한다."""
     for attr_name in ("status_code", "code"):
         value = getattr(exc, attr_name, None)
+        if value is None:
+            continue
         try:
             return int(value)
         except (TypeError, ValueError):
@@ -410,12 +429,45 @@ def _build_gemini_embedding_func(
         model_name=settings_obj.lightrag_embedding_model,
     )
     async def embedding_func(texts: list[str]) -> Any:
-        return await dependencies.gemini_embed.func(
-            texts,
-            api_key=settings_obj.gemini_api_key,
-            model=settings_obj.lightrag_embedding_model,
-            embedding_dim=settings_obj.embedding_dim,
-            max_token_size=settings_obj.lightrag_embedding_max_token_size,
+        key_candidates = settings_obj.gemini_api_key_candidates
+        last_retryable_exc: BaseException | None = None
+
+        for key_index, api_key in enumerate(key_candidates):
+            try:
+                return await dependencies.gemini_embed.func(
+                    texts,
+                    api_key=api_key,
+                    model=settings_obj.lightrag_embedding_model,
+                    embedding_dim=settings_obj.embedding_dim,
+                    max_token_size=settings_obj.lightrag_embedding_max_token_size,
+                )
+            except Exception as exc:
+                if not is_retryable_ai_error(exc):
+                    raise
+
+                last_retryable_exc = exc
+                next_key_exists = key_index + 1 < len(key_candidates)
+                if next_key_exists:
+                    logger.warning(
+                        "LightRAG Gemini embedding key failover scheduled "
+                        "key_index=%s next_key_index=%s error=%s status=%s",
+                        key_index,
+                        key_index + 1,
+                        exc.__class__.__name__,
+                        _extract_ai_error_status(exc),
+                    )
+                    continue
+                break
+
+        logger.error(
+            "LightRAG Gemini embedding exhausted all API key candidates "
+            "key_count=%s last_error=%s status=%s",
+            len(key_candidates),
+            last_retryable_exc.__class__.__name__ if last_retryable_exc else None,
+            _extract_ai_error_status(last_retryable_exc) if last_retryable_exc else None,
+        )
+        raise last_retryable_exc or LightRagProviderUnavailableError(
+            "Gemini embedding provider unavailable after API key failover"
         )
 
     return embedding_func

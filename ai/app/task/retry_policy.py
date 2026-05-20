@@ -50,6 +50,8 @@ def retry_ai_task(task: Any, exc: Exception, *, task_name: str, target_id: int) 
 def _extract_status_code(exc: BaseException) -> int | None:
     for attr_name in ("status_code", "code"):
         value = getattr(exc, attr_name, None)
+        if value is None:
+            continue
         try:
             return int(value)
         except (TypeError, ValueError):

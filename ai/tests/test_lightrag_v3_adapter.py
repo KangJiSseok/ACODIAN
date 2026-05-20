@@ -18,6 +18,7 @@ from app.light.v3.service.lightrag_adapter import (
     LightRagWorklogIndexAdapter,
     close_lightrag_worklog_index_adapter,
     get_lightrag_worklog_index_adapter,
+    _build_gemini_embedding_func,
     _build_gemini_llm_model_func,
 )
 from app.light.v3.service.worklog_document_builder import LightRagWorklogDocument
@@ -441,7 +442,7 @@ def test_lightrag_adapter_batches_multiple_documents_with_ordered_ids_and_file_p
 
 
 
-def test_lightrag_adapter_bridges_qdrant_url_and_api_key(
+def test_lightrag_adapter_bridges_local_qdrant_url_and_api_key(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     FakeLightRAG.instances = []
@@ -488,7 +489,7 @@ def test_lightrag_adapter_clears_stale_qdrant_api_key_when_setting_empty(
     assert "QDRANT_API_KEY" not in os.environ
 
 
-def test_lightrag_adapter_requires_qdrant_vector_storage() -> None:
+def test_lightrag_adapter_requires_qdrant_vector_storage_before_runtime() -> None:
     dependencies, _, _, _ = make_dependencies()
     settings = make_settings()
     settings.lightrag_vector_storage = "NanoVectorDBStorage"
@@ -912,32 +913,40 @@ def test_lightrag_llm_wrapper_retries_primary_model_after_retryable_error() -> N
     assert calls[0]["api_key"] == "fake-gemini-api-key"
 
 
-def test_lightrag_llm_wrapper_falls_back_after_primary_retries_exhausted() -> None:
+def test_lightrag_llm_wrapper_uses_next_key_before_model_fallback() -> None:
     settings = make_settings()
+    settings.gemini_api_keys = "second-key"
     settings.lightrag_llm_fallback_models = "gemini-fallback"
     settings.lightrag_query_llm_max_retries_per_model = 0
     settings.lightrag_query_llm_retry_initial_delay_seconds = 0.0
     dependencies, calls = make_completion_only_dependencies([
         RetryableGeminiError(),
-        "fallback ok",
+        "second key ok",
     ])
     llm_func = _build_gemini_llm_model_func(settings_obj=settings, dependencies=dependencies)
 
     result = asyncio.run(llm_func("prompt"))
 
-    assert result == "fallback ok"
+    assert result == "second key ok"
     assert [call["model_name"] for call in calls] == [
         "gemini-2.5-flash",
-        "gemini-fallback",
+        "gemini-2.5-flash",
+    ]
+    assert [call["api_key"] for call in calls] == [
+        "fake-gemini-api-key",
+        "second-key",
     ]
 
 
 def test_lightrag_llm_wrapper_raises_provider_unavailable_after_all_fallbacks_fail() -> None:
     settings = make_settings()
+    settings.gemini_api_keys = "second-key"
     settings.lightrag_llm_fallback_models = "gemini-fallback"
     settings.lightrag_query_llm_max_retries_per_model = 0
     settings.lightrag_query_llm_retry_initial_delay_seconds = 0.0
     dependencies, calls = make_completion_only_dependencies([
+        RetryableGeminiError(),
+        RetryableGeminiError(),
         RetryableGeminiError(),
         RetryableGeminiError(),
     ])
@@ -948,7 +957,15 @@ def test_lightrag_llm_wrapper_raises_provider_unavailable_after_all_fallbacks_fa
 
     assert [call["model_name"] for call in calls] == [
         "gemini-2.5-flash",
+        "gemini-2.5-flash",
         "gemini-fallback",
+        "gemini-fallback",
+    ]
+    assert [call["api_key"] for call in calls] == [
+        "fake-gemini-api-key",
+        "second-key",
+        "fake-gemini-api-key",
+        "second-key",
     ]
 
 
@@ -962,6 +979,43 @@ def test_lightrag_llm_wrapper_does_not_hide_non_retryable_errors() -> None:
         asyncio.run(llm_func("prompt"))
 
     assert [call["model_name"] for call in calls] == ["gemini-2.5-flash"]
+
+
+def test_lightrag_embedding_wrapper_uses_next_key_after_retryable_error() -> None:
+    settings = make_settings()
+    settings.gemini_api_keys = "second-key"
+    embed = FakeGeminiEmbed()
+
+    async def fail_once_then_embed(texts: list[str], **kwargs: Any) -> list[list[float]]:
+        embed.calls.append((texts, kwargs))
+        if len(embed.calls) == 1:
+            raise RetryableGeminiError()
+        return [[1.0] * 768 for _ in texts]
+
+    embed.func = fail_once_then_embed  # type: ignore[method-assign]
+
+    def fake_embedding_wrapper(**attrs: Any):
+        def decorate(func):
+            return func
+
+        return decorate
+
+    dependencies = LightRagDependencies(
+        lightrag_class=FakeLightRAG,
+        gemini_model_complete=lambda *args, **kwargs: "ok",
+        gemini_embed=embed,
+        embedding_wrapper=fake_embedding_wrapper,
+        query_param_class=FakeQueryParam,
+    )
+    embedding_func = _build_gemini_embedding_func(settings_obj=settings, dependencies=dependencies)
+
+    result = asyncio.run(embedding_func(["text"]))
+
+    assert result == [[1.0] * 768]
+    assert [call[1]["api_key"] for call in embed.calls] == [
+        "fake-gemini-api-key",
+        "second-key",
+    ]
 
 
 def test_lightrag_adapter_query_preserves_provider_unavailable_error() -> None:
