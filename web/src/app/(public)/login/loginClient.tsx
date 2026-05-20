@@ -24,8 +24,6 @@ import { cn } from "@/lib/utils";
 
 // 이메일 검증 정규식
 const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-const TEST_EMAIL = "director@ibank.local";
-const TEST_PASSWORD = "password1!";
 
 const departmentOptions = [
   { departmentId: 2, departmentName: "솔루션사업부" },
@@ -97,8 +95,8 @@ function AuthEntry({ redirectPath }: LoginClientProps) {
   const [mode, setMode] = useState<AuthMode>("login");
 
   // 로그인 입력값
-  const [email, setEmail] = useState(TEST_EMAIL);
-  const [password, setPassword] = useState(TEST_PASSWORD);
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
 
   // 회원가입 입력값
   const [signupValues, setSignupValues] = useState<SignupFormState>({
@@ -373,7 +371,7 @@ function LoginPanel({
           icon={UserRound}
           id="email"
           label="이메일"
-          placeholder={TEST_EMAIL}
+          placeholder="이메일"
           type="email"
           value={email}
           onChange={onEmailChange}
@@ -383,7 +381,7 @@ function LoginPanel({
           id="password"
           isVisible={isPasswordVisible}
           label="비밀번호"
-          placeholder={TEST_PASSWORD}
+          placeholder="비밀번호"
           value={password}
           onChange={onPasswordChange}
           onVisibleChange={onPasswordVisibleChange}
