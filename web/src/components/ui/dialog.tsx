@@ -13,6 +13,22 @@ export function Dialog({
   onOpenChange: (open: boolean) => void
   children: React.ReactNode
 }) {
+  React.useEffect(() => {
+    if (!open) return
+
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape") {
+        onOpenChange(false)
+      }
+    }
+
+    document.addEventListener("keydown", handleKeyDown)
+
+    return () => {
+      document.removeEventListener("keydown", handleKeyDown)
+    }
+  }, [onOpenChange, open])
+
   if (!open || typeof document === "undefined") return null
 
   return createPortal(
