@@ -35,7 +35,7 @@ class WorklogAiProcessingStatusServiceTest {
     }
 
     @Test
-    @DisplayName("통합 AI 후처리 요청이 모두 dispatch 되면 업무 AI 상태를 PROCESSING으로 변경한다")
+    @DisplayName("외부 AI 콜백 대기를 시작하면 업무 AI 상태를 PROCESSING으로 변경한다")
     void startAiProcessing_marks_worklog_processing() {
         Worklog worklog = worklog();
         when(worklogRepository.findById(501L)).thenReturn(Optional.of(worklog));
@@ -43,6 +43,17 @@ class WorklogAiProcessingStatusServiceTest {
         service.startAiProcessing(501L);
 
         assertThat(worklog.getAiProcessingStatus()).isEqualTo(AiProcessingStatus.PROCESSING);
+    }
+
+    @Test
+    @DisplayName("통합 AI 후처리 요청이 모두 dispatch 되면 업무 AI 상태를 COMPLETED로 변경한다")
+    void completeAiProcessing_marks_worklog_completed() {
+        Worklog worklog = worklog();
+        when(worklogRepository.findById(501L)).thenReturn(Optional.of(worklog));
+
+        service.completeAiProcessing(501L);
+
+        assertThat(worklog.getAiProcessingStatus()).isEqualTo(AiProcessingStatus.COMPLETED);
     }
 
     @Test

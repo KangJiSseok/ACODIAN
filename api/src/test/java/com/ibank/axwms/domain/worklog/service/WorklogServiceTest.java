@@ -59,12 +59,14 @@ import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.concurrent.atomic.AtomicReference;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.BDDMockito.given;
+import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
@@ -178,17 +180,23 @@ class WorklogServiceTest {
         CustomUserPrincipal principal = principal();
         CreateWorklogApiDto.Request request = request(INSTRUCTION_DATE, DUE_DATE);
         List<MultipartFile> files = sampleFiles();
+        AtomicReference<Worklog> savedWorklogRef = new AtomicReference<>();
 
         given(teamService.getTeamOrThrow(TEAM_ID)).willReturn(sampleTeam());
         given(teamService.isMember(USER_ID, TEAM_ID)).willReturn(true);
         given(worklogRepository.save(any(Worklog.class))).willAnswer(invocation -> {
             Worklog toSave = invocation.getArgument(0);
             ReflectionTestUtils.setField(toSave, "id", WORKLOG_ID);
+            savedWorklogRef.set(toSave);
             return toSave;
         });
         given(tagService.normalizeExistingTagIds(TAG_IDS)).willReturn(TAG_IDS);
         given(fileService.uploadWorklogFilesWithoutAiSummaryRequest(WORKLOG_ID, USER_ID, files))
                 .willReturn(List.of(new FileService.UploadedFile(9001L, "worklog/501/report.txt", "report.txt", "txt", 7L)));
+        doAnswer(invocation -> {
+            assertThat(savedWorklogRef.get().getAiProcessingStatus()).isEqualTo(AiProcessingStatus.PROCESSING);
+            return null;
+        }).when(eventPublisher).publishEvent(any(WorklogAiPostProcessRequestedEvent.class));
 
         // when
         CreateWorklogApiDto.Response response = worklogService.createWorklog(principal, request, files);
@@ -199,6 +207,7 @@ class WorklogServiceTest {
         verify(worklogRepository).save(worklogCaptor.capture());
         assertThat(worklogCaptor.getValue().getStatusCode()).isEqualTo(WorklogStatus.IN_PROGRESS);
         assertThat(worklogCaptor.getValue().getActualHours()).isEqualByComparingTo("3.10");
+        assertThat(worklogCaptor.getValue().getAiProcessingStatus()).isEqualTo(AiProcessingStatus.PROCESSING);
         verify(fileService).uploadWorklogFilesWithoutAiSummaryRequest(eq(WORKLOG_ID), eq(USER_ID), eq(files));
         verify(fileService, never()).uploadWorklogFiles(eq(WORKLOG_ID), eq(USER_ID), eq(files));
         verify(worklogStatusHistoryService).createStatusHistory(

@@ -16,13 +16,23 @@ public class WorklogAiProcessingStatusService {
     private final WorklogRepository worklogRepository;
 
     /**
-     * 통합 AI 후처리 요청이 모두 정상 dispatch 된 업무를 콜백 대기 상태로 표시한다.
+     * AI 재처리처럼 외부 콜백 대기를 시작해야 하는 업무를 처리중 상태로 표시한다.
      *
      * @param worklogId 상태를 변경할 업무 ID
      */
     @Transactional
     public void startAiProcessing(Long worklogId) {
         getWorklogOrThrow(worklogId).startAiProcessing();
+    }
+
+    /**
+     * 통합 AI 후처리 요청이 모두 정상 dispatch 된 업무를 즉시 완료 상태로 표시한다.
+     *
+     * @param worklogId 상태를 변경할 업무 ID
+     */
+    @Transactional
+    public void completeAiProcessing(Long worklogId) {
+        getWorklogOrThrow(worklogId).completeAiProcessing();
     }
 
     /**
