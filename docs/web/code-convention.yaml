@@ -1,0 +1,61 @@
+# Web 모듈의 E2E 테스트 전용 코드 컨벤션 파일.
+general:
+  - id: GEN-001
+    rule: E2E 테스트는 사용자가 실제 브라우저에서 수행하는 핵심 업무 흐름만 검증한다. 순수 함수, 단순 포맷팅, 작은 UI 분기는 E2E로 만들지 않는다.
+    stacks: [nextjs, playwright]
+  - id: GEN-002
+    rule: 테스트는 독립적으로 재실행 가능해야 한다. 이전 테스트의 로그인 상태, 생성 데이터, 실행 순서에 의존하지 않는다.
+    stacks: [playwright]
+  - id: GEN-003
+    rule: 운영/공유 환경의 실제 데이터를 생성·수정·삭제하는 E2E 테스트를 작성하지 않는다. 로컬 또는 테스트 전용 환경과 seed/fixture 데이터를 사용한다.
+    stacks: [playwright]
+
+playwright:
+  - id: PW-001
+    rule: Playwright 테스트 파일은 `web/e2e/**/*.spec.ts`에 둔다. 공통 helper, fixture, 인증 상태 파일은 `web/e2e/_support/` 아래에 둔다.
+    stacks: [playwright]
+  - id: PW-002
+    rule: selector는 접근성 우선순위(`getByRole`, `getByLabel`, `getByPlaceholder`, `getByText`)로 작성한다. CSS class, DOM depth, nth-child 기반 selector는 마지막 수단으로만 사용한다.
+    stacks: [playwright]
+  - id: PW-003
+    rule: 임의 대기(`waitForTimeout`)를 금지한다. URL 변경, locator visibility, API 응답, toast 메시지처럼 사용자가 관찰 가능한 상태를 기준으로 기다린다.
+    stacks: [playwright]
+  - id: PW-004
+    rule: 로그인은 각 spec에서 UI로 반복하지 않는다. 로그인 자체를 검증하는 spec만 UI 로그인을 사용하고, 나머지는 storage state 또는 인증 fixture를 재사용한다.
+    stacks: [playwright]
+  - id: PW-005
+    rule: API 응답을 mock할 때는 테스트 의도가 UI 동작 검증인지 API 연동 검증인지 spec 이름과 주석에 드러낸다. 실제 API 연동 E2E와 mock 기반 UI E2E를 한 spec 안에 섞지 않는다.
+    stacks: [playwright]
+  - id: PW-006
+    rule: 실패 분석을 위해 CI 실행에서는 trace를 retain-on-failure로 남기고, screenshot/video는 실패 시에만 저장한다.
+    stacks: [playwright]
+
+nextjs:
+  - id: NEXT-001
+    rule: 보호 라우트 E2E는 미인증 접근 시 로그인 화면 또는 권한 오류 화면으로 이동하는지 검증한다.
+    stacks: [nextjs, playwright]
+  - id: NEXT-002
+    rule: 역할별 화면 차이가 있는 라우트는 최소 DIRECTOR, DEPT_HEAD, TEAM_LEAD, MEMBER 중 실제 차이를 만드는 역할 조합만 선택해 검증한다.
+    stacks: [nextjs, playwright]
+  - id: NEXT-003
+    rule: 폼 E2E는 정상 제출 1개와 대표 유효성 실패 1개를 기본으로 작성한다. 모든 입력 조합을 E2E에서 전수 검사하지 않는다.
+    stacks: [nextjs, playwright]
+  - id: NEXT-004
+    rule: 파일 업로드/다운로드 E2E는 실제 대용량 파일 대신 작은 fixture 파일을 사용하고, 업로드 결과 UI와 API 계약상 식별자 노출 여부를 검증한다.
+    stacks: [nextjs, playwright]
+
+quality:
+  - id: QA-001
+    rule: 우선 작성할 E2E spec은 `auth.spec.ts`, `dashboard.spec.ts`, `organization.spec.ts`, `user.spec.ts`, `worklog.spec.ts`, `file.spec.ts`, `notification.spec.ts`, `search-tag.spec.ts`로 나눈다.
+    stacks: [playwright]
+  - id: QA-002
+    rule: |
+      각 spec은 테스트 목적을 `test.describe` 제목에 도메인과 사용자 역할 기준으로 명시한다.
+      예: `worklog - TEAM_LEAD 상태 전이`.
+    stacks: [playwright]
+  - id: QA-003
+    rule: 신규 화면 또는 핵심 사용자 흐름을 추가하면 happy path E2E 1개 이상을 함께 추가하거나, E2E에서 제외하는 이유를 PR 본문에 적는다.
+    stacks: [nextjs, playwright]
+  - id: QA-004
+    rule: E2E 검증 명령은 Playwright 도입 후 `pnpm --filter ./web exec playwright test`를 기본으로 사용한다. lint 검증은 기존 기준대로 `pnpm --filter ./web lint`를 함께 실행한다.
+    stacks: [nextjs, playwright]
