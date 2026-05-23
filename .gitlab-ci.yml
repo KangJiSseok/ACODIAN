@@ -3,8 +3,12 @@ workflow:
     on_new_commit: conservative
   rules:
     - if: '$CI_PIPELINE_SOURCE == "merge_request_event" && ($CI_MERGE_REQUEST_TARGET_BRANCH_NAME == "dev" || $CI_MERGE_REQUEST_TARGET_BRANCH_NAME == "master")'
+    # CI/CD 병렬 Runner 검증용 임시 규칙: 현재 작업 브랜치를 dev push pipeline처럼 실행한다.
+    - if: '$CI_PIPELINE_SOURCE == "push" && $CI_COMMIT_BRANCH == "refactor/infra/cicd"'
+      auto_cancel:
+        on_new_commit: none
     - if: '$CI_PIPELINE_SOURCE == "push" && $CI_COMMIT_BRANCH && $CI_COMMIT_BRANCH != "dev" && $CI_COMMIT_BRANCH != "master"'
-    - if: '$CI_PIPELINE_SOURCE == "push" && ($CI_COMMIT_BRANCH == "dev" || $CI_COMMIT_BRANCH == "master")'
+    - if: '$CI_PIPELINE_SOURCE == "push" && ($CI_COMMIT_BRANCH == "dev" || $CI_COMMIT_BRANCH == "master" || $CI_COMMIT_BRANCH == "refactor/infra/cicd")'
       auto_cancel:
         on_new_commit: none
     - when: never
@@ -90,7 +94,7 @@ infra_validate:
       changes: *infra_changes
     - if: '$CI_PIPELINE_SOURCE == "push" && $CI_COMMIT_BRANCH && $CI_COMMIT_BRANCH != "dev" && $CI_COMMIT_BRANCH != "master"'
       changes: *infra_changes
-    - if: '$CI_PIPELINE_SOURCE == "push" && ($CI_COMMIT_BRANCH == "dev" || $CI_COMMIT_BRANCH == "master")'
+    - if: '$CI_PIPELINE_SOURCE == "push" && ($CI_COMMIT_BRANCH == "dev" || $CI_COMMIT_BRANCH == "master" || $CI_COMMIT_BRANCH == "refactor/infra/cicd")'
       changes: *infra_changes
 
 web_ci:
@@ -115,7 +119,7 @@ web_ci:
       changes: *web_changes
     - if: '$CI_PIPELINE_SOURCE == "push" && $CI_COMMIT_BRANCH && $CI_COMMIT_BRANCH != "dev" && $CI_COMMIT_BRANCH != "master"'
       changes: *web_changes
-    - if: '$CI_PIPELINE_SOURCE == "push" && ($CI_COMMIT_BRANCH == "dev" || $CI_COMMIT_BRANCH == "master")'
+    - if: '$CI_PIPELINE_SOURCE == "push" && ($CI_COMMIT_BRANCH == "dev" || $CI_COMMIT_BRANCH == "master" || $CI_COMMIT_BRANCH == "refactor/infra/cicd")'
       changes: *web_changes
 
 web_e2e:
@@ -166,7 +170,7 @@ ai_ci:
       changes: *ai_changes
     - if: '$CI_PIPELINE_SOURCE == "push" && $CI_COMMIT_BRANCH && $CI_COMMIT_BRANCH != "dev" && $CI_COMMIT_BRANCH != "master"'
       changes: *ai_changes
-    - if: '$CI_PIPELINE_SOURCE == "push" && ($CI_COMMIT_BRANCH == "dev" || $CI_COMMIT_BRANCH == "master")'
+    - if: '$CI_PIPELINE_SOURCE == "push" && ($CI_COMMIT_BRANCH == "dev" || $CI_COMMIT_BRANCH == "master" || $CI_COMMIT_BRANCH == "refactor/infra/cicd")'
       changes: *ai_changes
 
 api_ci:
@@ -204,7 +208,7 @@ api_ci:
       changes: *api_changes
     - if: '$CI_PIPELINE_SOURCE == "push" && $CI_COMMIT_BRANCH && $CI_COMMIT_BRANCH != "dev" && $CI_COMMIT_BRANCH != "master"'
       changes: *api_changes
-    - if: '$CI_PIPELINE_SOURCE == "push" && ($CI_COMMIT_BRANCH == "dev" || $CI_COMMIT_BRANCH == "master")'
+    - if: '$CI_PIPELINE_SOURCE == "push" && ($CI_COMMIT_BRANCH == "dev" || $CI_COMMIT_BRANCH == "master" || $CI_COMMIT_BRANCH == "refactor/infra/cicd")'
       changes: *api_deploy_changes
 
 api_image:
@@ -227,7 +231,7 @@ api_image:
     - docker push "$API_IMAGE_BASE:$CI_COMMIT_SHA"
     - docker push "$API_IMAGE_BASE:$CI_COMMIT_REF_SLUG"
   rules:
-    - if: '$CI_PIPELINE_SOURCE == "push" && ($CI_COMMIT_BRANCH == "dev" || $CI_COMMIT_BRANCH == "master")'
+    - if: '$CI_PIPELINE_SOURCE == "push" && ($CI_COMMIT_BRANCH == "dev" || $CI_COMMIT_BRANCH == "master" || $CI_COMMIT_BRANCH == "refactor/infra/cicd")'
       changes: *api_deploy_changes
 
 web_image:
@@ -247,7 +251,7 @@ web_image:
     - docker push "$WEB_IMAGE_BASE:$CI_COMMIT_SHA"
     - docker push "$WEB_IMAGE_BASE:$CI_COMMIT_REF_SLUG"
   rules:
-    - if: '$CI_PIPELINE_SOURCE == "push" && ($CI_COMMIT_BRANCH == "dev" || $CI_COMMIT_BRANCH == "master")'
+    - if: '$CI_PIPELINE_SOURCE == "push" && ($CI_COMMIT_BRANCH == "dev" || $CI_COMMIT_BRANCH == "master" || $CI_COMMIT_BRANCH == "refactor/infra/cicd")'
       changes: *web_deploy_changes
 
 ai_image:
@@ -268,7 +272,7 @@ ai_image:
     - docker push "$AI_IMAGE_BASE:$CI_COMMIT_SHA"
     - docker push "$AI_IMAGE_BASE:$CI_COMMIT_REF_SLUG"
   rules:
-    - if: '$CI_PIPELINE_SOURCE == "push" && ($CI_COMMIT_BRANCH == "dev" || $CI_COMMIT_BRANCH == "master")'
+    - if: '$CI_PIPELINE_SOURCE == "push" && ($CI_COMMIT_BRANCH == "dev" || $CI_COMMIT_BRANCH == "master" || $CI_COMMIT_BRANCH == "refactor/infra/cicd")'
       changes: *ai_deploy_changes
 
 .deploy_base:
@@ -305,7 +309,7 @@ deploy_dev:
     - scp infra/nginx/snippets/rate-limit.conf "$DEPLOY_USER@$TARGET_HOST:/tmp/rate-limit.conf"
     - ssh "$DEPLOY_USER@$TARGET_HOST" "sudo install -o root -g root -m 0644 /tmp/axwms.conf /etc/nginx/sites-available/axwms.conf && sudo mkdir -p /etc/nginx/snippets && sudo install -o root -g root -m 0644 /tmp/proxy-headers.conf /etc/nginx/snippets/proxy-headers.conf && sudo install -o root -g root -m 0644 /tmp/rate-limit.conf /etc/nginx/snippets/rate-limit.conf && sudo nginx -t && sudo systemctl reload nginx && rm -f /tmp/axwms.conf /tmp/proxy-headers.conf /tmp/rate-limit.conf"
   rules:
-    - if: '$CI_PIPELINE_SOURCE == "push" && $CI_COMMIT_BRANCH == "dev"'
+    - if: '$CI_PIPELINE_SOURCE == "push" && ($CI_COMMIT_BRANCH == "dev" || $CI_COMMIT_BRANCH == "refactor/infra/cicd")'
       changes: *deploy_changes
 
 deploy_prod:
