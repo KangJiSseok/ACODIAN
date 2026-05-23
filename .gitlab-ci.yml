@@ -307,3 +307,4 @@ deploy_prod:
   rules:
     - if: '$CI_PIPELINE_SOURCE == "push" && $CI_COMMIT_BRANCH == "master"'
       changes: *deploy_changes
+
