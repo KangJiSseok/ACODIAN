@@ -45,6 +45,8 @@ Thumbs.db
 **/.next/
 **/dist/
 **/coverage/
+**/playwright-report/
+**/test-results/
 **/.turbo/
 **/__pycache__/
 **/.pytest_cache/

@@ -7,7 +7,11 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start -p 8000",
-    "lint": "eslint"
+    "lint": "eslint",
+    "e2e": "playwright test",
+    "e2e:ui": "WEB_E2E_TRACE=on playwright test --ui --trace on",
+    "e2e:trace": "WEB_E2E_TRACE=on playwright test --trace on",
+    "e2e:report": "playwright show-report"
   },
   "dependencies": {
     "@tanstack/react-query": "^5.99.2",
@@ -25,6 +29,7 @@
     "zustand": "^5.0.12"
   },
   "devDependencies": {
+    "@playwright/test": "^1.60.0",
     "@tailwindcss/postcss": "^4.2.2",
     "@types/node": "^20.19.39",
     "@types/react": "^19.2.14",
