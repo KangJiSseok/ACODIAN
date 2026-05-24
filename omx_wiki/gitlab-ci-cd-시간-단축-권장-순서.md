@@ -4,7 +4,7 @@ tags: ["infra", "gitlab-ci", "runner", "cicd", "performance"]
 created: 2026-05-23T14:40:57.727Z
 updated: 2026-05-23T14:40:57.727Z
 sources: []
-links: ["runners.md", "api-ci-병렬화-api-test와-api-bootjar-분리-이유.md"]
+links: ["runners.md", "api-ci-병렬화-api-test와-api-bootjar-분리-이유.md", "ci-cd-dag-needs-적용-변경사항과-장단점.md"]
 category: reference
 confidence: medium
 schemaVersion: 1
@@ -19,6 +19,7 @@ AX-WMS 현재 CI/CD는 GitLab Runner(docker executor + DinD)를 사용하고, `.
 실제 적용 결정 기록:
 
 - [[api-ci-병렬화-api-test와-api-bootjar-분리-이유]]
+- [[ci-cd-dag-needs-적용-변경사항과-장단점]]
 
 ## 1. Runner 병렬 수 확인 및 조정
 
