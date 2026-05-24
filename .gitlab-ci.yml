@@ -144,7 +144,7 @@ web_e2e:
       - web/test-results
     expire_in: 1 week
   rules:
-    - if: '$CI_PIPELINE_SOURCE == "push" && ($CI_COMMIT_BRANCH == "dev" || $CI_COMMIT_BRANCH == "master" || $CI_COMMIT_BRANCH == "refactor/infra/cicd")'
+    - if: '$CI_PIPELINE_SOURCE == "push" && ($CI_COMMIT_BRANCH == "dev" || $CI_COMMIT_BRANCH == "master")'
       changes: *web_deploy_changes
 
 ai_ci:
@@ -169,8 +169,7 @@ ai_ci:
     - if: '$CI_PIPELINE_SOURCE == "push" && ($CI_COMMIT_BRANCH == "dev" || $CI_COMMIT_BRANCH == "master")'
       changes: *ai_changes
 
-api_ci:
-  stage: build
+.api_gradle_dind:
   image: docker:27.5.1-cli
   services:
     - name: docker:27.5.1-dind
@@ -195,6 +194,52 @@ api_ci:
         - api/build.gradle
     paths:
       - api/.gradle
+
+.docker_image_buildx:
+  image: docker:27.5.1-cli
+  services:
+    - name: docker:27.5.1-dind
+      command: ["--tls=false"]
+  variables:
+    DOCKER_HOST: tcp://docker:2375
+    DOCKER_TLS_CERTDIR: ""
+    DOCKER_BUILDKIT: "1"
+  before_script:
+    - echo "$GHCR_TOKEN" | docker login ghcr.io -u "$GHCR_USER" --password-stdin
+    - docker buildx create --use --driver docker-container --name "axwms-${CI_JOB_ID}"
+    - docker buildx inspect --bootstrap
+  after_script:
+    - docker buildx rm "axwms-${CI_JOB_ID}" || true
+
+api_test:
+  extends: .api_gradle_dind
+  stage: test
+  script:
+    - cd api
+    - ./gradlew --no-daemon clean test
+  artifacts:
+    when: always
+    reports:
+      junit: api/build/test-results/test/TEST-*.xml
+    paths:
+      - api/build/test-results/test
+      - api/build/reports/tests/test
+    expire_in: 1 week
+  rules:
+    - if: '$CI_PIPELINE_SOURCE == "merge_request_event"'
+      changes: *api_changes
+    - if: '$CI_PIPELINE_SOURCE == "push" && $CI_COMMIT_BRANCH && $CI_COMMIT_BRANCH != "dev" && $CI_COMMIT_BRANCH != "master"'
+      changes: *api_changes
+    - if: '$CI_PIPELINE_SOURCE == "push" && ($CI_COMMIT_BRANCH == "dev" || $CI_COMMIT_BRANCH == "master")'
+      changes: *api_deploy_changes
+
+api_bootJar:
+  extends: .api_gradle_dind
+  stage: build
+  needs: []
+  script:
+    - cd api
+    - ./gradlew --no-daemon clean bootJar -x test
   artifacts:
     paths:
       - api/build/libs/*.jar
@@ -208,65 +253,69 @@ api_ci:
       changes: *api_deploy_changes
 
 api_image:
+  extends: .docker_image_buildx
   stage: image
   interruptible: false
-  image: docker:27.5.1-cli
-  services:
-    - name: docker:27.5.1-dind
-      command: ["--tls=false"]
-  variables:
-    DOCKER_HOST: tcp://docker:2375
-    DOCKER_TLS_CERTDIR: ""
   needs:
-    - job: api_ci
+    - job: api_bootJar
       artifacts: true
-  before_script:
-    - echo "$GHCR_TOKEN" | docker login ghcr.io -u "$GHCR_USER" --password-stdin
+    - job: api_test
+      artifacts: false
   script:
-    - docker build -t "$API_IMAGE_BASE:$CI_COMMIT_SHA" -t "$API_IMAGE_BASE:$CI_COMMIT_REF_SLUG" api
-    - docker push "$API_IMAGE_BASE:$CI_COMMIT_SHA"
-    - docker push "$API_IMAGE_BASE:$CI_COMMIT_REF_SLUG"
+    - >
+      docker buildx build
+      --push
+      --tag "$API_IMAGE_BASE:$CI_COMMIT_SHA"
+      --tag "$API_IMAGE_BASE:$CI_COMMIT_REF_SLUG"
+      --cache-from "type=registry,ref=$API_IMAGE_BASE:buildcache"
+      --cache-to "type=registry,ref=$API_IMAGE_BASE:buildcache,mode=max"
+      api
   rules:
     - if: '$CI_PIPELINE_SOURCE == "push" && ($CI_COMMIT_BRANCH == "dev" || $CI_COMMIT_BRANCH == "master")'
       changes: *api_deploy_changes
 
 web_image:
+  extends: .docker_image_buildx
   stage: image
   interruptible: false
-  image: docker:27.5.1-cli
-  services:
-    - name: docker:27.5.1-dind
-      command: ["--tls=false"]
-  variables:
-    DOCKER_HOST: tcp://docker:2375
-    DOCKER_TLS_CERTDIR: ""
-  before_script:
-    - echo "$GHCR_TOKEN" | docker login ghcr.io -u "$GHCR_USER" --password-stdin
+  needs:
+    - job: web_ci
+      optional: true
+      artifacts: false
+    - job: web_e2e
+      optional: true
+      artifacts: false
   script:
-    - docker build -t "$WEB_IMAGE_BASE:$CI_COMMIT_SHA" -t "$WEB_IMAGE_BASE:$CI_COMMIT_REF_SLUG" -f web/Dockerfile .
-    - docker push "$WEB_IMAGE_BASE:$CI_COMMIT_SHA"
-    - docker push "$WEB_IMAGE_BASE:$CI_COMMIT_REF_SLUG"
+    - >
+      docker buildx build
+      --push
+      --tag "$WEB_IMAGE_BASE:$CI_COMMIT_SHA"
+      --tag "$WEB_IMAGE_BASE:$CI_COMMIT_REF_SLUG"
+      --cache-from "type=registry,ref=$WEB_IMAGE_BASE:buildcache"
+      --cache-to "type=registry,ref=$WEB_IMAGE_BASE:buildcache,mode=max"
+      -f web/Dockerfile .
   rules:
     - if: '$CI_PIPELINE_SOURCE == "push" && ($CI_COMMIT_BRANCH == "dev" || $CI_COMMIT_BRANCH == "master")'
       changes: *web_deploy_changes
 
 ai_image:
+  extends: .docker_image_buildx
   stage: image
   interruptible: false
-  image: docker:27.5.1-cli
-  services:
-    - name: docker:27.5.1-dind
-      command: ["--tls=false"]
-  variables:
-    DOCKER_HOST: tcp://docker:2375
-    DOCKER_TLS_CERTDIR: ""
-  before_script:
-    - echo "$GHCR_TOKEN" | docker login ghcr.io -u "$GHCR_USER" --password-stdin
+  needs:
+    - job: ai_ci
+      optional: true
+      artifacts: false
   script:
     # 빌드 컨텍스트 = ai/. api 와 동일하게 단일 영역 컨텍스트로 빌드해 web 의 모노레포 컨텍스트와 분리한다(ADR-016).
-    - docker build -t "$AI_IMAGE_BASE:$CI_COMMIT_SHA" -t "$AI_IMAGE_BASE:$CI_COMMIT_REF_SLUG" -f ai/Dockerfile ai
-    - docker push "$AI_IMAGE_BASE:$CI_COMMIT_SHA"
-    - docker push "$AI_IMAGE_BASE:$CI_COMMIT_REF_SLUG"
+    - >
+      docker buildx build
+      --push
+      --tag "$AI_IMAGE_BASE:$CI_COMMIT_SHA"
+      --tag "$AI_IMAGE_BASE:$CI_COMMIT_REF_SLUG"
+      --cache-from "type=registry,ref=$AI_IMAGE_BASE:buildcache"
+      --cache-to "type=registry,ref=$AI_IMAGE_BASE:buildcache,mode=max"
+      -f ai/Dockerfile ai
   rules:
     - if: '$CI_PIPELINE_SOURCE == "push" && ($CI_COMMIT_BRANCH == "dev" || $CI_COMMIT_BRANCH == "master")'
       changes: *ai_deploy_changes
@@ -286,6 +335,19 @@ deploy_dev:
   extends: .deploy_base
   stage: deploy
   interruptible: false
+  needs:
+    - job: infra_validate
+      optional: true
+      artifacts: false
+    - job: api_image
+      optional: true
+      artifacts: false
+    - job: web_image
+      optional: true
+      artifacts: false
+    - job: ai_image
+      optional: true
+      artifacts: false
   environment:
     name: staging
     url: $STAGING_URL
@@ -312,6 +374,19 @@ deploy_prod:
   extends: .deploy_base
   stage: deploy
   interruptible: false
+  needs:
+    - job: infra_validate
+      optional: true
+      artifacts: false
+    - job: api_image
+      optional: true
+      artifacts: false
+    - job: web_image
+      optional: true
+      artifacts: false
+    - job: ai_image
+      optional: true
+      artifacts: false
   environment:
     name: production
     url: $PRODUCTION_URL
@@ -332,3 +407,4 @@ deploy_prod:
   rules:
     - if: '$CI_PIPELINE_SOURCE == "push" && $CI_COMMIT_BRANCH == "master"'
       changes: *deploy_changes
+

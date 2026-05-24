@@ -2,12 +2,12 @@
 
 - 기준 문서: [`docs/infra/adr.yaml`](adr.yaml), [`docs/infra/code-convention.yaml`](code-convention.yaml)
 - 목적: AX-WMS 인프라를 처음 보는 사람도 EC2 + GitLab CI/CD 자동배포를 그대로 재현할 수 있도록 1차 운영 절차를 제공한다.
-- 범위: api/web/postgres/redis 자동배포, GitLab Runner 운영, 브랜치별 파이프라인 동작, 서버 `.env` 와 GitLab CI/CD Variables 운영, Nginx 진입 예시.
+- 범위: api/web/ai/postgres/redis 자동배포, GitLab Runner 운영, 브랜치별 파이프라인 동작, 서버 `.env` 와 GitLab CI/CD Variables 운영, Nginx 진입 예시.
 - 전제: EC2 호스트, SSafy GitLab 사용, ghcr.io 이미지 레지스트리(ADR-007), 외부 도메인/HTTPS 사전 준비.
 - 연계 문서: [`runbooks/infra/ci-auth-troubleshoot.md`](../../runbooks/infra/ci-auth-troubleshoot.md) (CI 인증 자격증명 장애 대응), [`docs/api/jooq-codegen-policy.md`](../api/jooq-codegen-policy.md) (`api_ci` 의 DinD 의존 배경).
 
 이 문서는 **AX-WMS 인프라를 처음 보는 사람도 그대로 따라갈 수 있게** 작성한 1차 운영 가이드다.
-현재 범위는 **api / web / postgres / redis 자동배포 + nginx conf 저장소 동기화**이며, `ai` 자동배포 편입만 후속 작업으로 남겨둔다(ADR-014/ADR-015, pending-decisions #5 참조).
+현재 범위는 **api / web / ai / postgres / redis 자동배포 + nginx conf 저장소 동기화**다(ADR-014/ADR-015/ADR-016).
 
 ---
 
@@ -19,7 +19,7 @@
 - 소스 저장소: **GitLab**
 - 배포 방식: **GitLab CI/CD가 이미지를 빌드해서 Registry에 push → EC2가 pull 받아 compose로 기동**
 - 외부 도메인/HTTPS: **이미 준비됨**
-- 현재 자동배포 대상: **api + web + postgres + redis** (ai 는 후속, ADR-014 / pending-decisions #5)
+- 현재 자동배포 대상: **api + web + ai + postgres + redis** (ADR-014/ADR-016)
 
 즉, 이 문서는 “EC2에 어떻게 올리고, GitLab을 어떻게 연결하고, 브랜치별로 언제 배포되는가”를 설명한다.
 
@@ -71,17 +71,17 @@
 
 MR merge -> dev push
   -> GitLab CI
-  -> api / web Docker image build (변경 영역에 해당하는 것만)
+  -> api / web / ai Docker image build (변경 영역에 해당하는 것만)
   -> ghcr.io push
   -> SSH로 EC2 staging 접속
-  -> docker compose pull api web / up -d
+  -> docker compose pull api web ai / up -d
 
 MR merge -> master push
   -> GitLab CI
-  -> api / web Docker image build (변경 영역에 해당하는 것만)
+  -> api / web / ai Docker image build (변경 영역에 해당하는 것만)
   -> ghcr.io push
   -> SSH로 EC2 production 접속
-  -> docker compose pull api web / up -d
+  -> docker compose pull api web ai / up -d
 ```
 
 ---
@@ -93,10 +93,11 @@ MR merge -> master push
 | `.gitlab-ci.yml` | GitLab 파이프라인 규칙과 job 정의 |
 | `api/Dockerfile` | api 이미지를 만드는 Dockerfile (api 단일 컨텍스트) |
 | `web/Dockerfile` | web 이미지를 만드는 Dockerfile (모노레포 루트 컨텍스트, multi-stage, ADR-014) |
+| `ai/Dockerfile` | ai 이미지를 만드는 Dockerfile (ai 단일 컨텍스트, ADR-016) |
 | `.dockerignore` (루트) | web 빌드 시 모노레포 루트 컨텍스트에서 제외할 파일 (DO-004) |
 | `infra/compose.deploy.yml` | EC2에서 실제로 사용하는 compose 파일 |
 | `infra/.env.example` | compose 렌더용 기본값 파일 (ADR-009) |
-| `infra/scripts/remote-deploy.sh` | 서버에서 api/web 컨테이너를 멱등 배포하는 스크립트 (OPS-016) |
+| `infra/scripts/remote-deploy.sh` | 서버에서 api/web/ai 컨테이너를 멱등 배포하는 스크립트 (OPS-016) |
 | `infra/nginx/sites-available/axwms.conf` | EC2 systemd nginx 의 단일 진입점 conf SSOT (ADR-015 / OPS-017) |
 | `infra/nginx/snippets/proxy-headers.conf` | 모든 location 의 공통 proxy header 묶음 |
 | `docs/infra/adr.yaml` | 인프라 의사결정 기록 |
@@ -236,7 +237,7 @@ EC2 에서 `sudo gitlab-runner register` 를 실행해 아래 값으로 응답�
 
 #### privileged 필수
 
-`api_ci`, `api_image` 는 `docker:27.5.1-dind` service 를 쓰므로 Runner 가 privileged 모드로 동작해야 한다. 등록 직후 `/etc/gitlab-runner/config.toml` 을 열어 `[runners.docker]` 섹션의 `privileged` 를 `true` 로 바꾸고 서비스를 재시작한다.
+`api_ci` 와 `api_image`/`web_image`/`ai_image` 는 `docker:27.5.1-dind` service 를 쓰므로 Runner 가 privileged 모드로 동작해야 한다. 등록 직후 `/etc/gitlab-runner/config.toml` 을 열어 `[runners.docker]` 섹션의 `privileged` 를 `true` 로 바꾸고 서비스를 재시작한다.
 
 ```toml
 [runners.docker]
@@ -383,7 +384,7 @@ GitLab Variables 등록 시 정책:
 ### Registry 자격증명 — ghcr.io 기준
 
 이미지 레지스트리는 GitHub Container Registry(`ghcr.io`) 를 사용한다 (ADR-007).
-이미지 네임스페이스는 영역별로 분리한다 — api 는 `ghcr.io/axwms-s209/axwms-api`, web 은 `ghcr.io/axwms-s209/axwms-web` (ADR-014).
+이미지 네임스페이스는 영역별로 분리한다 — api 는 `ghcr.io/axwms-s209/axwms-api`, web 은 `ghcr.io/axwms-s209/axwms-web`, ai 는 `ghcr.io/axwms-s209/axwms-ai` 를 사용한다(ADR-014/ADR-016).
 
 - `GHCR_USER` — PAT 을 발급한 **GitHub 개인 계정 username** (Organization 이름 아님 ⚠)
 - `GHCR_TOKEN` — GitHub classic PAT (scopes: `write:packages`, `read:packages`, `repo`)
@@ -391,6 +392,15 @@ GitLab Variables 등록 시 정책:
 두 변수 모두 Protected 로 등록하고 `GHCR_TOKEN` 은 Mask 를 적용한다.
 PAT 은 만료 기한이 있으므로 만료 전에 갱신하지 않으면 CI 가 `unauthorized` 로 실패한다.
 갱신 일정을 캘린더에 미리 등록한다.
+
+이미지 빌드 캐시는 같은 GHCR namespace 의 별도 tag 로 저장한다(ADR-021).
+
+- `ghcr.io/axwms-s209/axwms-api:buildcache`
+- `ghcr.io/axwms-s209/axwms-web:buildcache`
+- `ghcr.io/axwms-s209/axwms-ai:buildcache`
+
+첫 pipeline 은 cache cold 상태라 시간이 줄지 않을 수 있다. 동일 Dockerfile/lockfile/requirements 기준 두 번째 pipeline 에서
+`importing cache manifest` / `exporting cache to registry` 계열 로그와 image job duration 을 확인한다.
 
 ### protected variable 주의
 `master`는 protected branch라 production 변수와 잘 맞는다.
@@ -458,8 +468,10 @@ GitLab auto-cancel 은 변경 영역(web/api/ai)이 아니라 ref 단위로 동�
 
 ### 10-3. 이미지 빌드 job
 
-- `api_image`: `api/Dockerfile` (컨텍스트 `api/`) 빌드 후 ghcr push, 트리거는 `.api_deploy_changes` (api 코드 + 인프라 변경 시).
-- `web_image`: `web/Dockerfile` (컨텍스트 모노레포 루트, `-f web/Dockerfile`) 빌드 후 ghcr push, 트리거는 `.web_deploy_changes` (web 코드 + 모노레포 manifest + 인프라 변경 시). ADR-014.
+- `api_image`: `api/Dockerfile` (컨텍스트 `api/`)을 `docker buildx build --push` 로 빌드하고 ghcr push, 트리거는 `.api_deploy_changes` (api 코드 + 인프라 변경 시).
+- `web_image`: `web/Dockerfile` (컨텍스트 모노레포 루트, `-f web/Dockerfile`)을 `docker buildx build --push` 로 빌드하고 ghcr push, 트리거는 `.web_deploy_changes` (web 코드 + 모노레포 manifest + 인프라 변경 시). ADR-014.
+- `ai_image`: `ai/Dockerfile` (컨텍스트 `ai/`, `-f ai/Dockerfile`)을 `docker buildx build --push` 로 빌드하고 ghcr push, 트리거는 `.ai_deploy_changes` (ai 코드 + 인프라 변경 시). ADR-016.
+- 세 image job 은 각각 `$*_IMAGE_BASE:buildcache` 를 `--cache-from` / `--cache-to mode=max` 로 사용한다(ADR-021).
 - `api_image`, `web_image`, `ai_image` 는 `interruptible: false` 로 둔다. 이미지 태그(`:<sha>`, `:<ref-slug>`) push 도중 취소되면 이후 deploy 가 이전 이미지를 재사용할 수 있기 때문이다.
 
 ### 10-4. 배포 job
@@ -467,7 +479,7 @@ GitLab auto-cancel 은 변경 영역(web/api/ai)이 아니라 ref 단위로 동�
 - `deploy_dev`: `dev` push 시 staging 배포
 - `deploy_prod`: `master` push 시 production 배포
 
-배포 트리거(`.deploy_changes`) 는 **api/web/모노레포 manifest/infra/docs/infra/.gitlab-ci.yml 중 하나라도 변경**되면 작동한다. 변경 영역에 해당하는 이미지 job 이 함께 돌고, deploy job 은 `API_IMAGE`/`WEB_IMAGE` 두 변수를 SSH 환경변수로 같이 주입한다. 인프라-only 변경에서도 기존 `:<ref-slug>` 태그 이미지로 재배포된다.
+배포 트리거(`.deploy_changes`) 는 **api/web/ai/모노레포 manifest/infra/docs/infra/.gitlab-ci.yml 중 하나라도 변경**되면 작동한다. 변경 영역에 해당하는 이미지 job 이 함께 돌고, deploy job 은 `API_IMAGE`/`WEB_IMAGE`/`AI_IMAGE` 세 변수를 SSH 환경변수로 같이 주입한다. 인프라-only 변경에서도 기존 `:<ref-slug>` 태그 이미지로 재배포된다.
 `deploy_dev`, `deploy_prod` 도 `interruptible: false` 로 둔다. 배포 중간 취소는 서버 상태와 GitLab pipeline 상태를 어긋나게 만들 수 있으므로 허용하지 않는다.
 
 ---
@@ -502,11 +514,11 @@ GitLab auto-cancel 은 변경 영역(web/api/ai)이 아니라 ref 단위로 동�
 
 ### `dev` merge 후
 
-1. GitLab이 변경 영역의 이미지를 빌드 (api 변경이면 `api_image`, web 변경이면 `web_image`, 인프라-only 면 둘 다 스킵)
-2. ghcr.io 에 `axwms-api:dev`, `axwms-web:dev` 등 `:<ref-slug>` + `:<sha>` 두 태그로 push
+1. GitLab이 변경 영역의 이미지를 빌드 (api 변경이면 `api_image`, web 변경이면 `web_image`, ai 변경이면 `ai_image`, 인프라-only 면 기존 ref-slug 이미지를 재사용)
+2. ghcr.io 에 `axwms-api:dev`, `axwms-web:dev`, `axwms-ai:dev` 등 `:<ref-slug>` + `:<sha>` 두 태그로 push
 3. CI가 staging 서버에 SSH 접속
 4. `compose.deploy.yml`, `remote-deploy.sh` 를 서버에 복사
-5. 서버에서 `docker compose pull api web` / `up -d --remove-orphans postgres redis api web` (OPS-016 의 멱등 흐름)
+5. 서버에서 `docker compose pull api web ai` / `up -d --remove-orphans postgres redis api web ai` (OPS-016 의 멱등 흐름)
 
 ### `master` merge 후
 같은 흐름으로 production 에 반영된다.
@@ -863,6 +875,7 @@ TLS 자동 갱신은 ADR-012 로, web/ai 자동배포 편입은 ADR-014/016 으�
 6. **CDN/WAF (Cloudflare 등) 도입** — 분산 DDoS / 봇 관리. SSAFY 의 `k14s209.p.ssafy.io` DNS CNAME / NS 변경 가능 여부를 먼저 확인.
 7. **nginx keep-alive 풀** — `upstream { keepalive N; }` + `proxy_set_header Connection ""` 짝꿍 한 번에 추가 (ADR-015 의 6번 "본 ADR 범위 밖" 항목).
 8. **파이프라인 `changes` 세분화** (pending-decisions #2) — 문서-only MR 이 배포까지 도는 비용을 줄이는 후행 정리.
+9. **GHCR cache retention 정리** — BuildKit `:buildcache` tag/version 저장소 사용량이 커지면 `mode=min` 전환 또는 cleanup 정책을 검토한다(ADR-021).
 
 ---
 
