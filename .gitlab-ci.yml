@@ -179,8 +179,7 @@ ai_ci:
     - if: '$CI_PIPELINE_SOURCE == "push" && ($CI_COMMIT_BRANCH == "dev" || $CI_COMMIT_BRANCH == "master" || $CI_COMMIT_BRANCH == "refactor/infra/cicd")'
       changes: *ai_changes
 
-api_ci:
-  stage: build
+.api_gradle_dind:
   image: docker:27.5.1-cli
   services:
     - name: docker:27.5.1-dind
@@ -205,6 +204,38 @@ api_ci:
         - api/build.gradle
     paths:
       - api/.gradle
+
+api_test:
+  extends: .api_gradle_dind
+  stage: test
+  script:
+    - cd api
+    - ./gradlew --no-daemon clean test
+  artifacts:
+    when: always
+    reports:
+      junit: api/build/test-results/test/TEST-*.xml
+    paths:
+      - api/build/test-results/test
+      - api/build/reports/tests/test
+    expire_in: 1 week
+  rules:
+    # CI/CD 병렬 Runner 검증용 임시 규칙: 현재 작업 브랜치에서는 changes 필터 없이 dev-like job을 생성한다.
+    - if: '$CI_PIPELINE_SOURCE == "push" && $CI_COMMIT_BRANCH == "refactor/infra/cicd"'
+    - if: '$CI_PIPELINE_SOURCE == "merge_request_event"'
+      changes: *api_changes
+    - if: '$CI_PIPELINE_SOURCE == "push" && $CI_COMMIT_BRANCH && $CI_COMMIT_BRANCH != "dev" && $CI_COMMIT_BRANCH != "master"'
+      changes: *api_changes
+    - if: '$CI_PIPELINE_SOURCE == "push" && ($CI_COMMIT_BRANCH == "dev" || $CI_COMMIT_BRANCH == "master" || $CI_COMMIT_BRANCH == "refactor/infra/cicd")'
+      changes: *api_deploy_changes
+
+api_bootJar:
+  extends: .api_gradle_dind
+  stage: build
+  needs: []
+  script:
+    - cd api
+    - ./gradlew --no-daemon clean bootJar -x test
   artifacts:
     paths:
       - api/build/libs/*.jar
@@ -230,8 +261,10 @@ api_image:
     DOCKER_HOST: tcp://docker:2375
     DOCKER_TLS_CERTDIR: ""
   needs:
-    - job: api_ci
+    - job: api_bootJar
       artifacts: true
+    - job: api_test
+      artifacts: false
   before_script:
     - echo "$GHCR_TOKEN" | docker login ghcr.io -u "$GHCR_USER" --password-stdin
   script:
@@ -352,4 +385,3 @@ deploy_prod:
   rules:
     - if: '$CI_PIPELINE_SOURCE == "push" && $CI_COMMIT_BRANCH == "master"'
       changes: *deploy_changes
-
