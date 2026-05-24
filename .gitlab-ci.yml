@@ -205,6 +205,22 @@ ai_ci:
     paths:
       - api/.gradle
 
+.docker_image_buildx:
+  image: docker:27.5.1-cli
+  services:
+    - name: docker:27.5.1-dind
+      command: ["--tls=false"]
+  variables:
+    DOCKER_HOST: tcp://docker:2375
+    DOCKER_TLS_CERTDIR: ""
+    DOCKER_BUILDKIT: "1"
+  before_script:
+    - echo "$GHCR_TOKEN" | docker login ghcr.io -u "$GHCR_USER" --password-stdin
+    - docker buildx create --use --driver docker-container --name "axwms-${CI_JOB_ID}"
+    - docker buildx inspect --bootstrap
+  after_script:
+    - docker buildx rm "axwms-${CI_JOB_ID}" || true
+
 api_test:
   extends: .api_gradle_dind
   stage: test
@@ -251,6 +267,7 @@ api_bootJar:
       changes: *api_deploy_changes
 
 api_image:
+  extends: .docker_image_buildx
   stage: image
   interruptible: false
   needs:
@@ -258,19 +275,15 @@ api_image:
       artifacts: true
     - job: api_test
       artifacts: false
-  image: docker:27.5.1-cli
-  services:
-    - name: docker:27.5.1-dind
-      command: ["--tls=false"]
-  variables:
-    DOCKER_HOST: tcp://docker:2375
-    DOCKER_TLS_CERTDIR: ""
-  before_script:
-    - echo "$GHCR_TOKEN" | docker login ghcr.io -u "$GHCR_USER" --password-stdin
   script:
-    - docker build -t "$API_IMAGE_BASE:$CI_COMMIT_SHA" -t "$API_IMAGE_BASE:$CI_COMMIT_REF_SLUG" api
-    - docker push "$API_IMAGE_BASE:$CI_COMMIT_SHA"
-    - docker push "$API_IMAGE_BASE:$CI_COMMIT_REF_SLUG"
+    - >
+      docker buildx build
+      --push
+      --tag "$API_IMAGE_BASE:$CI_COMMIT_SHA"
+      --tag "$API_IMAGE_BASE:$CI_COMMIT_REF_SLUG"
+      --cache-from "type=registry,ref=$API_IMAGE_BASE:buildcache"
+      --cache-to "type=registry,ref=$API_IMAGE_BASE:buildcache,mode=max"
+      api
   rules:
     # CI/CD 병렬 Runner 검증용 임시 규칙: 현재 작업 브랜치에서는 changes 필터 없이 dev-like job을 생성한다.
     - if: '$CI_PIPELINE_SOURCE == "push" && $CI_COMMIT_BRANCH == "refactor/infra/cicd"'
@@ -278,6 +291,7 @@ api_image:
       changes: *api_deploy_changes
 
 web_image:
+  extends: .docker_image_buildx
   stage: image
   interruptible: false
   needs:
@@ -287,19 +301,15 @@ web_image:
     - job: web_e2e
       optional: true
       artifacts: false
-  image: docker:27.5.1-cli
-  services:
-    - name: docker:27.5.1-dind
-      command: ["--tls=false"]
-  variables:
-    DOCKER_HOST: tcp://docker:2375
-    DOCKER_TLS_CERTDIR: ""
-  before_script:
-    - echo "$GHCR_TOKEN" | docker login ghcr.io -u "$GHCR_USER" --password-stdin
   script:
-    - docker build -t "$WEB_IMAGE_BASE:$CI_COMMIT_SHA" -t "$WEB_IMAGE_BASE:$CI_COMMIT_REF_SLUG" -f web/Dockerfile .
-    - docker push "$WEB_IMAGE_BASE:$CI_COMMIT_SHA"
-    - docker push "$WEB_IMAGE_BASE:$CI_COMMIT_REF_SLUG"
+    - >
+      docker buildx build
+      --push
+      --tag "$WEB_IMAGE_BASE:$CI_COMMIT_SHA"
+      --tag "$WEB_IMAGE_BASE:$CI_COMMIT_REF_SLUG"
+      --cache-from "type=registry,ref=$WEB_IMAGE_BASE:buildcache"
+      --cache-to "type=registry,ref=$WEB_IMAGE_BASE:buildcache,mode=max"
+      -f web/Dockerfile .
   rules:
     # CI/CD 병렬 Runner 검증용 임시 규칙: 현재 작업 브랜치에서는 changes 필터 없이 dev-like job을 생성한다.
     - if: '$CI_PIPELINE_SOURCE == "push" && $CI_COMMIT_BRANCH == "refactor/infra/cicd"'
@@ -307,26 +317,23 @@ web_image:
       changes: *web_deploy_changes
 
 ai_image:
+  extends: .docker_image_buildx
   stage: image
   interruptible: false
   needs:
     - job: ai_ci
       optional: true
       artifacts: false
-  image: docker:27.5.1-cli
-  services:
-    - name: docker:27.5.1-dind
-      command: ["--tls=false"]
-  variables:
-    DOCKER_HOST: tcp://docker:2375
-    DOCKER_TLS_CERTDIR: ""
-  before_script:
-    - echo "$GHCR_TOKEN" | docker login ghcr.io -u "$GHCR_USER" --password-stdin
   script:
     # 빌드 컨텍스트 = ai/. api 와 동일하게 단일 영역 컨텍스트로 빌드해 web 의 모노레포 컨텍스트와 분리한다(ADR-016).
-    - docker build -t "$AI_IMAGE_BASE:$CI_COMMIT_SHA" -t "$AI_IMAGE_BASE:$CI_COMMIT_REF_SLUG" -f ai/Dockerfile ai
-    - docker push "$AI_IMAGE_BASE:$CI_COMMIT_SHA"
-    - docker push "$AI_IMAGE_BASE:$CI_COMMIT_REF_SLUG"
+    - >
+      docker buildx build
+      --push
+      --tag "$AI_IMAGE_BASE:$CI_COMMIT_SHA"
+      --tag "$AI_IMAGE_BASE:$CI_COMMIT_REF_SLUG"
+      --cache-from "type=registry,ref=$AI_IMAGE_BASE:buildcache"
+      --cache-to "type=registry,ref=$AI_IMAGE_BASE:buildcache,mode=max"
+      -f ai/Dockerfile ai
   rules:
     # CI/CD 병렬 Runner 검증용 임시 규칙: 현재 작업 브랜치에서는 changes 필터 없이 dev-like job을 생성한다.
     - if: '$CI_PIPELINE_SOURCE == "push" && $CI_COMMIT_BRANCH == "refactor/infra/cicd"'
