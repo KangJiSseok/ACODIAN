@@ -4,7 +4,7 @@ tags: ["infra", "gitlab-ci", "runner", "cicd", "performance"]
 created: 2026-05-23T14:40:57.727Z
 updated: 2026-05-23T14:40:57.727Z
 sources: []
-links: ["runners.md"]
+links: ["runners.md", "api-ci-병렬화-api-test와-api-bootjar-분리-이유.md"]
 category: reference
 confidence: medium
 schemaVersion: 1
@@ -15,6 +15,10 @@ schemaVersion: 1
 # GitLab CI/CD 시간 단축 권장 순서
 
 AX-WMS 현재 CI/CD는 GitLab Runner(docker executor + DinD)를 사용하고, `.gitlab-ci.yml` 기준 `validate → test → build → image → deploy` 순서로 동작한다. 현재 약 20분 소요되는 병목을 줄일 때는 아래 순서로 진행하는 것이 좋다.
+
+실제 적용 결정 기록:
+
+- [[api-ci-병렬화-api-test와-api-bootjar-분리-이유]]
 
 ## 1. Runner 병렬 수 확인 및 조정
 
@@ -193,4 +197,3 @@ variables:
 - Runner는 현재 배포 대상 EC2에 공존한다. 병렬 수를 올리면 운영 컨테이너와 CPU/RAM/Disk I/O를 경쟁할 수 있다.
 - `deploy_dev`/`deploy_prod`, image push job은 `interruptible: false`로 유지하는 것이 좋다. 이미지 tag push 또는 배포 중간 취소를 막기 위한 ADR-017/OPS-019 정책과 연결된다.
 - infra 문서 변경만으로 운영 배포가 도는 문제는 시간 낭비뿐 아니라 배포 리스크도 키운다. `changes` 세분화가 단순 최적화가 아니라 안정성 개선이기도 하다.
-
