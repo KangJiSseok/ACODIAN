@@ -469,7 +469,7 @@
       - deploy 시 ghcr 에 web 이미지가 없으면 실패한다. `.web_deploy_changes` 가 인프라 변경도 포함하므로 본 MR 의 인프라 변경이 web_image 첫 빌드를 보장한다. 이후 인프라-only 변경에서도 동일 보장.
       - pending-decisions #3 가 후행이라 nginx 가 web upstream 으로 라우팅하기 전까지 컨테이너는 떠 있고 외부 접근만 막힌다 — 의도된 단계 분리. 후속 MR 에서 nginx conf 저장소 편입 + reload 자동화.
       - 모노레포 루트 컨텍스트 빌드를 위해 `.dockerignore` 가 루트에 신설된다. api 빌드는 컨텍스트가 `api/` 이므로 api/.dockerignore 가 우선이고 본 파일의 영향은 없다.
-      - web/Dockerfile 의 builder stage 가 `pnpm install --frozen-lockfile` 을 매번 수행한다. CI 캐시는 `.web_changes` 의 lockfile 키 기반 cache 가 web_ci 에서 따로 동작하지만 web_image 자체에는 캐시가 없어 첫 빌드 시간이 더 길다(허용 범위로 판단, 추후 BuildKit `--cache-from` 도입은 별 MR).
+      - web/Dockerfile 의 builder stage 가 `pnpm install --frozen-lockfile` 을 매번 수행한다. CI 캐시는 `.web_changes` 의 lockfile 키 기반 cache 가 web_ci 에서 따로 동작하지만 web_image 자체에는 캐시가 없어 첫 빌드 시간이 더 길다(허용 범위로 판단, 추후 BuildKit `--cache-from` 도입은 별 MR — ADR-021 에서 회수).
 
     재검토 트리거:
       - 패키지 매니저가 pnpm 외 다른 워크스페이스 모델로 바뀌는 경우(빌드 컨텍스트 전제 변동).
@@ -764,3 +764,59 @@
       - AI 앱 인증 또는 앱 레벨 rate limit 이 도입되어 직접 포트 보호 책임을 재정의해야 할 때.
       - 외부 직접 호출 요구가 사라져 Nginx `/ai/` 경유만으로 충분해질 때.
       - 운영 보안그룹 정책이 8200/8201 public inbound 를 허용하지 않거나 IP whitelist 만 허용하도록 바뀔 때.
+
+- id: ADR-021
+  title: Docker BuildKit registry cache로 image job 빌드 캐시 외부화
+  status: adopted
+  date: 2026-05-25
+  stacks: [gitlab, docker, buildkit, ghcr, ci]
+  context: |
+    Runner 병렬성 조정과 DAG `needs` 적용 이후에도 `api_image`, `web_image`, `ai_image` job 은 매번
+    `docker build` 후 `docker push` 두 번을 수행한다. Docker daemon layer cache 는 GitLab DinD job 간에
+    안정적으로 공유되지 않으므로 image job 재실행 시 의존성 layer 를 반복 계산한다.
+
+    특히 `web/Dockerfile` 은 ADR-014 의 multi-stage 구조상 `pnpm install --frozen-lockfile` 과
+    `pnpm --filter ./web build` 비용이 크고, ADR-014 의 consequence 에서도 BuildKit `--cache-from`
+    도입을 별 MR 로 남겨 두었다. `ai/Dockerfile` 은 ADR-016 의 단일 stage 구조지만 OS package 설치와
+    `pip install -r requirements.txt` layer 가 반복된다. `api/Dockerfile` 은 ADR-002/DO-001 에 따라
+    외부 빌드된 JAR 만 복사하므로 캐시 이득은 작지만, 세 image job 을 같은 빌드·push 패턴으로 유지하는
+    운영 단순성이 있다.
+  decision: |
+    `.gitlab-ci.yml` 의 image job 공통 template 으로 `.docker_image_buildx` 를 둔다.
+
+    1. template 은 기존 DinD 전제(ADR-008) 와 GHCR login(ADR-007) 을 유지하되,
+       `DOCKER_BUILDKIT=1`, `docker buildx create --driver docker-container --use`,
+       `docker buildx inspect --bootstrap`, `after_script` 의 builder 제거를 포함한다.
+    2. `api_image`, `web_image`, `ai_image` 는 `docker build` + `docker push` 2회 대신
+       `docker buildx build --push` 를 사용한다.
+    3. 기존 image tag 정책은 그대로 유지한다.
+       - `:$CI_COMMIT_SHA`
+       - `:$CI_COMMIT_REF_SLUG`
+    4. cache ref 는 애플리케이션 image 와 같은 GHCR package namespace 안에서 image 별로 분리한다.
+       - `$API_IMAGE_BASE:buildcache`
+       - `$WEB_IMAGE_BASE:buildcache`
+       - `$AI_IMAGE_BASE:buildcache`
+    5. `--cache-to ... mode=max` 를 사용해 multi-stage 중간 layer 까지 export 한다.
+       web 에 가장 큰 효과를 기대하고, ai 는 dependency layer 재사용을 기대한다.
+    6. cache export 실패를 숨기지 않는다. 초기 도입에서는 `ignore-error=true` 를 붙이지 않아
+       cache 경로가 깨지면 job 실패로 드러나게 한다.
+
+    본 결정은 ADR-014 의 “추후 BuildKit `--cache-from` 도입은 별 MR” 잔여 항목을 회수한다.
+    3번 과제였던 `changes` 세분화는 본 ADR 범위 밖으로 유지한다.
+  consequence: |
+    긍정적 영향:
+      - DinD job 간 local cache 부재를 GHCR registry cache 로 보완해 warm cache 이후 web/ai image build 시간을 줄일 수 있다.
+      - `docker buildx build --push` 한 번으로 두 tag push 와 cache export 를 함께 수행해 image job 패턴이 단순해진다.
+      - cache ref 가 image 별로 분리되어 api/web/ai 가 서로 cache manifest 를 덮어쓰지 않는다.
+
+    부정적 영향과 완화:
+      - 첫 실행은 cache cold 상태라 buildx bootstrap + cache export 비용 때문에 느릴 수 있다. 완화: 두 번째 동일 입력 pipeline 의 warm cache 시간을 기준으로 평가한다.
+      - GHCR package version/cache storage 가 증가할 수 있다. 완화: 초기에는 `mode=max` 로 효과를 측정하고, 저장소 증가가 문제되면 `mode=min` 또는 retention cleanup 을 별도 작업으로 검토한다.
+      - 동시 pipeline 이 같은 `:buildcache` ref 를 마지막 writer 기준으로 갱신한다. 완화: image 별 ref 는 분리하고, branch 별 cache 격리가 필요해지면 `:buildcache-$CI_COMMIT_REF_SLUG` 로 확장한다.
+      - Dockerfile 에 secret build arg/copy 가 추가되면 cache image 를 통한 유출 경로가 생길 수 있다. 완화: 현재 Dockerfile 들은 secret 을 빌드 입력으로 받지 않으며, secret 은 계속 EC2 `.env` 또는 GitLab protected variable 로만 주입한다.
+
+    재검토 트리거:
+      - GHCR storage 사용량 또는 package version 관리 부담이 운영 이슈가 되는 경우.
+      - Runner 가 전용 빌드 VM 으로 분리되어 local persistent cache 전략을 다시 검토할 수 있는 경우.
+      - web/ai Dockerfile 구조가 크게 바뀌어 `mode=max` 비용 대비 효과가 낮아지는 경우.
+      - SSafy GitLab Container Registry 가 활성화되어 ADR-007 의 registry 선택을 재검토하는 경우.
