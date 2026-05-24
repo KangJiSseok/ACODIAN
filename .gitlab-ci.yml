@@ -232,7 +232,6 @@ api_test:
 api_bootJar:
   extends: .api_gradle_dind
   stage: build
-  needs: []
   script:
     - cd api
     - ./gradlew --no-daemon clean bootJar -x test
@@ -260,11 +259,6 @@ api_image:
   variables:
     DOCKER_HOST: tcp://docker:2375
     DOCKER_TLS_CERTDIR: ""
-  needs:
-    - job: api_bootJar
-      artifacts: true
-    - job: api_test
-      artifacts: false
   before_script:
     - echo "$GHCR_TOKEN" | docker login ghcr.io -u "$GHCR_USER" --password-stdin
   script:
