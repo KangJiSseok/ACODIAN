@@ -4,7 +4,7 @@ tags: ["infra", "gitlab-ci", "runner", "cicd", "performance"]
 created: 2026-05-23T14:40:57.727Z
 updated: 2026-05-23T14:40:57.727Z
 sources: []
-links: ["runners.md", "api-ci-병렬화-api-test와-api-bootjar-분리-이유.md", "ci-cd-dag-needs-적용-변경사항과-장단점.md"]
+links: ["runners.md", "api-ci-병렬화-api-test와-api-bootjar-분리-이유.md", "ci-cd-dag-needs-적용-변경사항과-장단점.md", "docker-buildkit-registry-cache-적용-기록.md"]
 category: reference
 confidence: medium
 schemaVersion: 1
@@ -20,6 +20,7 @@ AX-WMS 현재 CI/CD는 GitLab Runner(docker executor + DinD)를 사용하고, `.
 
 - [[api-ci-병렬화-api-test와-api-bootjar-분리-이유]]
 - [[ci-cd-dag-needs-적용-변경사항과-장단점]]
+- [[docker-buildkit-registry-cache-적용-기록]]
 
 ## 1. Runner 병렬 수 확인 및 조정
 
@@ -119,7 +120,7 @@ deploy_dev:
 
 이 방향은 `docs/infra/pending-decisions.md`의 “파이프라인 changes 세분화” 항목과도 일치한다.
 
-## 4. Docker BuildKit registry cache 도입
+## 4. Docker BuildKit registry cache 도입 — 적용됨(2026-05-25)
 
 현재 `api_image`, `web_image`, `ai_image`는 `docker build`에 layer cache가 거의 없다. 특히 `web/Dockerfile`은 multi-stage이고 `ai/Dockerfile`은 `pip install -r requirements.txt`가 있어 registry cache 효과가 크다.
 
@@ -137,6 +138,14 @@ docker buildx build \
 ```
 
 동일 패턴을 `ai_image`, 필요 시 `api_image`에도 적용한다.
+
+적용 결과:
+
+- `.gitlab-ci.yml`에 `.docker_image_buildx` template을 추가했다.
+- `api_image`, `web_image`, `ai_image` 모두 `docker buildx build --push`를 사용한다.
+- cache ref는 각각 `$API_IMAGE_BASE:buildcache`, `$WEB_IMAGE_BASE:buildcache`, `$AI_IMAGE_BASE:buildcache`로 분리했다.
+- 기존 `:$CI_COMMIT_SHA` / `:$CI_COMMIT_REF_SLUG` tag 정책과 image/deploy job의 `interruptible: false` 정책은 유지한다.
+- 실제 단축 효과는 첫 cache cold pipeline이 아니라 동일 입력 두 번째 warm cache pipeline에서 확인한다.
 
 ## 5. API jOOQ generated source cache 추가
 
@@ -188,7 +197,7 @@ variables:
 1. Runner `concurrent`, `limit`, `request_concurrency` 확인 및 3~4 수준 조정
 2. `.gitlab-ci.yml`에 DAG `needs` 적용
 3. `changes` 세분화로 docs/infra-only 변경의 전체 빌드 방지
-4. Docker BuildKit registry cache 도입
+4. Docker BuildKit registry cache 도입 — 적용됨(2026-05-25)
 5. API jOOQ generated source cache 추가
 6. web build 중복 제거
 7. DinD `overlay2`/BuildKit/registry mirror 및 전용 Runner VM 검토

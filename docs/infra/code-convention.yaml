@@ -108,3 +108,6 @@ ops:
   - id: OPS-021
     rule: 'Qdrant 와 Neo4j 는 애플리케이션 이미지가 아니라 AI 저장소 의존성이다. `infra/compose.deploy.yml` 에서는 postgres/redis 와 같은 상태 저장형 서비스로 관리하고 named volume, healthcheck 를 둔다. Qdrant, Neo4j Bolt, Neo4j HTTP Browser 는 개발 편의를 위해 호스트 포트로 외부 개방하며, EC2 보안그룹 또는 방화벽에서 접근 가능한 IP 를 제한한다. 배포 스크립트의 `pull` / `rm -sf` 애플리케이션 컨테이너 목록에는 넣지 않고 `up -d --remove-orphans` 대상에만 포함한다. 환경별 host port 는 staging +1 규칙을 따라 Qdrant 8500/8501, Neo4j Bolt 8600/8601, Neo4j HTTP Browser 8602/8603 으로 둔다. 실제 `NEO4J_PASSWORD` 는 EC2 `.env` 또는 GitLab CI/CD Variables 로만 주입한다.'
     stacks: [compose, qdrant, neo4j, ai, ec2]
+  - id: OPS-022
+    rule: '`.gitlab-ci.yml` 의 `api_image`, `web_image`, `ai_image` 는 `.docker_image_buildx` template 을 통해 `docker buildx build --push` 와 GHCR registry cache 를 사용한다. 기존 `:$CI_COMMIT_SHA` / `:$CI_COMMIT_REF_SLUG` tag 정책, image/deploy job 의 `interruptible: false`, deploy job 의 ref-slug pull 정책은 유지한다. cache ref 는 image 별 `$*_IMAGE_BASE:buildcache` 로 분리하고, 초기 도입에서는 cache export 실패를 숨기는 `ignore-error=true` 를 붙이지 않는다. 근거는 ADR-021.'
+    stacks: [gitlab, docker, buildkit, ghcr, ci]
