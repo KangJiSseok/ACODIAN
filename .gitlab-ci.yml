@@ -232,6 +232,7 @@ api_test:
 api_bootJar:
   extends: .api_gradle_dind
   stage: build
+  needs: []
   script:
     - cd api
     - ./gradlew --no-daemon clean bootJar -x test
@@ -252,6 +253,11 @@ api_bootJar:
 api_image:
   stage: image
   interruptible: false
+  needs:
+    - job: api_bootJar
+      artifacts: true
+    - job: api_test
+      artifacts: false
   image: docker:27.5.1-cli
   services:
     - name: docker:27.5.1-dind
@@ -274,6 +280,13 @@ api_image:
 web_image:
   stage: image
   interruptible: false
+  needs:
+    - job: web_ci
+      optional: true
+      artifacts: false
+    - job: web_e2e
+      optional: true
+      artifacts: false
   image: docker:27.5.1-cli
   services:
     - name: docker:27.5.1-dind
@@ -296,6 +309,10 @@ web_image:
 ai_image:
   stage: image
   interruptible: false
+  needs:
+    - job: ai_ci
+      optional: true
+      artifacts: false
   image: docker:27.5.1-cli
   services:
     - name: docker:27.5.1-dind
@@ -331,6 +348,19 @@ deploy_dev:
   extends: .deploy_base
   stage: deploy
   interruptible: false
+  needs:
+    - job: infra_validate
+      optional: true
+      artifacts: false
+    - job: api_image
+      optional: true
+      artifacts: false
+    - job: web_image
+      optional: true
+      artifacts: false
+    - job: ai_image
+      optional: true
+      artifacts: false
   environment:
     name: staging
     url: $STAGING_URL
@@ -359,6 +389,19 @@ deploy_prod:
   extends: .deploy_base
   stage: deploy
   interruptible: false
+  needs:
+    - job: infra_validate
+      optional: true
+      artifacts: false
+    - job: api_image
+      optional: true
+      artifacts: false
+    - job: web_image
+      optional: true
+      artifacts: false
+    - job: ai_image
+      optional: true
+      artifacts: false
   environment:
     name: production
     url: $PRODUCTION_URL
