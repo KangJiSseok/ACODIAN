@@ -118,6 +118,35 @@ web_ci:
     - if: '$CI_PIPELINE_SOURCE == "push" && ($CI_COMMIT_BRANCH == "dev" || $CI_COMMIT_BRANCH == "master")'
       changes: *web_changes
 
+web_e2e:
+  stage: test
+  image: mcr.microsoft.com/playwright:v1.60.0-noble
+  variables:
+    WEB_E2E_TRACE: retain-on-failure
+  before_script:
+    - corepack enable
+    - corepack prepare pnpm@10.32.0 --activate
+    - pnpm config set store-dir .pnpm-store
+    - pnpm install --frozen-lockfile
+  script:
+    - cd web
+    - pnpm e2e --project=chromium
+  cache:
+    key:
+      files:
+        - pnpm-lock.yaml
+    paths:
+      - .pnpm-store
+  artifacts:
+    when: always
+    paths:
+      - web/playwright-report
+      - web/test-results
+    expire_in: 1 week
+  rules:
+    - if: '$CI_PIPELINE_SOURCE == "push" && ($CI_COMMIT_BRANCH == "dev" || $CI_COMMIT_BRANCH == "master" || $CI_COMMIT_BRANCH == "refactor/infra/cicd")'
+      changes: *web_deploy_changes
+
 ai_ci:
   stage: test
   image: python:3.12-slim
