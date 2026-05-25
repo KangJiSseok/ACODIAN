@@ -110,6 +110,7 @@ ai/
 | `app/chain/tag_merge_chain.py` | 태그 병합 후보 |
 | `app/service/tag_merge_service.py` | 태그 병합 후보 |
 | `app/light/v3/**` | LightRAG v3 업무일지 index/search |
+| `app/graph/v1/**` | GraphRAG v1 업무일지 graph index/search |
 
 ## 공유 파일과 수정 규칙
 
