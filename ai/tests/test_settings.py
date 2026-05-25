@@ -232,3 +232,45 @@ def test_settings_normalizes_gemini_api_key_candidates(monkeypatch) -> None:
     settings = Settings(_env_file=None)
 
     assert settings.gemini_api_key_candidates == ["key-a", "key-b", "key-c"]
+
+
+def test_settings_has_graphrag_defaults(monkeypatch) -> None:
+    """GraphRAG v1 기본 index/query 운영값을 제공해야 한다."""
+    monkeypatch.delenv("GRAPHRAG_WORKSPACE", raising=False)
+    monkeypatch.delenv("GRAPHRAG_INDEX_MAX_BATCH_SIZE", raising=False)
+    monkeypatch.delenv("GRAPHRAG_INSERT_TIMEOUT_SECONDS", raising=False)
+    monkeypatch.delenv("GRAPHRAG_QUERY_TIMEOUT_SECONDS", raising=False)
+    monkeypatch.delenv("GRAPHRAG_QUERY_MAX_DEPTH", raising=False)
+    monkeypatch.delenv("GRAPHRAG_QUERY_LIMIT", raising=False)
+    monkeypatch.delenv("GRAPHRAG_NEO4J_DATABASE", raising=False)
+
+    settings = Settings(_env_file=None)
+
+    assert settings.graphrag_workspace == "worklogs-v1"
+    assert settings.graphrag_index_max_batch_size == 10
+    assert settings.graphrag_insert_timeout_seconds == 120
+    assert settings.graphrag_query_timeout_seconds == 30
+    assert settings.graphrag_query_max_depth == 2
+    assert settings.graphrag_query_limit == 20
+    assert settings.graphrag_neo4j_database == "neo4j"
+
+
+def test_settings_accepts_graphrag_env_override(monkeypatch) -> None:
+    """GraphRAG v1 운영값을 env로 override할 수 있어야 한다."""
+    monkeypatch.setenv("GRAPHRAG_WORKSPACE", "smoke")
+    monkeypatch.setenv("GRAPHRAG_INDEX_MAX_BATCH_SIZE", "3")
+    monkeypatch.setenv("GRAPHRAG_INSERT_TIMEOUT_SECONDS", "10")
+    monkeypatch.setenv("GRAPHRAG_QUERY_TIMEOUT_SECONDS", "7")
+    monkeypatch.setenv("GRAPHRAG_QUERY_MAX_DEPTH", "1")
+    monkeypatch.setenv("GRAPHRAG_QUERY_LIMIT", "4")
+    monkeypatch.setenv("GRAPHRAG_NEO4J_DATABASE", "graph")
+
+    settings = Settings(_env_file=None)
+
+    assert settings.graphrag_workspace == "smoke"
+    assert settings.graphrag_index_max_batch_size == 3
+    assert settings.graphrag_insert_timeout_seconds == 10
+    assert settings.graphrag_query_timeout_seconds == 7
+    assert settings.graphrag_query_max_depth == 1
+    assert settings.graphrag_query_limit == 4
+    assert settings.graphrag_neo4j_database == "graph"
