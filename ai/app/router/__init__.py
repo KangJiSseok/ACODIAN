@@ -14,6 +14,8 @@
 
 from fastapi import APIRouter
 
+from app.graph.v1.router.worklog_index import router as graph_worklogs_v1_router
+from app.graph.v1.router.worklog_query import router as graph_worklogs_v1_query_router
 from app.light.v3.router.worklog_index import router as light_worklogs_v3_router
 from app.light.v3.router.worklog_query import router as light_worklogs_v3_query_router
 from app.router.embedding import router as embedding_router
@@ -34,6 +36,8 @@ api_router.include_router(embedding_router)
 api_router.include_router(search_router)
 api_router.include_router(worklog_polish_router)
 api_router.include_router(file_router)
+api_router.include_router(graph_worklogs_v1_router)
+api_router.include_router(graph_worklogs_v1_query_router)
 api_router.include_router(light_worklogs_v3_router)
 api_router.include_router(light_worklogs_v3_query_router)
 api_router.include_router(tag_merge_router)

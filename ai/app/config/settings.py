@@ -74,6 +74,13 @@ class Settings(BaseSettings):
     lightrag_graph_storage: str = "Neo4JStorage"
     lightrag_neo4j_database: str = "neo4j"
     gemini_api_keys: str = ""                            # 추가 Gemini 프로젝트 키 후보. comma-separated, 실제 키는 env로만 주입한다.
+    graphrag_workspace: str = "worklogs-v1"
+    graphrag_index_max_batch_size: int = 10
+    graphrag_insert_timeout_seconds: int = 120
+    graphrag_query_timeout_seconds: int = 30
+    graphrag_query_max_depth: int = 2
+    graphrag_query_limit: int = 20
+    graphrag_neo4j_database: str = "neo4j"
 
     model_config = SettingsConfigDict(
         # ai/.env 를 자동 로드한다 (없으면 위 기본값을 사용).
