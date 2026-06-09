@@ -14,17 +14,19 @@ from contextlib import asynccontextmanager
 from fastapi import FastAPI
 
 from app.config.settings import settings
+from app.graph.v1.service.graph_rag_adapter import close_graph_rag_worklog_adapter
 from app.light.v3.service.lightrag_adapter import close_lightrag_worklog_index_adapter
 from app.router import api_router
 
 
 @asynccontextmanager
 async def lifespan(_: FastAPI) -> AsyncIterator[None]:
-    """FastAPI 종료 시 LightRAG storage lifecycle을 정리한다."""
+    """FastAPI 종료 시 RAG storage lifecycle을 정리한다."""
     try:
         yield
     finally:
         await close_lightrag_worklog_index_adapter()
+        await close_graph_rag_worklog_adapter()
 
 
 def create_app() -> FastAPI:
