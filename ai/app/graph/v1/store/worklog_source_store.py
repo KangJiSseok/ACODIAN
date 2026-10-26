@@ -22,6 +22,7 @@ class GraphWorklogPredecessor:
     """GraphRAG DEPENDS_ON edge에 포함할 직접 선행 업무일지 정보."""
 
     worklog_id: int
+    team_id: int
     title: str
 
 
@@ -156,6 +157,7 @@ class GraphWorklogSourceStore:
                 select(
                     WorklogDependency.worklog_id,
                     WorklogDependency.depends_on_worklog_id,
+                    Worklog.team_id,
                     Worklog.title,
                 )
                 .join(Worklog, Worklog.worklog_id == WorklogDependency.depends_on_worklog_id)
@@ -170,6 +172,7 @@ class GraphWorklogSourceStore:
             predecessors_by_worklog_id.setdefault(row.worklog_id, []).append(
                 GraphWorklogPredecessor(
                     worklog_id=row.depends_on_worklog_id,
+                    team_id=row.team_id,
                     title=row.title,
                 )
             )

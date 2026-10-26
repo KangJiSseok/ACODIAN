@@ -1,9 +1,16 @@
 import asyncio
-from types import SimpleNamespace
+
+import pytest
 
 from app.config.settings import Settings
-from app.graph.v1.service.worklog_graph_builder import GraphEdge, GraphNode, WorklogGraphDocument
-from app.graph.v1.store.graph_rag_store import GraphRagStore, _records_to_subgraph
+from app.graph.v1.service.worklog_graph_builder import (
+    GraphEdge,
+    GraphNode,
+    GraphRagProvenanceError,
+    WorklogGraphDocument,
+)
+from app.graph.v1.store.graph_rag_store import GraphRagStore
+from app.graph.v1.store.graph_rag_subgraph_mapper import records_to_subgraph
 
 
 class _Tx:
@@ -21,24 +28,58 @@ def test_upsert_nodes_and_edges_uses_parameterized_cypher() -> None:
     asyncio.run(
         GraphRagStore._upsert_nodes_and_edges(
             tx,
-            nodes=[GraphNode(node_id="worklog:101", label="Worklog", properties={"title": "검색어"})],
+            nodes=[
+                GraphNode(
+                    node_id="worklog:101",
+                    label="Worklog",
+                    source_worklog_ids=[101],
+                    source_team_ids=[7],
+                    properties={"title": "검색어"},
+                )
+            ],
             edges=[
                 GraphEdge(
                     edge_id="e1",
                     source_id="worklog:101",
                     target_id="user:5",
                     type="AUTHORED_BY",
+                    source_worklog_ids=[101],
+                    source_team_ids=[7],
                     properties={"worklogId": 101},
                 )
             ],
         )
     )
 
-    assert len(tx.calls) == 2
-    assert "$nodes" in tx.calls[0][0]
-    assert "$edges" in tx.calls[1][0]
-    assert "검색어" not in tx.calls[0][0]
-    assert tx.calls[0][1]["nodes"][0]["properties"] == {"title": "검색어"}
+    assert len(tx.calls) == 3
+    assert tx.calls[0][1] == {"root_id": "worklog:101"}
+    assert "$nodes" in tx.calls[1][0]
+    assert "$edges" in tx.calls[2][0]
+    assert "coalesce(n.sourceWorklogIds, []) AS existingSourceWorklogIds" in tx.calls[1][0]
+    assert "coalesce(n.sourceTeamIds, []) AS existingSourceTeamIds" in tx.calls[1][0]
+    assert "n.sourceWorklogIds = existingSourceWorklogIds" in tx.calls[1][0]
+    assert "n.sourceTeamIds = existingSourceTeamIds" in tx.calls[1][0]
+    assert "NOT id IN existingSourceWorklogIds" in tx.calls[1][0]
+    assert "NOT id IN existingSourceTeamIds" in tx.calls[1][0]
+    assert "coalesce(r.sourceWorklogIds, []) AS existingSourceWorklogIds" in tx.calls[2][0]
+    assert "coalesce(r.sourceTeamIds, []) AS existingSourceTeamIds" in tx.calls[2][0]
+    assert "r.sourceWorklogIds = existingSourceWorklogIds" in tx.calls[2][0]
+    assert "r.sourceTeamIds = existingSourceTeamIds" in tx.calls[2][0]
+    assert "NOT id IN existingSourceWorklogIds" in tx.calls[2][0]
+    assert "NOT id IN existingSourceTeamIds" in tx.calls[2][0]
+    assert "검색어" not in tx.calls[1][0]
+    assert tx.calls[1][1]["nodes"][0]["properties"] == {
+        "title": "검색어",
+        "sourceWorklogIds": [101],
+        "sourceTeamIds": [7],
+    }
+
+
+def test_deleted_worklog_graph_uses_bound_id() -> None:
+    tx = _Tx()
+    asyncio.run(GraphRagStore._delete_worklog_node(tx, 101))
+    assert tx.calls[0][1] == {"root_id": "worklog:101"}
+    assert "DETACH DELETE root" in tx.calls[0][0]
 
 
 def test_query_subgraph_passes_user_input_as_params() -> None:
@@ -112,6 +153,37 @@ def test_query_subgraph_bounds_depth_with_static_cypher() -> None:
     assert "GRAPH_RAG_EDGE*0..3" in tx.cyphers[0]
 
 
+def test_cross_team_predecessor_scope_is_applied_to_related_worklog_nodes() -> None:
+    cypher = GraphRagStore._query_subgraph
+
+    class _Result:
+        def __aiter__(self):
+            self._iter = iter([])
+            return self
+
+        async def __anext__(self):
+            try:
+                return next(self._iter)
+            except StopIteration as exc:
+                raise StopAsyncIteration from exc
+
+    class _QueryTx:
+        def __init__(self) -> None:
+            self.call: tuple[str, dict] | None = None
+
+        async def run(self, query: str, **params):
+            self.call = (query, params)
+            return _Result()
+
+    tx = _QueryTx()
+    asyncio.run(cypher(tx, query="정산", allowed_team_ids=[7], max_depth=2, limit=3))
+
+    assert tx.call is not None
+    query, params = tx.call
+    assert params["allowed_team_ids"] == [7]
+    assert "all(node IN path_nodes WHERE node.worklogId IS NULL OR node.teamId IN $allowed_team_ids)" in query
+
+
 def test_records_to_subgraph_normalizes_neo4j_relationship_like_entities() -> None:
     class _Entity:
         def __init__(self, **properties) -> None:
@@ -129,22 +201,60 @@ def test_records_to_subgraph_normalizes_neo4j_relationship_like_entities() -> No
             self.start_node = start_node
             self.end_node = end_node
 
-    root = _Entity(id="worklog:2050", labels=["Worklog"], worklogId=2050, title="타임아웃")
-    user = _Entity(id="user:202", labels=["User"], userId=202)
+    root = _Entity(
+        id="worklog:2050",
+        labels=["Worklog"],
+        worklogId=2050,
+        teamId=7,
+        sourceWorklogIds=[2050],
+        sourceTeamIds=[7],
+        title="타임아웃",
+    )
+    user = _Entity(
+        id="user:202",
+        labels=["User"],
+        userId=202,
+        sourceWorklogIds=[2050],
+        sourceTeamIds=[7],
+    )
     edge = _Relationship(
         root,
         user,
         id="worklog:2050:AUTHORED_BY:user:202",
         type="AUTHORED_BY",
         worklogId=2050,
+        teamId=7,
+        sourceWorklogIds=[2050],
+        sourceTeamIds=[7],
     )
 
-    subgraph = _records_to_subgraph([{"root": root, "nodes": [root, user], "edges": [edge]}])
+    subgraph = records_to_subgraph([{"root": root, "nodes": [root, user], "edges": [edge]}])
 
     assert [node.node_id for node in subgraph.nodes] == ["worklog:2050", "user:202"]
+    assert subgraph.nodes[0].source_worklog_ids == [2050]
+    assert subgraph.nodes[0].source_team_ids == [7]
     assert subgraph.edges[0].source_id == "worklog:2050"
     assert subgraph.edges[0].target_id == "user:202"
     assert subgraph.edges[0].type == "AUTHORED_BY"
+    assert subgraph.edges[0].source_worklog_ids == [2050]
+    assert subgraph.edges[0].source_team_ids == [7]
+
+
+def test_records_to_subgraph_does_not_promote_legacy_ids_to_provenance() -> None:
+    record = {
+        "root": {
+            "id": "worklog:999",
+            "labels": ["Worklog"],
+            "worklogId": 999,
+            "teamId": 7,
+            "title": "legacy missing explicit provenance",
+        },
+        "nodes": [],
+        "edges": [],
+    }
+
+    with pytest.raises(GraphRagProvenanceError):
+        records_to_subgraph([record])
 
 
 def test_upsert_worklog_graph_closes_driver() -> None:
@@ -181,9 +291,17 @@ def test_upsert_worklog_graph_closes_driver() -> None:
         store.upsert_worklog_graph(
             WorklogGraphDocument(
                 worklog_id=101,
-                nodes=[GraphNode(node_id="worklog:101", label="Worklog", properties={})],
-                edges=[],
-            )
+            nodes=[
+                GraphNode(
+                    node_id="worklog:101",
+                    label="Worklog",
+                    source_worklog_ids=[101],
+                    source_team_ids=[7],
+                    properties={},
+                )
+            ],
+            edges=[],
+        )
         )
     )
     asyncio.run(store.close())

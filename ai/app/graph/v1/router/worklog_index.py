@@ -1,13 +1,21 @@
 """GraphRAG v1 업무일지 index 라우터."""
 
+import time
 from typing import Annotated
 
 from fastapi import APIRouter, Depends, HTTPException, status
 
 from app.config.settings import settings
-from app.graph.v1.model.worklog_index import WorklogGraphIndexRequest, WorklogGraphIndexResponse
+from app.graph.v1.model.worklog_index import (
+    WorklogGraphIndexQueueRequest,
+    WorklogGraphIndexQueueResponse,
+    WorklogGraphIndexRequest,
+    WorklogGraphIndexResponse,
+)
 from app.graph.v1.service.worklog_index_service import GraphWorklogIndexService
 from app.graph.v1.store.graph_rag_store import GraphRagConfigurationError
+from app.task.graph_index_tasks import index_graph_worklog
+from app.task.embedding_tasks import generate_worklog_embedding
 
 router = APIRouter(prefix="/graph/worklogs-v1", tags=["graph-worklogs-v1"])
 
@@ -26,6 +34,22 @@ def validate_index_batch_size(worklog_ids: list[int]) -> None:
             status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
             detail="worklogIds exceeds GRAPHRAG_INDEX_MAX_BATCH_SIZE",
         )
+
+
+@router.post(
+    "/index-requests",
+    response_model=WorklogGraphIndexQueueResponse,
+    status_code=status.HTTP_202_ACCEPTED,
+)
+async def enqueue_worklogs(request: WorklogGraphIndexQueueRequest) -> WorklogGraphIndexQueueResponse:
+    """커밋된 업무일지 ID를 Graph/embedding worker에 등록한다."""
+    ids = [int(worklog_id) for worklog_id in request.worklog_ids]
+    validate_index_batch_size(ids)
+    for worklog_id in ids:
+        index_graph_worklog.delay(worklog_id, int(time.time() * 1000))
+        if request.refresh_embedding:
+            generate_worklog_embedding.delay(worklog_id)
+    return WorklogGraphIndexQueueResponse(queued=len(ids))
 
 
 @router.post("/index", response_model=WorklogGraphIndexResponse)

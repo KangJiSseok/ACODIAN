@@ -3,12 +3,15 @@
 from __future__ import annotations
 
 import asyncio
-from collections.abc import Callable
 from dataclasses import dataclass
+from collections.abc import Callable
 from typing import Any, Protocol
 
 from app.config.settings import Settings, settings
 from app.graph.v1.service.worklog_graph_builder import GraphEdge, GraphNode, WorklogGraphDocument
+from app.graph.v1.store.graph_rag_subgraph_mapper import records_to_subgraph
+from app.graph.v1.store.graph_rag_subgraph_query import select_subgraph_cypher
+from app.graph.v1.store.graph_rag_types import GraphRagSubgraph
 
 
 class GraphRagConfigurationError(RuntimeError):
@@ -39,15 +42,46 @@ class AsyncGraphDriver(Protocol):
     async def close(self) -> None: ...
 
 
-@dataclass(frozen=True)
-class GraphRagSubgraph:
-    """GraphRAG query 결과로 회수한 subgraph."""
-
-    nodes: list[GraphNode]
-    edges: list[GraphEdge]
-
-
 DriverFactory = Callable[[], AsyncGraphDriver]
+
+
+@dataclass(frozen=True)
+class GraphWorklogLink:
+    source_id: int
+    target_id: int
+    relation: str
+
+
+_RELATED_WORKLOGS_CYPHER = """
+UNWIND $root_ids AS rootId
+MATCH (root:GraphRagEntity {id: 'worklog:' + toString(rootId)})
+WHERE root.worklogId = rootId AND root.teamId IS NOT NULL
+  AND ($allowed_team_ids IS NULL OR root.teamId IN $allowed_team_ids)
+CALL (root) {
+  MATCH (root)-[edge:GRAPH_RAG_EDGE {type:'DEPENDS_ON'}]->(related:GraphRagEntity)
+        -[authorEdge:GRAPH_RAG_EDGE {type:'AUTHORED_BY'}]->(author:GraphRagEntity)
+  WHERE related.worklogId IS NOT NULL AND related.teamId IS NOT NULL
+    AND root.worklogId IN edge.sourceWorklogIds AND related.worklogId IN edge.sourceWorklogIds
+    AND author.userId IS NOT NULL AND related.worklogId IN authorEdge.sourceWorklogIds
+    AND size(authorEdge.sourceTeamIds) > 0
+    AND ($allowed_team_ids IS NULL OR all(t IN authorEdge.sourceTeamIds WHERE t IN $allowed_team_ids))
+  RETURN related, edge.type AS relation, edge.sourceTeamIds AS teams
+  UNION
+  MATCH (root)-[first:GRAPH_RAG_EDGE]->(shared:GraphRagEntity)<-[second:GRAPH_RAG_EDGE]-(related:GraphRagEntity)
+  WHERE first.type IN ['AUTHORED_BY', 'HAS_TAG'] AND second.type = first.type
+    AND related.worklogId IS NOT NULL AND related.id <> root.id
+    AND root.worklogId IN first.sourceWorklogIds
+    AND related.worklogId IN second.sourceWorklogIds
+    AND size(first.sourceTeamIds) > 0
+    AND ($allowed_team_ids IS NULL OR all(t IN first.sourceTeamIds WHERE t IN $allowed_team_ids))
+  RETURN related, first.type AS relation, second.sourceTeamIds AS teams
+}
+WITH root, related, relation, teams
+WHERE size(teams) > 0 AND related.teamId IS NOT NULL
+  AND ($allowed_team_ids IS NULL OR (related.teamId IN $allowed_team_ids AND all(t IN teams WHERE t IN $allowed_team_ids)))
+RETURN DISTINCT root.worklogId AS sourceId, related.worklogId AS targetId, relation
+LIMIT $limit
+"""
 
 
 class GraphRagStore:
@@ -79,6 +113,8 @@ class GraphRagStore:
         self._driver = AsyncGraphDatabase.driver(
             self._settings.neo4j_uri,
             auth=(self._settings.neo4j_user, self._settings.neo4j_password),
+            connection_timeout=2.0,
+            max_transaction_retry_time=2.0,
         )
         return self._driver
 
@@ -104,21 +140,79 @@ class GraphRagStore:
         async with driver.session(database=self._settings.graphrag_neo4j_database) as session:
             await session.execute_write(self._upsert_nodes_and_edges, document.nodes, document.edges)
 
+    async def fetch_worklog_links(
+        self, root_ids: list[int], allowed_team_ids: list[int] | None, limit: int
+    ) -> list[GraphWorklogLink]:
+        """허용 범위에서 최대 2홉 관계의 ID와 종류만 읽는다."""
+        if not root_ids:
+            return []
+        try:
+            return await asyncio.wait_for(
+                self._fetch_worklog_links(root_ids, allowed_team_ids, limit),
+                timeout=self._settings.graphrag_query_timeout_seconds,
+            )
+        except TimeoutError as exc:
+            raise GraphRagQueryTimeoutError("GraphRAG query timeout") from exc
+        except GraphRagConfigurationError:
+            raise
+        except Exception as exc:
+            raise GraphRagQueryFailedError("GraphRAG query failed") from exc
+
+    async def _fetch_worklog_links(
+        self, root_ids: list[int], allowed_team_ids: list[int] | None, limit: int
+    ) -> list[GraphWorklogLink]:
+        driver = self._get_driver()
+        async with driver.session(database=self._settings.graphrag_neo4j_database) as session:
+            return await session.execute_read(
+                self._query_worklog_links, root_ids, allowed_team_ids, limit
+            )
+
+    @staticmethod
+    async def _query_worklog_links(
+        tx: Any, root_ids: list[int], allowed_team_ids: list[int] | None, limit: int
+    ) -> list[GraphWorklogLink]:
+        result = await tx.run(
+            _RELATED_WORKLOGS_CYPHER,
+            root_ids=root_ids,
+            allowed_team_ids=allowed_team_ids,
+            limit=limit,
+        )
+        return [
+            GraphWorklogLink(int(row["sourceId"]), int(row["targetId"]), row["relation"])
+            async for row in result
+        ]
+
     @staticmethod
     async def _upsert_nodes_and_edges(tx: Any, nodes: list[GraphNode], edges: list[GraphEdge]) -> None:
         """Node/edge payload를 parameterized Cypher로 upsert한다."""
+        root_id = next(node.node_id for node in nodes if node.label == "Worklog")
+        await tx.run(
+            "MATCH (root:GraphRagEntity {id: $root_id})-[edge:GRAPH_RAG_EDGE]->() DELETE edge",
+            root_id=root_id,
+        )
         await tx.run(
             """
             UNWIND $nodes AS node
             MERGE (n:GraphRagEntity {id: node.id})
+            WITH n, node,
+                 coalesce(n.sourceWorklogIds, []) AS existingSourceWorklogIds,
+                 coalesce(n.sourceTeamIds, []) AS existingSourceTeamIds
             SET n.labels = node.labels,
                 n += node.properties
+            SET n.sourceWorklogIds = existingSourceWorklogIds
+                + [id IN node.properties.sourceWorklogIds WHERE NOT id IN existingSourceWorklogIds],
+                n.sourceTeamIds = existingSourceTeamIds
+                + [id IN node.properties.sourceTeamIds WHERE NOT id IN existingSourceTeamIds]
             """,
             nodes=[
                 {
                     "id": node.node_id,
                     "labels": [node.label],
-                    "properties": node.properties,
+                    "properties": {
+                        **node.properties,
+                        "sourceWorklogIds": node.source_worklog_ids,
+                        "sourceTeamIds": node.source_team_ids,
+                    },
                 }
                 for node in nodes
             ],
@@ -129,8 +223,15 @@ class GraphRagStore:
             MATCH (source:GraphRagEntity {id: edge.source_id})
             MATCH (target:GraphRagEntity {id: edge.target_id})
             MERGE (source)-[r:GRAPH_RAG_EDGE {id: edge.id}]->(target)
+            WITH r, edge,
+                 coalesce(r.sourceWorklogIds, []) AS existingSourceWorklogIds,
+                 coalesce(r.sourceTeamIds, []) AS existingSourceTeamIds
             SET r.type = edge.type,
                 r += edge.properties
+            SET r.sourceWorklogIds = existingSourceWorklogIds
+                + [id IN edge.properties.sourceWorklogIds WHERE NOT id IN existingSourceWorklogIds],
+                r.sourceTeamIds = existingSourceTeamIds
+                + [id IN edge.properties.sourceTeamIds WHERE NOT id IN existingSourceTeamIds]
             """,
             edges=[
                 {
@@ -138,10 +239,27 @@ class GraphRagStore:
                     "source_id": edge.source_id,
                     "target_id": edge.target_id,
                     "type": edge.type,
-                    "properties": edge.properties,
+                    "properties": {
+                        **edge.properties,
+                        "sourceWorklogIds": edge.source_worklog_ids,
+                        "sourceTeamIds": edge.source_team_ids,
+                    },
                 }
                 for edge in edges
             ],
+        )
+
+    async def delete_worklog_graph(self, worklog_id: int) -> None:
+        """원장에서 사라진 업무일지의 그래프 노드와 연결 관계를 제거한다."""
+        driver = self._get_driver()
+        async with driver.session(database=self._settings.graphrag_neo4j_database) as session:
+            await session.execute_write(self._delete_worklog_node, worklog_id)
+
+    @staticmethod
+    async def _delete_worklog_node(tx: Any, worklog_id: int) -> None:
+        await tx.run(
+            "MATCH (root:GraphRagEntity {id: $root_id}) DETACH DELETE root",
+            root_id=f"worklog:{worklog_id}",
         )
 
     async def fetch_worklog_subgraph(
@@ -188,7 +306,7 @@ class GraphRagStore:
                 max_depth,
                 limit,
             )
-        return _records_to_subgraph(records)
+        return records_to_subgraph(records)
 
     @staticmethod
     async def _query_subgraph(
@@ -200,7 +318,7 @@ class GraphRagStore:
     ) -> list[dict[str, Any]]:
         """사용자 입력을 parameter로만 전달해 subgraph를 조회한다."""
         result = await tx.run(
-            _select_subgraph_cypher(max_depth),
+            select_subgraph_cypher(max_depth),
             search_text=query.strip(),
             allowed_team_ids=allowed_team_ids,
             limit=limit,
@@ -219,124 +337,3 @@ class GraphRagStore:
         if self._driver is not None:
             await self._driver.close()
             self._driver = None
-
-
-_SUBGRAPH_CYPHER_BY_DEPTH = {
-    1: """
-    MATCH (worklog:GraphRagEntity)
-    WHERE worklog.worklogId IS NOT NULL
-      AND (
-        $search_text = ""
-        OR toLower(coalesce(worklog.title, "")) CONTAINS toLower($search_text)
-        OR toLower(coalesce(worklog.workContent, "")) CONTAINS toLower($search_text)
-      )
-      AND (
-        $allowed_team_ids IS NULL
-        OR worklog.teamId IN $allowed_team_ids
-      )
-    OPTIONAL MATCH path = (worklog)-[edge:GRAPH_RAG_EDGE*0..1]-(related:GraphRagEntity)
-    WITH worklog, nodes(path) AS path_nodes, relationships(path) AS path_edges
-    LIMIT $limit
-    RETURN worklog AS root, path_nodes AS nodes, path_edges AS edges
-    """,
-    2: """
-    MATCH (worklog:GraphRagEntity)
-    WHERE worklog.worklogId IS NOT NULL
-      AND (
-        $search_text = ""
-        OR toLower(coalesce(worklog.title, "")) CONTAINS toLower($search_text)
-        OR toLower(coalesce(worklog.workContent, "")) CONTAINS toLower($search_text)
-      )
-      AND (
-        $allowed_team_ids IS NULL
-        OR worklog.teamId IN $allowed_team_ids
-      )
-    OPTIONAL MATCH path = (worklog)-[edge:GRAPH_RAG_EDGE*0..2]-(related:GraphRagEntity)
-    WITH worklog, nodes(path) AS path_nodes, relationships(path) AS path_edges
-    LIMIT $limit
-    RETURN worklog AS root, path_nodes AS nodes, path_edges AS edges
-    """,
-    3: """
-    MATCH (worklog:GraphRagEntity)
-    WHERE worklog.worklogId IS NOT NULL
-      AND (
-        $search_text = ""
-        OR toLower(coalesce(worklog.title, "")) CONTAINS toLower($search_text)
-        OR toLower(coalesce(worklog.workContent, "")) CONTAINS toLower($search_text)
-      )
-      AND (
-        $allowed_team_ids IS NULL
-        OR worklog.teamId IN $allowed_team_ids
-      )
-    OPTIONAL MATCH path = (worklog)-[edge:GRAPH_RAG_EDGE*0..3]-(related:GraphRagEntity)
-    WITH worklog, nodes(path) AS path_nodes, relationships(path) AS path_edges
-    LIMIT $limit
-    RETURN worklog AS root, path_nodes AS nodes, path_edges AS edges
-    """,
-}
-
-
-def _select_subgraph_cypher(max_depth: int) -> str:
-    """Cypher path depth를 안전한 상수 query 중 하나로 선택한다."""
-    bounded_depth = min(max(max_depth, 1), max(_SUBGRAPH_CYPHER_BY_DEPTH))
-    return _SUBGRAPH_CYPHER_BY_DEPTH[bounded_depth]
-
-
-def _node_to_graph_node(raw: Any) -> GraphNode:
-    """Neo4j node-like 객체를 GraphNode로 정규화한다."""
-    properties = _graph_entity_properties(raw)
-    node_id = str(properties.pop("id"))
-    labels = properties.pop("labels", [])
-    label = labels[0] if labels else "GraphRagEntity"
-    return GraphNode(node_id=node_id, label=label, properties=properties)
-
-
-def _edge_to_graph_edge(raw: Any) -> GraphEdge:
-    """Neo4j relationship-like 객체를 GraphEdge로 정규화한다."""
-    properties = _graph_entity_properties(raw)
-    edge_id = str(properties.pop("id"))
-    source_id = str(_graph_entity_id(getattr(raw, "start_node", None)) or properties.pop("sourceId", ""))
-    target_id = str(_graph_entity_id(getattr(raw, "end_node", None)) or properties.pop("targetId", ""))
-    edge_type = str(properties.pop("type", "GRAPH_RAG_EDGE"))
-    return GraphEdge(
-        edge_id=edge_id,
-        source_id=source_id,
-        target_id=target_id,
-        type=edge_type,
-        properties=properties,
-    )
-
-
-def _graph_entity_properties(raw: Any) -> dict[str, Any]:
-    """Neo4j Node/Relationship 또는 dict-like 객체의 properties를 dict로 변환한다."""
-    if isinstance(raw, dict):
-        return dict(raw)
-    if hasattr(raw, "items"):
-        return dict(raw.items())
-    return dict(raw)
-
-
-def _graph_entity_id(raw: Any) -> Any:
-    """Neo4j endpoint node에서 GraphRAG entity id property를 추출한다."""
-    if raw is None:
-        return None
-    return _graph_entity_properties(raw).get("id")
-
-
-def _records_to_subgraph(records: list[dict[str, Any]]) -> GraphRagSubgraph:
-    """Neo4j record list를 중복 제거된 GraphRAG subgraph로 변환한다."""
-    nodes_by_id: dict[str, GraphNode] = {}
-    edges_by_id: dict[str, GraphEdge] = {}
-    for record in records:
-        raw_nodes = [record.get("root"), *record.get("nodes", [])]
-        for raw_node in raw_nodes:
-            if raw_node is None:
-                continue
-            node = _node_to_graph_node(raw_node)
-            nodes_by_id[node.node_id] = node
-        for raw_edge in record.get("edges", []):
-            if raw_edge is None:
-                continue
-            edge = _edge_to_graph_edge(raw_edge)
-            edges_by_id[edge.edge_id] = edge
-    return GraphRagSubgraph(nodes=list(nodes_by_id.values()), edges=list(edges_by_id.values()))

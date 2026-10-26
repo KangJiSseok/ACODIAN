@@ -1,0 +1,8 @@
+[
+  {"query": "A 업무의 선행 업무 담당자는 누구야?", "relation": true, "similarity": false},
+  {"query": "재고 실사 오류와 비슷한 과거 업무일지를 찾아줘", "relation": false, "similarity": true},
+  {"query": "A 업무의 선행 업무 담당자와 비슷한 사례를 찾아줘", "relation": true, "similarity": true},
+  {"query": "이 건은 어떻게 됐어?", "relation": true, "similarity": true},
+  {"query": "정산 배치 지연과 유사한 해결 사례가 있어?", "relation": false, "similarity": true},
+  {"query": "A 업무가 의존하는 업무는 무엇이야?", "relation": true, "similarity": false}
+]

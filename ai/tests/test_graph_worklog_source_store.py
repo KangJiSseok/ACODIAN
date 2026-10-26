@@ -59,7 +59,7 @@ def test_fetch_worklog_sources_batches_base_tags_and_direct_predecessors() -> No
             assert "tb_worklog_dependency.worklog_id IN" in compiled
             assert "tb_worklog.is_deleted IS false" in compiled
             return _Result(
-                [SimpleNamespace(worklog_id=101, depends_on_worklog_id=88, title="직접 선행")]
+                [SimpleNamespace(worklog_id=101, depends_on_worklog_id=88, team_id=7, title="직접 선행")]
             )
 
     session = _Session()
@@ -78,6 +78,6 @@ def test_fetch_worklog_sources_batches_base_tags_and_direct_predecessors() -> No
         GraphWorklogTag(tag_id=11, tag_name="정산", description="정산 배치와 대사 업무")
     ]
     assert sources[101].direct_predecessors == [
-        GraphWorklogPredecessor(worklog_id=88, title="직접 선행")
+        GraphWorklogPredecessor(worklog_id=88, team_id=7, title="직접 선행")
     ]
     assert len(session.compiled_statements) == 3

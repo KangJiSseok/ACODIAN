@@ -49,6 +49,10 @@ class GraphWorklogIndexService:
     async def index_worklogs(self, worklog_ids: list[int]) -> WorklogGraphIndexResponse:
         """요청된 업무일지 ID 순서대로 GraphRAG index 결과를 반환한다."""
         prepared = await self.prepare_documents(worklog_ids)
+        if prepared.missing_worklog_ids:
+            adapter = get_graph_rag_worklog_adapter()
+            for worklog_id in prepared.missing_worklog_ids:
+                await adapter.delete_worklog_graph(worklog_id)
         failed_found_ids = await self._index_found_documents(prepared)
 
         missing_worklog_ids = set(prepared.missing_worklog_ids)

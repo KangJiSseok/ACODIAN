@@ -17,7 +17,7 @@ def make_source_row(worklog_id: int) -> GraphWorklogSourceRow:
         team_id=7,
         team_name="정산 고도화 TF",
         tags=[GraphWorklogTag(tag_id=11, tag_name="정산", description=None)],
-        direct_predecessors=[GraphWorklogPredecessor(worklog_id=88, title="직접 선행")],
+        direct_predecessors=[GraphWorklogPredecessor(worklog_id=88, team_id=7, title="직접 선행")],
     )
 
 
@@ -61,6 +61,10 @@ def test_index_service_maps_missing_and_per_item_failures(monkeypatch) -> None:
                 raise GraphRagIndexTimeoutError("timeout")
             if document.worklog_id == 103:
                 raise GraphRagIndexFailedError("failed")
+
+
+        async def delete_worklog_graph(self, worklog_id: int) -> None:
+            assert worklog_id == 102
 
     async def run_case() -> None:
         monkeypatch.setattr(service_module, "WorklogGraphSourceRowReader", _Reader)

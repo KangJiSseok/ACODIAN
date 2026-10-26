@@ -81,6 +81,9 @@ class Settings(BaseSettings):
     graphrag_query_max_depth: int = 2
     graphrag_query_limit: int = 20
     graphrag_neo4j_database: str = "neo4j"
+    graphrag_router_mode: str = "shadow"
+    jev_url: str = "http://localhost:8017"
+    jev_timeout_seconds: float = 5.0
 
     model_config = SettingsConfigDict(
         # ai/.env 를 자동 로드한다 (없으면 위 기본값을 사용).
