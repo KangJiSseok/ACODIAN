@@ -3,6 +3,7 @@ package com.ibank.axwms.domain.worklog.controller;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.BDDMockito.given;
 import static org.mockito.BDDMockito.then;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.patch;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
@@ -17,7 +18,7 @@ import com.ibank.axwms.domain.worklog.dto.SearchSemanticWorklogsApiDto;
 import com.ibank.axwms.domain.worklog.dto.SearchWorklogsApiDto;
 import com.ibank.axwms.domain.worklog.dto.UpdateWorklogStatusApiDto;
 import com.ibank.axwms.domain.worklog.service.WorklogService;
-import com.ibank.axwms.domain.worklog.service.search.LightRagWorklogSearchService;
+import com.ibank.axwms.domain.worklog.service.search.GraphRagWorklogSearchService;
 import com.ibank.axwms.domain.worklog.service.search.WorklogSearchService;
 import com.ibank.axwms.global.response.EmptyResponse;
 import com.ibank.axwms.global.response.GlobalResponseAdvice;
@@ -56,7 +57,7 @@ class WorklogControllerTest {
     private WorklogSearchService keywordWorklogSearchService;
 
     @Mock
-    private LightRagWorklogSearchService lightRagWorklogSearchService;
+    private GraphRagWorklogSearchService graphRagWorklogSearchService;
 
     @InjectMocks
     private WorklogController worklogController;
@@ -254,6 +255,55 @@ class WorklogControllerTest {
         assertThat(getMapping.value()).containsExactly("/search/semantic");
         assertThat(preAuthorize).isNotNull();
         assertThat(preAuthorize.value()).isEqualTo("hasAnyRole('DIRECTOR','DEPT_HEAD','TEAM_LEAD','MEMBER')");
+    }
+
+    @Test
+    @DisplayName("시맨틱 검색 메서드는 GraphRAG 검색 서비스로 위임한다")
+    void 시맨틱_검색_메서드는_GraphRAG_검색_서비스로_위임한다() {
+        CustomUserPrincipal principal = new CustomUserPrincipal(101L, "member@ibank.com", "MEMBER");
+        SearchSemanticWorklogsApiDto.Request request = new SearchSemanticWorklogsApiDto.Request("결산 업무 알려줘");
+        SearchSemanticWorklogsApiDto.Response expected = new SearchSemanticWorklogsApiDto.Response(
+                "결산 보고서 작성 업무가 있습니다.",
+                List.of(new SearchSemanticWorklogsApiDto.Reference("ref-a", "worklog://502"))
+        );
+        given(graphRagWorklogSearchService.searchWorklogs(principal, request)).willReturn(expected);
+
+        SearchSemanticWorklogsApiDto.Response response = worklogController.searchSemanticWorklogs(principal, request);
+
+        assertThat(response).isEqualTo(expected);
+        then(graphRagWorklogSearchService).should().searchWorklogs(principal, request);
+    }
+
+    @Test
+    @DisplayName("시맨틱 검색 HTTP 요청은 query 만 공개 계약으로 받아 전역 응답 형식을 유지한다")
+    void 시맨틱_검색_HTTP_요청은_query만_공개_계약으로_받아_전역_응답_형식을_유지한다() throws Exception {
+        SearchSemanticWorklogsApiDto.Response expected = new SearchSemanticWorklogsApiDto.Response(
+                "결산 보고서 작성 업무가 있습니다.",
+                List.of(new SearchSemanticWorklogsApiDto.Reference("ref-a", "worklog://502"))
+        );
+        given(graphRagWorklogSearchService.searchWorklogs(
+                new CustomUserPrincipal(null, null, null),
+                new SearchSemanticWorklogsApiDto.Request("결산 업무 알려줘")
+        )).willReturn(expected);
+
+        MvcResult result = mockMvc.perform(get("/worklogs/search/semantic")
+                        .param("query", "결산 업무 알려줘")
+                        .param("allowedTeamIds", "999")
+                        .param("teamIds", "999"))
+                .andExpect(status().isOk())
+                .andReturn();
+
+        JsonNode json = objectMapper.readTree(result.getResponse().getContentAsString());
+        JsonNode data = json.get("data");
+
+        assertThat(json.get("success").asBoolean()).isTrue();
+        assertThat(data.get("answer").asText()).isEqualTo("결산 보고서 작성 업무가 있습니다.");
+        assertThat(data.get("references").get(0).get("filePath").asText()).isEqualTo("worklog://502");
+        assertThat(json.get("timestamp").asText()).isNotBlank();
+        then(graphRagWorklogSearchService).should().searchWorklogs(
+                new CustomUserPrincipal(null, null, null),
+                new SearchSemanticWorklogsApiDto.Request("결산 업무 알려줘")
+        );
     }
 
     @Test
