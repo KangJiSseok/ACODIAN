@@ -16,6 +16,7 @@ require_var DEPLOY_ROOT
 require_var API_IMAGE
 require_var WEB_IMAGE
 require_var AI_IMAGE
+require_var JEV_IMAGE
 require_var GHCR_USER
 require_var GHCR_TOKEN
 
@@ -40,6 +41,7 @@ export APP_ENV
 export API_IMAGE
 export WEB_IMAGE
 export AI_IMAGE
+export JEV_IMAGE
 
 echo "[remote-deploy] pre-deploy state"
 docker compose \
@@ -52,19 +54,19 @@ docker compose \
   --env-file "$ENV_FILE" \
   -f "$COMPOSE_FILE" \
   -p "$PROJECT_NAME" \
-  pull api web ai ai_worker
+  pull api web ai ai_worker jevos
 
 docker compose \
   --env-file "$ENV_FILE" \
   -f "$COMPOSE_FILE" \
   -p "$PROJECT_NAME" \
-  rm -sf api web ai ai_worker || true
+  rm -sf api web ai ai_worker jevos || true
 
 docker compose \
   --env-file "$ENV_FILE" \
   -f "$COMPOSE_FILE" \
   -p "$PROJECT_NAME" \
-  up -d --remove-orphans postgres redis qdrant neo4j api web ai ai_worker
+  up -d --remove-orphans postgres redis qdrant neo4j jevos api web ai ai_worker
 
 echo "[remote-deploy] post-deploy state"
 docker compose \
