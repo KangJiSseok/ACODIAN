@@ -120,7 +120,7 @@ public interface WorklogControllerDocs {
     );
 
     @Operation(summary = "업무일지 시맨틱 검색",
-            description = "검색어와 접근 가능한 팀 범위를 LightRAG v3 업무일지 query API에 전달하고, "
+            description = "검색어와 서버가 계산한 접근 가능 범위를 GraphRAG 업무일지 query API에 전달하고, "
                     + "AI 서버가 반환한 answer와 references를 반환한다. "
                     + "page/pageSize는 적용하지 않는다.")
     @SecurityRequirement(name = "bearerAuth")

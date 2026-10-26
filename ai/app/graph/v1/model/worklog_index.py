@@ -33,3 +33,13 @@ class WorklogGraphIndexResponse(BaseModel):
     model_config = ConfigDict(populate_by_name=True)
 
     items: list[WorklogGraphIndexItem]
+
+
+class WorklogGraphIndexQueueRequest(WorklogGraphIndexRequest):
+    """커밋 후 큐 등록 요청. 본문이 바뀐 경우 embedding도 교체한다."""
+
+    refresh_embedding: bool = Field(default=False, alias="refreshEmbedding")
+
+
+class WorklogGraphIndexQueueResponse(BaseModel):
+    queued: int = Field(ge=1)

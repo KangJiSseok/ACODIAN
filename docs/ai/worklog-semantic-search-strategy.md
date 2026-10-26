@@ -3,43 +3,55 @@
 ## 목적
 
 이 문서는 `tb_worklog_embedding`에 저장된 업무일지 vector를 어떻게 검색하는지 기록한다.
-현재 목표는 GraphRAG 전 단계인 **시맨틱 검색 API와 수동 평가 기반**을 만드는 것이다.
+현재 검색 경로는 GraphRAG v1 업무일지 query API가 권한 범위를 먼저 적용한 corpus를 만든 뒤
+Local/BYOG 문맥을 구성하는 방식으로 확장되었다.
 
 검색 결과 품질은 이후 chunking/embedding 방식 변경 시 이 문서를 기준으로 비교한다.
 
 ## 현재 범위
 
-이번 검색 MR은 다음만 다룬다.
+현재 검색 범위는 다음을 다룬다.
 
-- 검색어를 Gemini embedding vector로 변환
-- `tb_worklog_embedding`에서 pgvector cosine distance로 유사 chunk 검색
-- worklog별 가장 가까운 chunk 1개만 결과로 반환
-- API 서버 DTO에서 받을 수 있는 구조적 필터 적용
+- jevos O/X 두 질문으로 관계·유사도 경로를 관찰하고, 불확실하면 두 경로를 실행
+- 유사도 경로는 검색어를 Gemini embedding vector로 변환하고 `tb_worklog_embedding`에서 pgvector 후보를 넉넉히 검색
+- 허용된 후보 ID를 Neo4j에서 최대 2홉 확장하고 관계 질문은 정확한 제목 식별 후 고정 Cypher로 선행 업무를 조회
+- API 서버가 계산한 명시적 GraphRAG scope 계약 적용
+- scope 적용 후 허용된 업무일지, 선행 업무, 작성자/팀/태그 메타데이터만 graph context 로 변환
+- provenance 가 검증된 node/edge/reference/text unit 만 응답에 포함
 - 수동 평가용 질의 fixture와 CLI 추가
 
 아직 다루지 않는 범위:
 
-- API 서버의 기존 `SearchService`와 실제 end-to-end 연동
-- GraphRAG / Neo4j 기반 관계 확장
+- shared all-team GraphRAG Global/DRIFT/community report
 - 완료일이 마감일보다 늦은 업무 같은 계산형 조건 검색
-- 검색 결과 설명문 생성
 
 ## 검색 흐름
 
-현재 구현:
+기존 pgvector 검색 구현:
 
 - `app/router/search.py`
 - `app/service/search_service.py`
 - `app/store/embedding_store.py`
 
+GraphRAG v1 query 구현:
+
+- `app/graph/v1/router/worklog_query.py`
+- `app/graph/v1/service/worklog_query_service.py`
+- `app/graph/v1/store/graph_authorized_corpus_store.py`
+- `app/graph/v1/store/graph_rag_store.py`
+- `app/graph/v1/service/jev_router.py`
+- `app/graph/v1/service/graph_scope_context_builder.py`
+- `app/graph/v1/service/graph_answer_adapter.py`
+
 흐름:
 
-1. API 서버가 `/ai/search/worklogs`로 검색 요청을 보낸다.
-2. `SearchService`가 `keyword`만 Gemini로 보내 query embedding을 만든다.
-3. `EmbeddingStore`가 `tb_worklog_embedding`과 최신 `tb_worklog`, `tb_team`을 join한다.
-4. pgvector cosine distance로 chunk 유사도를 계산한다.
-5. `row_number()`로 worklog별 가장 가까운 chunk만 남긴다.
-6. 페이지 정보와 함께 ranked `worklogId`, `score`, `matchedChunk`, `predecessorWorklogIds`를 반환한다.
+1. API 서버가 public semantic request 의 `query` 와 서버에서 계산한 내부 scope 를 `/ai/graph/worklogs-v1/query` 로 보낸다.
+2. `WorklogGraphQueryRequest`가 `scopeMode=TEAM_IDS|ALL` 계약을 검증한다.
+3. jevos가 관계/유사도 필요 여부를 한 요청의 O/X 두 질문으로 판단한다. `shadow`에서는 예측만 기록하고 두 경로를 실행한다.
+4. 유사도 경로는 PostgreSQL 권한 필터를 적용한 pgvector 후보를 최종 reference 수보다 넓게 찾는다. 관계 경로는 정확한 제목의 업무일지가 하나인지 확인한다.
+5. Neo4j는 후보 ID의 관계와 연결 업무 ID만 반환한다. 원장의 최신 팀 범위·삭제 상태·관계를 재확인한 뒤 `GraphScopeContextBuilder`가 text unit, node, edge, reference를 만든다.
+6. context guard 가 `sourceWorklogIds`와 `sourceTeamIds` provenance 를 확인한 뒤 LLM prompt 로 넘긴다.
+7. `GraphAnswerAdapter`가 Local/BYOG context 기반으로만 답변을 생성하고, Global/DRIFT/community report 모드는 사용하지 않는다.
 
 ## 구조적 필터
 
@@ -52,38 +64,36 @@
 - `authorId`
 - `tagId`
 - `createdFrom`
-- `allowedTeamIds`
+- `scopeMode`
+- `allowedTeamIds` (`scopeMode=TEAM_IDS`일 때만)
 
-`allowedTeamIds`는 public API DTO에는 없지만, API 서버가 권한 계산 후 AI 서버에 넘겨줄 내부 필드다.
-빈 배열이 오면 접근 가능한 팀이 없다는 뜻이므로 결과를 0건으로 처리한다.
+`scopeMode`와 `allowedTeamIds`는 public API DTO에는 없고, API 서버가 권한 계산 후 AI 서버에 넘겨주는 내부 필드다.
+`scopeMode=TEAM_IDS`는 비어 있지 않은 `allowedTeamIds`가 필요하다.
+`scopeMode=ALL`만 전체 범위를 뜻하며, 이때 `allowedTeamIds`는 없어야 한다.
+`allowedTeamIds=null`만으로 전체 범위를 표현하지 않는다.
+접근 가능한 팀이 없으면 API 서버가 AI를 호출하지 않고 빈 semantic response를 반환한다.
 
 상태/중요도는 임베딩 텍스트에 넣지 않고 검색 시점에 `tb_worklog`에서 읽는다.
 값이 자주 바뀌어도 재임베딩 없이 최신 상태로 필터링하기 위해서다.
 
 ## 응답 형태
 
-AI 서버는 화면 표시용 상세 DTO를 만들지 않는다.
-대신 API 서버가 기존 projection으로 다시 조회할 수 있도록 랭킹 근거만 반환한다.
+GraphRAG v1 query 응답은 API 서버가 public semantic response 로 변환할 수 있는 answer/reference 와 provenance 정보를 포함한다.
+API 서버는 반환된 `worklog://<id>` reference 를 같은 `WorklogVisibilityScope`로 재조회해 보이는 ID만 public response 로 내보낸다.
 
 ```json
 {
-  "items": [
+  "answer": "결산 보고서 작성 업무가 있습니다.",
+  "references": [
     {
-      "worklogId": 7,
-      "score": 0.91,
-      "chunkIndex": 0,
-      "matchedChunk": "...",
-      "predecessorWorklogIds": [1]
+      "referenceId": "worklog-7",
+      "filePath": "worklog://7",
+      "sourceWorklogIds": [7],
+      "sourceTeamIds": [3]
     }
   ],
-  "page": 1,
-  "pageSize": 20,
-  "totalCount": 1,
-  "totalPages": 1,
-  "isFirst": true,
-  "isLast": true,
-  "hasNext": false,
-  "hasPrevious": false
+  "mode": "graph",
+  "internalOnly": true
 }
 ```
 
@@ -116,6 +126,8 @@ cd /c/ssafy/S14P31S209/ai
 
 - `ai/tests/fixtures/semantic_search_queries.yaml`
 - `ai/tests/fixtures/semantic_search_query_set.md`
+- `ai/app/graph/v1/fixtures/graph_routing_questions.json` (`python -m app.graph.v1.evaluate_router`)
+- `docs/ai/graph-routing-local-evaluation.md` (로컬 jevos-v5 점검 결과와 shadow 유지 근거)
 
 우선 점검 질의는 다음 관점을 포함한다.
 
@@ -139,4 +151,3 @@ cd /c/ssafy/S14P31S209/ai
 - 방식 C: 후속 업무 제목도 임베딩 문맥에 포함
 - 방식 D: 역할 문맥 제거 후 role-based query 영향 비교
 - 방식 E: 상태성 문맥을 vector가 아니라 별도 reranking hint로 반영
-- 방식 F: GraphRAG 단계에서 `tb_worklog_dependency` 관계를 확장 검색에 사용

@@ -20,6 +20,7 @@ import com.ibank.axwms.domain.worklog.entity.Worklog;
 import com.ibank.axwms.domain.worklog.entity.WorklogTag;
 import com.ibank.axwms.domain.worklog.event.WorklogAiPostProcessRequestedEvent;
 import com.ibank.axwms.domain.worklog.event.WorklogCompletedEvent;
+import com.ibank.axwms.domain.worklog.event.WorklogGraphIndexRequestedEvent;
 import com.ibank.axwms.domain.worklog.external.WorklogPolishClient;
 import com.ibank.axwms.domain.worklog.policy.WorklogStatusPolicy;
 import com.ibank.axwms.domain.worklog.repository.WorklogDependencyRepository;
@@ -161,6 +162,7 @@ public class WorklogService {
         );
         savedWorklog.startAiProcessing();
         publishWorklogAiPostProcessRequest(savedWorklog, team, uploadedFiles);
+        eventPublisher.publishEvent(new WorklogGraphIndexRequestedEvent(savedWorklog.getId(), true));
 
         return CreateWorklogApiDto.Response.of(savedWorklog.getId());
     }
@@ -350,6 +352,10 @@ public class WorklogService {
         }
 
         fileService.uploadWorklogFiles(worklogId, principal.userId(), newFiles);
+        boolean refreshEmbedding = request.title() != null
+                || request.requestContent() != null || request.workContent() != null
+                || request.predecessorWorklogIds() != null;
+        eventPublisher.publishEvent(new WorklogGraphIndexRequestedEvent(worklogId, refreshEmbedding));
     }
 
     /**

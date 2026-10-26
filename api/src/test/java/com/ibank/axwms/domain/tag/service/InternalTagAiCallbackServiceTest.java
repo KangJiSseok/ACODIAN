@@ -30,6 +30,8 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.BDDMockito.given;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
+import org.springframework.context.ApplicationEventPublisher;
+import com.ibank.axwms.domain.worklog.event.WorklogGraphIndexRequestedEvent;
 
 @ExtendWith(MockitoExtension.class)
 class InternalTagAiCallbackServiceTest {
@@ -47,6 +49,9 @@ class InternalTagAiCallbackServiceTest {
 
     @Mock
     private TagService tagService;
+
+    @Mock
+    private ApplicationEventPublisher eventPublisher;
 
     @InjectMocks
     private InternalTagAiCallbackService internalTagAiCallbackService;
@@ -75,6 +80,7 @@ class InternalTagAiCallbackServiceTest {
         verify(tagRepository).insertAiGeneratedTagsIgnoreDuplicates(List.of(new AiGeneratedTagCommand("재고", "재고 흐름 점검")));
         verify(worklogTagRepository).saveAll(org.mockito.ArgumentMatchers.<List<WorklogTag>>any());
         verify(tagService).incrementUsageCountByIds(List.of(1L, 3L));
+        verify(eventPublisher).publishEvent(new WorklogGraphIndexRequestedEvent(WORKLOG_ID, false));
     }
 
     @Test

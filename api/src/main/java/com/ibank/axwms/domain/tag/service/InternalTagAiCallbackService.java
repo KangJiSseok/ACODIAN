@@ -6,11 +6,13 @@ import com.ibank.axwms.domain.tag.repository.jooq.MetaTagJooqRepository.AiGenera
 import com.ibank.axwms.domain.worklog.dto.ApplyWorklogAiTagsApiDto;
 import com.ibank.axwms.domain.worklog.entity.Worklog;
 import com.ibank.axwms.domain.worklog.entity.WorklogTag;
+import com.ibank.axwms.domain.worklog.event.WorklogGraphIndexRequestedEvent;
 import com.ibank.axwms.domain.worklog.repository.WorklogRepository;
 import com.ibank.axwms.domain.worklog.repository.WorklogTagRepository;
 import com.ibank.axwms.global.error.BusinessException;
 import com.ibank.axwms.global.error.ErrorCode;
 import lombok.RequiredArgsConstructor;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -27,6 +29,7 @@ public class InternalTagAiCallbackService {
     private final WorklogRepository worklogRepository;
     private final WorklogTagRepository worklogTagRepository;
     private final TagService tagService;
+    private final ApplicationEventPublisher eventPublisher;
 
     /**
      * FastAPI 태그 생성 프롬프트에 전달할 내부용 태그 목록을 조회한다.
@@ -52,6 +55,9 @@ public class InternalTagAiCallbackService {
         List<Long> newlyLinkedTagIds = linkTagsToWorklog(worklogId, tagIds);
 
         tagService.incrementUsageCountByIds(newlyLinkedTagIds);
+        if (!newlyLinkedTagIds.isEmpty()) {
+            eventPublisher.publishEvent(new WorklogGraphIndexRequestedEvent(worklogId, false));
+        }
     }
 
     /**

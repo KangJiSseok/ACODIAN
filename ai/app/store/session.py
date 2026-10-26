@@ -75,6 +75,15 @@ def get_session_factory() -> async_sessionmaker[AsyncSession]:
     return _session_factory
 
 
+async def dispose_engine() -> None:
+    """짧은 Celery asyncio.run 루프가 끝나면 그 루프의 DB 연결을 버린다."""
+    global _engine, _session_factory
+    if _engine is not None:
+        await _engine.dispose()
+        _engine = None
+        _session_factory = None
+
+
 async def get_session() -> AsyncIterator[AsyncSession]:
     """FastAPI 의존성용 세션 generator.
 

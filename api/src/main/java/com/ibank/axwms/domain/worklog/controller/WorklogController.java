@@ -12,7 +12,7 @@ import com.ibank.axwms.domain.worklog.dto.SearchWorklogsApiDto;
 import com.ibank.axwms.domain.worklog.dto.UpdateWorklogApiDto;
 import com.ibank.axwms.domain.worklog.dto.UpdateWorklogStatusApiDto;
 import com.ibank.axwms.domain.worklog.service.WorklogService;
-import com.ibank.axwms.domain.worklog.service.search.LightRagWorklogSearchService;
+import com.ibank.axwms.domain.worklog.service.search.GraphRagWorklogSearchService;
 import com.ibank.axwms.domain.worklog.service.search.WorklogSearchService;
 import com.ibank.axwms.global.response.EmptyResponse;
 import com.ibank.axwms.global.response.PageResponse;
@@ -43,7 +43,7 @@ public class WorklogController implements WorklogControllerDocs {
 
     private final WorklogService worklogService;
     private final WorklogSearchService keywordWorklogSearchService;
-    private final LightRagWorklogSearchService lightRagWorklogSearchService;
+    private final GraphRagWorklogSearchService graphRagWorklogSearchService;
 
     @Override
     @PostMapping
@@ -112,7 +112,7 @@ public class WorklogController implements WorklogControllerDocs {
             @AuthenticationPrincipal CustomUserPrincipal principal,
             @Valid @ModelAttribute SearchSemanticWorklogsApiDto.Request request
     ) {
-        return lightRagWorklogSearchService.searchWorklogs(principal, request);
+        return graphRagWorklogSearchService.searchWorklogs(principal, request);
     }
 
     @Override

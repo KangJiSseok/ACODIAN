@@ -174,3 +174,29 @@
     인증과 호출 정책이 한 곳에서 관리된다.
     기능 PR 들이 같은 파일을 동시에 수정할 위험이 줄어든다 (메서드는 기능별로 분리).
     Gemini SDK 교체나 호출 옵션 추가가 필요할 때 영향 범위를 국소화할 수 있다.
+
+- id: ADR-010
+  title: GraphRAG v1 검색 — scope-first authorized corpus 와 Local/BYOG 한정
+  status: adopted
+  date: 2026-06-09
+  stacks: [fastapi, pgvector, graphrag]
+  context: |
+    업무일지 GraphRAG 검색은 팀 권한 범위를 넘는 업무일지, 선행 업무, 작성자, 팀, 태그, 노드/엣지, LLM 문맥이
+    답변이나 reference 로 누출되지 않아야 한다. 기존 PoC 방식처럼 전체 그래프/벡터 후보를 먼저 확장한 뒤
+    사후 필터링하면 LLM prompt 에 이미 비허용 정보가 들어갈 수 있다.
+    또한 `allowedTeamIds=null` 만으로 전체 범위와 누락된 권한 범위를 구분하면 내부 API 계약이 모호해진다.
+  decision: |
+    GraphRAG v1 query contract 는 `scopeMode=TEAM_IDS|ALL` 을 명시적으로 요구한다.
+    `TEAM_IDS` 는 비어 있지 않은 `allowedTeamIds` 가 있어야 하며, `ALL` 만 전체 범위를 뜻하고 `allowedTeamIds` 를 함께 받지 않는다.
+    AI 는 LLM prompt 또는 graph context 를 만들기 전에 PostgreSQL/pgvector 에서 권한이 적용된 authorized corpus 를 먼저 만든다.
+    업무일지 후보, 선행 업무, 작성자/팀/태그 메타데이터, derived node/edge/reference/text unit 은 모두 authorized corpus 에서만 파생한다.
+    각 derived object 는 `sourceWorklogIds` 와 `sourceTeamIds` provenance 를 유지하고, `TEAM_IDS` 에서는 provenance 가 허용 corpus/team set 의 부분집합일 때만 context/response 에 포함한다.
+    Microsoft GraphRAG 는 공유 all-team index 의 Global/DRIFT/community report 가 아니라 이미 권한이 적용된 Local/BYOG context 위의 adapter 경계로만 사용한다.
+    관계 질문은 PostgreSQL에서 허용 범위의 정확한 업무일지를 식별한 뒤 고정 Cypher로 Neo4j 관계 ID를 읽는다. 유사도 질문은 허용된 pgvector 후보 ID에서 최대 2홉을 확장한다.
+    Neo4j 노드 본문은 답변에 사용하지 않고, 확장 ID와 관계를 PostgreSQL 원장으로 다시 확인한 뒤 context를 만든다. jevos O/X 두 질문은 shadow 모드로 시작하고 불확실·실패 시 두 경로를 조회한다.
+    자유 Cypher 생성은 생성 쿼리의 권한 강제가 검증되기 전까지 공개 검색 경로에 연결하지 않는다.
+  consequence: |
+    팀 제한 검색은 비허용 팀 업무, cross-team predecessor, 공유 작성자/태그 메타데이터가 LLM 전 문맥과 최종 응답에 들어가지 않는다.
+    전체 범위 검색은 `scopeMode=ALL` 로만 호출되므로 `allowedTeamIds=null` 의 의미가 모호하지 않다.
+    shared all-team GraphRAG Global/DRIFT/community report 는 팀별 materialized report 와 provenance 정책이 생기기 전까지 사용하지 않는다.
+    권한을 LLM 이후 post-filter 에 의존하지 않고, API post-validation 은 defense-in-depth 로만 둔다.

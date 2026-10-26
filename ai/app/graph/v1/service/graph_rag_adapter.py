@@ -4,11 +4,11 @@ from __future__ import annotations
 
 from app.config.settings import Settings, settings
 from app.graph.v1.service.worklog_graph_builder import WorklogGraphDocument
-from app.graph.v1.store.graph_rag_store import GraphRagStore, GraphRagSubgraph
+from app.graph.v1.store.graph_rag_store import GraphRagStore, GraphRagSubgraph, GraphWorklogLink
 
 
 class GraphRagAdapter:
-    """Service 계층이 사용하는 GraphRAG graph store adapter."""
+    """GraphRAG index 저장과 legacy index inspection 전용 graph store adapter."""
 
     def __init__(self, *, store: GraphRagStore | None = None, settings_obj: Settings = settings) -> None:
         self._settings = settings_obj
@@ -18,6 +18,14 @@ class GraphRagAdapter:
         """업무일지 graph document 1건을 index한다."""
         await self._store.upsert_worklog_graph(document)
 
+    async def fetch_worklog_links(
+        self, root_ids: list[int], allowed_team_ids: list[int] | None, limit: int
+    ) -> list[GraphWorklogLink]:
+        return await self._store.fetch_worklog_links(root_ids, allowed_team_ids, limit)
+
+    async def delete_worklog_graph(self, worklog_id: int) -> None:
+        await self._store.delete_worklog_graph(worklog_id)
+
     async def fetch_worklog_subgraph(
         self,
         *,
@@ -26,7 +34,7 @@ class GraphRagAdapter:
         max_depth: int,
         limit: int,
     ) -> GraphRagSubgraph:
-        """업무일지 GraphRAG subgraph를 조회한다."""
+        """legacy PoC subgraph 조회다. query endpoint 기본 경로는 authorized corpus store를 사용한다."""
         return await self._store.fetch_worklog_subgraph(
             query=query,
             allowed_team_ids=allowed_team_ids,
