@@ -2,12 +2,12 @@
 
 - 기준 문서: [`docs/infra/adr.yaml`](adr.yaml), [`docs/infra/code-convention.yaml`](code-convention.yaml)
 - 목적: AX-WMS 인프라를 처음 보는 사람도 EC2 + GitLab CI/CD 자동배포를 그대로 재현할 수 있도록 1차 운영 절차를 제공한다.
-- 범위: api/web/ai/postgres/redis 자동배포, GitLab Runner 운영, 브랜치별 파이프라인 동작, 서버 `.env` 와 GitLab CI/CD Variables 운영, Nginx 진입 예시.
+- 범위: api/web/ai/jevos와 postgres/redis/Qdrant/Neo4j 자동배포, GitLab Runner 운영, 브랜치별 파이프라인 동작, 서버 `.env` 와 GitLab CI/CD Variables 운영, Nginx 진입 예시.
 - 전제: EC2 호스트, SSafy GitLab 사용, ghcr.io 이미지 레지스트리(ADR-007), 외부 도메인/HTTPS 사전 준비.
 - 연계 문서: [`runbooks/infra/ci-auth-troubleshoot.md`](../../runbooks/infra/ci-auth-troubleshoot.md) (CI 인증 자격증명 장애 대응), [`docs/api/jooq-codegen-policy.md`](../api/jooq-codegen-policy.md) (`api_ci` 의 DinD 의존 배경).
 
 이 문서는 **AX-WMS 인프라를 처음 보는 사람도 그대로 따라갈 수 있게** 작성한 1차 운영 가이드다.
-현재 범위는 **api / web / ai / postgres / redis 자동배포 + nginx conf 저장소 동기화**다(ADR-014/ADR-015/ADR-016).
+현재 범위는 **api / web / ai / jevos / postgres / redis / Qdrant / Neo4j 자동배포 + nginx conf 저장소 동기화**다(ADR-014/ADR-015/ADR-016/ADR-024).
 
 ---
 
@@ -19,7 +19,7 @@
 - 소스 저장소: **GitLab**
 - 배포 방식: **GitLab CI/CD가 이미지를 빌드해서 Registry에 push → EC2가 pull 받아 compose로 기동**
 - 외부 도메인/HTTPS: **이미 준비됨**
-- 현재 자동배포 대상: **api + web + ai + postgres + redis** (ADR-014/ADR-016)
+- 현재 자동배포 대상: **api + web + ai + jevos + postgres + redis + Qdrant + Neo4j** (ADR-014/ADR-016/ADR-024)
 
 즉, 이 문서는 “EC2에 어떻게 올리고, GitLab을 어떻게 연결하고, 브랜치별로 언제 배포되는가”를 설명한다.
 
@@ -71,17 +71,17 @@
 
 MR merge -> dev push
   -> GitLab CI
-  -> api / web / ai Docker image build (변경 영역에 해당하는 것만)
+  -> api / web / ai / jevos Docker image build (변경 영역에 해당하는 것만)
   -> ghcr.io push
   -> SSH로 EC2 staging 접속
-  -> docker compose pull api web ai / up -d
+  -> docker compose pull api web ai ai_worker jevos / up -d
 
 MR merge -> master push
   -> GitLab CI
-  -> api / web / ai Docker image build (변경 영역에 해당하는 것만)
+  -> api / web / ai / jevos Docker image build (변경 영역에 해당하는 것만)
   -> ghcr.io push
   -> SSH로 EC2 production 접속
-  -> docker compose pull api web ai / up -d
+  -> docker compose pull api web ai ai_worker jevos / up -d
 ```
 
 ---
@@ -97,7 +97,7 @@ MR merge -> master push
 | `.dockerignore` (루트) | web 빌드 시 모노레포 루트 컨텍스트에서 제외할 파일 (DO-004) |
 | `infra/compose.deploy.yml` | EC2에서 실제로 사용하는 compose 파일 |
 | `infra/.env.example` | compose 렌더용 기본값 파일 (ADR-009) |
-| `infra/scripts/remote-deploy.sh` | 서버에서 api/web/ai 컨테이너를 멱등 배포하는 스크립트 (OPS-016) |
+| `infra/scripts/remote-deploy.sh` | 서버에서 api/web/ai/ai_worker/jevos 컨테이너를 멱등 배포하는 스크립트 (OPS-016) |
 | `infra/nginx/sites-available/axwms.conf` | EC2 systemd nginx 의 단일 진입점 conf SSOT (ADR-015 / OPS-017) |
 | `infra/nginx/snippets/proxy-headers.conf` | 모든 location 의 공통 proxy header 묶음 |
 | `docs/infra/adr.yaml` | 인프라 의사결정 기록 |
@@ -471,6 +471,8 @@ GitLab auto-cancel 은 변경 영역(web/api/ai)이 아니라 ref 단위로 동�
 - `api_image`: `api/Dockerfile` (컨텍스트 `api/`)을 `docker buildx build --push` 로 빌드하고 ghcr push, 트리거는 `.api_deploy_changes` (api 코드 + 인프라 변경 시).
 - `web_image`: `web/Dockerfile` (컨텍스트 모노레포 루트, `-f web/Dockerfile`)을 `docker buildx build --push` 로 빌드하고 ghcr push, 트리거는 `.web_deploy_changes` (web 코드 + 모노레포 manifest + 인프라 변경 시). ADR-014.
 - `ai_image`: `ai/Dockerfile` (컨텍스트 `ai/`, `-f ai/Dockerfile`)을 `docker buildx build --push` 로 빌드하고 ghcr push, 트리거는 `.ai_deploy_changes` (ai 코드 + 인프라 변경 시). ADR-016.
+- `jev_image`: `infra/jev/Dockerfile`의 SHA-256 고정 `jevos-v5` 바이너리와 모델을 빌드해 GHCR에 push한다. `infra/jev/**` 또는 CI 설정 변경 시 빌드하며 host port는 열지 않는다.
+  jevos release가 Linux x64 바이너리이므로 배포 EC2도 x86_64여야 한다.
 - 세 image job 은 각각 `$*_IMAGE_BASE:buildcache` 를 `--cache-from` / `--cache-to mode=max` 로 사용한다(ADR-021).
 - `api_image`, `web_image`, `ai_image` 는 `interruptible: false` 로 둔다. 이미지 태그(`:<sha>`, `:<ref-slug>`) push 도중 취소되면 이후 deploy 가 이전 이미지를 재사용할 수 있기 때문이다.
 
@@ -479,7 +481,9 @@ GitLab auto-cancel 은 변경 영역(web/api/ai)이 아니라 ref 단위로 동�
 - `deploy_dev`: `dev` push 시 staging 배포
 - `deploy_prod`: `master` push 시 production 배포
 
-배포 트리거(`.deploy_changes`) 는 **api/web/ai/모노레포 manifest/infra/docs/infra/.gitlab-ci.yml 중 하나라도 변경**되면 작동한다. 변경 영역에 해당하는 이미지 job 이 함께 돌고, deploy job 은 `API_IMAGE`/`WEB_IMAGE`/`AI_IMAGE` 세 변수를 SSH 환경변수로 같이 주입한다. 인프라-only 변경에서도 기존 `:<ref-slug>` 태그 이미지로 재배포된다.
+배포 트리거(`.deploy_changes`) 는 **api/web/ai/모노레포 manifest/infra/docs/infra/.gitlab-ci.yml 중 하나라도 변경**되면 작동한다. 변경 영역에 해당하는 이미지 job 이 함께 돌고, deploy job 은 `API_IMAGE`/`WEB_IMAGE`/`AI_IMAGE`/`JEV_IMAGE` 변수를 SSH 환경변수로 같이 주입한다. 인프라-only 변경에서도 기존 `:<ref-slug>` 태그 이미지로 재배포된다.
+
+GraphRAG 적용 순서: `GRAPHRAG_ROUTER_MODE=shadow`로 배포하고 `docker exec axwms-staging-ai-1 python -m app.graph.v1.backfill`을 실행해 기존 업무를 10건 이하 배치로 색인한다. 이어 `docker exec axwms-staging-ai-1 python -m app.graph.v1.evaluate_router`와 실사용 한국어 질문 평가로 관계·유사도·혼합·모호 질문의 경로 누락을 확인한다. staging에서 reference, 양쪽 조회 비율, 지연을 기존 검색과 비교하고 `docker stats --no-stream axwms-staging-jevos-1`로 메모리 여유를 확인한다. 경로 누락이 없고 지연·메모리 조건을 충족하면 서버 `.env`의 `GRAPHRAG_ROUTER_MODE=active`로 변경해 재배포한다. 충족하지 못하면 shadow를 유지한다. `AI_WORKLOG_GRAPH_INDEX_ENABLED`는 생성·수정 후 자동 색인 접수 스위치다.
 `deploy_dev`, `deploy_prod` 도 `interruptible: false` 로 둔다. 배포 중간 취소는 서버 상태와 GitLab pipeline 상태를 어긋나게 만들 수 있으므로 허용하지 않는다.
 
 ---
@@ -518,7 +522,7 @@ GitLab auto-cancel 은 변경 영역(web/api/ai)이 아니라 ref 단위로 동�
 2. ghcr.io 에 `axwms-api:dev`, `axwms-web:dev`, `axwms-ai:dev` 등 `:<ref-slug>` + `:<sha>` 두 태그로 push
 3. CI가 staging 서버에 SSH 접속
 4. `compose.deploy.yml`, `remote-deploy.sh` 를 서버에 복사
-5. 서버에서 `docker compose pull api web ai` / `up -d --remove-orphans postgres redis api web ai` (OPS-016 의 멱등 흐름)
+5. 서버에서 `docker compose pull api web ai ai_worker jevos` / `up -d --remove-orphans postgres redis qdrant neo4j jevos api web ai ai_worker` (OPS-016 의 멱등 흐름)
 
 ### `master` merge 후
 같은 흐름으로 production 에 반영된다.
@@ -597,6 +601,7 @@ server {
 
     location /api/auth/ { limit_req zone=req_auth    burst=30  nodelay; proxy_pass http://axwms_api_prod; include /etc/nginx/snippets/proxy-headers.conf; }
     location /api/      { limit_req zone=req_general burst=200 nodelay; proxy_pass http://axwms_api_prod; include /etc/nginx/snippets/proxy-headers.conf; }
+    location /ai/graph/worklogs-v1/ { return 404; }
     location /ai/       { limit_req zone=req_ai      burst=60  nodelay; proxy_read_timeout 180s; proxy_pass http://axwms_ai_prod; include /etc/nginx/snippets/proxy-headers.conf; }
     location /          { limit_req zone=req_general burst=200 nodelay; proxy_pass http://axwms_web_prod; include /etc/nginx/snippets/proxy-headers.conf; }
 }
@@ -618,6 +623,7 @@ server {
 
     location /api/auth/ { limit_req zone=req_auth    burst=30  nodelay; proxy_pass http://axwms_api_staging; include /etc/nginx/snippets/proxy-headers.conf; }
     location /api/      { limit_req zone=req_general burst=200 nodelay; proxy_pass http://axwms_api_staging; include /etc/nginx/snippets/proxy-headers.conf; }
+    location /ai/graph/worklogs-v1/ { return 404; }
     location /ai/       { limit_req zone=req_ai      burst=60  nodelay; proxy_read_timeout 180s; proxy_pass http://axwms_ai_staging; include /etc/nginx/snippets/proxy-headers.conf; }
     location /          { limit_req zone=req_general burst=200 nodelay; proxy_pass http://axwms_web_staging; include /etc/nginx/snippets/proxy-headers.conf; }
 }

@@ -576,7 +576,7 @@
     표준가이드 docx 의 nextjs 3000 / nestjs 4000 / fastapi 5000 스킴은 컨테이너↔nginx localhost 통신이라 SSAFY 외부 노출 정책과 무관하고, nestjs 항목은 본 프로젝트 Spring Boot 스택과 어긋나며, ADR-010/014/015 가 8x00 위에 다섯 서비스 + nginx + sudoers + TLS 를 정합한 비용은 docx 한 줄에 맞추기 위해 회수할 가치가 없다.
   decision: |
     `ai/Dockerfile` 신규 — `python:3.12-slim` 단일 stage, non-root, EXPOSE 8200, CMD `uvicorn app.main:app --host 0.0.0.0 --port 8200`. `ai/.dockerignore` 동반.
-    `infra/compose.deploy.yml` 에 `ai` 서비스 추가 — 최초 결정은 production `127.0.0.1:8200:8200` / staging `127.0.0.1:8201:8200` 였으나, AI 직접 검증/호출을 위해 host binding 은 ADR-020 에서 `0.0.0.0:8200/8201:8200` 으로 재정의한다. depends_on postgres/redis healthy, 내부 통신은 compose hostname.
+    `infra/compose.deploy.yml` 에 `ai` 서비스 추가 — production `127.0.0.1:8200:8200` / staging `127.0.0.1:8201:8200` 로 host binding 을 제한한다. depends_on postgres/redis healthy, 내부 통신은 compose hostname.
     `remote-deploy.sh` 일반화 — `AI_IMAGE` require_var 및 `pull/rm -sf/up -d` 인자에 ai 포함.
     `.gitlab-ci.yml` 확장 — `AI_IMAGE_BASE` 변수, `ai_image` job(`-f ai/Dockerfile ai`), `.ai_deploy_changes` anchor, `.deploy_changes` 합집합에 ai/** 편입, deploy_dev/prod ssh 한 줄에 `AI_IMAGE` 주입.
     이미지 네임스페이스: `ghcr.io/axwms-s209/axwms-ai` (ADR-007 organization 그대로). 태그 정책은 api/web 과 동일.
@@ -724,7 +724,7 @@
 
 - id: ADR-020
   title: AI FastAPI host port 직접 외부 개방 예외
-  status: adopted
+  status: superseded
   date: 2026-05-19
   stacks: [infra, compose, ai, ec2, security]
   context: |
@@ -764,6 +764,26 @@
       - AI 앱 인증 또는 앱 레벨 rate limit 이 도입되어 직접 포트 보호 책임을 재정의해야 할 때.
       - 외부 직접 호출 요구가 사라져 Nginx `/ai/` 경유만으로 충분해질 때.
       - 운영 보안그룹 정책이 8200/8201 public inbound 를 허용하지 않거나 IP whitelist 만 허용하도록 바뀔 때.
+
+- id: ADR-023
+  title: AI FastAPI host binding 재제한 — Nginx 경유만 허용
+  status: adopted
+  date: 2026-06-09
+  stacks: [nginx, compose, fastapi, security]
+  context: |
+    ADR-020 은 외부 직접 검증 편의를 위해 AI FastAPI host port 를 `0.0.0.0:8200/8201` 로 열었다.
+    그러나 GraphRAG v1 query 는 API 가 계산한 scopeMode 를 내부 계약으로 받아야 하며,
+    외부 클라이언트가 `/ai/graph/worklogs-v1/query` 를 직접 호출해 `scopeMode=ALL` 을 보내면 API 권한 계산을 우회할 수 있다.
+    Nginx 에서 해당 path 를 404 로 막아도 host port 가 전체 인터페이스에 열려 있으면 Nginx 를 우회한 직접 접근이 남는다.
+  decision: |
+    AI FastAPI host binding 을 `127.0.0.1:${AI_HOST_PORT}:8200` 으로 되돌린다.
+    외부 클라이언트는 AI 를 직접 호출하지 않고 Nginx `/ai/` 경유만 사용한다.
+    Nginx 는 `/ai/graph/worklogs-v1/` 전체를 production/staging 모두에서 `/ai/` proxy 보다 먼저 404 처리해 내부 GraphRAG query/index contract 를 외부에 노출하지 않는다.
+    API 컨테이너의 AI 호출은 compose network hostname `http://ai:8200/ai` 를 계속 사용하므로 host binding 제한의 영향을 받지 않는다.
+  consequence: |
+    외부에서 `http://<host>:8200/ai/...` 또는 `:8201` 로 AI 를 직접 검증하는 운영 방식은 중단된다.
+    모든 외부 AI 요청은 Nginx rate limit, timeout, path block 정책을 통과해야 한다.
+    GraphRAG 내부 query 의 `scopeMode=ALL` 은 API 서버가 계산해 보낼 때만 사용할 수 있다.
 
 - id: ADR-021
   title: Docker BuildKit registry cache로 image job 빌드 캐시 외부화
@@ -813,6 +833,22 @@
       - 첫 실행은 cache cold 상태라 buildx bootstrap + cache export 비용 때문에 느릴 수 있다. 완화: 두 번째 동일 입력 pipeline 의 warm cache 시간을 기준으로 평가한다.
       - GHCR package version/cache storage 가 증가할 수 있다. 완화: 초기에는 `mode=max` 로 효과를 측정하고, 저장소 증가가 문제되면 `mode=min` 또는 retention cleanup 을 별도 작업으로 검토한다.
       - 동시 pipeline 이 같은 `:buildcache` ref 를 마지막 writer 기준으로 갱신한다. 완화: image 별 ref 는 분리하고, branch 별 cache 격리가 필요해지면 `:buildcache-$CI_COMMIT_REF_SLUG` 로 확장한다.
+
+- id: ADR-024
+  title: jevos 내부 라우터 이미지와 GraphRAG 내부 색인 경계
+  status: adopted
+  date: 2026-10-26
+  stacks: [gitlab, docker, compose, nginx, fastapi]
+  context: |
+    GraphRAG 검색의 관계/유사도 라우팅은 로컬 실행형 jevos 모델을 사용한다. GraphRAG index/query는 API가 권한 범위를 계산한 뒤 호출하는 내부 계약이다.
+  decision: |
+    `jevos-v5` Linux binary와 OpenVINO INT8 모델은 release URL 및 SHA-256을 Dockerfile에 고정한다.
+    GitLab image job에서 `JEV_IMAGE`를 빌드하고 compose 내부 네트워크에 host port 없이 실행한다.
+    AI의 `GRAPHRAG_ROUTER_MODE`는 shadow로 시작하며, 한국어 평가와 EC2 메모리 확인 뒤 active로 전환한다.
+    Nginx는 `/ai/graph/worklogs-v1/` 전체를 404 처리한다. LightRAG Qdrant/Neo4j 서비스는 유지한다.
+  consequence: |
+    jevos 장애나 낮은 확신은 AI가 관계·유사도 두 경로를 조회하는 것으로 흡수한다.
+    EC2에는 jevos 약 1~1.4GB의 추가 메모리 여유가 필요하다.
       - Dockerfile 에 secret build arg/copy 가 추가되면 cache image 를 통한 유출 경로가 생길 수 있다. 완화: 현재 Dockerfile 들은 secret 을 빌드 입력으로 받지 않으며, secret 은 계속 EC2 `.env` 또는 GitLab protected variable 로만 주입한다.
 
     재검토 트리거:
